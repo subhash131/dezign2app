@@ -46,7 +46,12 @@ interface BackendCanvasState {
   setView: (view: BackendCanvasView) => void;
 
   // Called after Convex sync succeeds
-  clearPending: () => void;
+  clearPending: (
+    syncedNodeUpserts: BackendNode[],
+    syncedNodeRemovals: string[],
+    syncedEdgeUpserts: BackendEdge[],
+    syncedEdgeRemovals: string[]
+  ) => void;
   reset: () => void;
 }
 
@@ -276,13 +281,13 @@ export const useBackendCanvasStore = create<BackendCanvasState>((set, get) => ({
 
   setView: (view) => set({ canvasView: view }),
 
-  clearPending: () =>
-    set({
-      pendingNodeUpserts: [],
-      pendingNodeRemovals: [],
-      pendingEdgeUpserts: [],
-      pendingEdgeRemovals: [],
-    }),
+  clearPending: (syncedNodes, syncedNodeRemovals, syncedEdges, syncedEdgeRemovals) =>
+    set((state) => ({
+      pendingNodeUpserts: state.pendingNodeUpserts.filter(n => !syncedNodes.includes(n)),
+      pendingNodeRemovals: state.pendingNodeRemovals.filter(id => !syncedNodeRemovals.includes(id)),
+      pendingEdgeUpserts: state.pendingEdgeUpserts.filter(e => !syncedEdges.includes(e)),
+      pendingEdgeRemovals: state.pendingEdgeRemovals.filter(id => !syncedEdgeRemovals.includes(id)),
+    })),
 
   reset: () =>
     set({

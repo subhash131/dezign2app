@@ -84,7 +84,7 @@ function Flow({ projectId, view }: BackendCanvasProps) {
     clearPending,
   } = useBackendCanvasStore();
 
-  const { fitView } = useReactFlow();
+  const { fitView, setViewport } = useReactFlow();
 
   const initialElements = useQuery(api.canvas.getBackendElements, {
     projectId: projectId as Id<"projects">,
@@ -102,17 +102,46 @@ function Flow({ projectId, view }: BackendCanvasProps) {
     if (initialElements === undefined || hasHydrated.current) return; // still loading or already loaded
     hasHydrated.current = true;
 
-    const nodes: BackendNode[] = (initialElements.nodes ?? []).map((row: any) => ({
-      id: row.nodeId,
-      type: row.type,
-      position: row.position,
-      data: row.data,
-      fractionalIndex: row.fractionalIndex,
-      parentId: row.data?.parentId,
-      style: row.data?.style,
-      width: row.data?.width,
-      height: row.data?.height,
-    }));
+    const rawNodes: BackendNode[] = (initialElements.nodes ?? []).map((row: any) => {
+      let activePosition = row.position;
+      if (view === "schema" && row.data?.schemaPosition) {
+        activePosition = row.data.schemaPosition;
+      } else if (view === "graph" && row.data?.graphPosition) {
+        activePosition = row.data.graphPosition;
+      }
+      return {
+        id: row.nodeId,
+        type: row.type,
+        position: activePosition,
+        data: {
+          ...row.data,
+          graphPosition: row.data?.graphPosition ?? row.position,
+          schemaPosition: row.data?.schemaPosition,
+        },
+        fractionalIndex: row.fractionalIndex,
+        parentId: row.data?.parentId,
+        style: row.data?.style,
+        width: row.data?.width,
+        height: row.data?.height,
+      };
+    });
+    
+    // Ensure parent nodes appear before child nodes for React Flow
+    const nodes: BackendNode[] = [];
+    const addedIds = new Set<string>();
+
+    const addNode = (node: BackendNode) => {
+      if (addedIds.has(node.id)) return;
+      if (node.parentId && !addedIds.has(node.parentId)) {
+        const parent = rawNodes.find((n) => n.id === node.parentId);
+        if (parent) addNode(parent);
+      }
+      nodes.push(node);
+      addedIds.add(node.id);
+    };
+
+    rawNodes.forEach(addNode);
+
     const edges: BackendEdge[] = (initialElements.edges ?? []).map((row: any) => ({
       id: row.edgeId,
       source: row.source,
@@ -122,11 +151,51 @@ function Flow({ projectId, view }: BackendCanvasProps) {
       fractionalIndex: row.fractionalIndex,
     }));
     setNodesAndEdges(nodes, edges);
+  }, [initialElements, setNodesAndEdges, view]);
 
-    if (nodes.length > 0) {
-      setTimeout(() => fitView(), 100);
+  // Handle view changes: swap active positions for existing nodes
+  const prevViewRef = React.useRef(view);
+  useEffect(() => {
+    if (prevViewRef.current !== view && hasHydrated.current) {
+      const store = useBackendCanvasStore.getState();
+      const nextNodes = store.nodes.map((n) => {
+        let newPos = n.position;
+        if (view === "schema") {
+          newPos = n.data?.schemaPosition ?? n.data?.graphPosition ?? n.position;
+        } else if (view === "graph") {
+          newPos = n.data?.graphPosition ?? n.position;
+        }
+        return { ...n, position: newPos };
+      });
+      useBackendCanvasStore.setState({ nodes: nextNodes });
     }
-  }, [initialElements, setNodesAndEdges, fitView]);
+    prevViewRef.current = view;
+  }, [view]);
+
+  // Restore viewport when view changes or after hydration
+  useEffect(() => {
+    if (!hasHydrated.current || nodes.length === 0) return;
+    
+    // Slight delay to ensure React Flow has rendered the nodes
+    const timer = setTimeout(() => {
+      try {
+        const saved = localStorage.getItem(`canvas_viewport_${projectId}_${view}`);
+        if (saved) {
+          setViewport(JSON.parse(saved));
+        } else {
+          fitView();
+        }
+      } catch (e) {
+        fitView();
+      }
+    }, 100);
+    
+    return () => clearTimeout(timer);
+  }, [hasHydrated.current, nodes.length > 0, view, projectId, setViewport, fitView]);
+
+  const handleMoveEnd = useCallback((event: any, viewport: any) => {
+    localStorage.setItem(`canvas_viewport_${projectId}_${view}`, JSON.stringify(viewport));
+  }, [projectId, view]);
 
   // Fix stale closure: always reference live store state for the adapter
   useEffect(() => {
@@ -135,7 +204,7 @@ function Flow({ projectId, view }: BackendCanvasProps) {
     );
   }, []);
 
-  // Sync pending ops to Convex immediately (no debounce needed — per-op)
+  // Sync pending ops to Convex with a small debounce to batch rapid drag events
   useEffect(() => {
     if (
       pendingNodeUpserts.length === 0 &&
@@ -146,52 +215,79 @@ function Flow({ projectId, view }: BackendCanvasProps) {
       return;
     }
 
-    console.log("BackendCanvas sync loop: pendingNodeUpserts", pendingNodeUpserts);
+    const timer = setTimeout(() => {
+      console.log("BackendCanvas sync loop: pendingNodeUpserts", pendingNodeUpserts);
 
-    const pid = projectId as Id<"projects">;
+      const pid = projectId as Id<"projects">;
+      
+      // Capture the exact references being synced so we can clear only them
+      const syncingNodes = [...pendingNodeUpserts];
+      const syncingNodeRemovals = [...pendingNodeRemovals];
+      const syncingEdges = [...pendingEdgeUpserts];
+      const syncingEdgeRemovals = [...pendingEdgeRemovals];
 
-    Promise.all([
-      ...pendingNodeUpserts.map((n) =>
-        upsertNode({
-          projectId: pid,
-          nodeId: n.id,
-          type: n.type,
-          position: n.position,
-          data: { 
-            ...n.data, 
-            ...(n.parentId !== undefined && { parentId: n.parentId }), 
-            ...(n.style !== undefined && { style: n.style }), 
-            ...(n.width !== undefined && { width: n.width }), 
-            ...(n.height !== undefined && { height: n.height }) 
-          },
-          fractionalIndex: n.fractionalIndex,
+      // Deduplicate for actual API calls (take the latest version for each ID)
+      const uniqueNodesToSync = Array.from(new Map(syncingNodes.map(n => [n.id, n])).values());
+      const uniqueEdgesToSync = Array.from(new Map(syncingEdges.map(e => [e.id, e])).values());
+      const uniqueNodeRemovals = Array.from(new Set(syncingNodeRemovals));
+      const uniqueEdgeRemovals = Array.from(new Set(syncingEdgeRemovals));
+
+      Promise.all([
+        ...uniqueNodesToSync.map((n) => {
+          let graphPosition = n.data?.graphPosition ?? n.position;
+          let schemaPosition = n.data?.schemaPosition;
+          
+          if (view === "schema") {
+            schemaPosition = n.position;
+          } else if (view === "graph") {
+            graphPosition = n.position;
+          }
+
+          return upsertNode({
+            projectId: pid,
+            nodeId: n.id,
+            type: n.type,
+            position: graphPosition,
+            data: { 
+              ...n.data, 
+              graphPosition,
+              schemaPosition,
+              ...(n.parentId !== undefined && { parentId: n.parentId }), 
+              ...(n.style !== undefined && { style: n.style }), 
+              ...(n.width !== undefined && { width: n.width }), 
+              ...(n.height !== undefined && { height: n.height }) 
+            },
+            fractionalIndex: n.fractionalIndex,
+          });
+        }),
+        ...uniqueNodeRemovals.map((id) =>
+          removeNode({ projectId: pid, nodeId: id })
+        ),
+        ...uniqueEdgesToSync.map((e) =>
+          upsertEdge({
+            projectId: pid,
+            edgeId: e.id,
+            source: e.source,
+            target: e.target,
+            type: e.type,
+            data: e.data,
+            fractionalIndex: e.fractionalIndex,
+          })
+        ),
+        ...uniqueEdgeRemovals.map((id) =>
+          removeEdge({ projectId: pid, edgeId: id })
+        ),
+      ])
+        .then(() => {
+          console.log("BackendCanvas sync loop: sync successful");
+          clearPending(syncingNodes, syncingNodeRemovals, syncingEdges, syncingEdgeRemovals);
         })
-      ),
-      ...pendingNodeRemovals.map((id) =>
-        removeNode({ projectId: pid, nodeId: id })
-      ),
-      ...pendingEdgeUpserts.map((e) =>
-        upsertEdge({
-          projectId: pid,
-          edgeId: e.id,
-          source: e.source,
-          target: e.target,
-          type: e.type,
-          data: e.data,
-          fractionalIndex: e.fractionalIndex,
-        })
-      ),
-      ...pendingEdgeRemovals.map((id) =>
-        removeEdge({ projectId: pid, edgeId: id })
-      ),
-    ])
-      .then(() => {
-        console.log("BackendCanvas sync loop: sync successful");
-        clearPending();
-      })
-      .catch((e) => {
-        console.error("BackendCanvas sync loop: sync failed", e);
-      });
+        .catch((e) => {
+          console.error("BackendCanvas sync loop: sync failed", e);
+        });
+    }, 500);
+
+    return () => clearTimeout(timer);
   }, [
     pendingNodeUpserts,
     pendingNodeRemovals,
@@ -251,7 +347,7 @@ function Flow({ projectId, view }: BackendCanvasProps) {
           onConnect={onConnect}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
-          fitView
+          onMoveEnd={handleMoveEnd}
           attributionPosition="bottom-right"
         >
           <Background gap={12} size={1} />
@@ -284,7 +380,7 @@ function Flow({ projectId, view }: BackendCanvasProps) {
         onConnect={onConnect}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
-        fitView
+        onMoveEnd={handleMoveEnd}
         attributionPosition="bottom-right"
       >
         <Background gap={12} size={1} />

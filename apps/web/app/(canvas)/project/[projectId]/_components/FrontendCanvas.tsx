@@ -46,6 +46,21 @@ export function FrontendCanvas({ projectId }: FrontendCanvasProps) {
       },
       { scope: "document", source: "user" }
     );
+
+    // Listen to session changes to save camera viewport
+    let cameraSaveTimeout: NodeJS.Timeout;
+    editor.store.listen(
+      () => {
+        clearTimeout(cameraSaveTimeout);
+        cameraSaveTimeout = setTimeout(() => {
+          try {
+            const camera = editor.getCamera();
+            localStorage.setItem(`canvas_viewport_${projectId}_frontend`, JSON.stringify({ x: camera.x, y: camera.y, z: camera.z }));
+          } catch (e) {}
+        }, 500);
+      },
+      { scope: "session" }
+    );
   };
 
   // Both editor (state) and initialRecords are reactive —
@@ -53,20 +68,27 @@ export function FrontendCanvas({ projectId }: FrontendCanvasProps) {
   useEffect(() => {
     if (!editor || hydrated) return;
     if (initialRecords === undefined) return; // Convex still loading
-    if (initialRecords.length === 0) {
-      setHydrated(true);
-      return; // empty canvas
-    }
 
-    try {
-      editor.store.mergeRemoteChanges(() => {
-        editor.store.put(initialRecords as any);
-      });
-      setHydrated(true);
-    } catch (err) {
-      console.error("Failed to hydrate tldraw from Convex:", err);
+    if (initialRecords.length > 0) {
+      try {
+        editor.store.mergeRemoteChanges(() => {
+          editor.store.put(initialRecords as any);
+        });
+      } catch (err) {
+        console.error("Failed to hydrate tldraw from Convex:", err);
+      }
     }
-  }, [editor, initialRecords, hydrated]);
+    
+    setHydrated(true);
+
+    // Restore camera
+    try {
+      const saved = localStorage.getItem(`canvas_viewport_${projectId}_frontend`);
+      if (saved) {
+        editor.setCamera(JSON.parse(saved));
+      }
+    } catch (err) {}
+  }, [editor, initialRecords, hydrated, projectId]);
 
   // Show loader until Convex data is ready
   if (initialRecords === undefined) {

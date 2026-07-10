@@ -90,6 +90,7 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
   const [isEditingName, setIsEditingName] = useState(data.label === "");
   const [nameError, setNameError] = useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
+  const nodeRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
     if (isEditingName) {
@@ -120,7 +121,7 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
     updateNode(id, {
       data: {
         ...data,
-        indexes: [...indexes, { name: "idx_new", columns: "" }]
+        indexes: [...indexes, { name: "", columns: "" }]
       }
     });
     setEditingIndex(indexes.length);
@@ -136,7 +137,40 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
     let finalName = editingName.trim();
     if (!finalName) {
       if (!data.label) {
-        useBackendCanvasStore.getState().deleteNode(id);
+        const isBlur = e?.type === "blur";
+        if (isBlur) {
+          const relatedTarget = (e as React.FocusEvent).relatedTarget as Node | null;
+          if (nodeRef.current?.contains(relatedTarget)) {
+             const defaultName = "Untitled_Table";
+             const latestNode = useBackendCanvasStore.getState().nodes.find(n => n.id === id);
+             if (latestNode) {
+                 updateNode(id, { data: { ...latestNode.data, label: defaultName } });
+             }
+             setEditingName(defaultName);
+             setNameError(false);
+             setIsEditingName(false);
+             return;
+          }
+        }
+
+        const latestNode = useBackendCanvasStore.getState().nodes.find(n => n.id === id);
+        if (!latestNode) return;
+        
+        const latestCols = latestNode.data.columns || [];
+        const latestIdxs = latestNode.data.indexes || [];
+        
+        const isEmpty = latestCols.length === 0 && latestIdxs.length === 0;
+        const isInitial = latestCols.length === 1 && latestCols[0]?.name === "_id" && latestIdxs.length === 0;
+        
+        if (isEmpty || isInitial) {
+          useBackendCanvasStore.getState().deleteNode(id);
+        } else {
+          const defaultName = "Untitled_Table";
+          updateNode(id, { data: { ...latestNode.data, label: defaultName } });
+          setEditingName(defaultName);
+          setNameError(false);
+          setIsEditingName(false);
+        }
         return;
       }
       finalName = data.label; // revert to original valid name
@@ -159,14 +193,22 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
     }
     
     setNameError(false);
-    console.log("saveName: updating node", id, "with label", finalName);
-    updateNode(id, { data: { ...data, label: finalName } });
+    const latestNode = useBackendCanvasStore.getState().nodes.find(n => n.id === id);
+    if (latestNode) {
+        updateNode(id, { data: { ...latestNode.data, label: finalName } });
+    } else {
+        updateNode(id, { data: { ...data, label: finalName } });
+    }
     setEditingName(finalName);
     setIsEditingName(false);
   };
 
   return (
-    <div className={cn("shadow-md rounded-xl bg-card border-2 min-w-[250px] max-w-[350px] overflow-hidden", selected ? "border-primary" : "border-border")}>
+    <div 
+      ref={nodeRef}
+      tabIndex={-1}
+      className={cn("shadow-md rounded-xl bg-card border-2 min-w-[250px] max-w-[350px] overflow-hidden focus:outline-none", selected ? "border-primary" : "border-border")}
+    >
       <Handle type="target" position={Position.Top} className="w-2 h-2" />
       <div className="px-3 py-2 bg-secondary/80 border-b flex items-center justify-between group">
         <div className="flex items-center flex-1">
@@ -270,6 +312,7 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
                 <div 
                   className="flex items-center justify-between w-full cursor-pointer"
                   onClick={() => setEditingCol(i)}
+                  onMouseDown={(e) => e.preventDefault()}
                 >
                   <div className="flex items-center gap-2 overflow-hidden">
                     {col.isPrimaryKey && <span className="text-[9px] bg-yellow-500/20 text-yellow-600 px-1 rounded font-bold shrink-0">PK</span>}
@@ -289,7 +332,13 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
       </div>
       
       <div className="bg-secondary/20 p-1.5 border-t">
-        <Button variant="ghost" size="sm" className="w-full h-6 text-xs text-muted-foreground hover:text-foreground" onClick={addColumn}>
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          className="w-full h-6 text-xs text-muted-foreground hover:text-foreground" 
+          onClick={addColumn}
+          onMouseDown={(e) => e.preventDefault()}
+        >
           <Plus size={12} className="mr-1" /> Add column
         </Button>
       </div>
@@ -384,6 +433,7 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
                 <div 
                   className="flex flex-col w-full cursor-pointer"
                   onClick={() => setEditingIndex(i)}
+                  onMouseDown={(e) => e.preventDefault()}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 overflow-hidden">
@@ -404,7 +454,13 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
       </div>
       
       <div className="bg-secondary/20 p-1.5 border-t">
-        <Button variant="ghost" size="sm" className="w-full h-6 text-xs text-muted-foreground hover:text-foreground" onClick={addIndex}>
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          className="w-full h-6 text-xs text-muted-foreground hover:text-foreground" 
+          onClick={addIndex}
+          onMouseDown={(e) => e.preventDefault()}
+        >
           <Plus size={12} className="mr-1" /> Add index
         </Button>
       </div>
