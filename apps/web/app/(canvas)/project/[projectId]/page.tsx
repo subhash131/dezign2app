@@ -22,7 +22,7 @@ export default function ProjectCanvasPage({ params }: { params: Promise<{ projec
   
   const [view, setView] = useQueryState<BackendCanvasView>(
     "view",
-    parseAsStringEnum<BackendCanvasView>(["graph", "sequence"]).withDefault("graph")
+    parseAsStringEnum<BackendCanvasView>(["graph", "sequence", "schema"]).withDefault("graph")
   );
 
   const [aiPanelOpen, setAiPanelOpen] = useState(false);

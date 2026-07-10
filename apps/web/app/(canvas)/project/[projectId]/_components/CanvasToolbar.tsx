@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { ArrowLeft, MonitorPlay, Network, Workflow, Sparkles, LayoutGrid } from "lucide-react";
+import { ArrowLeft, MonitorPlay, Network, Workflow, Sparkles, LayoutGrid, Database, PlusSquare, FolderPlus } from "lucide-react";
 import { CanvasMode, BackendCanvasView } from "@/types/canvas";
 import { Button } from "@workspace/ui/components/button";
 import { Tabs, TabsList, TabsTrigger } from "@workspace/ui/components/tabs";
@@ -28,8 +28,29 @@ export function CanvasToolbar({
   aiPanelOpen,
   setAiPanelOpen,
 }: CanvasToolbarProps) {
+  const addTableNode = useBackendCanvasStore(s => s.addTableNode);
+  const addNode = useBackendCanvasStore(s => s.addNode);
+  const nodes = useBackendCanvasStore(s => s.nodes);
   // We can hook into the store for auto-layout if needed
   // const runAutoLayout = useBackendCanvasStore(s => s.runAutoLayout); // to be implemented
+
+  const handleAddTable = () => {
+    addTableNode();
+  };
+
+  const handleAddGroup = () => {
+    addNode({
+      id: crypto.randomUUID(),
+      type: "group",
+      position: { x: 50, y: 50 },
+      style: { width: 450, height: 300 },
+      width: 450,
+      height: 300,
+      data: { 
+        label: ""
+      },
+    });
+  };
 
   return (
     <div className="flex items-center justify-between h-14 px-4 border-b bg-background shrink-0">
@@ -59,8 +80,8 @@ export function CanvasToolbar({
         {mode === "backend" && (
           <>
             <Separator orientation="vertical" className="h-6" />
-            <Tabs value={view} onValueChange={(v) => setView(v as BackendCanvasView)} className="w-[200px]">
-              <TabsList className="grid w-full grid-cols-2 h-9">
+            <Tabs value={view} onValueChange={(v) => setView(v as BackendCanvasView)} className="w-[300px]">
+              <TabsList className="grid w-full grid-cols-3 h-9">
                 <TabsTrigger value="graph" className="text-xs">
                   <Network className="w-3 h-3 mr-1.5" />
                   Graph
@@ -69,9 +90,25 @@ export function CanvasToolbar({
                   <Workflow className="w-3 h-3 mr-1.5" />
                   Sequence
                 </TabsTrigger>
+                <TabsTrigger value="schema" className="text-xs">
+                  <Database className="w-3 h-3 mr-1.5" />
+                  Schema
+                </TabsTrigger>
               </TabsList>
             </Tabs>
             
+            {view === "schema" && (
+              <>
+                <Button variant="outline" size="sm" className="h-9 text-xs" onClick={handleAddTable}>
+                  <PlusSquare className="w-3.5 h-3.5 mr-2" />
+                  Table
+                </Button>
+                <Button variant="outline" size="sm" className="h-9 text-xs" onClick={handleAddGroup}>
+                  <FolderPlus className="w-3.5 h-3.5 mr-2" />
+                  Group
+                </Button>
+              </>
+            )}
             <Button variant="outline" size="sm" className="h-9 text-xs" onClick={() => {
                // runAutoLayout()
             }}>

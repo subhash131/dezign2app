@@ -8,6 +8,7 @@ import {
   MiniMap,
   ReactFlowProvider,
   useReactFlow,
+  type Node,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { useMutation, useQuery } from "convex/react";
@@ -17,7 +18,12 @@ import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { BackendCanvasAdapter } from "@/lib/canvas-adapters/backendAdapter";
 import { BackendCanvasView, BackendNode, BackendEdge } from "@/types/canvas";
 import { nodeTypes } from "./backend-nodes/Nodes";
+import { ForeignKeyEdge } from "./backend-nodes/ForeignKeyEdge";
 import ELK from "elkjs/lib/elk.bundled.js";
+
+const edgeTypes = {
+  "foreign-key": ForeignKeyEdge,
+};
 
 const elk = new ELK();
 
@@ -89,9 +95,12 @@ function Flow({ projectId, view }: BackendCanvasProps) {
   const upsertEdge = useMutation(api.canvas.upsertBackendEdge);
   const removeEdge = useMutation(api.canvas.removeBackendEdge);
 
+  const hasHydrated = React.useRef(false);
+
   // Hydrate from Convex — useQuery is reactive, effect runs when data arrives
   useEffect(() => {
-    if (initialElements === undefined) return; // still loading — wait
+    if (initialElements === undefined || hasHydrated.current) return; // still loading or already loaded
+    hasHydrated.current = true;
 
     const nodes: BackendNode[] = (initialElements.nodes ?? []).map((row: any) => ({
       id: row.nodeId,
@@ -99,6 +108,10 @@ function Flow({ projectId, view }: BackendCanvasProps) {
       position: row.position,
       data: row.data,
       fractionalIndex: row.fractionalIndex,
+      parentId: row.data?.parentId,
+      style: row.data?.style,
+      width: row.data?.width,
+      height: row.data?.height,
     }));
     const edges: BackendEdge[] = (initialElements.edges ?? []).map((row: any) => ({
       id: row.edgeId,
@@ -113,9 +126,7 @@ function Flow({ projectId, view }: BackendCanvasProps) {
     if (nodes.length > 0) {
       setTimeout(() => fitView(), 100);
     }
-  // Run once when initialElements resolves from undefined → data
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialElements]);
+  }, [initialElements, setNodesAndEdges, fitView]);
 
   // Fix stale closure: always reference live store state for the adapter
   useEffect(() => {
@@ -135,6 +146,8 @@ function Flow({ projectId, view }: BackendCanvasProps) {
       return;
     }
 
+    console.log("BackendCanvas sync loop: pendingNodeUpserts", pendingNodeUpserts);
+
     const pid = projectId as Id<"projects">;
 
     Promise.all([
@@ -144,7 +157,13 @@ function Flow({ projectId, view }: BackendCanvasProps) {
           nodeId: n.id,
           type: n.type,
           position: n.position,
-          data: n.data,
+          data: { 
+            ...n.data, 
+            ...(n.parentId !== undefined && { parentId: n.parentId }), 
+            ...(n.style !== undefined && { style: n.style }), 
+            ...(n.width !== undefined && { width: n.width }), 
+            ...(n.height !== undefined && { height: n.height }) 
+          },
           fractionalIndex: n.fractionalIndex,
         })
       ),
@@ -166,8 +185,13 @@ function Flow({ projectId, view }: BackendCanvasProps) {
         removeEdge({ projectId: pid, edgeId: id })
       ),
     ])
-      .then(() => clearPending())
-      .catch(console.error);
+      .then(() => {
+        console.log("BackendCanvas sync loop: sync successful");
+        clearPending();
+      })
+      .catch((e) => {
+        console.error("BackendCanvas sync loop: sync failed", e);
+      });
   }, [
     pendingNodeUpserts,
     pendingNodeRemovals,
@@ -198,15 +222,68 @@ function Flow({ projectId, view }: BackendCanvasProps) {
     );
   }
 
+  if (view === "schema") {
+    const schemaNodes = nodes
+      .filter((n) => n.type === "entity" || n.type === "group")
+      .map((n) => {
+        if (n.type === "group") {
+          return {
+            ...n,
+            style: { ...n.style, minWidth: 450, minHeight: 300 },
+          };
+        }
+        return n;
+      });
+    const schemaEdges = edges.filter((e) => e.type === "foreign-key");
+    
+    return (
+      <div className="w-full h-full bg-muted/20">
+        <ReactFlow
+          nodes={schemaNodes}
+          edges={schemaEdges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onNodesDelete={(deleted: Node[]) => {
+            const store = useBackendCanvasStore.getState();
+            deleted.forEach(d => store.deleteNode(d.id));
+          }}
+          deleteKeyCode={["Backspace", "Delete"]}
+          onConnect={onConnect}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          fitView
+          attributionPosition="bottom-right"
+        >
+          <Background gap={12} size={1} />
+          <Controls />
+          <MiniMap />
+        </ReactFlow>
+      </div>
+    );
+  }
+
+  // Filter out schema specific things in graph view
+  const graphNodes = nodes.filter((n) => n.type !== "group" && n.type !== "entity");
+  // If we still want entities in graph view, we can just do n.type !== "group"
+  // The spec said: "New 3rd view — 'Schema' tab, dedicated to DB table nodes only, clean slate"
+  // This implies graph view probably doesn't need entity nodes, or if it does, it doesn't need groups.
+  // I will just filter out "group".
+  
   return (
     <div className="w-full h-full bg-muted/20">
       <ReactFlow
-        nodes={nodes}
+        nodes={nodes.filter(n => n.type !== "group")}
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onNodesDelete={(deleted: Node[]) => {
+          const store = useBackendCanvasStore.getState();
+          deleted.forEach(d => store.deleteNode(d.id));
+        }}
+        deleteKeyCode={["Backspace", "Delete"]}
         onConnect={onConnect}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         fitView
         attributionPosition="bottom-right"
       >

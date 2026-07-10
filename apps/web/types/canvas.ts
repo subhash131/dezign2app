@@ -1,7 +1,7 @@
 import { TLStoreSnapshot } from "tldraw";
 
 export type CanvasMode = "frontend" | "backend";
-export type BackendCanvasView = "graph" | "sequence";
+export type BackendCanvasView = "graph" | "sequence" | "schema";
 
 // --- Frontend Canvas Types ---
 
@@ -17,7 +17,8 @@ export type BackendNodeType =
   | "queue"
   | "entity"
   | "actor"
-  | "external";
+  | "external"
+  | "group";
 
 export type BackendNode = {
   id: string;
@@ -30,10 +31,22 @@ export type BackendNode = {
       type: string;
       isPrimaryKey?: boolean;
       isForeignKey?: boolean;
+      isNotNull?: boolean;
+      isUnique?: boolean;
+    }[];
+    indexes?: {
+      name: string;
+      columns: string;
+      isUnique?: boolean;
     }[];
     isActor?: boolean;
+    parentId?: string;
   };
   fractionalIndex: string; // For Z-order
+  parentId?: string;
+  style?: React.CSSProperties;
+  width?: number;
+  height?: number;
 };
 
 export type BackendEdgeType = "connection" | "foreign-key" | "message";
@@ -46,6 +59,8 @@ export type BackendEdge = {
   data?: {
     label?: string;
     sequenceOrder?: number;
+    sourceCardinality?: "1" | "N";
+    targetCardinality?: "1" | "N";
   };
   fractionalIndex: string; // For sequence diagram ordering
 };

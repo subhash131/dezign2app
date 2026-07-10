@@ -108,8 +108,28 @@ export const upsertBackendNode = mutation({
     fractionalIndex: v.string(),
   },
   async handler(ctx, args) {
+    console.log("upsertBackendNode called with args:", { nodeId: args.nodeId, type: args.type, label: args.data?.label });
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError("Not authenticated");
+
+    if ((args.type === "entity" || args.type === "group") && args.data?.label) {
+      const allNodes = await ctx.db
+        .query("canvas_backend_nodes")
+        .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+        .collect();
+
+      const exists = allNodes.some(
+        (n) =>
+          n.nodeId !== args.nodeId &&
+          n.type === args.type &&
+          n.data?.label?.toLowerCase() === args.data.label.toLowerCase()
+      );
+
+      if (exists) {
+        const typeName = args.type === "entity" ? "table" : "schema group";
+        throw new ConvexError(`A ${typeName} with the name "${args.data.label}" already exists.`);
+      }
+    }
 
     const existing = await ctx.db
       .query("canvas_backend_nodes")

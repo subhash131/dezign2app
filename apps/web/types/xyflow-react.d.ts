@@ -44,6 +44,22 @@ declare module "@xyflow/react" {
     id: string;
     data: TNode extends Node<infer TData, string> ? TData : never;
     selected?: boolean;
+    width?: number;
+    height?: number;
+  }
+
+  export interface EdgeProps<TEdge = Edge> {
+    id: string;
+    sourceX: number;
+    sourceY: number;
+    targetX: number;
+    targetY: number;
+    sourcePosition: string;
+    targetPosition: string;
+    data?: any;
+    markerEnd?: string;
+    markerStart?: string;
+    style?: React.CSSProperties;
   }
 
   export type NodeChange<TNode = Node> =
@@ -83,6 +99,8 @@ declare module "@xyflow/react" {
   export const Background: React.ComponentType<Record<string, unknown>>;
   export const Controls: React.ComponentType<Record<string, unknown>>;
   export const MiniMap: React.ComponentType<Record<string, unknown>>;
+  export const BaseEdge: React.ComponentType<any>;
+  export const NodeResizer: React.ComponentType<any>;
   export const ReactFlowProvider: React.ComponentType<{
     children?: React.ReactNode;
   }>;
@@ -117,4 +135,8 @@ declare module "@xyflow/react" {
     changes: EdgeChange<TEdge>[],
     edges: TEdge[],
   ): TEdge[];
+
+  export function getSmoothStepPath(params: any): [string, number, number, number, number];
+  
+  export function addEdge(edgeParams: any, edges: any[]): any[];
 }

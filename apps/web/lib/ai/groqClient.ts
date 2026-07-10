@@ -59,11 +59,11 @@ const backendTools = [
     type: "function",
     function: {
       name: "add_node",
-      description: "Add a service, database, queue, entity, external or actor node to the backend canvas.",
+      description: "Add a service, database, queue, entity, group, actor or external node to the backend canvas.",
       parameters: {
         type: "object",
         properties: {
-          type: { type: "string", enum: ["service", "database", "queue", "entity", "actor", "external"] },
+          type: { type: "string", enum: ["service", "database", "queue", "entity", "group", "actor", "external"] },
           label: { type: "string", description: "Name of the node" },
           data: { type: "object", description: "Additional data for the node, like columns for 'entity'" },
         },
@@ -139,6 +139,8 @@ export async function* streamCanvasAI(
   const systemPrompt = `You are an expert AI software architect and UI designer. 
 Your job is to assist the user in designing their system using the provided tools.
 You are currently viewing the **${canvasMode}** canvas.
+
+If working on a Database Schema, use 'entity' nodes and populate 'data.columns' with an array of { name, type, isPrimaryKey, isForeignKey, isNotNull, isUnique }. Use 'group' nodes to group tables, and 'foreign-key' edges to connect tables, specifying 'sourceCardinality' and 'targetCardinality' (1 or N) in 'data'.
 
 Current Canvas State:
 ${canvasStateContext}
