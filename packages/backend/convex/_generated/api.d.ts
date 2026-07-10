@@ -12,6 +12,7 @@ import type * as ai_conversations from "../ai/conversations.js";
 import type * as ai_messages from "../ai/messages.js";
 import type * as api_keys from "../api_keys.js";
 import type * as billing from "../billing.js";
+import type * as canvas from "../canvas.js";
 import type * as http from "../http.js";
 import type * as kanban from "../kanban.js";
 import type * as projects from "../projects.js";
@@ -37,6 +38,7 @@ declare const fullApi: ApiFromModules<{
   "ai/messages": typeof ai_messages;
   api_keys: typeof api_keys;
   billing: typeof billing;
+  canvas: typeof canvas;
   http: typeof http;
   kanban: typeof kanban;
   projects: typeof projects;

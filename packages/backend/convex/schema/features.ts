@@ -48,4 +48,41 @@ export const featureTables = {
     .index("by_status", ["status"])
     .index("by_user_status", ["userId", "status"])
     .index("by_org_status", ["organizationId", "status"]),
+
+  // Granular tldraw records — one row per shape/asset/camera
+  canvas_frontend_records: defineTable({
+    projectId: v.id("projects"),
+    recordId: v.string(),    // tldraw native ID e.g. "shape:xyz"
+    typeName: v.string(),    // "shape" | "asset" | "camera" | etc.
+    record: v.any(),
+    isDeleted: v.boolean(),
+  })
+    .index("by_project", ["projectId"])
+    .index("by_project_record", ["projectId", "recordId"]),
+
+  // Granular React Flow nodes
+  canvas_backend_nodes: defineTable({
+    projectId: v.id("projects"),
+    nodeId: v.string(),
+    type: v.string(),
+    position: v.object({ x: v.number(), y: v.number() }),
+    data: v.any(),
+    fractionalIndex: v.string(),
+  })
+    .index("by_project", ["projectId"])
+    .index("by_project_node", ["projectId", "nodeId"]),
+
+  // Granular React Flow edges
+  canvas_backend_edges: defineTable({
+    projectId: v.id("projects"),
+    edgeId: v.string(),
+    source: v.string(),
+    target: v.string(),
+    type: v.string(),
+    data: v.optional(v.any()),
+    fractionalIndex: v.string(),
+  })
+    .index("by_project", ["projectId"])
+    .index("by_project_edge", ["projectId", "edgeId"]),
+
 };

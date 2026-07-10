@@ -95,9 +95,17 @@ declare module "@xyflow/react" {
     },
   ): React.ReactElement;
 
+  export interface Viewport {
+    x: number;
+    y: number;
+    zoom: number;
+  }
+
   export function useReactFlow<TNode = Node, TEdge = Edge>(): {
     fitView: (options?: Record<string, unknown>) => void;
     screenToFlowPosition: (position: XYPosition) => XYPosition;
+    setViewport: (viewport: Viewport, options?: Record<string, unknown>) => void;
+    getViewport: () => Viewport;
   };
 
   export function applyNodeChanges<TNode = Node>(
