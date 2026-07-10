@@ -27,6 +27,10 @@ interface BackendCanvasState {
   pendingEdgeUpserts: BackendEdge[];
   pendingEdgeRemovals: string[];
 
+  // Deletion confirmation
+  nodesPendingDeletion: BackendNode[];
+  setNodesPendingDeletion: (nodes: BackendNode[]) => void;
+
   // React Flow handlers
   onNodesChange: (changes: NodeChange[]) => void;
   onEdgesChange: (changes: EdgeChange[]) => void;
@@ -63,6 +67,8 @@ export const useBackendCanvasStore = create<BackendCanvasState>((set, get) => ({
   pendingNodeRemovals: [],
   pendingEdgeUpserts: [],
   pendingEdgeRemovals: [],
+  nodesPendingDeletion: [],
+  setNodesPendingDeletion: (nodes) => set({ nodesPendingDeletion: nodes }),
 
   onNodesChange: (changes) => {
     // Clamp negative positions for child nodes before applying changes
@@ -256,10 +262,21 @@ export const useBackendCanvasStore = create<BackendCanvasState>((set, get) => ({
   },
 
   deleteNode: (id) => {
+    const getChildrenIds = (parentId: string): string[] => {
+      const children = get().nodes.filter(n => n.parentId === parentId).map(n => n.id);
+      let allIds = [...children];
+      for (const childId of children) {
+         allIds = [...allIds, ...getChildrenIds(childId)];
+      }
+      return allIds;
+    };
+    
+    const idsToDelete = [id, ...getChildrenIds(id)];
+    
     set({
-      nodes: get().nodes.filter((n) => n.id !== id),
-      edges: get().edges.filter((e) => e.source !== id && e.target !== id),
-      pendingNodeRemovals: [...get().pendingNodeRemovals, id],
+      nodes: get().nodes.filter((n) => !idsToDelete.includes(n.id)),
+      edges: get().edges.filter((e) => !idsToDelete.includes(e.source) && !idsToDelete.includes(e.target)),
+      pendingNodeRemovals: [...get().pendingNodeRemovals, ...idsToDelete],
     });
   },
 

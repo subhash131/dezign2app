@@ -43,6 +43,30 @@ export type BackendNode = {
     parentId?: string;
     graphPosition?: { x: number; y: number };
     schemaPosition?: { x: number; y: number };
+    // New fields for Graph tab detailed nodes
+    events?: { id: string; name: string }[];
+    inputs?: { id: string; name: string }[];
+    logic?: { id: string; name: string }[];
+    outputs?: { id: string; name: string }[];
+    actions?: { id: string; name: string }[];
+    messages?: { id: string; name: string }[];
+    tableRef?: string; // Reference to an entity node ID
+    techStack?: string;
+    dbType?: string;
+    baseUrl?: string;
+    queueType?: string;
+    cors?: boolean;
+    corsOrigins?: string;
+    rateLimit?: string;
+    port?: string;
+    endpoints?: { 
+      id: string; 
+      name: string; 
+      type: string;
+      headers?: { id: string; key: string; value: string }[];
+      params?: { id: string; key: string; type: string }[];
+      body?: string;
+    }[];
   };
   fractionalIndex: string; // For Z-order
   parentId?: string;

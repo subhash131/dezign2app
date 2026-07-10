@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { NodeProps, NodeResizer } from "@xyflow/react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
-import { Plus } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 
@@ -10,6 +10,7 @@ export const SchemaGroupNode = ({ id, data, selected, width, height }: NodeProps
   const addTableNode = useBackendCanvasStore(s => s.addTableNode);
   const updateNode = useBackendCanvasStore(s => s.updateNode);
   const deleteNode = useBackendCanvasStore(s => s.deleteNode);
+  const setNodesPendingDeletion = useBackendCanvasStore(s => s.setNodesPendingDeletion);
   const nodes = useBackendCanvasStore(s => s.nodes);
 
   const [isEditing, setIsEditing] = useState(data.label === "");
@@ -62,12 +63,23 @@ export const SchemaGroupNode = ({ id, data, selected, width, height }: NodeProps
     addTableNode(id);
   };
 
+  const handleDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const hasChildren = nodes.some(n => n.parentId === id);
+    if (hasChildren || data.label) {
+      const node = nodes.find(n => n.id === id);
+      if (node) setNodesPendingDeletion([node]);
+    } else {
+      deleteNode(id);
+    }
+  };
+
   return (
     <>
 
       <div 
         className={cn(
-          "bg-secondary/10 border-2 rounded-xl backdrop-blur-sm relative pointer-events-auto",
+          "bg-secondary/10 border-2 rounded-xl backdrop-blur-sm relative pointer-events-auto group",
           selected ? "border-primary border-dashed" : "border-border border-dashed"
         )}
         style={{ 
@@ -112,9 +124,12 @@ export const SchemaGroupNode = ({ id, data, selected, width, height }: NodeProps
             data.label
           )}
         </div>
-        <div className="absolute top-2 right-2">
-          <Button variant="secondary" size="icon" className="h-6 w-6" onClick={handleAddTable}>
+        <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <Button variant="secondary" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground" onClick={handleAddTable}>
             <Plus className="h-4 w-4" />
+          </Button>
+          <Button variant="secondary" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive hover:bg-destructive/10" onClick={handleDelete}>
+            <Trash2 className="h-4 w-4" />
           </Button>
         </div>
       </div>

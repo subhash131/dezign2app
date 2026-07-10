@@ -131,6 +131,18 @@ export const upsertBackendNode = mutation({
       }
     }
 
+    if (args.type === "entity" && Array.isArray(args.data?.columns)) {
+      const seen = new Set<string>();
+      for (const col of args.data.columns) {
+        if (!col.name || typeof col.name !== "string" || col.name.trim() === "") continue;
+        const lowerName = col.name.toLowerCase();
+        if (seen.has(lowerName)) {
+          throw new ConvexError(`A column with the name "${col.name}" already exists in this table.`);
+        }
+        seen.add(lowerName);
+      }
+    }
+
     const existing = await ctx.db
       .query("canvas_backend_nodes")
       .withIndex("by_project_node", (q) =>

@@ -10,10 +10,21 @@ import {
   useReactFlow,
   Panel,
   type Node,
+  type NodeChange,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@workspace/ui/components/alert-dialog";
 import { Button } from "@workspace/ui/components/button";
-import { PlusSquare, FolderPlus, LayoutGrid } from "lucide-react";
+import { PlusSquare, FolderPlus, LayoutGrid, User, Server, Globe, Container, Database } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@workspace/backend/_generated/api";
 import { Id } from "@workspace/backend/_generated/dataModel";
@@ -90,6 +101,54 @@ function Flow({ projectId, view }: BackendCanvasProps) {
   const addTableNode = useBackendCanvasStore(s => s.addTableNode);
   const addNode = useBackendCanvasStore(s => s.addNode);
 
+  const handleNodesChange = useCallback((changes: NodeChange[]) => {
+    const removals = changes.filter(c => c.type === "remove");
+    const otherChanges = changes.filter(c => c.type !== "remove");
+    
+    if (removals.length > 0) {
+      const store = useBackendCanvasStore.getState();
+      const entitiesToConfirm: BackendNode[] = [];
+      const safeToRemove: NodeChange[] = [];
+      
+      removals.forEach(r => {
+        const node = store.nodes.find(n => n.id === r.id);
+        if (node && node.type === "entity") {
+          const cols = node.data.columns || [];
+          const idxs = node.data.indexes || [];
+          const isEmpty = cols.length === 0 && idxs.length === 0;
+          const isInitial = cols.length === 1 && cols[0]?.name === "_id" && idxs.length === 0;
+          
+          if (!isEmpty && !isInitial) {
+            entitiesToConfirm.push(node);
+          } else {
+            safeToRemove.push(r);
+          }
+        } else if (node && node.type === "group") {
+          const hasChildren = store.nodes.some(n => n.parentId === node.id);
+          if (hasChildren || node.data.label) {
+            entitiesToConfirm.push(node);
+          } else {
+            safeToRemove.push(r);
+          }
+        } else if (node) {
+          safeToRemove.push(r);
+        }
+      });
+      
+      if (entitiesToConfirm.length > 0) {
+        store.setNodesPendingDeletion(entitiesToConfirm);
+        if (otherChanges.length > 0 || safeToRemove.length > 0) {
+          onNodesChange([...otherChanges, ...safeToRemove]);
+        }
+        return;
+      }
+    }
+    
+    if (changes.length > 0) {
+      onNodesChange(changes);
+    }
+  }, [onNodesChange]);
+
   const { fitView, setViewport, screenToFlowPosition } = useReactFlow();
 
   const getCenterPosition = () => {
@@ -100,17 +159,33 @@ function Flow({ projectId, view }: BackendCanvasProps) {
     });
   };
 
+  const getOffsetPosition = (baseX: number, baseY: number) => {
+    let x = baseX;
+    let y = baseY;
+    const offset = 20;
+    
+    // Find a position that doesn't exactly overlap with existing nodes
+    while (nodes.some(node => Math.abs(node.position.x - x) < 5 && Math.abs(node.position.y - y) < 5)) {
+      x += offset;
+      y += offset;
+    }
+    
+    return { x, y };
+  };
+
   const handleAddTable = () => {
     const center = getCenterPosition();
-    addTableNode(undefined, { x: center.x - 75, y: center.y - 30 }); // offset by half the rough width/height of table
+    const { x, y } = getOffsetPosition(center.x - 75, center.y - 30);
+    addTableNode(undefined, { x, y }); // offset by half the rough width/height of table
   };
 
   const handleAddGroup = () => {
     const center = getCenterPosition();
+    const { x, y } = getOffsetPosition(center.x - 225, center.y - 150);
     addNode({
       id: crypto.randomUUID(),
       type: "group",
-      position: { x: center.x - 225, y: center.y - 150 },
+      position: { x, y },
       style: { width: 450, height: 300 },
       width: 450,
       height: 300,
@@ -375,12 +450,8 @@ function Flow({ projectId, view }: BackendCanvasProps) {
         <ReactFlow
           nodes={schemaNodes}
           edges={schemaEdges}
-          onNodesChange={onNodesChange}
+          onNodesChange={handleNodesChange}
           onEdgesChange={onEdgesChange}
-          onNodesDelete={(deleted: Node[]) => {
-            const store = useBackendCanvasStore.getState();
-            deleted.forEach(d => store.deleteNode(d.id));
-          }}
           deleteKeyCode={["Backspace", "Delete"]}
           onConnect={onConnect}
           nodeTypes={nodeTypes}
@@ -419,17 +490,32 @@ function Flow({ projectId, view }: BackendCanvasProps) {
   // This implies graph view probably doesn't need entity nodes, or if it does, it doesn't need groups.
   // I will just filter out "group".
   
+  const handleAddGraphNode = (type: "service" | "database" | "queue" | "actor" | "external", label: string) => {
+    const center = getCenterPosition();
+    const { x, y } = getOffsetPosition(center.x - 100, center.y - 100);
+    addNode({
+      id: crypto.randomUUID(),
+      type,
+      position: { x, y },
+      data: { 
+        label,
+        events: type === 'actor' ? [] : undefined,
+        inputs: type === 'service' ? [] : undefined,
+        logic: type === 'service' ? [] : undefined,
+        outputs: (type === 'service' || type === 'queue') ? [] : undefined,
+        actions: type === 'external' ? [] : undefined,
+        messages: type === 'queue' ? [] : undefined,
+      },
+    });
+  };
+
   return (
     <div className="w-full h-full bg-muted/20">
       <ReactFlow
         nodes={nodes.filter(n => n.type !== "group")}
         edges={edges}
-        onNodesChange={onNodesChange}
+        onNodesChange={handleNodesChange}
         onEdgesChange={onEdgesChange}
-        onNodesDelete={(deleted: Node[]) => {
-          const store = useBackendCanvasStore.getState();
-          deleted.forEach(d => store.deleteNode(d.id));
-        }}
         deleteKeyCode={["Backspace", "Delete"]}
         onConnect={onConnect}
         nodeTypes={nodeTypes}
@@ -440,8 +526,28 @@ function Flow({ projectId, view }: BackendCanvasProps) {
         <Background gap={12} size={1} />
         <Controls />
         <MiniMap />
-        <Panel position="top-right" className="flex gap-2">
-          <Button variant="outline" size="sm" className="bg-background shadow-sm h-9 text-xs" onClick={() => {
+        <Panel position="top-right" className="flex gap-2 flex-col">
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start" onClick={() => handleAddGraphNode('actor', 'New Client')}>
+            <User className="w-3.5 h-3.5 mr-2" />
+            Client
+          </Button>
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start" onClick={() => handleAddGraphNode('service', 'New Service')}>
+            <Server className="w-3.5 h-3.5 mr-2" />
+            Service
+          </Button>
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start" onClick={() => handleAddGraphNode('external', 'New API')}>
+            <Globe className="w-3.5 h-3.5 mr-2" />
+            External
+          </Button>
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start" onClick={() => handleAddGraphNode('queue', 'New Queue')}>
+            <Container className="w-3.5 h-3.5 mr-2" />
+            Queue
+          </Button>
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start" onClick={() => handleAddGraphNode('database', 'Table Ref')}>
+            <Database className="w-3.5 h-3.5 mr-2" />
+            DB Ref
+          </Button>
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start mt-2" onClick={() => {
              // runAutoLayout()
           }}>
             <LayoutGrid className="w-3.5 h-3.5 mr-2" />
@@ -455,9 +561,33 @@ function Flow({ projectId, view }: BackendCanvasProps) {
 
 export function BackendCanvas(props: BackendCanvasProps) {
   if (!props.projectId) return null;
+  
+  const nodesPendingDeletion = useBackendCanvasStore(s => s.nodesPendingDeletion);
+  const setNodesPendingDeletion = useBackendCanvasStore(s => s.setNodesPendingDeletion);
+  const deleteNode = useBackendCanvasStore(s => s.deleteNode);
+
   return (
     <ReactFlowProvider>
       <Flow {...props} />
+      <AlertDialog open={nodesPendingDeletion.length > 0} onOpenChange={(open) => !open && setNodesPendingDeletion([])}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will delete the {nodesPendingDeletion.length > 1 ? "selected items" : (nodesPendingDeletion[0]?.type === 'group' ? "group" : "table")} "{nodesPendingDeletion.map(n => n.data.label || 'Untitled').join(", ")}" and all of their contents. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              nodesPendingDeletion.forEach(n => deleteNode(n.id));
+              setNodesPendingDeletion([]);
+            }} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </ReactFlowProvider>
   );
 }

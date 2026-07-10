@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Handle, Position, NodeProps } from "@xyflow/react";
-import { Server, Database, Container, Table2, User, Globe, Plus, Check, X } from "lucide-react";
+import { Server, Database, Container, Table2, User, Globe, Plus, Check, X, Trash2 } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { Input } from "@workspace/ui/components/input";
@@ -30,61 +30,15 @@ const ensureUniqueColumnNames = (columns: any[]) => {
   return result;
 };
 
-// --- Service Node ---
-export const ServiceNode = ({ data, selected }: NodeProps<BackendNode>) => (
-  <div className={cn("px-4 py-3 shadow-md rounded-xl bg-card border-2 flex items-center min-w-[150px]", selected ? "border-primary" : "border-border")}>
-    <Handle type="target" position={Position.Top} className="w-2 h-2" />
-    <div className="flex items-center">
-      <div className="rounded-full w-8 h-8 flex items-center justify-center bg-blue-500/20 text-blue-500 mr-3">
-        <Server size={16} />
-      </div>
-      <div className="flex flex-col">
-        <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Service</span>
-        <span className="font-medium text-sm">{data.label}</span>
-      </div>
-    </div>
-    <Handle type="source" position={Position.Bottom} className="w-2 h-2" />
-  </div>
-);
-
-// --- Database Node ---
-export const DatabaseNode = ({ data, selected }: NodeProps<BackendNode>) => (
-  <div className={cn("px-4 py-3 shadow-md rounded-xl bg-card border-2 flex items-center min-w-[150px]", selected ? "border-primary" : "border-border")}>
-    <Handle type="target" position={Position.Top} className="w-2 h-2" />
-    <div className="flex items-center">
-      <div className="rounded-full w-8 h-8 flex items-center justify-center bg-orange-500/20 text-orange-500 mr-3">
-        <Database size={16} />
-      </div>
-      <div className="flex flex-col">
-        <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Database</span>
-        <span className="font-medium text-sm">{data.label}</span>
-      </div>
-    </div>
-    <Handle type="source" position={Position.Bottom} className="w-2 h-2" />
-  </div>
-);
-
-// --- Queue Node ---
-export const QueueNode = ({ data, selected }: NodeProps<BackendNode>) => (
-  <div className={cn("px-4 py-3 shadow-md rounded-xl bg-card border-2 flex items-center min-w-[150px]", selected ? "border-primary" : "border-border")}>
-    <Handle type="target" position={Position.Top} className="w-2 h-2" />
-    <div className="flex items-center">
-      <div className="rounded-full w-8 h-8 flex items-center justify-center bg-purple-500/20 text-purple-500 mr-3">
-        <Container size={16} />
-      </div>
-      <div className="flex flex-col">
-        <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Queue</span>
-        <span className="font-medium text-sm">{data.label}</span>
-      </div>
-    </div>
-    <Handle type="source" position={Position.Bottom} className="w-2 h-2" />
-  </div>
-);
+// Graph nodes (Service, Database, Queue, External, Actor) are now imported from GraphNodes.tsx
 
 // --- Entity Node ---
 export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
+  const setNodesPendingDeletion = useBackendCanvasStore((s) => s.setNodesPendingDeletion);
   const [editingCol, setEditingCol] = useState<number | null>(null);
+  const [editingColName, setEditingColName] = useState("");
+  const [colNameError, setColNameError] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingName, setEditingName] = useState(data.label);
   const [isEditingName, setIsEditingName] = useState(data.label === "");
@@ -109,6 +63,8 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
       }
     });
     setEditingCol(columns.length);
+    setEditingColName("");
+    setColNameError(false);
   };
 
   const updateColumn = (index: number, changes: any) => {
@@ -237,12 +193,31 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
             </div>
           ) : (
             <span 
-              className="font-semibold text-sm cursor-pointer hover:text-primary transition-colors flex-1"
+              className="font-semibold text-sm cursor-pointer hover:text-primary transition-colors flex-1 truncate"
               onClick={() => setIsEditingName(true)}
             >
               {data.label}
             </span>
           )}
+        </div>
+        <div 
+          className="opacity-0 group-hover:opacity-100 flex items-center justify-center p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all cursor-pointer ml-2 shrink-0"
+          onClick={(e) => {
+            e.stopPropagation();
+            const cols = data.columns || [];
+            const idxs = data.indexes || [];
+            const isEmpty = cols.length === 0 && idxs.length === 0;
+            const isInitial = cols.length === 1 && cols[0]?.name === "_id" && idxs.length === 0;
+            
+            if (!isEmpty && !isInitial) {
+              const node = useBackendCanvasStore.getState().nodes.find(n => n.id === id);
+              if (node) setNodesPendingDeletion([node]);
+            } else {
+              useBackendCanvasStore.getState().deleteNode(id);
+            }
+          }}
+        >
+          <Trash2 size={14} />
         </div>
       </div>
       
@@ -257,29 +232,39 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
               {isEditing ? (
                 <div className="flex items-center gap-2 w-full">
                   <Input 
-                    value={col.name} 
-                    onChange={(e) => updateColumn(i, { name: e.target.value })} 
-                    className="h-6 text-xs w-24"
+                    value={editingColName} 
+                    onChange={(e) => {
+                      setEditingColName(e.target.value);
+                      if (colNameError) setColNameError(false);
+                    }} 
+                    className={cn("h-6 text-xs w-24", colNameError && "border-destructive focus-visible:ring-destructive")}
                     autoFocus
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
+                        const trimmedName = editingColName.trim();
                         let newCols = [...columns];
-                        if (newCols[i]?.name.trim() === "") {
+                        if (trimmedName === "") {
                           if (newCols[i]?.isPrimaryKey) {
                             newCols[i].name = "_id";
                             updateNode(id, { data: { ...data, columns: newCols } });
                           } else {
                             newCols.splice(i, 1);
-                            newCols = ensureUniqueColumnNames(newCols);
                             updateNode(id, { data: { ...data, columns: newCols } });
                           }
                           setEditingCol(null);
                         } else {
-                          newCols = ensureUniqueColumnNames(newCols);
+                          const isDuplicate = newCols.some((c, idx) => idx !== i && c.name.toLowerCase() === trimmedName.toLowerCase());
+                          if (isDuplicate) {
+                            setColNameError(true);
+                            return;
+                          }
+                          newCols[i]!.name = trimmedName;
                           newCols.splice(i + 1, 0, { name: "", type: "VARCHAR" });
                           updateNode(id, { data: { ...data, columns: newCols } });
                           setEditingCol(i + 1);
+                          setEditingColName("");
+                          setColNameError(false);
                         }
                       }
                       if (e.key === "Escape") {
@@ -292,24 +277,37 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
                       if (related?.closest('[role="combobox"]')) return;
                       if (related?.closest('[role="listbox"]')) return;
                       
+                      const trimmedName = editingColName.trim();
                       let newCols = [...columns];
-                      if (newCols[i]?.name.trim() === "") {
+                      if (trimmedName === "") {
                         if (newCols[i]?.isPrimaryKey) {
                           newCols[i].name = "_id";
+                          updateNode(id, { data: { ...data, columns: newCols } });
+                          setEditingCol(null);
                         } else {
                           newCols.splice(i, 1);
+                          updateNode(id, { data: { ...data, columns: newCols } });
+                          setEditingCol(null);
                         }
+                      } else {
+                        const isDuplicate = newCols.some((c, idx) => idx !== i && c.name.toLowerCase() === trimmedName.toLowerCase());
+                        if (isDuplicate) {
+                          setColNameError(true);
+                          setTimeout(() => e.target.focus(), 0);
+                          return;
+                        }
+                        newCols[i]!.name = trimmedName;
+                        updateNode(id, { data: { ...data, columns: newCols } });
+                        setEditingCol(null);
                       }
-                      newCols = ensureUniqueColumnNames(newCols);
-                      updateNode(id, { data: { ...data, columns: newCols } });
-                      setEditingCol(null);
                     }}
                   />
                   <Select 
                     value={col.type} 
                     onValueChange={(val) => {
-                      if (col.name.trim() === "") {
-                        const newCols = [...columns];
+                      const trimmedName = editingColName.trim();
+                      let newCols = [...columns];
+                      if (trimmedName === "") {
                         if (col.isPrimaryKey && newCols[i]) {
                           newCols[i].name = "_id";
                           newCols[i].type = val;
@@ -317,10 +315,20 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
                           newCols.splice(i, 1);
                         }
                         updateNode(id, { data: { ...data, columns: newCols } });
+                        setEditingCol(null);
                       } else {
-                        updateColumn(i, { type: val });
+                        const isDuplicate = newCols.some((c, idx) => idx !== i && c.name.toLowerCase() === trimmedName.toLowerCase());
+                        if (isDuplicate) {
+                          setColNameError(true);
+                          newCols[i]!.type = val;
+                          updateNode(id, { data: { ...data, columns: newCols } });
+                          return;
+                        }
+                        newCols[i]!.name = trimmedName;
+                        newCols[i]!.type = val;
+                        updateNode(id, { data: { ...data, columns: newCols } });
+                        setEditingCol(null);
                       }
-                      setEditingCol(null);
                     }}
                   >
                     <SelectTrigger className="h-6 text-xs flex-1">
@@ -334,7 +342,11 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
               ) : (
                 <div 
                   className="flex items-center justify-between w-full cursor-pointer"
-                  onClick={() => setEditingCol(i)}
+                  onClick={() => {
+                    setEditingCol(i);
+                    setEditingColName(col.name);
+                    setColNameError(false);
+                  }}
                   onMouseDown={(e) => e.preventDefault()}
                 >
                   <div className="flex items-center gap-2 overflow-hidden">
@@ -515,32 +527,14 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
   );
 };
 
-// --- External Node ---
-export const ExternalNode = ({ data, selected }: NodeProps<BackendNode>) => (
-  <div className={cn("px-4 py-3 shadow-md rounded-xl bg-card border-2 border-dashed flex items-center min-w-[150px]", selected ? "border-primary" : "border-border")}>
-    <Handle type="target" position={Position.Top} className="w-2 h-2" />
-    <div className="flex items-center">
-      <div className="rounded-full w-8 h-8 flex items-center justify-center bg-gray-500/20 text-gray-500 mr-3">
-        <Globe size={16} />
-      </div>
-      <div className="flex flex-col">
-        <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider">External</span>
-        <span className="font-medium text-sm">{data.label}</span>
-      </div>
-    </div>
-    <Handle type="source" position={Position.Bottom} className="w-2 h-2" />
-  </div>
-);
-
-// --- Actor Node ---
-export const ActorNode = ({ data, selected }: NodeProps<BackendNode>) => (
-  <div className={cn("px-4 py-2 flex flex-col items-center", selected ? "text-primary" : "")}>
-    <Handle type="target" position={Position.Top} className="w-2 h-2" />
-    <User size={32} className="mb-2" />
-    <span className="font-medium text-sm text-center">{data.label}</span>
-    <Handle type="source" position={Position.Bottom} className="w-2 h-2" />
-  </div>
-);
+// Import Graph Nodes
+import { 
+  ServiceNode, 
+  DatabaseNode, 
+  QueueNode, 
+  ExternalNode, 
+  ActorNode 
+} from "./graph-nodes";
 
 // Map for React Flow
 export const nodeTypes = {
