@@ -196,6 +196,8 @@ export const upsertBackendEdge = mutation({
     source: v.string(),
     target: v.string(),
     type: v.string(),
+    sourceHandle: v.optional(v.string()),
+    targetHandle: v.optional(v.string()),
     data: v.optional(v.any()),
     fractionalIndex: v.string(),
   },
@@ -215,6 +217,8 @@ export const upsertBackendEdge = mutation({
         source: args.source,
         target: args.target,
         type: args.type,
+        sourceHandle: args.sourceHandle,
+        targetHandle: args.targetHandle,
         data: args.data,
         fractionalIndex: args.fractionalIndex,
       });
@@ -225,6 +229,8 @@ export const upsertBackendEdge = mutation({
         source: args.source,
         target: args.target,
         type: args.type,
+        sourceHandle: args.sourceHandle,
+        targetHandle: args.targetHandle,
         data: args.data,
         fractionalIndex: args.fractionalIndex,
       });

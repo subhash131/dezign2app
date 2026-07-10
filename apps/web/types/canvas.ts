@@ -41,6 +41,8 @@ export type BackendNode = {
     }[];
     isActor?: boolean;
     parentId?: string;
+    graphPosition?: { x: number; y: number };
+    schemaPosition?: { x: number; y: number };
   };
   fractionalIndex: string; // For Z-order
   parentId?: string;
@@ -56,6 +58,8 @@ export type BackendEdge = {
   source: string;
   target: string;
   type: BackendEdgeType;
+  sourceHandle?: string | null;
+  targetHandle?: string | null;
   data?: {
     label?: string;
     sequenceOrder?: number;

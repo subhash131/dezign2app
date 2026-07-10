@@ -79,6 +79,8 @@ export const featureTables = {
     source: v.string(),
     target: v.string(),
     type: v.string(),
+    sourceHandle: v.optional(v.string()),
+    targetHandle: v.optional(v.string()),
     data: v.optional(v.any()),
     fractionalIndex: v.string(),
   })

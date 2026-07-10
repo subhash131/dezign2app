@@ -147,6 +147,8 @@ function Flow({ projectId, view }: BackendCanvasProps) {
       source: row.source,
       target: row.target,
       type: row.type,
+      sourceHandle: row.sourceHandle,
+      targetHandle: row.targetHandle,
       data: row.data,
       fractionalIndex: row.fractionalIndex,
     }));
@@ -270,6 +272,8 @@ function Flow({ projectId, view }: BackendCanvasProps) {
             source: e.source,
             target: e.target,
             type: e.type,
+            sourceHandle: e.sourceHandle ?? undefined,
+            targetHandle: e.targetHandle ?? undefined,
             data: e.data,
             fractionalIndex: e.fractionalIndex,
           })

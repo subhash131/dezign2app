@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Handle, Position, NodeProps } from "@xyflow/react";
-import { Server, Database, Container, Table2, User, Globe, Plus, Check } from "lucide-react";
+import { Server, Database, Container, Table2, User, Globe, Plus, Check, X } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { Input } from "@workspace/ui/components/input";
@@ -263,15 +263,29 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
                     autoFocus
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
+                        e.preventDefault();
                         let newCols = [...columns];
                         if (newCols[i]?.name.trim() === "") {
-                          newCols.splice(i, 1);
+                          if (newCols[i]?.isPrimaryKey) {
+                            newCols[i].name = "_id";
+                            updateNode(id, { data: { ...data, columns: newCols } });
+                          } else {
+                            newCols.splice(i, 1);
+                            newCols = ensureUniqueColumnNames(newCols);
+                            updateNode(id, { data: { ...data, columns: newCols } });
+                          }
+                          setEditingCol(null);
+                        } else {
+                          newCols = ensureUniqueColumnNames(newCols);
+                          newCols.splice(i + 1, 0, { name: "", type: "VARCHAR" });
+                          updateNode(id, { data: { ...data, columns: newCols } });
+                          setEditingCol(i + 1);
                         }
-                        newCols = ensureUniqueColumnNames(newCols);
-                        updateNode(id, { data: { ...data, columns: newCols } });
-                        setEditingCol(null);
                       }
-                      if (e.key === "Escape") e.currentTarget.blur();
+                      if (e.key === "Escape") {
+                        e.preventDefault();
+                        e.currentTarget.blur();
+                      }
                     }}
                     onBlur={(e) => {
                       const related = e.relatedTarget as HTMLElement | null;
@@ -280,7 +294,11 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
                       
                       let newCols = [...columns];
                       if (newCols[i]?.name.trim() === "") {
-                        newCols.splice(i, 1);
+                        if (newCols[i]?.isPrimaryKey) {
+                          newCols[i].name = "_id";
+                        } else {
+                          newCols.splice(i, 1);
+                        }
                       }
                       newCols = ensureUniqueColumnNames(newCols);
                       updateNode(id, { data: { ...data, columns: newCols } });
@@ -292,7 +310,12 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
                     onValueChange={(val) => {
                       if (col.name.trim() === "") {
                         const newCols = [...columns];
-                        newCols.splice(i, 1);
+                        if (col.isPrimaryKey && newCols[i]) {
+                          newCols[i].name = "_id";
+                          newCols[i].type = val;
+                        } else {
+                          newCols.splice(i, 1);
+                        }
                         updateNode(id, { data: { ...data, columns: newCols } });
                       } else {
                         updateColumn(i, { type: val });
@@ -323,6 +346,17 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
                     <span className="text-muted-foreground">{col.type}</span>
                     {col.isNotNull && <span className="text-[9px] bg-red-500/10 text-red-600 px-1 rounded font-bold">NN</span>}
                     {col.isUnique && <span className="text-[9px] bg-purple-500/10 text-purple-600 px-1 rounded font-bold">UQ</span>}
+                    <div 
+                      className="opacity-0 group-hover/row:opacity-100 flex items-center justify-center p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const newCols = [...columns];
+                        newCols.splice(i, 1);
+                        updateNode(id, { data: { ...data, columns: newCols } });
+                      }}
+                    >
+                      <X size={12} className={`${col.isPrimaryKey && "opacity-0"}`}/>
+                    </div>
                   </div>
                 </div>
               )}
@@ -441,6 +475,17 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
                     </div>
                     <div className="flex items-center gap-2 shrink-0 ml-2">
                       {idxObj.isUnique && <span className="text-[9px] bg-purple-500/10 text-purple-600 px-1 rounded font-bold">UQ</span>}
+                      <div 
+                        className="opacity-0 group-hover/row:opacity-100 flex items-center justify-center p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const newIdxs = [...indexes];
+                          newIdxs.splice(i, 1);
+                          updateNode(id, { data: { ...data, indexes: newIdxs } });
+                        }}
+                      >
+                        <X size={12} />
+                      </div>
                     </div>
                   </div>
                   <div className="text-[10px] text-muted-foreground truncate w-full mt-0.5">
