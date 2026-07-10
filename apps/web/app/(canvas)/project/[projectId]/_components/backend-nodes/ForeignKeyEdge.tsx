@@ -72,7 +72,7 @@ export const ForeignKeyEdge = (props: EdgeProps<BackendEdge>) => {
         style={{
           ...props.style,
           strokeWidth: 1.5,
-          stroke: "hsl(var(--muted-foreground))",
+          stroke: "var(--muted-foreground)",
         }}
       />
     </>

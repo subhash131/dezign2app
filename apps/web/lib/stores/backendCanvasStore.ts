@@ -174,6 +174,9 @@ export const useBackendCanvasStore = create<BackendCanvasState>((set, get) => ({
   },
 
   onConnect: (connection) => {
+    const isColumnToColumn = connection.sourceHandle?.startsWith('source-') || connection.targetHandle?.startsWith('target-');
+    const edgeType = isColumnToColumn ? "foreign-key" : "connection";
+
     const lastEdgeIndex = getLastIndex(get().edges);
     const fractionalIndex = generateKeyBetween(lastEdgeIndex, null);
 
@@ -181,9 +184,26 @@ export const useBackendCanvasStore = create<BackendCanvasState>((set, get) => ({
       id: `edge-${Date.now()}`,
       source: connection.source!,
       target: connection.target!,
-      type: "connection",
+      type: edgeType,
+      sourceHandle: connection.sourceHandle,
+      targetHandle: connection.targetHandle,
       fractionalIndex,
     };
+    
+    // Update source node's column to isForeignKey: true if it's a foreign key edge
+    if (isColumnToColumn && connection.sourceHandle?.startsWith('source-')) {
+       const colIndex = parseInt(connection.sourceHandle.replace('source-', ''), 10);
+       const sourceNode = get().nodes.find(n => n.id === connection.source);
+       if (sourceNode && !isNaN(colIndex) && sourceNode.data.columns) {
+           const column = sourceNode.data.columns[colIndex];
+           if (column) {
+               const newCols = [...sourceNode.data.columns];
+               newCols[colIndex] = { ...column, isForeignKey: true };
+               get().updateNode(sourceNode.id, { data: { ...sourceNode.data, columns: newCols } });
+           }
+       }
+    }
+
     const next = addEdge(newEdge as any, get().edges as any) as any as BackendEdge[];
     set({
       edges: next,

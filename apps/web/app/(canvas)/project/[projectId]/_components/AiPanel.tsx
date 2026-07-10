@@ -88,7 +88,9 @@ export function AiPanel({ projectId, mode, isOpen, onClose }: AiPanelProps) {
               assistantContent += data.content;
               setMessages(prev => {
                 const newMsgs = [...prev];
-                newMsgs[newMsgs.length - 1].content = assistantContent;
+                if (newMsgs.length > 0) {
+                  newMsgs[newMsgs.length - 1].content = assistantContent;
+                }
                 return newMsgs;
               });
             } else if (data.type === "tool_call") {
