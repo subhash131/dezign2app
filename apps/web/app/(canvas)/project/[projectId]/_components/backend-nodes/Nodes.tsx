@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { COLUMN_TYPES } from "@/lib/schema/columnTypes";
 import { SchemaGroupNode } from "./SchemaGroupNode";
+import { Textarea } from "@workspace/ui/components/textarea";
 
 const ensureUniqueColumnNames = (columns: any[]) => {
   const seen = new Set<string>();
@@ -221,6 +222,16 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
         </div>
       </div>
       
+      {/* Description */}
+      <div className="px-3 py-2 bg-secondary/5 border-b nodrag">
+        <Textarea
+          className="min-h-[20px] text-xs bg-transparent border-none shadow-none p-1 resize-none focus-visible:ring-0 placeholder:text-muted-foreground/50"
+          placeholder="description"
+          value={data.description || ""}
+          onChange={(e) => updateNode(id, { data: { ...data, description: e.target.value } })}
+        />
+      </div>
+
       <div className="flex flex-col">
         {columns.map((col, i) => {
           const isEditing = editingCol === i;
@@ -537,6 +548,7 @@ import {
   KafkaNode,
   RedisStreamsNode,
   SQSNode,
+  RedisPubSubNode,
   ExternalNode, 
   WebClientNode 
 } from "./graph-nodes";
@@ -551,6 +563,7 @@ export const nodeTypes = {
   kafka: KafkaNode,
   "redis-streams": RedisStreamsNode,
   sqs: SQSNode,
+  "redis-pubsub": RedisPubSubNode,
   entity: EntityNode,
   external: ExternalNode,
   webClient: WebClientNode,

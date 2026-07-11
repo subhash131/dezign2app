@@ -55,6 +55,20 @@ export type SQSBrokerConfig = {
   fifo?: boolean;
 };
 
+export type RedisPubSubChannel = {
+  id: string;
+  kind: "channel";
+  name: string;
+  description?: string;
+  schema?: string;
+  version?: string;
+};
+
+export type RedisPubSubBrokerConfig = {
+  // Future Redis Pub/Sub configuration.
+  // Reserved for cluster/sharding-specific options if needed.
+};
+
 export type BackendNodeType =
   | "service"
   | "database"
@@ -64,6 +78,7 @@ export type BackendNodeType =
   | "kafka"
   | "redis-streams"
   | "sqs"
+  | "redis-pubsub"
   | "entity"
   | "webClient"
   | "external"
@@ -117,9 +132,11 @@ export type BackendNode = {
     topics?: KafkaTopic[];
     streams?: RedisStream[];
     queues?: SQSQueue[];
+    channels?: RedisPubSubChannel[];
     kafkaBroker?: KafkaBrokerConfig;
     redisBroker?: RedisStreamsBrokerConfig;
     sqsBroker?: SQSBrokerConfig;
+    redisPubSubBroker?: RedisPubSubBrokerConfig;
     publishedEvents?: { 
       id: string; 
       name: string;
@@ -216,7 +233,7 @@ export type BackendEdge = {
   targetHandle?: string | null;
   sourceResourceId?: string;
   targetResourceId?: string;
-  resourceType?: "topics" | "streams" | "queues";
+  resourceType?: "topics" | "streams" | "queues" | "channels";
   data?: {
     label?: string;
     sequenceOrder?: number;

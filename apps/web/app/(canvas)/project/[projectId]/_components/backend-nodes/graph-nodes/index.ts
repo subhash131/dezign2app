@@ -7,4 +7,5 @@ export { EventStreamNode } from "./EventStreamNode";
 export { KafkaNode } from "./KafkaNode";
 export { RedisStreamsNode } from "./RedisStreamsNode";
 export { SQSNode } from "./SQSNode";
+export { RedisPubSubNode } from "./RedisPubSubNode";
 export { DatabaseNode } from "./DatabaseNode";
