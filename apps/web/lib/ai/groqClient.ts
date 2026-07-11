@@ -71,7 +71,8 @@ const backendTools = [
 - 'database': A database reference node
 - 'queue': Point-to-point message queue (use with implementations: 'RabbitMQ', 'Amazon SQS', 'Azure Service Bus')
 - 'pubsub': Fan-out publish-subscribe (use with implementations: 'Google Pub/Sub', 'Redis Pub/Sub', 'RabbitMQ Fanout')
-- 'eventstream': Log-based event streaming (use with implementations: 'Kafka', 'Redis Streams', 'Azure Event Hubs')
+- 'kafka': Apache Kafka broker (stores topics in data.eventChannels)
+- 'redis-streams': Redis Streams broker (stores streams in data.eventChannels)
 - 'entity': A database table/schema entity
 - 'webClient': A frontend client or page
 - 'external': An external third-party API
@@ -79,9 +80,9 @@ const backendTools = [
       parameters: {
         type: "object",
         properties: {
-          type: { type: "string", enum: ["service", "database", "queue", "pubsub", "eventstream", "entity", "group", "webClient", "external"] },
+          type: { type: "string", enum: ["service", "database", "queue", "pubsub", "kafka", "redis-streams", "entity", "group", "webClient", "external"] },
           label: { type: "string", description: "Name of the node" },
-          data: { type: "object", description: "Additional data for the node. For 'queue': { implementation: 'RabbitMQ'|'Amazon SQS'|'Azure Service Bus', delivery, failureHandling, durable, rabbitExchange, rabbitRoutingKey, sqsVisibilityTimeout, sqsFifo, azureTopic }. For 'pubsub': { implementation: 'Google Pub/Sub'|'Redis Pub/Sub'|'RabbitMQ Fanout', delivery, retention, gcpTopic, gcpSubscription, rabbitExchange }. For 'eventstream': { implementation: 'Kafka'|'Redis Streams'|'Azure Event Hubs', delivery, ordering, retention, kafkaPartitions, kafkaReplication, kafkaCompression, kafkaTTL, kafkaBatchSize, redisConsumerGroup }. For 'entity': { columns: [{ name, type, isPrimaryKey, isForeignKey, isNotNull, isUnique }] }." },
+          data: { type: "object", description: "Additional data for the node. For 'queue': { implementation: 'RabbitMQ'|'Amazon SQS'|'Azure Service Bus', delivery, failureHandling, durable, rabbitExchange, rabbitRoutingKey, sqsVisibilityTimeout, sqsFifo, azureTopic }. For 'pubsub': { implementation: 'Google Pub/Sub'|'Redis Pub/Sub'|'RabbitMQ Fanout', delivery, retention, gcpTopic, gcpSubscription, rabbitExchange }. For 'kafka': { eventChannels: [{ id, name, description, schema, version }], delivery, ordering, retention, kafkaPartitions, kafkaReplication, kafkaCompression, kafkaTTL, kafkaBatchSize }. For 'redis-streams': { eventChannels: [{ id, name, description, schema, version }], delivery, ordering, retention, redisConsumerGroup }. For 'entity': { columns: [{ name, type, isPrimaryKey, isForeignKey, isNotNull, isUnique }] }." },
         },
         required: ["type", "label"],
       },
@@ -160,7 +161,8 @@ If working on a Database Schema, use 'entity' nodes and populate 'data.columns' 
 When adding messaging infrastructure, choose the correct node type based on the messaging pattern:
 - Use 'queue' for point-to-point work queues. Valid implementations: 'RabbitMQ', 'Amazon SQS', 'Azure Service Bus'. Only set fields: delivery, failureHandling, durable, rabbitExchange, rabbitRoutingKey, rabbitBindings, sqsVisibilityTimeout, sqsDelay, sqsFifo, azureTopic, azureSubscription.
 - Use 'pubsub' for fan-out broadcast messaging. Valid implementations: 'Google Pub/Sub', 'Redis Pub/Sub', 'RabbitMQ Fanout'. Only set fields: delivery, retention, gcpTopic, gcpSubscription, rabbitExchange.
-- Use 'eventstream' for log-based replay-able streams. Valid implementations: 'Kafka', 'Redis Streams', 'Azure Event Hubs'. Only set fields: delivery, ordering, retention, kafkaPartitions, kafkaReplication, kafkaCompression, kafkaTTL, kafkaBatchSize, redisConsumerGroup.
+- Use 'kafka' for Apache Kafka messaging brokers. Store topics in 'data.eventChannels'. Valid fields: delivery, ordering, retention, kafkaPartitions, kafkaReplication, kafkaCompression, kafkaTTL, kafkaBatchSize.
+- Use 'redis-streams' for Redis Streams messaging brokers. Store streams in 'data.eventChannels'. Valid fields: delivery, ordering, retention, redisConsumerGroup.
 NEVER mix implementation fields across node types (e.g., never put kafkaPartitions on a 'queue' node).
 
 Current Canvas State:

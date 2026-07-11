@@ -222,6 +222,13 @@ export const useBackendCanvasStore = create<BackendCanvasState>((set, get) => ({
       edgeType = "message";
     }
 
+    const targetChannelId = connection.targetHandle?.startsWith('eventChannels-in-')
+      ? connection.targetHandle.replace('eventChannels-in-', '')
+      : undefined;
+    const sourceChannelId = connection.sourceHandle?.startsWith('eventChannels-out-')
+      ? connection.sourceHandle.replace('eventChannels-out-', '')
+      : undefined;
+
     const lastEdgeIndex = getLastIndex(get().edges);
     const fractionalIndex = generateKeyBetween(lastEdgeIndex, null);
 
@@ -233,6 +240,8 @@ export const useBackendCanvasStore = create<BackendCanvasState>((set, get) => ({
       sourceHandle: connection.sourceHandle,
       targetHandle: connection.targetHandle,
       fractionalIndex,
+      targetChannelId,
+      sourceChannelId,
     };
     
     // Update targetNodeId on service events if connected via messaging handles

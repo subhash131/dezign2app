@@ -494,7 +494,7 @@ function Flow({ projectId, view }: BackendCanvasProps) {
   // This implies graph view probably doesn't need entity nodes, or if it does, it doesn't need groups.
   // I will just filter out "group".
   
-  const handleAddGraphNode = (type: "service" | "database" | "queue" | "pubsub" | "eventstream" | "webClient" | "external", label: string) => {
+  const handleAddGraphNode = (type: "service" | "database" | "queue" | "pubsub" | "eventstream" | "kafka" | "redis-streams" | "webClient" | "external", label: string) => {
     const center = getCenterPosition();
     const { x, y } = getOffsetPosition(center.x - 100, center.y - 100);
     addNode({
@@ -508,6 +508,7 @@ function Flow({ projectId, view }: BackendCanvasProps) {
         logic: type === 'service' ? [] : undefined,
         outputs: type === 'service' ? [] : undefined,
         actions: type === 'external' ? [] : undefined,
+        eventChannels: (type === 'kafka' || type === 'redis-streams') ? [] : undefined,
       },
     });
   };
@@ -547,9 +548,13 @@ function Flow({ projectId, view }: BackendCanvasProps) {
             <Radio className="w-3.5 h-3.5 mr-2" />
             Pub / Sub
           </Button>
-          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start" onClick={() => handleAddGraphNode('eventstream', 'New Event Stream')}>
-            <Waves className="w-3.5 h-3.5 mr-2" />
-            Event Stream
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start" onClick={() => handleAddGraphNode('kafka', 'New Kafka Broker')}>
+            <Waves className="w-3.5 h-3.5 mr-2 text-emerald-500" />
+            Kafka
+          </Button>
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start" onClick={() => handleAddGraphNode('redis-streams', 'New Redis Streams Broker')}>
+            <Waves className="w-3.5 h-3.5 mr-2 text-rose-500" />
+            Redis Streams
           </Button>
           <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start" onClick={() => handleAddGraphNode('database', 'Table Ref')}>
             <Database className="w-3.5 h-3.5 mr-2" />

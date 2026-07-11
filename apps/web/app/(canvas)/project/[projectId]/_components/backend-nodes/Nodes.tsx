@@ -534,6 +534,8 @@ import {
   QueueNode,
   PubSubNode,
   EventStreamNode,
+  KafkaNode,
+  RedisStreamsNode,
   ExternalNode, 
   WebClientNode 
 } from "./graph-nodes";
@@ -545,6 +547,8 @@ export const nodeTypes = {
   queue: QueueNode,
   pubsub: PubSubNode,
   eventstream: EventStreamNode,
+  kafka: KafkaNode,
+  "redis-streams": RedisStreamsNode,
   entity: EntityNode,
   external: ExternalNode,
   webClient: WebClientNode,

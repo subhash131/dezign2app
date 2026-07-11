@@ -435,14 +435,18 @@ export const NodeHeader = ({ id, data, icon: Icon, title, colorClass, selected }
   );
 };
 
-export const MessageRow = ({ item, isEditing, setEditingId, setEditingName, handleUpdate, handleDelete, handleUpdateItem, field, handleType, handlePosition, editingName }: any) => {
+export const EventChannelRow = ({ item, isEditing, setEditingId, setEditingName, handleUpdate, handleDelete, handleUpdateItem, field, handleType, handlePosition, editingName, variant }: any) => {
   const [expanded, setExpanded] = useState(!item.name);
-  const isPublished = field === "publishedEvents";
-  const isConsumed = field === "consumedEvents";
+  const isPublished = field === "publishedEvents" || variant === "publish";
+  const isConsumed = field === "consumedEvents" || variant === "consume";
   const nodes = useBackendCanvasStore(s => s.nodes);
-  const messagingNodes = nodes.filter(n => n.type === "queue" || n.type === "pubsub" || n.type === "eventstream");
+  const messagingNodes = nodes.filter(n => n.type === "queue" || n.type === "pubsub" || n.type === "eventstream" || n.type === "kafka" || n.type === "redis-streams");
+  
+  const edges = useBackendCanvasStore(s => s.edges);
+  const publisherCount = edges.filter(e => e.targetChannelId === item.id).length;
+  const consumerCount = edges.filter(e => e.sourceChannelId === item.id).length;
 
-  const isMessageEmpty = () => {
+  const isChannelEmpty = () => {
     const currentName = isEditing ? editingName : (item.name || "");
     const hasName = currentName.trim().length > 0;
     const hasDesc = item.description?.trim().length > 0;
@@ -464,7 +468,7 @@ export const MessageRow = ({ item, isEditing, setEditingId, setEditingName, hand
         if (related?.closest('[data-radix-popper-content-wrapper]')) return;
 
         if (!e.currentTarget.contains(related)) {
-          if (isMessageEmpty()) {
+          if (isChannelEmpty()) {
             handleDelete(item.id);
             if (isEditing) setEditingId(null);
           } else if (isEditing) {
@@ -474,7 +478,7 @@ export const MessageRow = ({ item, isEditing, setEditingId, setEditingName, hand
         }
       }}
     >
-      {isPublished && (
+      {isPublished && variant !== "definition" && (
         <Handle
           type="source"
           position={Position.Right}
@@ -483,7 +487,7 @@ export const MessageRow = ({ item, isEditing, setEditingId, setEditingName, hand
           style={{ top: '15px' }}
         />
       )}
-      {isConsumed && (
+      {isConsumed && variant !== "definition" && (
         <Handle
           type="target"
           position={Position.Left}
@@ -491,6 +495,24 @@ export const MessageRow = ({ item, isEditing, setEditingId, setEditingName, hand
           className="w-2 h-2 -left-1"
           style={{ top: '15px' }}
         />
+      )}
+      {variant === "definition" && (
+        <>
+          <Handle
+            type="target"
+            position={Position.Left}
+            id={`eventChannels-in-${item.id}`}
+            className="w-2 h-2 -left-1"
+            style={{ top: '15px' }}
+          />
+          <Handle
+            type="source"
+            position={Position.Right}
+            id={`eventChannels-out-${item.id}`}
+            className="w-2 h-2 -right-1"
+            style={{ top: '15px' }}
+          />
+        </>
       )}
       <div className="flex flex-col px-3 py-1.5 nodrag">
 
@@ -526,6 +548,11 @@ export const MessageRow = ({ item, isEditing, setEditingId, setEditingName, hand
           <div className="flex items-center justify-between w-full cursor-pointer" onClick={() => { setEditingId(item.id); setEditingName(item.name); }}>
              <div className="flex items-center gap-2 overflow-hidden">
                <span className="font-medium truncate">{item.name}</span>
+               {variant === "definition" && item.name && (
+                 <span className="text-[9px] bg-secondary/80 text-muted-foreground px-1 py-0.5 rounded font-mono shrink-0">
+                   P: {publisherCount} &nbsp; C: {consumerCount}
+                 </span>
+               )}
              </div>
              <div className="flex items-center gap-1 opacity-0 group-hover/row:opacity-100 transition-all">
                 <div className="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground" onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}>
@@ -576,7 +603,7 @@ export const MessageRow = ({ item, isEditing, setEditingId, setEditingName, hand
                </div>
              )}
 
-             {!isPublished && (
+             {!isPublished && variant !== "definition" && (
                <div className="flex items-center justify-between gap-2">
                  <span className="text-[9px] font-bold text-muted-foreground">Retry Policy</span>
                  <Input 
@@ -598,7 +625,7 @@ export const MessageRow = ({ item, isEditing, setEditingId, setEditingName, hand
                 />
              </div>
 
-             {(isPublished || isConsumed) && (
+             {(isPublished || isConsumed) && variant !== "definition" && (
                <div className="flex flex-col gap-1.5 border-t border-border/50 pt-2 mt-1">
                  <span className="text-[9px] font-bold text-muted-foreground">
                    {isPublished ? "Publishes To" : "Consumes From"}
@@ -625,7 +652,7 @@ export const MessageRow = ({ item, isEditing, setEditingId, setEditingName, hand
   )
 }
 
-export const MessageList = ({ nodeId, title, items = [], field, updateNode, data }: any) => {
+export const EventChannelList = ({ nodeId, title, items = [], field, updateNode, data, variant }: any) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
 
@@ -671,7 +698,7 @@ export const MessageList = ({ nodeId, title, items = [], field, updateNode, data
       </div>
       <div className="flex flex-col">
         {items.map((item: any) => (
-          <MessageRow
+          <EventChannelRow
             key={item.id}
             item={item}
             isEditing={editingId === item.id}
@@ -682,6 +709,7 @@ export const MessageList = ({ nodeId, title, items = [], field, updateNode, data
             handleDelete={handleDelete}
             handleUpdateItem={handleUpdateItem}
             field={field}
+            variant={variant}
           />
         ))}
       </div>

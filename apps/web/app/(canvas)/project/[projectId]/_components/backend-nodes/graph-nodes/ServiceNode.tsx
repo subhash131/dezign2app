@@ -7,7 +7,7 @@ import { Input } from "@workspace/ui/components/input";
 import { Switch } from "@workspace/ui/components/switch";
 import { Label } from "@workspace/ui/components/label";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
-import { NodeHeader, EndpointList, MessageList } from "./shared";
+import { NodeHeader, EndpointList, EventChannelList } from "./shared";
 
 export const ServiceNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
@@ -19,9 +19,9 @@ export const ServiceNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
       
       <EndpointList nodeId={id} title="Endpoints / Routes" items={data.endpoints || []} field="endpoints" updateNode={updateNode} data={data} />
       
-      <MessageList nodeId={id} title="Published Events" items={data.publishedEvents || []} field="publishedEvents" updateNode={updateNode} data={data} />
+      <EventChannelList nodeId={id} title="Published Events" items={data.publishedEvents || []} field="publishedEvents" updateNode={updateNode} data={data} variant="publish" />
       
-      <MessageList nodeId={id} title="Consumed Events" items={data.consumedEvents || []} field="consumedEvents" updateNode={updateNode} data={data} />
+      <EventChannelList nodeId={id} title="Consumed Events" items={data.consumedEvents || []} field="consumedEvents" updateNode={updateNode} data={data} variant="consume" />
 
       <div className="p-3 bg-secondary/10 flex flex-col gap-3 rounded-b-xl">
          <div 

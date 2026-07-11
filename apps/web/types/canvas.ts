@@ -16,6 +16,8 @@ export type BackendNodeType =
   | "queue"
   | "pubsub"
   | "eventstream"
+  | "kafka"
+  | "redis-streams"
   | "entity"
   | "webClient"
   | "external"
@@ -57,6 +59,13 @@ export type BackendNode = {
       description?: string;
       schema?: string;
       retryPolicy?: string;
+      version?: string;
+    }[];
+    eventChannels?: {
+      id: string;
+      name: string;
+      description?: string;
+      schema?: string;
       version?: string;
     }[];
     publishedEvents?: { 
@@ -153,6 +162,8 @@ export type BackendEdge = {
   type: BackendEdgeType;
   sourceHandle?: string | null;
   targetHandle?: string | null;
+  sourceChannelId?: string;
+  targetChannelId?: string;
   data?: {
     label?: string;
     sequenceOrder?: number;

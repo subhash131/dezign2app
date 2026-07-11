@@ -4,4 +4,6 @@ export { ExternalNode } from "./ExternalNode";
 export { QueueNode } from "./QueueNode";
 export { PubSubNode } from "./PubSubNode";
 export { EventStreamNode } from "./EventStreamNode";
+export { KafkaNode } from "./KafkaNode";
+export { RedisStreamsNode } from "./RedisStreamsNode";
 export { DatabaseNode } from "./DatabaseNode";
