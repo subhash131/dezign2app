@@ -30,11 +30,13 @@ import { api } from "@workspace/backend/_generated/api";
 import { Id } from "@workspace/backend/_generated/dataModel";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { BackendCanvasAdapter } from "@/lib/canvas-adapters/backendAdapter";
-import { BackendCanvasView, BackendNode, BackendEdge } from "@/types/canvas";
+import { BackendCanvasView, BackendNode, BackendEdge, BackendNodeType } from "@/types/canvas";
 import { nodeTypes } from "./backend-nodes/Nodes";
 import { ForeignKeyEdge } from "./backend-nodes/ForeignKeyEdge";
 import { HTTPConnectionEdge, MessagingEdge } from "./backend-nodes/CustomEdges";
+import { isValidConnection } from "@workspace/backend/canvas/index";
 import ELK from "elkjs/lib/elk.bundled.js";
+import { Connection } from "@xyflow/react";
 
 const edgeTypes = {
   "foreign-key": ForeignKeyEdge,
@@ -458,6 +460,12 @@ function Flow({ projectId, view }: BackendCanvasProps) {
           onEdgesChange={onEdgesChange}
           deleteKeyCode={["Backspace", "Delete"]}
           onConnect={onConnect}
+          isValidConnection={(connection: Connection) => {
+            const src = nodes.find(n => n.id === connection.source);
+            const tgt = nodes.find(n => n.id === connection.target);
+            if (!src || !tgt) return false;
+            return isValidConnection(src.type, connection.sourceHandle, tgt.type, connection.targetHandle).valid;
+          }}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           onMoveEnd={handleMoveEnd}
@@ -528,6 +536,12 @@ function Flow({ projectId, view }: BackendCanvasProps) {
         onEdgesChange={onEdgesChange}
         deleteKeyCode={["Backspace", "Delete"]}
         onConnect={onConnect}
+        isValidConnection={(connection: Connection) => {
+          const src = nodes.find(n => n.id === connection.source);
+          const tgt = nodes.find(n => n.id === connection.target);
+          if (!src || !tgt) return false;
+          return isValidConnection(src.type, connection.sourceHandle, tgt.type, connection.targetHandle).valid;
+        }}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         onMoveEnd={handleMoveEnd}

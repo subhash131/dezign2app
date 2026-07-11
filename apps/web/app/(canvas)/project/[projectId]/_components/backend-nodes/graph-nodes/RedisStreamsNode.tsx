@@ -47,14 +47,18 @@ export const RedisStreamsNode = ({ id, data, selected }: NodeProps<BackendNode>)
 
       {/* Streams (Messaging Resources) */}
       <MessagingResourceList
-        nodeId={id}
         title="Streams"
         items={data.streams || []}
-        field="streams"
-        updateNode={updateNode}
-        data={data}
         variant="definition"
         resourceType="streams"
+        onChange={(streams) =>
+          updateNode(id, {
+            data: {
+              ...data,
+              streams,
+            },
+          })
+        }
       />
 
       {/* Reliability */}

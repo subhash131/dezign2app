@@ -7,7 +7,7 @@ import { Input } from "@workspace/ui/components/input";
 import { Switch } from "@workspace/ui/components/switch";
 import { Label } from "@workspace/ui/components/label";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
-import { NodeHeader, EndpointList, MessagingResourceList } from "./shared";
+import { NodeHeader, EndpointList } from "./shared";
 import { Textarea } from "@workspace/ui/components/textarea";
 
 export const ServiceNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
@@ -28,12 +28,14 @@ export const ServiceNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
         />
       </div>
       
-      <EndpointList nodeId={id} title="Endpoints / Routes" items={data.endpoints || []} field="endpoints" updateNode={updateNode} data={data} />
-      
-      <MessagingResourceList nodeId={id} title="Published Events" items={data.publishedEvents || []} field="publishedEvents" updateNode={updateNode} data={data} variant="publish" />
-      
-      <MessagingResourceList nodeId={id} title="Consumed Events" items={data.consumedEvents || []} field="consumedEvents" updateNode={updateNode} data={data} variant="consume" />
-
+      <EndpointList
+        nodeId={id}
+        title="Endpoints / Routes"
+        items={data.endpoints || []}
+        field="endpoints"
+        updateNode={updateNode}
+        data={data}
+      />
       <div className="p-3 bg-secondary/10 flex flex-col gap-3 rounded-b-xl">
          <div 
            className="flex items-center justify-between cursor-pointer group"

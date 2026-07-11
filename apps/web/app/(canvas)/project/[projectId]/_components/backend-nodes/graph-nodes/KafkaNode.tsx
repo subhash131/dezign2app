@@ -47,15 +47,16 @@ export const KafkaNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
 
       {/* Topics (Messaging Resources) */}
       <MessagingResourceList
-        nodeId={id}
-        title="Topics"
-        items={data.topics || []}
-        field="topics"
-        updateNode={updateNode}
-        data={data}
-        variant="definition"
-        resourceType="topics"
-      />
+          title="Topics"
+          items={data.topics || []}
+          variant="definition"
+          resourceType="topics"
+          onChange={(topics) =>
+            updateNode(id, {
+              data: { ...data, topics },
+            })
+          }
+        />
 
       {/* Reliability */}
       <div className="flex flex-col nodrag border-b">

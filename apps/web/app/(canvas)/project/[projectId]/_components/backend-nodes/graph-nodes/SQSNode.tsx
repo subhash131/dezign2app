@@ -48,14 +48,18 @@ export const SQSNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
 
       {/* Queues (Messaging Resources) */}
       <MessagingResourceList
-        nodeId={id}
         title="Queues"
         items={data.queues || []}
-        field="queues"
-        updateNode={updateNode}
-        data={data}
         variant="definition"
         resourceType="queues"
+        onChange={(queues) =>
+          updateNode(id, {
+            data: {
+              ...data,
+              queues,
+            },
+          })
+        }
       />
 
       {/* Reliability */}

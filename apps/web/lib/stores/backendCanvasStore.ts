@@ -9,6 +9,7 @@ import {
   Connection,
 } from "@xyflow/react";
 import { generateKeyBetween } from "fractional-indexing";
+import { isValidConnection } from "@workspace/backend/canvas/index";
 
 // Helper: get the last fractional index from a sorted list
 function getLastIndex(items: { fractionalIndex?: string }[]): string | null {
@@ -236,14 +237,25 @@ export const useBackendCanvasStore = create<BackendCanvasState>((set, get) => ({
   },
 
   onConnect: (connection) => {
-    const isColumnToColumn = connection.sourceHandle?.startsWith('source-') || connection.targetHandle?.startsWith('target-');
+    const sourceNode = get().nodes.find(n => n.id === connection.source);
+    const targetNode = get().nodes.find(n => n.id === connection.target);
+    if (!sourceNode || !targetNode) return;
+
+    const result = isValidConnection(
+      sourceNode.type as any, connection.sourceHandle,
+      targetNode.type as any, connection.targetHandle,
+      { sourceNodeId: connection.source!, targetNodeId: connection.target!, existingEdges: get().edges as any }
+    );
+    
+    if (!result.valid) {
+      console.warn("Invalid connection attempted:", result.message);
+      return;
+    }
+
+    const edgeType = result.edgeType;
+    const isColumnToColumn = edgeType === "foreign-key";
     const isPublishedConnect = connection.sourceHandle?.startsWith('publishedEvents-out-');
     const isConsumedConnect = connection.targetHandle?.startsWith('consumedEvents-in-');
-    
-    let edgeType = isColumnToColumn ? "foreign-key" : "connection";
-    if (isPublishedConnect || isConsumedConnect) {
-      edgeType = "message";
-    }
 
     const parsedTarget = parseResourceHandle(connection.targetHandle);
     const parsedSource = parseResourceHandle(connection.sourceHandle);
@@ -271,8 +283,7 @@ export const useBackendCanvasStore = create<BackendCanvasState>((set, get) => ({
     // Update targetNodeId on service events if connected via messaging handles
     if (isPublishedConnect && connection.sourceHandle) {
       const eventId = connection.sourceHandle.replace('publishedEvents-out-', '');
-      const sourceNode = get().nodes.find(n => n.id === connection.source);
-      if (sourceNode && sourceNode.data.publishedEvents) {
+      if (sourceNode.data.publishedEvents) {
         const updatedEvents = sourceNode.data.publishedEvents.map((ev: any) =>
           ev.id === eventId ? { ...ev, targetNodeId: connection.target } : ev
         );
@@ -284,8 +295,7 @@ export const useBackendCanvasStore = create<BackendCanvasState>((set, get) => ({
 
     if (isConsumedConnect && connection.targetHandle) {
       const eventId = connection.targetHandle.replace('consumedEvents-in-', '');
-      const targetNode = get().nodes.find(n => n.id === connection.target);
-      if (targetNode && targetNode.data.consumedEvents) {
+      if (targetNode.data.consumedEvents) {
         const updatedEvents = targetNode.data.consumedEvents.map((ev: any) =>
           ev.id === eventId ? { ...ev, targetNodeId: connection.source } : ev
         );
@@ -298,8 +308,7 @@ export const useBackendCanvasStore = create<BackendCanvasState>((set, get) => ({
     // Update source node's column to isForeignKey: true if it's a foreign key edge
     if (isColumnToColumn && connection.sourceHandle?.startsWith('source-')) {
        const colIndex = parseInt(connection.sourceHandle.replace('source-', ''), 10);
-       const sourceNode = get().nodes.find(n => n.id === connection.source);
-       if (sourceNode && !isNaN(colIndex) && sourceNode.data.columns) {
+       if (!isNaN(colIndex) && sourceNode.data.columns) {
            const column = sourceNode.data.columns[colIndex];
            if (column) {
                const newCols = [...sourceNode.data.columns];

@@ -7,6 +7,7 @@ import { Button } from "@workspace/ui/components/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@workspace/ui/components/select";
 import { Textarea } from "@workspace/ui/components/textarea";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { BackendNode, ConsumedEvent, Endpoint, PublishedEvent } from "@/types/canvas";
 
 export const generateId = () => Math.random().toString(36).substring(2, 9);
 
@@ -142,9 +143,9 @@ export const EndpointRow = ({ item, isEditing, setEditingId, setEditingName, set
     const hasHeaders = item.headers?.some((h: any) => h.key.trim() || h.value.trim());
     const hasParams = item.params?.some((p: any) => p.key.trim());
     const hasBody = item.body?.trim().length > 0;
-    const hasProcessing = item.processing?.trim().length > 0;
+    const hasBusinessLogic = item.businessLogic?.trim().length > 0;
     const hasOutput = item.output?.trim().length > 0;
-    return !hasName && !hasHeaders && !hasParams && !hasBody && !hasProcessing && !hasOutput;
+    return !hasName && !hasHeaders && !hasParams && !hasBody && !hasBusinessLogic && !hasOutput;
   };
 
   return (
@@ -296,15 +297,25 @@ export const EndpointRow = ({ item, isEditing, setEditingId, setEditingName, set
             </div>
 
             <div className="flex flex-col gap-1.5">
-               <span className="text-[9px] font-bold text-muted-foreground">Processing Logic</span>
+               <span className="text-[9px] font-bold text-muted-foreground">Business Logic</span>
                <Textarea 
                  className="min-h-[50px] w-full rounded-md border border-input px-2 py-1 text-[10px] shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring nodrag"
-                 placeholder="Describe processing logic here..."
-                 value={item.processing || ""}
-                 onChange={e => handleUpdateItem(item.id, { processing: e.target.value })}
+                 placeholder="Describe business logic here..."
+                 value={item.businessLogic || ""}
+                 onChange={e => handleUpdateItem(item.id, { businessLogic: e.target.value })}
                />
             </div>
-
+            <div className="flex flex-col gap-1.5">
+              <MessagingResourceList
+                title="Published Events"
+                items={item.publishedEvents || []}
+                variant="publish"
+                resourceType="topics"
+                onChange={(publishedEvents) =>
+                  handleUpdateItem(item.id, { publishedEvents })
+                }
+              />
+            </div>
             <div className="flex flex-col gap-1.5">
                <span className="text-[9px] font-bold text-muted-foreground uppercase">Output</span>
                <Textarea 
@@ -321,7 +332,21 @@ export const EndpointRow = ({ item, isEditing, setEditingId, setEditingName, set
   )
 }
 
-export const EndpointList = ({ nodeId, title, items = [], field, handleType, handlePosition, updateNode, data }: any) => {
+export const EndpointList = ({
+  nodeId,
+  title,
+  items = [],
+  field,
+  updateNode,
+  data,
+}: {
+  nodeId: string;
+  title: string;
+  items: Endpoint[];
+  field: string;
+  updateNode: (nodeId: string, changes: Partial<BackendNode>) => void;
+  data: BackendNode["data"];
+}) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [editingType, setEditingType] = useState("GET");
@@ -329,7 +354,7 @@ export const EndpointList = ({ nodeId, title, items = [], field, handleType, han
   const handleAdd = () => {
     const newItems = [...items, { id: generateId(), name: "", type: "GET" }];
     updateNode(nodeId, { data: { ...data, [field]: newItems } });
-    setEditingId(newItems[newItems.length - 1].id);
+    setEditingId(newItems[newItems.length - 1]!.id);
     setEditingName("");
     setEditingType("GET");
   };
@@ -382,8 +407,6 @@ export const EndpointList = ({ nodeId, title, items = [], field, handleType, han
             handleDelete={handleDelete}
             handleUpdateItem={handleUpdateItem}
             field={field}
-            handleType={handleType}
-            handlePosition={handlePosition}
           />
         ))}
       </div>
@@ -652,57 +675,104 @@ export const MessagingResourceRow = ({ item, isEditing, setEditingId, setEditing
   )
 }
 
-export const MessagingResourceList = ({ nodeId, title, items = [], field, updateNode, data, variant, resourceType }: any) => {
+
+export const MessagingResourceList = ({
+  title,
+  items = [],
+  variant,
+  resourceType,
+  onChange,
+}: {
+  title: string;
+  items: any[];
+  variant: "definition" | "publish" | "consume";
+  resourceType: "topics" | "streams" | "queues" | "channels";
+  onChange: (items: any[]) => void;
+}) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
 
-  const handleAdd = () => {
-    // Generate domain kind (topic, stream, queue)
-    let kind = "topic";
-    if (resourceType === "streams") kind = "stream";
-    if (resourceType === "queues") kind = "queue";
+  const getKind = () => {
+    switch (resourceType) {
+      case "topics":
+        return "topic";
+      case "streams":
+        return "stream";
+      case "queues":
+        return "queue";
+      case "channels":
+        return "channel";
+      default:
+        return "topic";
+    }
+  };
 
-    const newItems = [...items, { id: generateId(), name: "", kind }];
-    updateNode(nodeId, { data: { ...data, [field]: newItems } });
+  const handleAdd = () => {
+    const newItems = [
+      ...items,
+      {
+        id: generateId(),
+        name: "",
+        kind: getKind(),
+      },
+    ];
+
+    onChange(newItems);
+
     setEditingId(newItems[newItems.length - 1].id);
     setEditingName("");
   };
 
   const handleUpdate = (id: string, name: string) => {
-    const newItems = items.map((item: any) => item.id === id ? { ...item, name } : item);
-    updateNode(nodeId, { data: { ...data, [field]: newItems } });
+    onChange(
+      items.map((item) =>
+        item.id === id ? { ...item, name } : item
+      )
+    );
   };
 
   const handleDelete = (id: string) => {
-    const newItems = items.filter((item: any) => item.id !== id);
-    updateNode(nodeId, { data: { ...data, [field]: newItems } });
+    onChange(items.filter((item) => item.id !== id));
   };
 
   const handleUpdateItem = (id: string, changes: any) => {
-    const newItems = items.map((item: any) => item.id === id ? { ...item, ...changes } : item);
-    updateNode(nodeId, { data: { ...data, [field]: newItems } });
+    onChange(
+      items.map((item) =>
+        item.id === id ? { ...item, ...changes } : item
+      )
+    );
   };
 
   if (!items.length && !editingId) {
-     return (
-       <div className="bg-secondary/20 p-1.5 border-t">
-        <Button variant="ghost" size="sm" className="w-full h-6 text-xs text-muted-foreground hover:text-foreground" onClick={handleAdd}>
-          <Plus size={12} className="mr-1" /> Add {title.toLowerCase()}
+    return (
+      <div className="p-1.5">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full h-6 text-xs text-muted-foreground hover:text-foreground"
+          onClick={handleAdd}
+        >
+          <Plus size={12} className="mr-1" />
+          Add {title.toLowerCase()}
         </Button>
       </div>
-     )
+    );
   }
 
   return (
     <>
       <div className="px-3 py-1 bg-secondary/40 border-t border-b text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex justify-between items-center group">
         {title}
-        <div className="opacity-0 group-hover:opacity-100 cursor-pointer text-muted-foreground hover:text-foreground transition-all" onClick={handleAdd}>
+        <div
+          className="opacity-0 group-hover:opacity-100 cursor-pointer text-muted-foreground hover:text-foreground"
+          onClick={handleAdd}
+        >
           <Plus size={12} />
         </div>
       </div>
+
       <div className="flex flex-col">
-        {items.map((item: any) => (
+        {items.map((item) => (
           <MessagingResourceRow
             key={item.id}
             item={item}
@@ -713,15 +783,14 @@ export const MessagingResourceList = ({ nodeId, title, items = [], field, update
             handleUpdate={handleUpdate}
             handleDelete={handleDelete}
             handleUpdateItem={handleUpdateItem}
-            field={field}
             variant={variant}
             resourceType={resourceType}
           />
         ))}
       </div>
     </>
-  )
-}
+  );
+};
 
 // --- Route Group Components ---
 

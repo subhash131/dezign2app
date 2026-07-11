@@ -188,30 +188,12 @@ export type BackendNode = {
     gcpSubscription?: string;
     azureTopic?: string;
     azureSubscription?: string;
-    endpoints?: { 
-      id: string; 
-      name: string; 
-      type: string;
-      headers?: { id: string; key: string; value: string }[];
-      params?: { id: string; key: string; type: string }[];
-      body?: string;
-      processing?: string;
-      output?: string;
-    }[];
+    endpoints?: Endpoint[];
     routeGroups?: {
       id: string;
       name: string;
       basePath: string;
-      endpoints: {
-        id: string;
-        name: string;
-        type: string;
-        headers?: { id: string; key: string; value: string }[];
-        params?: { id: string; key: string; type: string }[];
-        body?: string;
-        processing?: string;
-        output?: string;
-      }[];
+      endpoints: Endpoint[];
     }[];
   };
   fractionalIndex: string; // For Z-order
@@ -267,3 +249,49 @@ export interface CanvasAdapter<TDoc> {
   applyOperations: (ops: CanvasOperation[]) => void;
   serialize: () => string; // For AI context
 }
+
+
+export type PublishedEvent = {
+  id: string;
+  name: string;
+  description?: string;
+  schema?: string;
+  version?: string;
+  targetNodeId?: string;
+};
+
+export type ConsumedEvent = {
+  id: string;
+  name: string;
+  description?: string;
+  schema?: string;
+  retryPolicy?: string;
+  version?: string;
+  handlerLogic?: string;
+  targetNodeId?: string;
+};
+
+export type Endpoint = {
+  id: string;
+  name: string;
+  type: string;
+
+  headers?: {
+    id: string;
+    key: string;
+    value: string;
+  }[];
+
+  params?: {
+    id: string;
+    key: string;
+    type: string;
+  }[];
+
+  body?: string;
+
+  businessLogic?: string;
+  publishedEvents?: PublishedEvent[];
+  consumedEvents?: ConsumedEvent[];
+  output?: string;
+};

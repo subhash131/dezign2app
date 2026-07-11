@@ -29,15 +29,19 @@ export const RedisPubSubNode = ({ id, data, selected }: NodeProps<BackendNode>) 
       </div>
 
       {/* Channels (Messaging Resources) */}
-      <MessagingResourceList
-        nodeId={id}
+     <MessagingResourceList
         title="Channels"
         items={data.channels || []}
-        field="channels"
-        updateNode={updateNode}
-        data={data}
         variant="definition"
         resourceType="channels"
+        onChange={(channels) =>
+          updateNode(id, {
+            data: {
+              ...data,
+              channels,
+            },
+          })
+        }
       />
 
       {/* Broker Configuration */}

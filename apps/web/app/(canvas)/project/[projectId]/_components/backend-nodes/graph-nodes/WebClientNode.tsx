@@ -147,12 +147,12 @@ const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint }: Trigger
             <span>
               Simulate triggering this client event, which will call the connected endpoint on <strong>{targetNode?.data?.label || "Service"}</strong>.
             </span>
-            <div className="flex items-center gap-1.5 p-2 bg-secondary/20 rounded-lg border text-xs font-mono select-all text-foreground mt-1">
+            <span className="flex items-center gap-1.5 p-2 bg-secondary/20 rounded-lg border text-xs font-mono select-all text-foreground mt-1">
               <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-muted text-muted-foreground border">
                 {endpoint?.type || "GET"}
               </span>
               <span className="font-semibold">{url}</span>
-            </div>
+            </span>
           </DialogDescription>
         </DialogHeader>
 

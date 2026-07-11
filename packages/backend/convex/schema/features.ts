@@ -83,6 +83,7 @@ export const featureTables = {
     targetHandle: v.optional(v.string()),
     data: v.optional(v.any()),
     fractionalIndex: v.string(),
+    rulesVersion: v.optional(v.number()), // Edge validation rules version (backward compat: undefined for pre-validation edges)
   })
     .index("by_project", ["projectId"])
     .index("by_project_edge", ["projectId", "edgeId"]),

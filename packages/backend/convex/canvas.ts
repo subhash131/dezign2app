@@ -1,5 +1,6 @@
 import { v, ConvexError } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { isValidConnection, RULES_VERSION } from "./canvas/index";
 
 // ---------------------------------------------------------------------------
 // FRONTEND CANVAS — tldraw granular records
@@ -217,6 +218,77 @@ export const upsertBackendEdge = mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError("Not authenticated");
 
+    // --- Edge Validation (Primary Enforcement) ---
+    // Look up source & target nodes to get their types
+    const sourceNode = await ctx.db
+      .query("canvas_backend_nodes")
+      .withIndex("by_project_node", (q) =>
+        q.eq("projectId", args.projectId).eq("nodeId", args.source)
+      )
+      .unique();
+
+    const targetNode = await ctx.db
+      .query("canvas_backend_nodes")
+      .withIndex("by_project_node", (q) =>
+        q.eq("projectId", args.projectId).eq("nodeId", args.target)
+      )
+      .unique();
+
+    if (!sourceNode) {
+      throw new ConvexError({
+        code: "SOURCE_NODE_NOT_FOUND",
+        message: `Source node "${args.source}" not found in project.`,
+      });
+    }
+    if (!targetNode) {
+      throw new ConvexError({
+        code: "TARGET_NODE_NOT_FOUND",
+        message: `Target node "${args.target}" not found in project.`,
+      });
+    }
+
+    // Fetch existing edges for duplicate detection (exclude current edgeId for upsert case)
+    const existingEdges = await ctx.db
+      .query("canvas_backend_edges")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
+
+    const otherEdges = existingEdges
+      .filter((e) => e.edgeId !== args.edgeId)
+      .map((e) => ({
+        source: e.source,
+        target: e.target,
+        sourceHandle: e.sourceHandle,
+        targetHandle: e.targetHandle,
+      }));
+
+    const result = isValidConnection(
+      sourceNode.type,
+      args.sourceHandle,
+      targetNode.type,
+      args.targetHandle,
+      {
+        sourceNodeId: args.source,
+        targetNodeId: args.target,
+        existingEdges: otherEdges,
+      },
+    );
+
+    if (!result.valid) {
+      throw new ConvexError({
+        code: result.code,
+        message: result.message,
+        ...(result.suggestion && { suggestion: result.suggestion }),
+      });
+    }
+
+    // Use validated edge type — the mutation is authoritative, not the client
+    const validatedType = result.edgeType;
+    const enrichedData = {
+      ...args.data,
+      ...(result.resourceKind && { resourceKind: result.resourceKind }),
+    };
+
     const existing = await ctx.db
       .query("canvas_backend_edges")
       .withIndex("by_project_edge", (q) =>
@@ -228,11 +300,12 @@ export const upsertBackendEdge = mutation({
       await ctx.db.patch(existing._id, {
         source: args.source,
         target: args.target,
-        type: args.type,
+        type: validatedType,
         sourceHandle: args.sourceHandle,
         targetHandle: args.targetHandle,
-        data: args.data,
+        data: enrichedData,
         fractionalIndex: args.fractionalIndex,
+        rulesVersion: RULES_VERSION,
       });
     } else {
       await ctx.db.insert("canvas_backend_edges", {
@@ -240,11 +313,12 @@ export const upsertBackendEdge = mutation({
         edgeId: args.edgeId,
         source: args.source,
         target: args.target,
-        type: args.type,
+        type: validatedType,
         sourceHandle: args.sourceHandle,
         targetHandle: args.targetHandle,
-        data: args.data,
+        data: enrichedData,
         fractionalIndex: args.fractionalIndex,
+        rulesVersion: RULES_VERSION,
       });
     }
   },
