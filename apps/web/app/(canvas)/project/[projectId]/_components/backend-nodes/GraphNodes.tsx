@@ -389,8 +389,8 @@ const NodeHeader = ({ id, data, icon: Icon, title, colorClass, selected }: any) 
   );
 };
 
-// --- Actor Node ---
-export const ActorNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
+// --- Web Client Node ---
+export const WebClientNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
 
   return (

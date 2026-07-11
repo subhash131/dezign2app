@@ -1,9 +1,16 @@
 import Groq from "groq-sdk";
 import { CanvasMode, CanvasOperation, CanvasAdapter } from "@/types/canvas";
 
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
-});
+// Instantiate Groq client lazily to avoid build-time errors when GROQ_API_KEY is not set
+let groq: Groq;
+function getGroqClient() {
+  if (!groq) {
+    groq = new Groq({
+      apiKey: process.env.GROQ_API_KEY || "dummy_key",
+    });
+  }
+  return groq;
+}
 
 const frontendTools = [
   {
@@ -59,11 +66,11 @@ const backendTools = [
     type: "function",
     function: {
       name: "add_node",
-      description: "Add a service, database, queue, entity, group, actor or external node to the backend canvas.",
+      description: "Add a service, database, queue, entity, group, webClient or external node to the backend canvas.",
       parameters: {
         type: "object",
         properties: {
-          type: { type: "string", enum: ["service", "database", "queue", "entity", "group", "actor", "external"] },
+          type: { type: "string", enum: ["service", "database", "queue", "entity", "group", "webClient", "external"] },
           label: { type: "string", description: "Name of the node" },
           data: { type: "object", description: "Additional data for the node, like columns for 'entity'" },
         },
@@ -147,7 +154,8 @@ ${canvasStateContext}
 
 Be concise in your textual responses. Prefer using tools to update the canvas to match the user's intent.`;
 
-  const response = await groq.chat.completions.create({
+  const client = getGroqClient();
+  const response = await client.chat.completions.create({
     model: "openai/gpt-oss-120b",
     messages: [{ role: "system", content: systemPrompt }, ...messages],
     tools: tools as any,

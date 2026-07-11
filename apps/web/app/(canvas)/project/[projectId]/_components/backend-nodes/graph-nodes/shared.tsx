@@ -265,6 +265,26 @@ export const EndpointRow = ({ item, isEditing, setEditingId, setEditingName, set
                  onChange={e => handleUpdateItem(item.id, { body: e.target.value })}
                />
             </div>
+
+            <div className="flex flex-col gap-1.5">
+               <span className="text-[9px] font-bold text-muted-foreground">Processing Logic</span>
+               <Textarea 
+                 className="min-h-[50px] w-full rounded-md border border-input px-2 py-1 text-[10px] shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring nodrag"
+                 placeholder="Describe processing logic here..."
+                 value={item.processing || ""}
+                 onChange={e => handleUpdateItem(item.id, { processing: e.target.value })}
+               />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+               <span className="text-[9px] font-bold text-muted-foreground uppercase">Output</span>
+               <Textarea 
+                 className="min-h-[50px] w-full rounded-md border border-input px-2 py-1 text-[10px] shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring nodrag"
+                 placeholder="Describe expected output..."
+                 value={item.output || ""}
+                 onChange={e => handleUpdateItem(item.id, { output: e.target.value })}
+               />
+            </div>
           </div>
         )}
       </div>
@@ -385,3 +405,209 @@ export const NodeHeader = ({ id, data, icon: Icon, title, colorClass, selected }
     </div>
   );
 };
+
+export const MessageRow = ({ item, isEditing, setEditingId, setEditingName, handleUpdate, handleDelete, handleUpdateItem, field, handleType, handlePosition, editingName }: any) => {
+  const [expanded, setExpanded] = useState(false);
+  const isPublished = field === "publishedEvents";
+  const isConsumed = field === "consumedEvents";
+  const nodes = useBackendCanvasStore(s => s.nodes);
+  const queueNodes = nodes.filter(n => n.type === "queue");
+
+  return (
+    <div className="flex flex-col border-b last:border-b-0 text-xs relative group/row hover:bg-secondary/20 nodrag">
+      <div className="flex flex-col px-3 py-1.5 nodrag">
+        {isEditing ? (
+           <div className="flex items-center gap-1 nodrag">
+             <Input 
+                value={editingName} 
+                onChange={(e) => setEditingName(e.target.value)} 
+                className="h-6 text-xs flex-1 nodrag"
+                placeholder="e.g. OrderCreated"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    if (!editingName.trim()) handleDelete(item.id);
+                    else handleUpdate(item.id, editingName.trim());
+                    setEditingId(null);
+                  }
+                  if (e.key === "Escape") {
+                     if (!item.name) handleDelete(item.id);
+                     setEditingId(null);
+                  }
+                }}
+              />
+              <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground" onClick={() => {
+                  if (!editingName.trim()) handleDelete(item.id);
+                  else handleUpdate(item.id, editingName.trim());
+                  setEditingId(null);
+              }}>
+                 <Check size={14} />
+              </Button>
+           </div>
+        ) : (
+          <div className="flex items-center justify-between w-full cursor-pointer" onClick={() => { setEditingId(item.id); setEditingName(item.name); }}>
+             <div className="flex items-center gap-2 overflow-hidden">
+               <span className="font-medium truncate">{item.name}</span>
+             </div>
+             <div className="flex items-center gap-1 opacity-0 group-hover/row:opacity-100 transition-all">
+                <div className="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground" onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}>
+                   {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </div>
+                <div className="p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive" onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }}>
+                   <X size={14} />
+                </div>
+             </div>
+          </div>
+        )}
+
+        {expanded && !isEditing && (
+          <div className="flex flex-col gap-3 pt-3 mt-2 border-t cursor-default nodrag" onClick={e => e.stopPropagation()}>
+             <div className="flex flex-col gap-1.5">
+               <span className="text-[9px] font-bold text-muted-foreground">
+                 {isPublished ? "When Published (Trigger)" : "Description"}
+               </span>
+               <Textarea 
+                 className="min-h-[30px] w-full rounded-md border border-input px-2 py-1 text-[10px] shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring nodrag"
+                 placeholder={isPublished ? "e.g. Order successfully created" : "What triggers this message?"}
+                 value={item.description || ""}
+                 onChange={e => handleUpdateItem(item.id, { description: e.target.value })}
+               />
+             </div>
+             
+             <div className="flex flex-col gap-1.5">
+               <span className="text-[9px] font-bold text-muted-foreground">
+                 {isConsumed ? "Expected Payload" : (isPublished ? "Payload" : "Schema")}
+               </span>
+               <Textarea 
+                 className="min-h-[50px] w-full rounded-md border border-input px-2 py-1 text-[10px] shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring nodrag font-mono"
+                 placeholder="{}"
+                 value={item.schema || ""}
+                 onChange={e => handleUpdateItem(item.id, { schema: e.target.value })}
+               />
+             </div>
+
+             {isConsumed && (
+               <div className="flex flex-col gap-1.5">
+                 <span className="text-[9px] font-bold text-muted-foreground">Handler Logic</span>
+                 <Textarea 
+                   className="min-h-[50px] w-full rounded-md border border-input px-2 py-1 text-[10px] shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring nodrag"
+                   placeholder="What happens when this event is received?"
+                   value={item.handlerLogic || ""}
+                   onChange={e => handleUpdateItem(item.id, { handlerLogic: e.target.value })}
+                 />
+               </div>
+             )}
+
+             {!isPublished && (
+               <div className="flex items-center justify-between gap-2">
+                 <span className="text-[9px] font-bold text-muted-foreground">Retry Policy</span>
+                 <Input 
+                   className="h-6 text-[10px] w-24 text-right bg-background nodrag" 
+                   placeholder="e.g. 3 times" 
+                   value={item.retryPolicy || ""}
+                   onChange={e => handleUpdateItem(item.id, { retryPolicy: e.target.value })}
+                 />
+               </div>
+             )}
+
+             <div className="flex items-center justify-between gap-2">
+                <span className="text-[9px] font-bold text-muted-foreground">Version</span>
+                <Input 
+                  className="h-6 text-[10px] w-16 text-right bg-background nodrag" 
+                  placeholder="v1" 
+                  value={item.version || ""}
+                  onChange={e => handleUpdateItem(item.id, { version: e.target.value })}
+                />
+             </div>
+
+             {(isPublished || isConsumed) && (
+               <div className="flex flex-col gap-1.5 border-t border-border/50 pt-2 mt-1">
+                 <span className="text-[9px] font-bold text-muted-foreground">
+                   {isPublished ? "Publishes To" : "Consumes From"}
+                 </span>
+                 <Select value={item.targetNodeId || ""} onValueChange={v => handleUpdateItem(item.id, { targetNodeId: v })}>
+                   <SelectTrigger className="h-7 text-xs bg-background nodrag">
+                     <SelectValue placeholder="Select Messaging Node" />
+                   </SelectTrigger>
+                   <SelectContent>
+                     {queueNodes.length === 0 && <SelectItem value="none" disabled className="text-xs">No messaging nodes found</SelectItem>}
+                     {queueNodes.map((node: any) => (
+                       <SelectItem key={node.id} value={node.id} className="text-xs">
+                         {node.data.label || "Untitled Messaging"}
+                       </SelectItem>
+                     ))}
+                   </SelectContent>
+                 </Select>
+               </div>
+             )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export const MessageList = ({ nodeId, title, items = [], field, updateNode, data }: any) => {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
+
+  const handleAdd = () => {
+    const newItems = [...items, { id: generateId(), name: "" }];
+    updateNode(nodeId, { data: { ...data, [field]: newItems } });
+    setEditingId(newItems[newItems.length - 1].id);
+    setEditingName("");
+  };
+
+  const handleUpdate = (id: string, name: string) => {
+    const newItems = items.map((item: any) => item.id === id ? { ...item, name } : item);
+    updateNode(nodeId, { data: { ...data, [field]: newItems } });
+  };
+
+  const handleDelete = (id: string) => {
+    const newItems = items.filter((item: any) => item.id !== id);
+    updateNode(nodeId, { data: { ...data, [field]: newItems } });
+  };
+
+  const handleUpdateItem = (id: string, changes: any) => {
+    const newItems = items.map((item: any) => item.id === id ? { ...item, ...changes } : item);
+    updateNode(nodeId, { data: { ...data, [field]: newItems } });
+  };
+
+  if (!items.length && !editingId) {
+     return (
+       <div className="bg-secondary/20 p-1.5 border-t">
+        <Button variant="ghost" size="sm" className="w-full h-6 text-xs text-muted-foreground hover:text-foreground" onClick={handleAdd}>
+          <Plus size={12} className="mr-1" /> Add {title.toLowerCase()}
+        </Button>
+      </div>
+     )
+  }
+
+  return (
+    <>
+      <div className="px-3 py-1 bg-secondary/40 border-t border-b text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex justify-between items-center group">
+        {title}
+        <div className="opacity-0 group-hover:opacity-100 cursor-pointer text-muted-foreground hover:text-foreground transition-all" onClick={handleAdd}>
+          <Plus size={12} />
+        </div>
+      </div>
+      <div className="flex flex-col">
+        {items.map((item: any) => (
+          <MessageRow
+            key={item.id}
+            item={item}
+            isEditing={editingId === item.id}
+            setEditingId={setEditingId}
+            editingName={editingName}
+            setEditingName={setEditingName}
+            handleUpdate={handleUpdate}
+            handleDelete={handleDelete}
+            handleUpdateItem={handleUpdateItem}
+            field={field}
+          />
+        ))}
+      </div>
+    </>
+  )
+}
+

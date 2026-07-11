@@ -490,7 +490,7 @@ function Flow({ projectId, view }: BackendCanvasProps) {
   // This implies graph view probably doesn't need entity nodes, or if it does, it doesn't need groups.
   // I will just filter out "group".
   
-  const handleAddGraphNode = (type: "service" | "database" | "queue" | "actor" | "external", label: string) => {
+  const handleAddGraphNode = (type: "service" | "database" | "queue" | "webClient" | "external", label: string) => {
     const center = getCenterPosition();
     const { x, y } = getOffsetPosition(center.x - 100, center.y - 100);
     addNode({
@@ -499,7 +499,7 @@ function Flow({ projectId, view }: BackendCanvasProps) {
       position: { x, y },
       data: { 
         label,
-        events: type === 'actor' ? [] : undefined,
+        events: type === 'webClient' ? [] : undefined,
         inputs: type === 'service' ? [] : undefined,
         logic: type === 'service' ? [] : undefined,
         outputs: (type === 'service' || type === 'queue') ? [] : undefined,
@@ -527,8 +527,8 @@ function Flow({ projectId, view }: BackendCanvasProps) {
         <Controls />
         <MiniMap />
         <Panel position="top-right" className="flex gap-2 flex-col">
-          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start" onClick={() => handleAddGraphNode('actor', 'New Client')}>
-            <User className="w-3.5 h-3.5 mr-2" />
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start" onClick={() => handleAddGraphNode('webClient', 'New Client')}>
+            <Globe className="w-3.5 h-3.5 mr-2" />
             Client
           </Button>
           <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start" onClick={() => handleAddGraphNode('service', 'New Service')}>

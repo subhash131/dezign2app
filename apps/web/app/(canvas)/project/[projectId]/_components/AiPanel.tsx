@@ -88,8 +88,9 @@ export function AiPanel({ projectId, mode, isOpen, onClose }: AiPanelProps) {
               assistantContent += data.content;
               setMessages(prev => {
                 const newMsgs = [...prev];
-                if (newMsgs.length > 0) {
-                  newMsgs[newMsgs.length - 1].content = assistantContent;
+                const lastMsg = newMsgs[newMsgs.length - 1];
+                if (lastMsg) {
+                  lastMsg.content = assistantContent;
                 }
                 return newMsgs;
               });
@@ -102,7 +103,10 @@ export function AiPanel({ projectId, mode, isOpen, onClose }: AiPanelProps) {
               assistantContent += `\n*🔧 Tool used: \`${data.name}\`*\n`;
               setMessages(prev => {
                 const newMsgs = [...prev];
-                newMsgs[newMsgs.length - 1].content = assistantContent;
+                const lastMsg = newMsgs[newMsgs.length - 1];
+                if (lastMsg) {
+                  lastMsg.content = assistantContent;
+                }
                 return newMsgs;
               });
             }
@@ -114,7 +118,10 @@ export function AiPanel({ projectId, mode, isOpen, onClose }: AiPanelProps) {
 
       setMessages(prev => {
         const newMsgs = [...prev];
-        newMsgs[newMsgs.length - 1].isStreaming = false;
+        const lastMsg = newMsgs[newMsgs.length - 1];
+        if (lastMsg) {
+          lastMsg.isStreaming = false;
+        }
         return newMsgs;
       });
 
@@ -163,9 +170,11 @@ export function AiPanel({ projectId, mode, isOpen, onClose }: AiPanelProps) {
                 }`}
               >
                 {msg.role === "assistant" ? (
-                  <ReactMarkdown className="prose prose-sm dark:prose-invert prose-p:leading-snug prose-pre:bg-black/50">
-                    {msg.content}
-                  </ReactMarkdown>
+                  <div className="prose prose-sm dark:prose-invert prose-p:leading-snug prose-pre:bg-black/50">
+                    <ReactMarkdown>
+                      {msg.content}
+                    </ReactMarkdown>
+                  </div>
                 ) : (
                   msg.content
                 )}

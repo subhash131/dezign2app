@@ -533,7 +533,7 @@ import {
   DatabaseNode, 
   QueueNode, 
   ExternalNode, 
-  ActorNode 
+  WebClientNode 
 } from "./graph-nodes";
 
 // Map for React Flow
@@ -543,6 +543,6 @@ export const nodeTypes = {
   queue: QueueNode,
   entity: EntityNode,
   external: ExternalNode,
-  actor: ActorNode,
+  webClient: WebClientNode,
   group: SchemaGroupNode,
 };

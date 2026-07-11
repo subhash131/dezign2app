@@ -1,4 +1,4 @@
-import { TLStoreSnapshot } from "tldraw";
+import { TLEditorSnapshot } from "tldraw";
 
 export type CanvasMode = "frontend" | "backend";
 export type BackendCanvasView = "graph" | "sequence" | "schema";
@@ -6,7 +6,7 @@ export type BackendCanvasView = "graph" | "sequence" | "schema";
 // --- Frontend Canvas Types ---
 
 export type FrontendDesignDoc = {
-  snapshot: TLStoreSnapshot | null;
+  snapshot: TLEditorSnapshot | null;
 };
 
 // --- Backend Canvas Types ---
@@ -16,7 +16,7 @@ export type BackendNodeType =
   | "database"
   | "queue"
   | "entity"
-  | "actor"
+  | "webClient"
   | "external"
   | "group";
 
@@ -26,6 +26,7 @@ export type BackendNode = {
   position: { x: number; y: number };
   data: {
     label: string;
+    description?: string;
     columns?: {
       name: string;
       type: string;
@@ -39,7 +40,7 @@ export type BackendNode = {
       columns: string;
       isUnique?: boolean;
     }[];
-    isActor?: boolean;
+    isWebClient?: boolean;
     parentId?: string;
     graphPosition?: { x: number; y: number };
     schemaPosition?: { x: number; y: number };
@@ -49,7 +50,32 @@ export type BackendNode = {
     logic?: { id: string; name: string }[];
     outputs?: { id: string; name: string }[];
     actions?: { id: string; name: string }[];
-    messages?: { id: string; name: string }[];
+    messages?: { 
+      id: string; 
+      name: string;
+      description?: string;
+      schema?: string;
+      retryPolicy?: string;
+      version?: string;
+    }[];
+    publishedEvents?: { 
+      id: string; 
+      name: string;
+      description?: string;
+      schema?: string;
+      version?: string;
+      targetNodeId?: string;
+    }[];
+    consumedEvents?: { 
+      id: string; 
+      name: string;
+      description?: string;
+      schema?: string;
+      retryPolicy?: string;
+      version?: string;
+      handlerLogic?: string;
+      targetNodeId?: string;
+    }[];
     tableRef?: string; // Reference to an entity node ID
     techStack?: string;
     dbType?: string;
@@ -59,6 +85,31 @@ export type BackendNode = {
     corsOrigins?: string;
     rateLimit?: string;
     port?: string;
+    // Messaging node fields
+    pattern?: string;
+    implementation?: string;
+    delivery?: string;
+    ordering?: string;
+    failureHandling?: string;
+    retention?: string;
+    durable?: boolean;
+    // Queue implementation specific fields
+    kafkaPartitions?: string;
+    kafkaReplication?: string;
+    kafkaCompression?: string;
+    kafkaTTL?: string;
+    kafkaBatchSize?: string;
+    rabbitExchange?: string;
+    rabbitRoutingKey?: string;
+    rabbitBindings?: string;
+    sqsVisibilityTimeout?: string;
+    sqsDelay?: string;
+    sqsFifo?: boolean;
+    redisConsumerGroup?: string;
+    gcpTopic?: string;
+    gcpSubscription?: string;
+    azureTopic?: string;
+    azureSubscription?: string;
     endpoints?: { 
       id: string; 
       name: string; 
@@ -66,6 +117,8 @@ export type BackendNode = {
       headers?: { id: string; key: string; value: string }[];
       params?: { id: string; key: string; type: string }[];
       body?: string;
+      processing?: string;
+      output?: string;
     }[];
   };
   fractionalIndex: string; // For Z-order

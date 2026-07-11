@@ -1,4 +1,4 @@
-import { Editor } from "tldraw";
+import { Editor, getSnapshot, TLShapeId } from "tldraw";
 import { CanvasAdapter, CanvasOperation, FrontendDesignDoc } from "@/types/canvas";
 
 export class FrontendCanvasAdapter implements CanvasAdapter<FrontendDesignDoc> {
@@ -10,14 +10,14 @@ export class FrontendCanvasAdapter implements CanvasAdapter<FrontendDesignDoc> {
 
   getState(): FrontendDesignDoc {
     return {
-      snapshot: this.editor.store.getSnapshot(),
+      snapshot: getSnapshot(this.editor.store),
     };
   }
 
   applyOperations(ops: CanvasOperation[]): void {
     const shapesToAdd: any[] = [];
     const shapesToUpdate: any[] = [];
-    const shapesToDelete: string[] = [];
+    const shapesToDelete: TLShapeId[] = [];
 
     for (const op of ops) {
       if (op.op === "add_shape") {
@@ -34,7 +34,7 @@ export class FrontendCanvasAdapter implements CanvasAdapter<FrontendDesignDoc> {
           ...op.props,
         });
       } else if (op.op === "delete_shape") {
-        shapesToDelete.push(op.id);
+        shapesToDelete.push(op.id as TLShapeId);
       }
     }
 
