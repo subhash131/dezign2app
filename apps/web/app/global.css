@@ -15,9 +15,96 @@
   transition: stroke 0.22s ease-in-out;
 }
 
+
 .react-flow__edge:hover .react-flow__edge-path,
 .react-flow__edge.selected .react-flow__edge-path { 
   stroke: var(--color-foreground) !important;
   color: var(--color-foreground) !important;
 }
+
+/* Custom styling for React Flow Controls to match the theme */
+.react-flow__controls {
+  background-color: var(--card) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: calc(var(--radius) - 2px) !important;
+  box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.15) !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0 !important;
+  padding: 0 !important;
+}
+
+.react-flow__controls-button {
+  background-color: transparent !important;
+  border: none !important;
+  border-bottom: 1px solid var(--border) !important;
+  color: var(--foreground) !important;
+  fill: var(--foreground) !important;
+  width: 28px !important;
+  height: 28px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: background-color 0.15s ease, color 0.15s ease !important;
+  box-sizing: border-box !important;
+}
+
+.react-flow__controls-button:last-child {
+  border-bottom: none !important;
+}
+
+.react-flow__controls-button:hover {
+  background-color: var(--accent) !important;
+  color: var(--accent-foreground) !important;
+}
+
+.react-flow__controls-button svg {
+  fill: currentColor !important;
+  width: 14px !important;
+  height: 14px !important;
+}
+
+/* Custom styling for React Flow MiniMap */
+.react-flow__minimap {
+  background-color: var(--card) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: calc(var(--radius) - 2px) !important;
+  box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.15) !important;
+  overflow: hidden !important;
+}
+
+.react-flow__minimap-mask {
+  fill: var(--muted) !important;
+  fill-opacity: 0.3 !important;
+  stroke: var(--border) !important;
+  stroke-width: 1px !important;
+}
+
+.react-flow__minimap-node {
+  fill: var(--muted-foreground) !important;
+  fill-opacity: 0.2 !important;
+  stroke: none !important;
+}
+
+/* Attribution styling */
+.react-flow__attribution {
+  background-color: var(--card) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: calc(var(--radius) - 4px) !important;
+  padding: 2px 6px !important;
+  color: var(--muted-foreground) !important;
+  font-size: 9px !important;
+  box-shadow: 0 2px 6px 0 rgba(0, 0, 0, 0.05) !important;
+}
+
+.react-flow__attribution a {
+  color: var(--muted-foreground) !important;
+  text-decoration: none !important;
+}
+
+.react-flow__attribution a:hover {
+  color: var(--foreground) !important;
+}
+
 
