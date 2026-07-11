@@ -16,6 +16,29 @@ function getLastIndex(items: { fractionalIndex?: string }[]): string | null {
   return items[items.length - 1]?.fractionalIndex ?? null;
 }
 
+export function parseResourceHandle(handleId: string | null | undefined): {
+  resourceType: "topics" | "streams" | "queues";
+  direction: "in" | "out";
+  resourceId: string;
+} | null {
+  if (!handleId) return null;
+  const parts = handleId.split(":");
+  if (parts.length === 3) {
+    const [resourceType, direction, resourceId] = parts;
+    if (
+      (resourceType === "topics" || resourceType === "streams" || resourceType === "queues") &&
+      (direction === "in" || direction === "out")
+    ) {
+      return {
+        resourceType: resourceType as any,
+        direction: direction as any,
+        resourceId: resourceId as string
+      };
+    }
+  }
+  return null;
+}
+
 interface BackendCanvasState {
   nodes: BackendNode[];
   edges: BackendEdge[];
@@ -222,12 +245,12 @@ export const useBackendCanvasStore = create<BackendCanvasState>((set, get) => ({
       edgeType = "message";
     }
 
-    const targetChannelId = connection.targetHandle?.startsWith('eventChannels-in-')
-      ? connection.targetHandle.replace('eventChannels-in-', '')
-      : undefined;
-    const sourceChannelId = connection.sourceHandle?.startsWith('eventChannels-out-')
-      ? connection.sourceHandle.replace('eventChannels-out-', '')
-      : undefined;
+    const parsedTarget = parseResourceHandle(connection.targetHandle);
+    const parsedSource = parseResourceHandle(connection.sourceHandle);
+
+    const targetResourceId = parsedTarget?.resourceId;
+    const sourceResourceId = parsedSource?.resourceId;
+    const resourceType = parsedTarget?.resourceType || parsedSource?.resourceType;
 
     const lastEdgeIndex = getLastIndex(get().edges);
     const fractionalIndex = generateKeyBetween(lastEdgeIndex, null);
@@ -240,8 +263,9 @@ export const useBackendCanvasStore = create<BackendCanvasState>((set, get) => ({
       sourceHandle: connection.sourceHandle,
       targetHandle: connection.targetHandle,
       fractionalIndex,
-      targetChannelId,
-      sourceChannelId,
+      targetResourceId,
+      sourceResourceId,
+      resourceType,
     };
     
     // Update targetNodeId on service events if connected via messaging handles

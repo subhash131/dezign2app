@@ -494,7 +494,7 @@ function Flow({ projectId, view }: BackendCanvasProps) {
   // This implies graph view probably doesn't need entity nodes, or if it does, it doesn't need groups.
   // I will just filter out "group".
   
-  const handleAddGraphNode = (type: "service" | "database" | "queue" | "pubsub" | "eventstream" | "kafka" | "redis-streams" | "webClient" | "external", label: string) => {
+  const handleAddGraphNode = (type: "service" | "database" | "queue" | "pubsub" | "eventstream" | "kafka" | "redis-streams" | "sqs" | "webClient" | "external", label: string) => {
     const center = getCenterPosition();
     const { x, y } = getOffsetPosition(center.x - 100, center.y - 100);
     addNode({
@@ -508,7 +508,12 @@ function Flow({ projectId, view }: BackendCanvasProps) {
         logic: type === 'service' ? [] : undefined,
         outputs: type === 'service' ? [] : undefined,
         actions: type === 'external' ? [] : undefined,
-        eventChannels: (type === 'kafka' || type === 'redis-streams') ? [] : undefined,
+        topics: type === 'kafka' ? [] : undefined,
+        streams: type === 'redis-streams' ? [] : undefined,
+        queues: type === 'sqs' ? [] : undefined,
+        kafkaBroker: type === 'kafka' ? {} : undefined,
+        redisBroker: type === 'redis-streams' ? {} : undefined,
+        sqsBroker: type === 'sqs' ? {} : undefined,
       },
     });
   };
@@ -530,37 +535,41 @@ function Flow({ projectId, view }: BackendCanvasProps) {
         <Background gap={12} size={1} />
         <Controls />
         <MiniMap />
-        <Panel position="top-right" className="flex gap-2 flex-col">
-          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start" onClick={() => handleAddGraphNode('webClient', 'New Client')}>
+        <Panel position="top-right" className="flex gap-1.5 flex-col bg-background/95 backdrop-blur border rounded-lg p-2.5 shadow-md max-w-[180px]">
+          <div className="text-[9px] uppercase font-extrabold text-muted-foreground/60 px-1 pt-1 pb-1">Computing</div>
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8" onClick={() => handleAddGraphNode('webClient', 'New Client')}>
             <Globe className="w-3.5 h-3.5 mr-2" />
             Client
           </Button>
-          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start" onClick={() => handleAddGraphNode('service', 'New Service')}>
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8" onClick={() => handleAddGraphNode('service', 'New Service')}>
             <Server className="w-3.5 h-3.5 mr-2" />
             Service
           </Button>
           
-          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start" onClick={() => handleAddGraphNode('queue', 'New Queue')}>
-            <GitBranch className="w-3.5 h-3.5 mr-2" />
-            Queue
-          </Button>
-          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start" onClick={() => handleAddGraphNode('pubsub', 'New Pub/Sub')}>
-            <Radio className="w-3.5 h-3.5 mr-2" />
-            Pub / Sub
-          </Button>
-          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start" onClick={() => handleAddGraphNode('kafka', 'New Kafka Broker')}>
+          <div className="text-[9px] uppercase font-extrabold text-muted-foreground/60 px-1 pt-2 pb-1 border-t mt-1">Messaging & Streaming</div>
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8" onClick={() => handleAddGraphNode('kafka', 'New Kafka Broker')}>
             <Waves className="w-3.5 h-3.5 mr-2 text-emerald-500" />
             Kafka
           </Button>
-          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start" onClick={() => handleAddGraphNode('redis-streams', 'New Redis Streams Broker')}>
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8" onClick={() => handleAddGraphNode('redis-streams', 'New Redis Streams Broker')}>
             <Waves className="w-3.5 h-3.5 mr-2 text-rose-500" />
             Redis Streams
           </Button>
-          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start" onClick={() => handleAddGraphNode('database', 'Table Ref')}>
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8" onClick={() => handleAddGraphNode('sqs', 'New Amazon SQS')}>
+            <GitBranch className="w-3.5 h-3.5 mr-2 text-orange-500" />
+            Amazon SQS
+          </Button>
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8" onClick={() => handleAddGraphNode('pubsub', 'New Pub/Sub')}>
+            <Radio className="w-3.5 h-3.5 mr-2" />
+            Pub / Sub
+          </Button>
+
+          <div className="text-[9px] uppercase font-extrabold text-muted-foreground/60 px-1 pt-2 pb-1 border-t mt-1">Storage & External</div>
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8" onClick={() => handleAddGraphNode('database', 'Table Ref')}>
             <Database className="w-3.5 h-3.5 mr-2" />
             DB Ref
           </Button>
-          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start" onClick={() => handleAddGraphNode('external', 'New API')}>
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8" onClick={() => handleAddGraphNode('external', 'New API')}>
             <Globe className="w-3.5 h-3.5 mr-2" />
             External
           </Button>
