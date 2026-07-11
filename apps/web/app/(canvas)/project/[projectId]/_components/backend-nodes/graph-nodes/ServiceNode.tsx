@@ -8,6 +8,7 @@ import { Switch } from "@workspace/ui/components/switch";
 import { Label } from "@workspace/ui/components/label";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { NodeHeader, EndpointList, MessagingResourceList } from "./shared";
+import { Textarea } from "@workspace/ui/components/textarea";
 
 export const ServiceNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
@@ -16,6 +17,16 @@ export const ServiceNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
   return (
     <div className={cn("shadow-md rounded-xl bg-card border-2 min-w-[300px] max-w-[400px] flex flex-col", selected ? "border-primary" : "border-border")}>
       <NodeHeader id={id} data={data} icon={Server} title="Service / API" colorClass="bg-blue-500/10 text-blue-700 dark:text-blue-400" selected={selected} />
+      
+      {/* Description */}
+      <div className="px-3 py-2 bg-secondary/5 border-b nodrag">
+        <Textarea
+          className="min-h-[20px] text-xs bg-transparent border-none shadow-none p-1 resize-none focus-visible:ring-0 placeholder:text-muted-foreground/50"
+          placeholder="description"
+          value={data.description || ""}
+          onChange={(e) => updateNode(id, { data: { ...data, description: e.target.value } })}
+        />
+      </div>
       
       <EndpointList nodeId={id} title="Endpoints / Routes" items={data.endpoints || []} field="endpoints" updateNode={updateNode} data={data} />
       

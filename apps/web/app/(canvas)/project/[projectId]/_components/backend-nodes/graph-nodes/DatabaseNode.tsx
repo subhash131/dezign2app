@@ -6,6 +6,7 @@ import { cn } from "@workspace/ui/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@workspace/ui/components/select";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useShallow } from "zustand/react/shallow";
+import { Textarea } from "@workspace/ui/components/textarea";
 
 export const DatabaseNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
@@ -58,6 +59,16 @@ export const DatabaseNode = ({ id, data, selected }: NodeProps<BackendNode>) => 
         >
           <Trash2 size={14} />
         </div>
+      </div>
+      
+      {/* Description */}
+      <div className="px-3 py-2 bg-secondary/5 border-b nodrag">
+        <Textarea
+          className="min-h-[20px] text-xs bg-transparent border-none shadow-none p-1 resize-none focus-visible:ring-0 placeholder:text-muted-foreground/50"
+          placeholder="description"
+          value={data.description || ""}
+          onChange={(e) => updateNode(id, { data: { ...data, description: e.target.value } })}
+        />
       </div>
       
       <div className="p-2 flex flex-col gap-2">

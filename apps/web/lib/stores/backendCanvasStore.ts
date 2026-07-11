@@ -17,7 +17,7 @@ function getLastIndex(items: { fractionalIndex?: string }[]): string | null {
 }
 
 export function parseResourceHandle(handleId: string | null | undefined): {
-  resourceType: "topics" | "streams" | "queues";
+  resourceType: "topics" | "streams" | "queues" | "channels";
   direction: "in" | "out";
   resourceId: string;
 } | null {
@@ -26,7 +26,7 @@ export function parseResourceHandle(handleId: string | null | undefined): {
   if (parts.length === 3) {
     const [resourceType, direction, resourceId] = parts;
     if (
-      (resourceType === "topics" || resourceType === "streams" || resourceType === "queues") &&
+      (resourceType === "topics" || resourceType === "streams" || resourceType === "queues" || resourceType === "channels") &&
       (direction === "in" || direction === "out")
     ) {
       return {

@@ -494,7 +494,7 @@ function Flow({ projectId, view }: BackendCanvasProps) {
   // This implies graph view probably doesn't need entity nodes, or if it does, it doesn't need groups.
   // I will just filter out "group".
   
-  const handleAddGraphNode = (type: "service" | "database" | "queue" | "pubsub" | "eventstream" | "kafka" | "redis-streams" | "sqs" | "webClient" | "external", label: string) => {
+  const handleAddGraphNode = (type: "service" | "database" | "queue" | "pubsub" | "eventstream" | "kafka" | "redis-streams" | "sqs" | "redis-pubsub" | "webClient" | "external", label: string) => {
     const center = getCenterPosition();
     const { x, y } = getOffsetPosition(center.x - 100, center.y - 100);
     addNode({
@@ -511,6 +511,7 @@ function Flow({ projectId, view }: BackendCanvasProps) {
         topics: type === 'kafka' ? [] : undefined,
         streams: type === 'redis-streams' ? [] : undefined,
         queues: type === 'sqs' ? [] : undefined,
+        channels: type === 'redis-pubsub' ? [] : undefined,
         kafkaBroker: type === 'kafka' ? {} : undefined,
         redisBroker: type === 'redis-streams' ? {} : undefined,
         sqsBroker: type === 'sqs' ? {} : undefined,
@@ -559,9 +560,9 @@ function Flow({ projectId, view }: BackendCanvasProps) {
             <GitBranch className="w-3.5 h-3.5 mr-2 text-orange-500" />
             Amazon SQS
           </Button>
-          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8" onClick={() => handleAddGraphNode('pubsub', 'New Pub/Sub')}>
-            <Radio className="w-3.5 h-3.5 mr-2" />
-            Pub / Sub
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8" onClick={() => handleAddGraphNode('redis-pubsub', 'New Redis Pub/Sub')}>
+            <Radio className="w-3.5 h-3.5 mr-2 text-red-500" />
+            Redis Pub/Sub
           </Button>
 
           <div className="text-[9px] uppercase font-extrabold text-muted-foreground/60 px-1 pt-2 pb-1 border-t mt-1">Storage & External</div>

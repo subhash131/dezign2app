@@ -38,8 +38,8 @@ export const RedisStreamsNode = ({ id, data, selected }: NodeProps<BackendNode>)
       {/* Description */}
       <div className="px-3 py-2 bg-secondary/5 border-b nodrag">
         <Textarea
-          className="min-h-[40px] text-xs bg-transparent border-none shadow-none p-1 resize-none focus-visible:ring-0 placeholder:text-muted-foreground/50"
-          placeholder="description (e.g. In-memory data store stream broker...)"
+          className="min-h-[20px] text-xs bg-transparent border-none shadow-none p-1 resize-none focus-visible:ring-0 placeholder:text-muted-foreground/50"
+          placeholder="description"
           value={data.description || ""}
           onChange={(e) => updateNode(id, { data: { ...data, description: e.target.value } })}
         />
