@@ -536,6 +536,7 @@ import {
   EventStreamNode,
   KafkaNode,
   RedisStreamsNode,
+  SQSNode,
   ExternalNode, 
   WebClientNode 
 } from "./graph-nodes";
@@ -549,6 +550,7 @@ export const nodeTypes = {
   eventstream: EventStreamNode,
   kafka: KafkaNode,
   "redis-streams": RedisStreamsNode,
+  sqs: SQSNode,
   entity: EntityNode,
   external: ExternalNode,
   webClient: WebClientNode,

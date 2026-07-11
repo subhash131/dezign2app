@@ -4,7 +4,7 @@ import { Waves, ChevronDown, ChevronUp } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
-import { NodeHeader, EventChannelList } from "./shared";
+import { NodeHeader, MessagingResourceList } from "./shared";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@workspace/ui/components/select";
 import { Textarea } from "@workspace/ui/components/textarea";
 import { Input } from "@workspace/ui/components/input";
@@ -15,6 +15,21 @@ export const KafkaNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
 
   const [showReliability, setShowReliability] = useState(false);
   const [showBrokerConfig, setShowBrokerConfig] = useState(true);
+
+  // Initialize kafkaBroker if not defined
+  const broker = data.kafkaBroker || {};
+
+  const updateBroker = (key: string, value: any) => {
+    updateNode(id, {
+      data: {
+        ...data,
+        kafkaBroker: {
+          ...broker,
+          [key]: value,
+        },
+      },
+    });
+  };
 
   return (
     <div className={cn("shadow-md rounded-xl bg-card border-2 min-w-[280px] max-w-[350px] flex flex-col", selected ? "border-primary" : "border-border")}>
@@ -30,15 +45,16 @@ export const KafkaNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
         />
       </div>
 
-      {/* Topics (Event Channels) */}
-      <EventChannelList
+      {/* Topics (Messaging Resources) */}
+      <MessagingResourceList
         nodeId={id}
         title="Topics"
-        items={data.eventChannels || []}
-        field="eventChannels"
+        items={data.topics || []}
+        field="topics"
         updateNode={updateNode}
         data={data}
         variant="definition"
+        resourceType="topics"
       />
 
       {/* Reliability */}
@@ -107,15 +123,15 @@ export const KafkaNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
           <div className="px-3 py-2 flex flex-col gap-3 border-t text-[10px] text-muted-foreground bg-secondary/5">
             <div className="flex items-center justify-between gap-2">
               <Label className="text-[10px] font-bold text-muted-foreground">Partitions</Label>
-              <Input className="h-6 text-[10px] w-16 text-right bg-background nodrag" placeholder="e.g. 3" value={data.kafkaPartitions || ""} onChange={e => updateNode(id, { data: { ...data, kafkaPartitions: e.target.value } })} />
+              <Input className="h-6 text-[10px] w-16 text-right bg-background nodrag" placeholder="e.g. 3" value={broker.partitions || ""} onChange={e => updateBroker("partitions", e.target.value)} />
             </div>
             <div className="flex items-center justify-between gap-2">
               <Label className="text-[10px] font-bold text-muted-foreground">Replication Factor</Label>
-              <Input className="h-6 text-[10px] w-16 text-right bg-background nodrag" placeholder="e.g. 3" value={data.kafkaReplication || ""} onChange={e => updateNode(id, { data: { ...data, kafkaReplication: e.target.value } })} />
+              <Input className="h-6 text-[10px] w-16 text-right bg-background nodrag" placeholder="e.g. 3" value={broker.replication || ""} onChange={e => updateBroker("replication", e.target.value)} />
             </div>
             <div className="flex items-center justify-between gap-2">
               <Label className="text-[10px] font-bold text-muted-foreground">Compression</Label>
-              <Select value={data.kafkaCompression || "None"} onValueChange={(val) => updateNode(id, { data: { ...data, kafkaCompression: val } })}>
+              <Select value={broker.compression || "None"} onValueChange={(val) => updateBroker("compression", val)}>
                 <SelectTrigger className="h-6 w-24 text-[10px] px-2 py-0 nodrag"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="None" className="text-[10px]">None</SelectItem>
@@ -128,11 +144,11 @@ export const KafkaNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
             </div>
             <div className="flex items-center justify-between gap-2">
               <Label className="text-[10px] font-bold text-muted-foreground">TTL</Label>
-              <Input className="h-6 text-[10px] w-24 text-right bg-background nodrag" placeholder="e.g. 7 days" value={data.kafkaTTL || ""} onChange={e => updateNode(id, { data: { ...data, kafkaTTL: e.target.value } })} />
+              <Input className="h-6 text-[10px] w-24 text-right bg-background nodrag" placeholder="e.g. 7 days" value={broker.ttl || ""} onChange={e => updateBroker("ttl", e.target.value)} />
             </div>
             <div className="flex items-center justify-between gap-2">
               <Label className="text-[10px] font-bold text-muted-foreground">Batch Size</Label>
-              <Input className="h-6 text-[10px] w-24 text-right bg-background nodrag" placeholder="e.g. 16KB" value={data.kafkaBatchSize || ""} onChange={e => updateNode(id, { data: { ...data, kafkaBatchSize: e.target.value } })} />
+              <Input className="h-6 text-[10px] w-24 text-right bg-background nodrag" placeholder="e.g. 16KB" value={broker.batchSize || ""} onChange={e => updateBroker("batchSize", e.target.value)} />
             </div>
           </div>
         )}

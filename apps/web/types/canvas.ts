@@ -10,6 +10,51 @@ export type FrontendDesignDoc = {
 
 // --- Backend Canvas Types ---
 
+export type KafkaTopic = {
+  id: string;
+  kind: "topic";
+  name: string;
+  description?: string;
+  schema?: string;
+  version?: string;
+};
+
+export type RedisStream = {
+  id: string;
+  kind: "stream";
+  name: string;
+  description?: string;
+  schema?: string;
+  version?: string;
+};
+
+export type SQSQueue = {
+  id: string;
+  kind: "queue";
+  name: string;
+  description?: string;
+  schema?: string;
+  version?: string;
+};
+
+export type KafkaBrokerConfig = {
+  partitions?: string;
+  replication?: string;
+  compression?: string;
+  ttl?: string;
+  batchSize?: string;
+};
+
+export type RedisStreamsBrokerConfig = {
+  consumerGroup?: string;
+};
+
+export type SQSBrokerConfig = {
+  visibilityTimeout?: string;
+  delay?: string;
+  fifo?: boolean;
+};
+
 export type BackendNodeType =
   | "service"
   | "database"
@@ -18,6 +63,7 @@ export type BackendNodeType =
   | "eventstream"
   | "kafka"
   | "redis-streams"
+  | "sqs"
   | "entity"
   | "webClient"
   | "external"
@@ -68,6 +114,12 @@ export type BackendNode = {
       schema?: string;
       version?: string;
     }[];
+    topics?: KafkaTopic[];
+    streams?: RedisStream[];
+    queues?: SQSQueue[];
+    kafkaBroker?: KafkaBrokerConfig;
+    redisBroker?: RedisStreamsBrokerConfig;
+    sqsBroker?: SQSBrokerConfig;
     publishedEvents?: { 
       id: string; 
       name: string;
@@ -162,8 +214,9 @@ export type BackendEdge = {
   type: BackendEdgeType;
   sourceHandle?: string | null;
   targetHandle?: string | null;
-  sourceChannelId?: string;
-  targetChannelId?: string;
+  sourceResourceId?: string;
+  targetResourceId?: string;
+  resourceType?: "topics" | "streams" | "queues";
   data?: {
     label?: string;
     sequenceOrder?: number;

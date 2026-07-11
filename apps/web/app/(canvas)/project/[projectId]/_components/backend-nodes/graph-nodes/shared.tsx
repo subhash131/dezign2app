@@ -435,16 +435,16 @@ export const NodeHeader = ({ id, data, icon: Icon, title, colorClass, selected }
   );
 };
 
-export const EventChannelRow = ({ item, isEditing, setEditingId, setEditingName, handleUpdate, handleDelete, handleUpdateItem, field, handleType, handlePosition, editingName, variant }: any) => {
+export const MessagingResourceRow = ({ item, isEditing, setEditingId, setEditingName, handleUpdate, handleDelete, handleUpdateItem, field, handleType, handlePosition, editingName, variant, resourceType }: any) => {
   const [expanded, setExpanded] = useState(!item.name);
   const isPublished = field === "publishedEvents" || variant === "publish";
   const isConsumed = field === "consumedEvents" || variant === "consume";
   const nodes = useBackendCanvasStore(s => s.nodes);
-  const messagingNodes = nodes.filter(n => n.type === "queue" || n.type === "pubsub" || n.type === "eventstream" || n.type === "kafka" || n.type === "redis-streams");
+  const messagingNodes = nodes.filter(n => n.type === "queue" || n.type === "pubsub" || n.type === "eventstream" || n.type === "kafka" || n.type === "redis-streams" || n.type === "sqs");
   
   const edges = useBackendCanvasStore(s => s.edges);
-  const publisherCount = edges.filter(e => e.targetChannelId === item.id).length;
-  const consumerCount = edges.filter(e => e.sourceChannelId === item.id).length;
+  const publisherCount = edges.filter(e => e.targetResourceId === item.id).length;
+  const consumerCount = edges.filter(e => e.sourceResourceId === item.id).length;
 
   const isChannelEmpty = () => {
     const currentName = isEditing ? editingName : (item.name || "");
@@ -496,19 +496,19 @@ export const EventChannelRow = ({ item, isEditing, setEditingId, setEditingName,
           style={{ top: '15px' }}
         />
       )}
-      {variant === "definition" && (
+      {variant === "definition" && resourceType && (
         <>
           <Handle
             type="target"
             position={Position.Left}
-            id={`eventChannels-in-${item.id}`}
+            id={`${resourceType}:in:${item.id}`}
             className="w-2 h-2 -left-1"
             style={{ top: '15px' }}
           />
           <Handle
             type="source"
             position={Position.Right}
-            id={`eventChannels-out-${item.id}`}
+            id={`${resourceType}:out:${item.id}`}
             className="w-2 h-2 -right-1"
             style={{ top: '15px' }}
           />
@@ -652,12 +652,17 @@ export const EventChannelRow = ({ item, isEditing, setEditingId, setEditingName,
   )
 }
 
-export const EventChannelList = ({ nodeId, title, items = [], field, updateNode, data, variant }: any) => {
+export const MessagingResourceList = ({ nodeId, title, items = [], field, updateNode, data, variant, resourceType }: any) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
 
   const handleAdd = () => {
-    const newItems = [...items, { id: generateId(), name: "" }];
+    // Generate domain kind (topic, stream, queue)
+    let kind = "topic";
+    if (resourceType === "streams") kind = "stream";
+    if (resourceType === "queues") kind = "queue";
+
+    const newItems = [...items, { id: generateId(), name: "", kind }];
     updateNode(nodeId, { data: { ...data, [field]: newItems } });
     setEditingId(newItems[newItems.length - 1].id);
     setEditingName("");
@@ -698,7 +703,7 @@ export const EventChannelList = ({ nodeId, title, items = [], field, updateNode,
       </div>
       <div className="flex flex-col">
         {items.map((item: any) => (
-          <EventChannelRow
+          <MessagingResourceRow
             key={item.id}
             item={item}
             isEditing={editingId === item.id}
@@ -710,6 +715,7 @@ export const EventChannelList = ({ nodeId, title, items = [], field, updateNode,
             handleUpdateItem={handleUpdateItem}
             field={field}
             variant={variant}
+            resourceType={resourceType}
           />
         ))}
       </div>

@@ -1,29 +1,30 @@
 import React, { useState } from "react";
 import { NodeProps } from "@xyflow/react";
-import { Waves, ChevronDown, ChevronUp } from "lucide-react";
+import { GitBranch, ChevronDown, ChevronUp } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { NodeHeader, MessagingResourceList } from "./shared";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@workspace/ui/components/select";
+import { Switch } from "@workspace/ui/components/switch";
+import { Label } from "@workspace/ui/components/label";
 import { Textarea } from "@workspace/ui/components/textarea";
 import { Input } from "@workspace/ui/components/input";
-import { Label } from "@workspace/ui/components/label";
 
-export const RedisStreamsNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
+export const SQSNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
 
   const [showReliability, setShowReliability] = useState(false);
   const [showBrokerConfig, setShowBrokerConfig] = useState(true);
 
-  // Initialize redisBroker if not defined
-  const broker = data.redisBroker || {};
+  // Initialize sqsBroker if not defined
+  const broker = data.sqsBroker || {};
 
   const updateBroker = (key: string, value: any) => {
     updateNode(id, {
       data: {
         ...data,
-        redisBroker: {
+        sqsBroker: {
           ...broker,
           [key]: value,
         },
@@ -33,28 +34,28 @@ export const RedisStreamsNode = ({ id, data, selected }: NodeProps<BackendNode>)
 
   return (
     <div className={cn("shadow-md rounded-xl bg-card border-2 min-w-[280px] max-w-[350px] flex flex-col", selected ? "border-primary" : "border-border")}>
-      <NodeHeader id={id} data={data} icon={Waves} title="Redis Streams" colorClass="bg-rose-500/10 text-rose-700 dark:text-rose-400" selected={selected} />
+      <NodeHeader id={id} data={data} icon={GitBranch} title="Amazon SQS" colorClass="bg-orange-500/10 text-orange-700 dark:text-orange-400" selected={selected} />
 
       {/* Description */}
       <div className="px-3 py-2 bg-secondary/5 border-b nodrag">
         <Textarea
           className="min-h-[40px] text-xs bg-transparent border-none shadow-none p-1 resize-none focus-visible:ring-0 placeholder:text-muted-foreground/50"
-          placeholder="description (e.g. In-memory data store stream broker...)"
+          placeholder="description (e.g. Fully managed message queuing service...)"
           value={data.description || ""}
           onChange={(e) => updateNode(id, { data: { ...data, description: e.target.value } })}
         />
       </div>
 
-      {/* Streams (Messaging Resources) */}
+      {/* Queues (Messaging Resources) */}
       <MessagingResourceList
         nodeId={id}
-        title="Streams"
-        items={data.streams || []}
-        field="streams"
+        title="Queues"
+        items={data.queues || []}
+        field="queues"
         updateNode={updateNode}
         data={data}
         variant="definition"
-        resourceType="streams"
+        resourceType="queues"
       />
 
       {/* Reliability */}
@@ -80,29 +81,14 @@ export const RedisStreamsNode = ({ id, data, selected }: NodeProps<BackendNode>)
               </Select>
             </div>
 
-            {/* Ordering */}
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[10px] font-bold text-muted-foreground uppercase">Ordering</span>
-              <Select value={data.ordering || "Unordered"} onValueChange={(val) => updateNode(id, { data: { ...data, ordering: val } })}>
+              <span className="text-[10px] font-bold text-muted-foreground uppercase">Failure Handling</span>
+              <Select value={data.failureHandling || "Retry"} onValueChange={(val) => updateNode(id, { data: { ...data, failureHandling: val } })}>
                 <SelectTrigger className="h-6 w-[140px] text-[10px] px-2 py-0 nodrag"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Unordered" className="text-xs">Unordered</SelectItem>
-                  <SelectItem value="Ordered" className="text-xs">Ordered</SelectItem>
-                  <SelectItem value="Global Order" className="text-xs">Global Order</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Retention */}
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-[10px] font-bold text-muted-foreground uppercase">Retention</span>
-              <Select value={data.retention || "7 days"} onValueChange={(val) => updateNode(id, { data: { ...data, retention: val } })}>
-                <SelectTrigger className="h-6 w-[140px] text-[10px] px-2 py-0 nodrag"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1 hour" className="text-xs">1 hour</SelectItem>
-                  <SelectItem value="1 day" className="text-xs">1 day</SelectItem>
-                  <SelectItem value="7 days" className="text-xs">7 days</SelectItem>
-                  <SelectItem value="Forever" className="text-xs">Forever</SelectItem>
+                  <SelectItem value="Drop" className="text-xs">Drop</SelectItem>
+                  <SelectItem value="Retry" className="text-xs">Retry</SelectItem>
+                  <SelectItem value="Retry + DLQ" className="text-xs">Retry + DLQ</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -122,8 +108,16 @@ export const RedisStreamsNode = ({ id, data, selected }: NodeProps<BackendNode>)
         {showBrokerConfig && (
           <div className="px-3 py-2 flex flex-col gap-3 border-t text-[10px] text-muted-foreground bg-secondary/5">
             <div className="flex items-center justify-between gap-2">
-              <Label className="text-[10px] font-bold text-muted-foreground">Consumer Group</Label>
-              <Input className="h-6 text-[10px] w-32 bg-background nodrag" placeholder="Group Name" value={broker.consumerGroup || ""} onChange={e => updateBroker("consumerGroup", e.target.value)} />
+              <Label className="text-[10px] font-bold text-muted-foreground">Visibility Timeout</Label>
+              <Input className="h-6 text-[10px] w-24 text-right bg-background nodrag" placeholder="e.g. 30s" value={broker.visibilityTimeout || ""} onChange={e => updateBroker("visibilityTimeout", e.target.value)} />
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <Label className="text-[10px] font-bold text-muted-foreground">Delay Seconds</Label>
+              <Input className="h-6 text-[10px] w-24 text-right bg-background nodrag" placeholder="e.g. 0s" value={broker.delay || ""} onChange={e => updateBroker("delay", e.target.value)} />
+            </div>
+            <div className="flex items-center justify-between">
+              <Label htmlFor={`sqs-fifo-${id}`} className="text-[10px] font-bold text-muted-foreground uppercase">FIFO Queue</Label>
+              <Switch id={`sqs-fifo-${id}`} className="nodrag scale-75 origin-right" checked={broker.fifo || false} onCheckedChange={(val) => updateBroker("fifo", val)} />
             </div>
           </div>
         )}

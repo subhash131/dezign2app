@@ -69,10 +69,10 @@ const backendTools = [
       description: `Add a node to the backend canvas. Node types:
 - 'service': A backend API / microservice
 - 'database': A database reference node
-- 'queue': Point-to-point message queue (use with implementations: 'RabbitMQ', 'Amazon SQS', 'Azure Service Bus')
+- 'sqs': Amazon SQS broker (stores queues in data.queues)
 - 'pubsub': Fan-out publish-subscribe (use with implementations: 'Google Pub/Sub', 'Redis Pub/Sub', 'RabbitMQ Fanout')
-- 'kafka': Apache Kafka broker (stores topics in data.eventChannels)
-- 'redis-streams': Redis Streams broker (stores streams in data.eventChannels)
+- 'kafka': Apache Kafka broker (stores topics in data.topics)
+- 'redis-streams': Redis Streams broker (stores streams in data.streams)
 - 'entity': A database table/schema entity
 - 'webClient': A frontend client or page
 - 'external': An external third-party API
@@ -80,9 +80,9 @@ const backendTools = [
       parameters: {
         type: "object",
         properties: {
-          type: { type: "string", enum: ["service", "database", "queue", "pubsub", "kafka", "redis-streams", "entity", "group", "webClient", "external"] },
+          type: { type: "string", enum: ["service", "database", "sqs", "pubsub", "kafka", "redis-streams", "entity", "group", "webClient", "external"] },
           label: { type: "string", description: "Name of the node" },
-          data: { type: "object", description: "Additional data for the node. For 'queue': { implementation: 'RabbitMQ'|'Amazon SQS'|'Azure Service Bus', delivery, failureHandling, durable, rabbitExchange, rabbitRoutingKey, sqsVisibilityTimeout, sqsFifo, azureTopic }. For 'pubsub': { implementation: 'Google Pub/Sub'|'Redis Pub/Sub'|'RabbitMQ Fanout', delivery, retention, gcpTopic, gcpSubscription, rabbitExchange }. For 'kafka': { eventChannels: [{ id, name, description, schema, version }], delivery, ordering, retention, kafkaPartitions, kafkaReplication, kafkaCompression, kafkaTTL, kafkaBatchSize }. For 'redis-streams': { eventChannels: [{ id, name, description, schema, version }], delivery, ordering, retention, redisConsumerGroup }. For 'entity': { columns: [{ name, type, isPrimaryKey, isForeignKey, isNotNull, isUnique }] }." },
+          data: { type: "object", description: "Additional data for the node. For 'sqs': { queues: [{ id, name, description, schema, version, kind: 'queue' }], sqsBroker: { visibilityTimeout, delay, fifo: boolean }, delivery, failureHandling }. For 'pubsub': { implementation: 'Google Pub/Sub'|'Redis Pub/Sub'|'RabbitMQ Fanout', delivery, retention, gcpTopic, gcpSubscription, rabbitExchange }. For 'kafka': { topics: [{ id, name, description, schema, version, kind: 'topic' }], kafkaBroker: { partitions, replication, compression, ttl, batchSize }, delivery, ordering, retention }. For 'redis-streams': { streams: [{ id, name, description, schema, version, kind: 'stream' }], redisBroker: { consumerGroup }, delivery, ordering, retention }. For 'entity': { columns: [{ name, type, isPrimaryKey, isForeignKey, isNotNull, isUnique }] }." },
         },
         required: ["type", "label"],
       },
@@ -159,11 +159,11 @@ You are currently viewing the system design canvas.
 If working on a Database Schema, use 'entity' nodes and populate 'data.columns' with an array of { name, type, isPrimaryKey, isForeignKey, isNotNull, isUnique }. Use 'group' nodes to group tables, and 'foreign-key' edges to connect tables, specifying 'sourceCardinality' and 'targetCardinality' (1 or N) in 'data'.
 
 When adding messaging infrastructure, choose the correct node type based on the messaging pattern:
-- Use 'queue' for point-to-point work queues. Valid implementations: 'RabbitMQ', 'Amazon SQS', 'Azure Service Bus'. Only set fields: delivery, failureHandling, durable, rabbitExchange, rabbitRoutingKey, rabbitBindings, sqsVisibilityTimeout, sqsDelay, sqsFifo, azureTopic, azureSubscription.
+- Use 'sqs' for Amazon SQS message queues. Store queues in 'data.queues'. Set broker settings under 'data.sqsBroker'. Valid fields: delivery, failureHandling, and sqsBroker: { visibilityTimeout, delay, fifo: boolean }.
 - Use 'pubsub' for fan-out broadcast messaging. Valid implementations: 'Google Pub/Sub', 'Redis Pub/Sub', 'RabbitMQ Fanout'. Only set fields: delivery, retention, gcpTopic, gcpSubscription, rabbitExchange.
-- Use 'kafka' for Apache Kafka messaging brokers. Store topics in 'data.eventChannels'. Valid fields: delivery, ordering, retention, kafkaPartitions, kafkaReplication, kafkaCompression, kafkaTTL, kafkaBatchSize.
-- Use 'redis-streams' for Redis Streams messaging brokers. Store streams in 'data.eventChannels'. Valid fields: delivery, ordering, retention, redisConsumerGroup.
-NEVER mix implementation fields across node types (e.g., never put kafkaPartitions on a 'queue' node).
+- Use 'kafka' for Apache Kafka messaging brokers. Store topics in 'data.topics'. Set broker configuration under 'data.kafkaBroker' (partitions, replication, compression, ttl, batchSize). Valid fields: delivery, ordering, retention.
+- Use 'redis-streams' for Redis Streams messaging brokers. Store streams in 'data.streams'. Set broker configuration under 'data.redisBroker' (consumerGroup). Valid fields: delivery, ordering, retention.
+NEVER mix implementation fields across node types.
 
 Current Canvas State:
 ${canvasStateContext}
