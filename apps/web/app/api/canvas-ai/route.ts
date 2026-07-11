@@ -1,13 +1,13 @@
 import { NextRequest } from "next/server";
 import { streamCanvasAI } from "@/lib/ai/groqClient";
-import { CanvasMode } from "@/types/canvas";
+
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { projectId, messages, canvasMode, canvasStateContext } = body;
+    const { projectId, messages, canvasStateContext } = body;
 
-    if (!projectId || !messages || !canvasMode) {
+    if (!projectId || !messages) {
       return new Response("Missing required fields", { status: 400 });
     }
 
@@ -18,7 +18,6 @@ export async function POST(req: NextRequest) {
         try {
           const aiStream = streamCanvasAI(
             messages,
-            canvasMode as CanvasMode,
             canvasStateContext || "Canvas is empty."
           );
 

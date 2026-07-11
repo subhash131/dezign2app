@@ -5,9 +5,8 @@ import { useQuery } from "convex/react";
 import { api } from "@workspace/backend/_generated/api";
 import { Id } from "@workspace/backend/_generated/dataModel";
 import { useQueryState, parseAsStringEnum } from "nuqs";
-import { CanvasMode, BackendCanvasView } from "@/types/canvas";
+import { BackendCanvasView } from "@/types/canvas";
 import { CanvasToolbar } from "./_components/CanvasToolbar";
-import { FrontendCanvas } from "./_components/FrontendCanvas";
 import { BackendCanvas } from "./_components/BackendCanvas";
 import { AiPanel } from "./_components/AiPanel";
 import { Loader2 } from "lucide-react";
@@ -15,11 +14,7 @@ import { Loader2 } from "lucide-react";
 export default function ProjectCanvasPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = React.use(params);
 
-  const [mode, setMode] = useQueryState<CanvasMode>(
-    "mode",
-    parseAsStringEnum<CanvasMode>(["frontend", "backend"]).withDefault("frontend")
-  );
-  
+
   const [view, setView] = useQueryState<BackendCanvasView>(
     "view",
     parseAsStringEnum<BackendCanvasView>(["graph", "sequence", "schema"]).withDefault("graph")
@@ -52,8 +47,6 @@ export default function ProjectCanvasPage({ params }: { params: Promise<{ projec
     <div className="flex flex-col h-full w-full relative">
       <CanvasToolbar
         projectName={project.name}
-        mode={mode}
-        setMode={setMode}
         view={view}
         setView={setView}
         aiPanelOpen={aiPanelOpen}
@@ -62,16 +55,11 @@ export default function ProjectCanvasPage({ params }: { params: Promise<{ projec
       
       <div className="flex-1 relative overflow-hidden flex">
         <div className="flex-1 relative">
-          {mode === "frontend" ? (
-            <FrontendCanvas projectId={projectId} />
-          ) : (
-            <BackendCanvas projectId={projectId} view={view} />
-          )}
+          <BackendCanvas projectId={projectId} view={view} />
         </div>
         
         <AiPanel 
           projectId={projectId} 
-          mode={mode}
           isOpen={aiPanelOpen} 
           onClose={() => setAiPanelOpen(false)} 
         />

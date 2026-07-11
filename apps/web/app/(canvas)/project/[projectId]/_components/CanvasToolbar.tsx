@@ -2,17 +2,14 @@
 
 import React from "react";
 import Link from "next/link";
-import { ArrowLeft, MonitorPlay, Network, Workflow, Sparkles, Database } from "lucide-react";
-import { CanvasMode, BackendCanvasView } from "@/types/canvas";
+import { ArrowLeft, Network, Workflow, Sparkles, Database } from "lucide-react";
+import { BackendCanvasView } from "@/types/canvas";
 import { Button } from "@workspace/ui/components/button";
 import { Tabs, TabsList, TabsTrigger } from "@workspace/ui/components/tabs";
-import { Separator } from "@workspace/ui/components/separator";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 
 interface CanvasToolbarProps {
   projectName: string;
-  mode: CanvasMode;
-  setMode: (mode: CanvasMode) => void;
   view: BackendCanvasView;
   setView: (view: BackendCanvasView) => void;
   aiPanelOpen: boolean;
@@ -21,8 +18,6 @@ interface CanvasToolbarProps {
 
 export function CanvasToolbar({
   projectName,
-  mode,
-  setMode,
   view,
   setView,
   aiPanelOpen,
@@ -41,44 +36,23 @@ export function CanvasToolbar({
         </Button>
         <div className="font-medium text-sm truncate max-w-[200px]">{projectName}</div>
       </div>
-
-      <div className="flex items-center space-x-6">
-        <Tabs value={mode} onValueChange={(v) => setMode(v as CanvasMode)} className="w-[300px]">
-          <TabsList className="grid w-full grid-cols-2 h-9">
-            <TabsTrigger value="frontend" className="text-xs">
-              <MonitorPlay className="w-3.5 h-3.5 mr-2" />
-              Frontend UI
+      <div className="flex items-center justify-center flex-1">
+        <Tabs value={view} onValueChange={(v) => setView(v as BackendCanvasView)} className="w-[300px]">
+          <TabsList className="grid w-full grid-cols-3 h-9">
+            <TabsTrigger value="graph" className="text-xs">
+              <Network className="w-3 h-3 mr-1.5" />
+              Graph
             </TabsTrigger>
-            <TabsTrigger value="backend" className="text-xs">
-              <Network className="w-3.5 h-3.5 mr-2" />
-              Backend System
+            <TabsTrigger value="sequence" className="text-xs">
+              <Workflow className="w-3 h-3 mr-1.5" />
+              Sequence
+            </TabsTrigger>
+            <TabsTrigger value="schema" className="text-xs">
+              <Database className="w-3 h-3 mr-1.5" />
+              Schema
             </TabsTrigger>
           </TabsList>
         </Tabs>
-
-        {mode === "backend" && (
-          <>
-            <Separator orientation="vertical" className="h-6" />
-            <Tabs value={view} onValueChange={(v) => setView(v as BackendCanvasView)} className="w-[300px]">
-              <TabsList className="grid w-full grid-cols-3 h-9">
-                <TabsTrigger value="graph" className="text-xs">
-                  <Network className="w-3 h-3 mr-1.5" />
-                  Graph
-                </TabsTrigger>
-                <TabsTrigger value="sequence" className="text-xs">
-                  <Workflow className="w-3 h-3 mr-1.5" />
-                  Sequence
-                </TabsTrigger>
-                <TabsTrigger value="schema" className="text-xs">
-                  <Database className="w-3 h-3 mr-1.5" />
-                  Schema
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-            
-
-          </>
-        )}
       </div>
 
       <div className="flex items-center">

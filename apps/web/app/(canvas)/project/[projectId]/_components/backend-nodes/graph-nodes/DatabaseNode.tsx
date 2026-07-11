@@ -5,11 +5,12 @@ import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@workspace/ui/components/select";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { useShallow } from "zustand/react/shallow";
 
 export const DatabaseNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const deleteNode = useBackendCanvasStore((s) => s.deleteNode);
-  const entities = useBackendCanvasStore((s) => s.nodes.filter(n => n.type === "entity"));
+  const entities = useBackendCanvasStore(useShallow((s) => s.nodes.filter(n => n.type === "entity")));
 
   const selectedEntity = entities.find(e => e.id === data.tableRef);
 

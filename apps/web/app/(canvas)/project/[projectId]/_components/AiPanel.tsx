@@ -6,12 +6,10 @@ import { X, Send, Sparkles, Loader2 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import { ScrollArea } from "@workspace/ui/components/scroll-area";
-import { CanvasMode } from "@/types/canvas";
 import ReactMarkdown from "react-markdown";
 
 interface AiPanelProps {
   projectId: string;
-  mode: CanvasMode;
   isOpen: boolean;
   onClose: () => void;
 }
@@ -22,9 +20,9 @@ type Message = {
   isStreaming?: boolean;
 };
 
-export function AiPanel({ projectId, mode, isOpen, onClose }: AiPanelProps) {
+export function AiPanel({ projectId, isOpen, onClose }: AiPanelProps) {
   const [messages, setMessages] = useState<Message[]>([
-    { role: "assistant", content: `Hi! I'm your Blueprint AI. I can help you design on the **${mode}** canvas. What would you like to build?` }
+    { role: "assistant", content: `Hi! I'm your Blueprint AI. I can help you design your system architecture. What would you like to build?` }
   ]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -47,9 +45,7 @@ export function AiPanel({ projectId, mode, isOpen, onClose }: AiPanelProps) {
     setIsLoading(true);
 
     try {
-      const adapter = mode === "frontend" 
-        ? (window as any).frontendAdapter 
-        : (window as any).backendAdapter;
+      const adapter = (window as any).canvasAdapter;
 
       const canvasStateContext = adapter?.serialize() || "Canvas is empty.";
 
@@ -59,7 +55,6 @@ export function AiPanel({ projectId, mode, isOpen, onClose }: AiPanelProps) {
         body: JSON.stringify({
           projectId,
           messages: [{ role: "user", content: userMessage }],
-          canvasMode: mode,
           canvasStateContext
         })
       });
@@ -196,7 +191,7 @@ export function AiPanel({ projectId, mode, isOpen, onClose }: AiPanelProps) {
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={`Ask AI to edit the ${mode}...`}
+            placeholder="Ask AI to design your system..."
             className="flex-1"
             disabled={isLoading}
           />

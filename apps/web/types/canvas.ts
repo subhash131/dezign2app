@@ -1,6 +1,5 @@
 import { TLEditorSnapshot } from "tldraw";
 
-export type CanvasMode = "frontend" | "backend";
 export type BackendCanvasView = "graph" | "sequence" | "schema";
 
 // --- Frontend Canvas Types ---

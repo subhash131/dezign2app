@@ -112,7 +112,7 @@ export const EditableNodeList = ({
 }
 
 export const EndpointRow = ({ item, isEditing, setEditingId, setEditingName, setEditingType, handleUpdate, handleDelete, handleUpdateItem, field, handleType, handlePosition, editingName, editingType }: any) => {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(!item.name);
 
   const addHeader = () => {
      const headers = item.headers || [];
@@ -136,8 +136,32 @@ export const EndpointRow = ({ item, isEditing, setEditingId, setEditingName, set
      handleUpdateItem(item.id, { params: item.params.filter((p: any) => p.id !== id) });
   };
 
+  const isEndpointEmpty = () => {
+    const currentName = isEditing ? editingName : (item.name || "");
+    const hasName = currentName.trim().length > 0;
+    const hasHeaders = item.headers?.some((h: any) => h.key.trim() || h.value.trim());
+    const hasParams = item.params?.some((p: any) => p.key.trim());
+    const hasBody = item.body?.trim().length > 0;
+    const hasProcessing = item.processing?.trim().length > 0;
+    const hasOutput = item.output?.trim().length > 0;
+    return !hasName && !hasHeaders && !hasParams && !hasBody && !hasProcessing && !hasOutput;
+  };
+
   return (
-    <div className="flex flex-col border-b last:border-b-0 text-xs relative group/row hover:bg-secondary/20 nodrag">
+    <div 
+      className="flex flex-col border-b last:border-b-0 text-xs relative group/row hover:bg-secondary/20 nodrag"
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+          if (isEndpointEmpty()) {
+            handleDelete(item.id);
+            if (isEditing) setEditingId(null);
+          } else if (isEditing) {
+            handleUpdate(item.id, editingName.trim(), editingType);
+            setEditingId(null);
+          }
+        }
+      }}
+    >
       <Handle 
         type="target" 
         position={Position.Left} 
@@ -213,7 +237,7 @@ export const EndpointRow = ({ item, isEditing, setEditingId, setEditingName, set
           </div>
         )}
 
-        {expanded && !isEditing && (
+        {expanded && (
           <div className="flex flex-col gap-3 pt-3 mt-2 border-t cursor-default nodrag" onClick={e => e.stopPropagation()}>
             <div className="flex flex-col gap-1.5">
                <div className="flex items-center justify-between">
@@ -407,14 +431,39 @@ export const NodeHeader = ({ id, data, icon: Icon, title, colorClass, selected }
 };
 
 export const MessageRow = ({ item, isEditing, setEditingId, setEditingName, handleUpdate, handleDelete, handleUpdateItem, field, handleType, handlePosition, editingName }: any) => {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(!item.name);
   const isPublished = field === "publishedEvents";
   const isConsumed = field === "consumedEvents";
   const nodes = useBackendCanvasStore(s => s.nodes);
   const messagingNodes = nodes.filter(n => n.type === "queue" || n.type === "pubsub" || n.type === "eventstream");
 
+  const isMessageEmpty = () => {
+    const currentName = isEditing ? editingName : (item.name || "");
+    const hasName = currentName.trim().length > 0;
+    const hasDesc = item.description?.trim().length > 0;
+    const hasSchema = item.schema?.trim().length > 0;
+    const hasLogic = item.handlerLogic?.trim().length > 0;
+    const hasRetry = item.retryPolicy?.trim().length > 0;
+    const hasVersion = item.version?.trim().length > 0;
+    const hasTarget = item.targetNodeId && item.targetNodeId !== "none";
+    return !hasName && !hasDesc && !hasSchema && !hasLogic && !hasRetry && !hasVersion && !hasTarget;
+  };
+
   return (
-    <div className="flex flex-col border-b last:border-b-0 text-xs relative group/row hover:bg-secondary/20 nodrag">
+    <div 
+      className="flex flex-col border-b last:border-b-0 text-xs relative group/row hover:bg-secondary/20 nodrag"
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+          if (isMessageEmpty()) {
+            handleDelete(item.id);
+            if (isEditing) setEditingId(null);
+          } else if (isEditing) {
+            handleUpdate(item.id, editingName.trim());
+            setEditingId(null);
+          }
+        }
+      }}
+    >
       <div className="flex flex-col px-3 py-1.5 nodrag">
         {isEditing ? (
            <div className="flex items-center gap-1 nodrag">
@@ -460,7 +509,7 @@ export const MessageRow = ({ item, isEditing, setEditingId, setEditingName, hand
           </div>
         )}
 
-        {expanded && !isEditing && (
+        {expanded && (
           <div className="flex flex-col gap-3 pt-3 mt-2 border-t cursor-default nodrag" onClick={e => e.stopPropagation()}>
              <div className="flex flex-col gap-1.5">
                <span className="text-[9px] font-bold text-muted-foreground">

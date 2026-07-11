@@ -1,5 +1,5 @@
 import Groq from "groq-sdk";
-import { CanvasMode, CanvasOperation, CanvasAdapter } from "@/types/canvas";
+import { CanvasOperation, CanvasAdapter } from "@/types/canvas";
 
 // Instantiate Groq client lazily to avoid build-time errors when GROQ_API_KEY is not set
 let groq: Groq;
@@ -148,13 +148,12 @@ const backendTools = [
 
 export async function* streamCanvasAI(
   messages: any[],
-  canvasMode: CanvasMode,
   canvasStateContext: string
 ) {
-  const tools = canvasMode === "frontend" ? frontendTools : backendTools;
+  const tools = backendTools;
   const systemPrompt = `You are an expert AI software architect and UI designer. 
 Your job is to assist the user in designing their system using the provided tools.
-You are currently viewing the **${canvasMode}** canvas.
+You are currently viewing the system design canvas.
 
 If working on a Database Schema, use 'entity' nodes and populate 'data.columns' with an array of { name, type, isPrimaryKey, isForeignKey, isNotNull, isUnique }. Use 'group' nodes to group tables, and 'foreign-key' edges to connect tables, specifying 'sourceCardinality' and 'targetCardinality' (1 or N) in 'data'.
 
