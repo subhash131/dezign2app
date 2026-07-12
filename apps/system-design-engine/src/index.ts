@@ -3,7 +3,8 @@ import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { stream } from 'hono/streaming';
 import { createGraph, systemPromptTemplate } from './ai/agent.js';
-import { HumanMessage, SystemMessage } from '@langchain/core/messages';
+import { HumanMessage, SystemMessage, AIMessage } from '@langchain/core/messages';
+import { ConvexHttpClient } from 'convex/browser';
 
 const app = new Hono();
 
@@ -14,9 +15,9 @@ app.get('/', (c) => {
 app.post('/canvas-ai', async (c) => {
   try {
     const body = await c.req.json();
-    const { projectId, messages, canvasStateContext, convexUrl: bodyConvexUrl, token, viewportCenter } = body;
+    const { projectId, chatId, canvasStateContext, convexUrl: bodyConvexUrl, token, viewportCenter } = body;
 
-    if (!messages || !projectId) {
+    if (!chatId || !projectId) {
       return c.text("Missing required fields", 400);
     }
 
@@ -25,13 +26,19 @@ app.post('/canvas-ai', async (c) => {
       return c.text("Missing CONVEX_URL environment variable", 500);
     }
 
+    const client = new ConvexHttpClient(convexUrl);
+    if (token) client.setAuth(token);
+
+    const messages = await client.query("project_chat:getMessages" as any, { chatId });
+
     const agent = createGraph();
     
+    const existingRequirements = await client.query("requirements:get" as any, { projectId });
+    
     // Prepare initial state
-    const formattedMessages = [
-      new SystemMessage(systemPromptTemplate(canvasStateContext || "Canvas is empty.")),
-      ...messages.map((m: any) => m.role === 'user' ? new HumanMessage(m.content) : new HumanMessage(m.content)) // Simplified
-    ];
+    const formattedMessages = messages.map((m: any) => 
+      m.role === 'assistant' ? new AIMessage(m.content) : new HumanMessage(m.content)
+    );
 
     const graphStream = await agent.streamEvents(
       { 
@@ -39,7 +46,9 @@ app.post('/canvas-ai', async (c) => {
         projectId,
         convexUrl,
         token,
-        viewportCenter
+        viewportCenter,
+        canvasStateContext: canvasStateContext || "Canvas is empty.",
+        requirements: existingRequirements ?? { functional: [], nonFunctional: [], assumptions: [], status: "pending" }
       },
       { version: 'v2' }
     );
@@ -50,6 +59,14 @@ app.post('/canvas-ai', async (c) => {
     return stream(c, async (streamWriter: any) => {
       for await (const event of graphStream) {
         if (event.event === 'on_chat_model_stream') {
+          // Only stream output from user-facing agent nodes.
+          // This prevents internal nodes like intentIdentifier or syncRequirements
+          // from leaking their raw JSON or internal prompts to the UI.
+          const nodeName = event.metadata?.langgraph_node;
+          if (nodeName && !['chatAgent', 'canvasAgent', 'reflectAgent'].includes(nodeName)) {
+            continue;
+          }
+
           const chunk = event.data.chunk;
           if (chunk.content) {
             await streamWriter.write(JSON.stringify({ type: 'text', content: chunk.content }) + '\n');

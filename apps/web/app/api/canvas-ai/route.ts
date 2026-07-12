@@ -3,9 +3,9 @@ import { NextRequest } from "next/server";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { projectId, messages, canvasStateContext, token, viewportCenter } = body;
+    const { projectId, chatId, canvasStateContext, token, viewportCenter } = body;
 
-    if (!projectId || !messages) {
+    if (!projectId || !chatId) {
       return new Response("Missing required fields", { status: 400 });
     }
 
@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
       },
       body: JSON.stringify({
         projectId,
-        messages,
+        chatId,
         canvasStateContext,
         convexUrl: process.env.NEXT_PUBLIC_CONVEX_URL,
         token,

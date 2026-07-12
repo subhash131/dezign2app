@@ -5,14 +5,15 @@ import { Resizable } from "re-resizable";
 import { X, Send, Sparkles, Loader2 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
-import { ScrollArea } from "@workspace/ui/components/scroll-area";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@workspace/backend/_generated/api";
 import { Id } from "@workspace/backend/_generated/dataModel";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@workspace/ui/components/select";
 import { useAuth } from "@clerk/nextjs";
 import { useReactFlow } from "@xyflow/react";
+import { Textarea } from "@workspace/ui/components/textarea";
 
 interface AiPanelProps {
   projectId: string;
@@ -101,7 +102,7 @@ export function AiPanel({ projectId, isOpen, onClose }: AiPanelProps) {
       setActiveChatId(currentChatId);
     }
 
-    addMessage({ chatId: currentChatId, role: "user", content: userMessage }).catch(console.error);
+    await addMessage({ chatId: currentChatId, role: "user", content: userMessage }).catch(console.error);
 
     try {
       const adapter = (window as any).backendAdapter || (window as any).canvasAdapter;
@@ -121,7 +122,7 @@ export function AiPanel({ projectId, isOpen, onClose }: AiPanelProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           projectId,
-          messages: [{ role: "user", content: userMessage }],
+          chatId: currentChatId,
           canvasStateContext,
           token,
           viewportCenter
@@ -237,7 +238,7 @@ export function AiPanel({ projectId, isOpen, onClose }: AiPanelProps) {
         </Button>
       </div>
 
-      <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+      <div className="flex-1 p-4 overflow-y-auto" ref={scrollRef}>
         <div className="space-y-4">
           {messages.map((msg, idx) => (
             <div
@@ -255,7 +256,15 @@ export function AiPanel({ projectId, isOpen, onClose }: AiPanelProps) {
               >
                 {msg.role === "assistant" ? (
                   <div className="prose prose-sm dark:prose-invert prose-p:leading-snug prose-pre:bg-black/50">
-                    <ReactMarkdown>
+                    <ReactMarkdown 
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        ol: ({node, ...props}) => <ol className="list-decimal ml-5 space-y-2" {...props} />,
+                        ul: ({node, ...props}) => <ul className="list-disc ml-5 space-y-2" {...props} />,
+                        li: ({node, ...props}) => <li className="pl-1 marker:text-foreground" {...props} />,
+                        p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />
+                      }}
+                    >
                       {msg.content}
                     </ReactMarkdown>
                   </div>
@@ -273,11 +282,11 @@ export function AiPanel({ projectId, isOpen, onClose }: AiPanelProps) {
             </div>
           )}
         </div>
-      </ScrollArea>
+      </div>
 
       <div className="p-4 border-t bg-background shrink-0">
         <form onSubmit={handleSubmit} className="flex items-center gap-2">
-          <Input
+          <Textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Ask AI to design your system..."
