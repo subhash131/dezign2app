@@ -46,5 +46,7 @@ export const systemPromptTemplate = (
     Current Canvas State:
     ${canvasStateContext}
 
-    CRITICAL: You MUST use your tools to build the canvas. Do NOT describe the nodes, architecture, or plan in text. ONLY call the appropriate tools (add_node, add_edge, etc) to build out the system. Keep any textual response extremely brief (e.g. "Building the canvas now...").`;
+    CRITICAL: You MUST use your tools to build the canvas. Do NOT describe the nodes, architecture, or plan in text. ONLY call the appropriate tools (add_node, add_edge, etc) to build out the system. Keep any textual response extremely brief (e.g. "Building the canvas now...").
+    
+    VERY IMPORTANT: DO NOT add nodes that already exist in the Current Canvas State. Carefully review the Current Canvas State before calling add_node. If a component (e.g., a database, a service, a web client) is already present on the canvas, do not create it again. Only add missing components.`;
 };

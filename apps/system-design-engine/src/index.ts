@@ -15,7 +15,7 @@ app.get('/', (c) => {
 app.post('/canvas-ai', async (c) => {
   try {
     const body = await c.req.json();
-    const { projectId, chatId, canvasStateContext, convexUrl: bodyConvexUrl, token, viewportCenter } = body;
+    const { projectId, chatId, convexUrl: bodyConvexUrl, token, viewportCenter } = body;
 
     if (!chatId || !projectId) {
       return c.text("Missing required fields", 400);
@@ -36,6 +36,31 @@ app.post('/canvas-ai', async (c) => {
     const existingRequirements = await client.query("requirements:get" as any, { projectId });
     const existingPlan = await client.query("requirements:getPlan" as any, { projectId });
     
+    // Fetch canvas state directly from backend
+    const elements: any = await client.query("canvas:getBackendElements" as any, { projectId });
+    let backendCanvasState = "Canvas is empty.";
+    if (elements && elements.nodes && elements.nodes.length > 0) {
+      let output = "Backend Canvas Nodes:\n";
+      elements.nodes.forEach((n: any) => {
+        let extra = "";
+        if (n.type === "entity" && n.data.columns) {
+          extra = ` (Columns: ${n.data.columns.map((c: any) => c.name).join(", ")})`;
+        }
+        output += `- [${n.type}] id: ${n.nodeId}, label: "${n.data.label}"${extra}\n`;
+      });
+
+      if (elements.edges && elements.edges.length > 0) {
+        output += "\nConnections:\n";
+        elements.edges.forEach((e: any) => {
+          const sourceNode = elements.nodes.find((n: any) => n.nodeId === e.source)?.data.label || e.source;
+          const targetNode = elements.nodes.find((n: any) => n.nodeId === e.target)?.data.label || e.target;
+          const label = e.data?.label ? ` (label: ${e.data.label})` : "";
+          output += `- ${sourceNode} -> ${targetNode} [${e.type}]${label}\n`;
+        });
+      }
+      backendCanvasState = output;
+    }
+    
     // Prepare initial state
     const formattedMessages = messages.map((m: any) => 
       m.role === 'assistant' ? new AIMessage(m.content) : new HumanMessage(m.content)
@@ -48,7 +73,7 @@ app.post('/canvas-ai', async (c) => {
         convexUrl,
         token,
         viewportCenter,
-        canvasStateContext: canvasStateContext || "Canvas is empty.",
+        canvasStateContext: backendCanvasState,
         requirements: existingRequirements ?? { functional: [], nonFunctional: [], assumptions: [], status: "pending" },
         implementationPlan: existingPlan ?? { content: "", status: "none" }
       },

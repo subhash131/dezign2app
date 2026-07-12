@@ -201,9 +201,11 @@ ${conversationContext}`
             .join("\n")}`
         : `Review the tool results below against the user's original request AND the approved
 implementation plan (technology choices, services, endpoints, messaging infra it called for).
-If everything the plan called for has been built, respond with a brief confirmation summary
-and do NOT call any tools. If something the plan specified is still missing or was built with
-the wrong technology/config, call the appropriate tool(s) to fix it.
+If everything the plan called for has been built or already exists on the canvas, respond with a brief confirmation summary
+and do NOT call any tools. If something the plan specified is still missing from BOTH the recent tool results AND the current canvas state, call the appropriate tool(s) to add it.
+
+Current Canvas State:
+${state.canvasStateContext ?? "Canvas is empty."}
 
 Approved Implementation Plan:
 ${plan.content || "none"}
