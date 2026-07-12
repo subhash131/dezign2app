@@ -7,7 +7,7 @@ import { Input } from "@workspace/ui/components/input";
 import { Switch } from "@workspace/ui/components/switch";
 import { Label } from "@workspace/ui/components/label";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
-import { NodeHeader, EndpointList } from "./shared";
+import { NodeHeader, EndpointList, MessagingResourceList } from "./shared";
 import { Textarea } from "@workspace/ui/components/textarea";
 
 export const ServiceNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
@@ -36,6 +36,23 @@ export const ServiceNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
         updateNode={updateNode}
         data={data}
       />
+      
+      <MessagingResourceList
+        title="Consumed Events (Listeners)"
+        items={data.consumedEvents || []}
+        variant="consume"
+        resourceType="topics"
+        onChange={(consumedEvents) => updateNode(id, { data: { ...data, consumedEvents } })}
+      />
+
+      <MessagingResourceList
+        title="Background Published Events"
+        items={data.publishedEvents || []}
+        variant="publish"
+        resourceType="topics"
+        onChange={(publishedEvents) => updateNode(id, { data: { ...data, publishedEvents } })}
+      />
+
       <div className="p-3 bg-secondary/10 flex flex-col gap-3 rounded-b-xl">
          <div 
            className="flex items-center justify-between cursor-pointer group"

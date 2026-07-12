@@ -56,6 +56,11 @@ export function classifyHandle(
     if (handleDirection === "source") return "database-source";
   }
 
+  if (["queue", "eventstream", "pubsub", "kafka", "redis-streams", "sqs", "redis-pubsub"].includes(nodeType)) {
+    if (handleDirection === "target") return "resource-def-in";
+    if (handleDirection === "source") return "resource-def-out";
+  }
+
   return "unknown";
 }
 

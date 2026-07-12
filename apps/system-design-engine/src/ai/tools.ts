@@ -191,13 +191,20 @@ export const addEdgeTool = tool(
   },
   {
     name: "add_edge",
-    description: "Connect two nodes on the backend canvas. Both nodes must already exist.",
+    description: `Connect two nodes on the backend canvas. Both nodes must already exist.
+Important handle rules:
+- Client to Service: sourceHandle="events-{id}" -> targetHandle="endpoints-in-{id}" (type: "connection")
+- Service to Broker (Queue/Kafka/PubSub): sourceHandle="publishedEvents-out-{id}" or "endpoints-out-{id}" -> targetHandle is omitted/empty (type: "message")
+- Broker to Service: sourceHandle is omitted/empty -> targetHandle="consumedEvents-in-{id}" (type: "message")
+- Service to Service: sourceHandle="endpoints-out-{id}" -> targetHandle="endpoints-in-{id}" (type: "connection")
+- DB Entity to DB Entity: sourceHandle="source-{id}" -> targetHandle="target-{id}" (type: "foreign-key")
+- DB reference: sourceHandle="endpoints-out-{id}" -> targetHandle="database-target" (type: "connection")`,
     schema: z.object({
       source: z.string().describe("Source node ID"),
       target: z.string().describe("Target node ID"),
       type: z.enum(["connection", "foreign-key", "message"]),
-      sourceHandle: z.string().optional(),
-      targetHandle: z.string().optional(),
+      sourceHandle: z.string().optional().describe("The ID of the source handle. See rules."),
+      targetHandle: z.string().optional().describe("The ID of the target handle. See rules."),
       data: z.any().optional(),
     }),
   }
@@ -228,7 +235,7 @@ export const deleteEdgeTool = tool(
 
 export const addServiceNodeTool = tool(
   async (input, config) => {
-    const { label, description, techStack, port, cors, baseUrl, endpoints, inputs, outputs, logic } = input;
+    const { label, description, techStack, port, cors, baseUrl, endpoints, consumedEvents, publishedEvents, inputs, outputs, logic } = input;
     const state = config.configurable?.state as typeof GraphAnnotation.State;
     if (!state?.projectId) return "Error: projectId missing";
     const convex = getConvexClient(state);
@@ -248,10 +255,16 @@ export const addServiceNodeTool = tool(
         ...pe,
         id: pe.id || Math.random().toString(36).slice(2, 9),
       })),
-      consumedEvents: ep.consumedEvents?.map((ce: any) => ({
-        ...ce,
-        id: ce.id || Math.random().toString(36).slice(2, 9),
-      })),
+    }));
+
+    const processedConsumedEvents = (consumedEvents || []).map((ce: any) => ({
+      ...ce,
+      id: ce.id || Math.random().toString(36).slice(2, 9),
+    }));
+
+    const processedPublishedEvents = (publishedEvents || []).map((pe: any) => ({
+      ...pe,
+      id: pe.id || Math.random().toString(36).slice(2, 9),
     }));
 
     try {
@@ -268,6 +281,8 @@ export const addServiceNodeTool = tool(
           cors,
           baseUrl,
           endpoints: processedEndpoints,
+          consumedEvents: processedConsumedEvents,
+          publishedEvents: processedPublishedEvents,
           inputs: inputs || [],
           outputs: outputs || [],
           logic: logic || [],
@@ -291,18 +306,29 @@ export const addServiceNodeTool = tool(
             }
           }
         }
-        if (ep.consumedEvents) {
-          for (const ce of ep.consumedEvents) {
-            if (ce.targetNodeId) {
-              edgesToCreate.push({
-                source: ce.targetNodeId,
-                target: nodeId,
-                sourceHandle: undefined,
-                targetHandle: `consumedEvents-in-${ce.id}`,
-                type: EDGE_TYPE_MAP["resource-def-out→consumed-event-in"] || "message",
-              });
-            }
-          }
+      }
+
+      for (const ce of processedConsumedEvents) {
+        if (ce.targetNodeId) {
+          edgesToCreate.push({
+            source: ce.targetNodeId,
+            target: nodeId,
+            sourceHandle: undefined,
+            targetHandle: `consumedEvents-in-${ce.id}`,
+            type: EDGE_TYPE_MAP["resource-def-out→consumed-event-in"] || "message",
+          });
+        }
+      }
+
+      for (const pe of processedPublishedEvents) {
+        if (pe.targetNodeId) {
+          edgesToCreate.push({
+            source: nodeId,
+            target: pe.targetNodeId,
+            sourceHandle: `publishedEvents-out-${pe.id}`,
+            targetHandle: undefined,
+            type: EDGE_TYPE_MAP["published-event-out→resource-def-in"] || "message",
+          });
         }
       }
 
@@ -321,7 +347,11 @@ export const addServiceNodeTool = tool(
         });
       }
 
-      return `Added service node ${label} with ID ${nodeId} and ${edgesToCreate.length} event edges`;
+      let resultStr = `Added service node ${label} with ID ${nodeId} and ${edgesToCreate.length} event edges.`;
+      if (processedEndpoints.length > 0) {
+        resultStr += `\nEndpoints:\n` + processedEndpoints.map((ep: any) => `- ${ep.type} ${ep.name}: targetHandle="endpoints-in-${ep.id}", sourceHandle="endpoints-out-${ep.id}"`).join("\n");
+      }
+      return resultStr;
     } catch (e: any) {
       return `Failed to add service node: ${e.message}`;
     }
@@ -346,14 +376,20 @@ export const addServiceNodeTool = tool(
           kind: z.string().optional(),
           schema: z.string().optional(),
           targetNodeId: z.string().optional().describe("Target node ID to automatically connect to (e.g. queue or pubsub node)")
-        })).optional(),
-        consumedEvents: z.array(z.object({
-          name: z.string(),
-          kind: z.string().optional(),
-          schema: z.string().optional(),
-          handlerLogic: z.string().optional(),
-          targetNodeId: z.string().optional().describe("Source node ID to automatically connect from (e.g. queue or pubsub node)")
         })).optional()
+      })).optional(),
+      consumedEvents: z.array(z.object({
+        name: z.string(),
+        kind: z.string().optional(),
+        schema: z.string().optional(),
+        handlerLogic: z.string().optional(),
+        targetNodeId: z.string().optional().describe("Source node ID to automatically connect from (e.g. queue or pubsub node)")
+      })).optional(),
+      publishedEvents: z.array(z.object({
+        name: z.string(),
+        kind: z.string().optional(),
+        schema: z.string().optional(),
+        targetNodeId: z.string().optional().describe("Target node ID to automatically connect to (e.g. queue or pubsub node)")
       })).optional(),
       inputs: z.array(z.any()).optional(),
       outputs: z.array(z.any()).optional(),
@@ -499,7 +535,11 @@ export const addClientNodeTool = tool(
         });
       }
 
-      return `Added client node ${label} with ID ${nodeId} and ${events?.length || 0} events`;
+      let resultStr = `Added client node ${label} with ID ${nodeId} and ${events?.length || 0} events.`;
+      if (processedEvents.length > 0) {
+        resultStr += `\nEvents:\n` + processedEvents.map((ev: any) => `- ${ev.name}: sourceHandle="events-${ev.id}"`).join("\n");
+      }
+      return resultStr;
     } catch (e: any) {
       return `Failed to add client node: ${e.message}`;
     }

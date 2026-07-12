@@ -3,7 +3,7 @@ import type { HandleKind } from "./types.js";
 export const CONNECTION_RULES: Record<HandleKind, HandleKind[]> = {
   "event-source": ["endpoint-in"],
   "endpoint-in": [],
-  "endpoint-out": ["database-target", "action-target", "resource-def-in"],
+  "endpoint-out": ["database-target", "action-target", "resource-def-in", "endpoint-in"],
   "published-event-out": ["resource-def-in"],
   "consumed-event-in": [],
   "resource-def-in": [],

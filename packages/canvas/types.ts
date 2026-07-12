@@ -329,6 +329,5 @@ export type Endpoint = {
 
   businessLogic?: string;
   publishedEvents?: PublishedEvent[];
-  consumedEvents?: ConsumedEvent[];
   output?: string;
 };

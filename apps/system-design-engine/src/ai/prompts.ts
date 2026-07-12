@@ -48,5 +48,7 @@ export const systemPromptTemplate = (
 
     CRITICAL: You MUST use your tools to build the canvas. Do NOT describe the nodes, architecture, or plan in text. ONLY call the appropriate tools (add_node, add_edge, etc) to build out the system. Keep any textual response extremely brief (e.g. "Building the canvas now...").
     
-    VERY IMPORTANT: DO NOT add nodes that already exist in the Current Canvas State. Carefully review the Current Canvas State before calling add_node. If a component (e.g., a database, a service, a web client) is already present on the canvas, do not create it again. Only add missing components.`;
+    VERY IMPORTANT: DO NOT add nodes that already exist in the Current Canvas State. Carefully review the Current Canvas State before calling add_node. If a component (e.g., a database, a service, a web client) is already present on the canvas, do not create it again. Only add missing components.
+    
+    CRITICAL: Nodes MUST be connected. Use the 'add_edge' tool to draw lines between components that interact (e.g., WebClient to Service, Service to Database). You may need to create the nodes first, receive their generated IDs in the next turn, and then call add_edge to connect them.`;
 };

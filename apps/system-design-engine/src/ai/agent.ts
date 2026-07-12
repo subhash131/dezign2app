@@ -201,8 +201,10 @@ ${conversationContext}`
             .join("\n")}`
         : `Review the tool results below against the user's original request AND the approved
 implementation plan (technology choices, services, endpoints, messaging infra it called for).
-If everything the plan called for has been built or already exists on the canvas, respond with a brief confirmation summary
+If everything the plan called for has been built or already exists on the canvas AND all necessary connections (edges) have been drawn, respond with a brief confirmation summary
 and do NOT call any tools. If something the plan specified is still missing from BOTH the recent tool results AND the current canvas state, call the appropriate tool(s) to add it.
+
+CRITICAL: Make sure nodes are actually connected! If you just created nodes, you must now use their IDs from the tool results below to call the 'add_edge' tool and connect them together (e.g. WebClient -> Service, Service -> Database).
 
 Current Canvas State:
 ${state.canvasStateContext ?? "Canvas is empty."}

@@ -44,7 +44,16 @@ app.post('/canvas-ai', async (c) => {
       elements.nodes.forEach((n: any) => {
         let extra = "";
         if (n.type === "entity" && n.data.columns) {
-          extra = ` (Columns: ${n.data.columns.map((c: any) => c.name).join(", ")})`;
+          extra += `\n  Columns (use for 'sourceHandle'/'targetHandle'): ` + n.data.columns.map((c: any) => `${c.name} (ID: ${c.id})`).join(", ");
+        }
+        if (n.type === "service" && n.data.endpoints) {
+          extra += `\n  Endpoints: ` + n.data.endpoints.map((ep: any) => `${ep.type} ${ep.name} (targetHandle="endpoints-in-${ep.id}", sourceHandle="endpoints-out-${ep.id}")`).join("\n    ");
+        }
+        if (n.type === "webClient" && n.data.events) {
+          extra += `\n  Events: ` + n.data.events.map((ev: any) => `${ev.name} (sourceHandle="events-${ev.id}")`).join("\n    ");
+        }
+        if (n.type === "kafka" && n.data.topics) {
+          extra += `\n  Topics: ` + n.data.topics.map((t: any) => `${t.name} (targetHandle="topics:in:${t.id}", sourceHandle="topics:out:${t.id}")`).join("\n    ");
         }
         output += `- [${n.type}] id: ${n.nodeId}, label: "${n.data.label}"${extra}\n`;
       });

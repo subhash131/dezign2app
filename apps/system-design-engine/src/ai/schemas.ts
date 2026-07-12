@@ -90,13 +90,32 @@ export const simpleDataSchema = z
   })
   .strict();
 
+export const serviceDataSchema = z
+  .object({
+    description: z.string().optional(),
+    techStack: z.string().optional(),
+    port: z.string().optional(),
+    cors: z.boolean().optional(),
+    corsOrigins: z.string().optional(),
+    rateLimit: z.string().optional(),
+    baseUrl: z.string().optional(),
+    endpoints: z.array(z.any()).optional(),
+    consumedEvents: z.array(z.any()).optional(),
+    publishedEvents: z.array(z.any()).optional(),
+    inputs: z.array(z.any()).optional(),
+    outputs: z.array(z.any()).optional(),
+    logic: z.array(z.any()).optional(),
+    routeGroups: z.array(z.any()).optional(),
+  })
+  .strict();
+
 export const nodeDataSchemas: Record<string, z.ZodTypeAny> = {
   kafka: kafkaDataSchema,
   sqs: sqsDataSchema,
   "redis-pubsub": redisPubSubDataSchema,
   "redis-streams": redisStreamsDataSchema,
   entity: entityDataSchema,
-  service: simpleDataSchema,
+  service: serviceDataSchema,
   database: simpleDataSchema,
   webClient: simpleDataSchema,
   external: simpleDataSchema,
