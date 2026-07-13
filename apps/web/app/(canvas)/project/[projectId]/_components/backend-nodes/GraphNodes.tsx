@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Handle, Position, NodeProps } from "@xyflow/react";
 import { Server, Container, User, Globe, Plus, X, Trash2, Check, ChevronDown, ChevronUp } from "lucide-react";
-import { BackendNode } from "@/types/canvas";
+import { BackendNode, Endpoint, Parameter } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { Input } from "@workspace/ui/components/input";
 import { Button } from "@workspace/ui/components/button";
@@ -13,7 +13,23 @@ import { Textarea } from "@workspace/ui/components/textarea";
 
 const generateId = () => Math.random().toString(36).substring(2, 9);
 
-const EditableNodeList = ({ 
+interface BaseItem {
+  id: string;
+  name: string;
+}
+
+interface EditableNodeListProps<T extends BaseItem> {
+  nodeId: string;
+  title: string;
+  items?: T[];
+  field: keyof BackendNode["data"];
+  handleType?: "source" | "target";
+  handlePosition?: "left" | "right" | "top" | "bottom" | any;
+  updateNode: (id: string, changes: Partial<BackendNode>) => void;
+  data: BackendNode["data"];
+}
+
+const EditableNodeList = <T extends BaseItem>({ 
   nodeId, 
   title, 
   items = [], 
@@ -22,28 +38,28 @@ const EditableNodeList = ({
   handlePosition, 
   updateNode,
   data 
-}: any) => {
+}: EditableNodeListProps<T>) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
 
   const handleAdd = () => {
     const newItems = [...items, { id: generateId(), name: "" }];
     updateNode(nodeId, { data: { ...data, [field]: newItems } });
-    setEditingId(newItems[newItems.length - 1].id);
+    setEditingId(newItems[newItems.length - 1]!.id);
     setEditingName("");
   };
 
   const handleUpdate = (id: string, name: string) => {
-    const newItems = items.map((item: any) => item.id === id ? { ...item, name } : item);
+    const newItems = items.map((item: T) => item.id === id ? { ...item, name } : item);
     updateNode(nodeId, { data: { ...data, [field]: newItems } });
   };
 
   const handleDelete = (id: string) => {
-    const newItems = items.filter((item: any) => item.id !== id);
+    const newItems = items.filter((item: T) => item.id !== id);
     updateNode(nodeId, { data: { ...data, [field]: newItems } });
   };
 
-  if (!items.length && !editingId) {
+  if (!items?.length && !editingId) {
      return (
        <div className="bg-secondary/20 p-1.5 border-t">
         <Button variant="ghost" size="sm" className="w-full h-6 text-xs text-muted-foreground hover:text-foreground" onClick={handleAdd}>
@@ -62,7 +78,7 @@ const EditableNodeList = ({
         </div>
       </div>
       <div className="flex flex-col">
-        {items.map((item: any) => {
+        {items.map((item: T) => {
           const isEditing = editingId === item.id;
           return (
             <div key={item.id} className="flex flex-col px-3 py-1.5 border-b last:border-b-0 text-xs relative group/row hover:bg-secondary/20">
@@ -114,12 +130,28 @@ const EditableNodeList = ({
   )
 }
 
-const EndpointRow = ({ item, isEditing, setEditingId, setEditingName, setEditingType, handleUpdate, handleDelete, handleUpdateItem, field, handleType, handlePosition, editingName, editingType }: any) => {
+interface EndpointRowProps {
+  item: Endpoint;
+  isEditing: boolean;
+  setEditingId: (id: string | null) => void;
+  setEditingName: (name: string) => void;
+  setEditingType: (type: string) => void;
+  handleUpdate: (id: string, name: string, type: string) => void;
+  handleDelete: (id: string) => void;
+  handleUpdateItem: (id: string, changes: Partial<Endpoint>) => void;
+  field: string;
+  handleType?: "source" | "target";
+  handlePosition?: "left" | "right" | "top" | "bottom" | any;
+  editingName: string;
+  editingType: string;
+}
+
+const EndpointRow = ({ item, isEditing, setEditingId, setEditingName, setEditingType, handleUpdate, handleDelete, handleUpdateItem, field, handleType, handlePosition, editingName, editingType }: EndpointRowProps) => {
   const [expanded, setExpanded] = useState(false);
 
   const addHeader = () => {
      const headers = item.headers || [];
-     handleUpdateItem(item.id, { headers: [...headers, { id: generateId(), key: "", value: "" }] });
+     handleUpdateItem(item.id, { headers: [...headers, { id: generateId(), name: "", type: "string", required: false, key: "", value: "" } as unknown as Parameter] });
   };
   const updateHeader = (id: string, key: string, value: string) => {
      handleUpdateItem(item.id, { headers: item.headers.map((h: any) => h.id === id ? { ...h, key, value } : h) });
@@ -129,14 +161,14 @@ const EndpointRow = ({ item, isEditing, setEditingId, setEditingName, setEditing
   };
 
   const addParam = () => {
-     const params = item.params || [];
-     handleUpdateItem(item.id, { params: [...params, { id: generateId(), key: "", type: "string" }] });
+     const params = item.queryParams || [];
+     handleUpdateItem(item.id, { queryParams: [...params, { id: generateId(), key: "", type: "string", name: "", required: false } as unknown as Parameter] });
   };
   const updateParam = (id: string, key: string, type: string) => {
-     handleUpdateItem(item.id, { params: item.params.map((p: any) => p.id === id ? { ...p, key, type } : p) });
+     handleUpdateItem(item.id, { queryParams: item.queryParams.map((p: any) => p.id === id ? { ...p, key, type } : p) });
   };
   const deleteParam = (id: string) => {
-     handleUpdateItem(item.id, { params: item.params.filter((p: any) => p.id !== id) });
+     handleUpdateItem(item.id, { queryParams: item.queryParams.filter((p: any) => p.id !== id) });
   };
 
   return (
@@ -240,10 +272,10 @@ const EndpointRow = ({ item, isEditing, setEditingId, setEditingName, setEditing
                  <span className="text-[9px] font-bold text-muted-foreground uppercase">Params / Query</span>
                  <Plus size={12} className="cursor-pointer text-muted-foreground hover:text-foreground" onClick={addParam} />
                </div>
-               {(item.params || []).map((p: any) => (
+               {(item.queryParams || []).map((p: any) => (
                  <div key={p.id} className="flex items-center gap-1">
-                   <Input className="h-6 text-[10px] px-1.5 flex-1 nodrag" placeholder="Name" value={p.key} onChange={e => updateParam(p.id, e.target.value, p.type)} />
-                   <Select value={p.type} onValueChange={v => updateParam(p.id, p.key, v)}>
+                   <Input className="h-6 text-[10px] px-1.5 flex-1 nodrag" placeholder="Name" value={p.key || p.name} onChange={e => updateParam(p.id, e.target.value, p.type)} />
+                   <Select value={p.type} onValueChange={v => updateParam(p.id, p.key || p.name, v)}>
                      <SelectTrigger className="h-6 w-[70px] text-[10px] px-1.5 py-0 nodrag"><SelectValue /></SelectTrigger>
                      <SelectContent>
                        <SelectItem value="string" className="text-xs">string</SelectItem>
@@ -254,7 +286,7 @@ const EndpointRow = ({ item, isEditing, setEditingId, setEditingName, setEditing
                    <X size={12} className="cursor-pointer text-muted-foreground hover:text-destructive shrink-0" onClick={() => deleteParam(p.id)} />
                  </div>
                ))}
-               {(!item.params || item.params.length === 0) && (
+               {(!item.queryParams || item.queryParams.length === 0) && (
                  <span className="text-[10px] text-muted-foreground italic">No parameters added</span>
                )}
             </div>
@@ -264,8 +296,8 @@ const EndpointRow = ({ item, isEditing, setEditingId, setEditingName, setEditing
                <Textarea 
                  className="min-h-[50px] w-full rounded-md border border-input px-2 py-1 text-[10px] shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring nodrag"
                  placeholder="{}"
-                 value={item.body || ""}
-                 onChange={e => handleUpdateItem(item.id, { body: e.target.value })}
+                 value={(item as any).body || ""}
+                 onChange={e => handleUpdateItem(item.id, { body: e.target.value } as any)}
                />
             </div>
           </div>
@@ -275,7 +307,18 @@ const EndpointRow = ({ item, isEditing, setEditingId, setEditingName, setEditing
   )
 }
 
-const EndpointList = ({ nodeId, title, items = [], field, handleType, handlePosition, updateNode, data }: any) => {
+interface EndpointListProps {
+  nodeId: string;
+  title: string;
+  items?: Endpoint[];
+  field: keyof BackendNode["data"];
+  handleType?: "source" | "target";
+  handlePosition?: "left" | "right" | "top" | "bottom" | any;
+  updateNode: (id: string, changes: Partial<BackendNode>) => void;
+  data: BackendNode["data"];
+}
+
+const EndpointList = ({ nodeId, title, items = [], field, handleType, handlePosition, updateNode, data }: EndpointListProps) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [editingType, setEditingType] = useState("GET");
@@ -283,27 +326,27 @@ const EndpointList = ({ nodeId, title, items = [], field, handleType, handlePosi
   const handleAdd = () => {
     const newItems = [...items, { id: generateId(), name: "", type: "GET" }];
     updateNode(nodeId, { data: { ...data, [field]: newItems } });
-    setEditingId(newItems[newItems.length - 1].id);
+    setEditingId(newItems[newItems.length - 1]!.id);
     setEditingName("");
     setEditingType("GET");
   };
 
   const handleUpdate = (id: string, name: string, type: string) => {
-    const newItems = items.map((item: any) => item.id === id ? { ...item, name, type } : item);
+    const newItems = items.map((item: Endpoint) => item.id === id ? { ...item, name, type } : item);
     updateNode(nodeId, { data: { ...data, [field]: newItems } });
   };
 
   const handleDelete = (id: string) => {
-    const newItems = items.filter((item: any) => item.id !== id);
+    const newItems = items.filter((item: Endpoint) => item.id !== id);
     updateNode(nodeId, { data: { ...data, [field]: newItems } });
   };
 
-  const handleUpdateItem = (id: string, changes: any) => {
-    const newItems = items.map((item: any) => item.id === id ? { ...item, ...changes } : item);
+  const handleUpdateItem = (id: string, changes: Partial<Endpoint>) => {
+    const newItems = items.map((item: Endpoint) => item.id === id ? { ...item, ...changes } : item);
     updateNode(nodeId, { data: { ...data, [field]: newItems } });
   };
 
-  if (!items.length && !editingId) {
+  if (!items?.length && !editingId) {
      return (
        <div className="bg-secondary/20 p-1.5 border-t">
         <Button variant="ghost" size="sm" className="w-full h-6 text-xs text-muted-foreground hover:text-foreground" onClick={handleAdd}>
@@ -322,7 +365,7 @@ const EndpointList = ({ nodeId, title, items = [], field, handleType, handlePosi
         </div>
       </div>
       <div className="flex flex-col">
-        {items.map((item: any) => (
+        {items.map((item: Endpoint) => (
           <EndpointRow
             key={item.id}
             item={item}
@@ -345,7 +388,16 @@ const EndpointList = ({ nodeId, title, items = [], field, handleType, handlePosi
   )
 }
 
-const NodeHeader = ({ id, data, icon: Icon, title, colorClass, selected }: any) => {
+interface NodeHeaderProps {
+  id: string;
+  data: BackendNode["data"];
+  icon: React.ElementType;
+  title: string;
+  colorClass: string;
+  selected?: boolean;
+}
+
+const NodeHeader = ({ id, data, icon: Icon, title, colorClass, selected }: NodeHeaderProps) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const deleteNode = useBackendCanvasStore((s) => s.deleteNode);
   const [isEditing, setIsEditing] = useState(data.label === "" || data.label === "Untitled");
