@@ -235,7 +235,7 @@ export type BackendNode = {
   };
   fractionalIndex: string; // For Z-order
   parentId?: string;
-  style?: Record<string, any>;
+  style?: Record<string, unknown>;
   width?: number;
   height?: number;
   selected?: boolean;
@@ -271,15 +271,15 @@ export type BackendDesignDoc = {
 // --- AI Adapter Types ---
 
 export type CanvasOperation =
-  | { op: "add_node"; type: BackendNodeType; label: string; position?: { x: number; y: number }; data?: any }
-  | { op: "update_node"; id: string; changes: any }
+  | { op: "add_node"; type: BackendNodeType; label: string; position?: { x: number; y: number }; data?: Record<string, unknown> }
+  | { op: "update_node"; id: string; changes: Record<string, unknown> }
   | { op: "delete_node"; id: string }
-  | { op: "add_edge"; source: string; target: string; type: BackendEdgeType; data?: any }
-  | { op: "update_edge"; id: string; changes: any }
+  | { op: "add_edge"; source: string; target: string; type: BackendEdgeType; data?: Record<string, unknown> }
+  | { op: "update_edge"; id: string; changes: Record<string, unknown> }
   | { op: "delete_edge"; id: string }
   | { op: "run_auto_layout" }
-  | { op: "add_shape"; type: string; x: number; y: number; props: any }
-  | { op: "update_shape"; id: string; props: any }
+  | { op: "add_shape"; type: string; x: number; y: number; props: Record<string, unknown> }
+  | { op: "update_shape"; id: string; props: Record<string, unknown> }
   | { op: "delete_shape"; id: string };
 
 export interface CanvasAdapter<TDoc> {
