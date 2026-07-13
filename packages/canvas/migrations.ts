@@ -1,14 +1,15 @@
-import type { BackendNode, Parameter, Schema, ProcessingStep, PublishedEvent, ConsumedEvent, Endpoint } from "./types.js";
+import type { BackendNode, Parameter, Schema, ProcessingStep, PublishedEvent, ConsumedEvent, Endpoint, SchemaVersion, EventCategory, DeliveryGuarantee, EventOrdering, ArchitectureMetadata, RetryPolicy } from "./types.js";
 
-function stringToSchema(schemaInput: any, defaultName: string = "body"): Schema {
+function stringToSchema(schemaInput: string | Record<string, unknown> | null | undefined | unknown, defaultName: string = "body"): Schema {
   if (!schemaInput) {
     return { id: crypto.randomUUID(), fields: [] };
   }
   
   // If it's already an object that looks like a Schema
   if (typeof schemaInput === 'object' && schemaInput !== null) {
-    if (schemaInput.id && Array.isArray(schemaInput.fields)) {
-      return schemaInput as Schema;
+    const obj = schemaInput as Record<string, unknown>;
+    if (obj.id && Array.isArray(obj.fields)) {
+      return obj as unknown as Schema;
     }
     // If it's an object but not a Schema, stringify it for the description
     schemaInput = JSON.stringify(schemaInput);
@@ -17,9 +18,9 @@ function stringToSchema(schemaInput: any, defaultName: string = "body"): Schema 
   if (typeof schemaInput === 'string') {
     if (schemaInput.startsWith('{"id":') && schemaInput.includes('"fields":')) {
       try {
-        const parsed = JSON.parse(schemaInput);
+        const parsed = JSON.parse(schemaInput) as Record<string, unknown>;
         if (parsed.id && Array.isArray(parsed.fields)) {
-          return parsed as Schema;
+          return parsed as unknown as Schema;
         }
       } catch (e) {}
     }
@@ -39,7 +40,18 @@ function stringToSchema(schemaInput: any, defaultName: string = "body"): Schema 
   };
 }
 
-function convertParams(params: any[] | undefined): Parameter[] {
+type LegacyParameter = {
+  id?: string;
+  name?: string;
+  key?: string;
+  type?: string;
+  required?: boolean;
+  description?: string;
+  value?: string;
+  defaultValue?: string;
+};
+
+function convertParams(params: LegacyParameter[] | undefined): Parameter[] {
   if (!params) return [];
   return params.map(p => ({
     id: p.id || crypto.randomUUID(),
@@ -51,16 +63,74 @@ function convertParams(params: any[] | undefined): Parameter[] {
   }));
 }
 
+type LegacyPublishedEvent = {
+  id?: string;
+  name?: string;
+  publishedWhen?: string;
+  description?: string;
+  brokerNodeId?: string;
+  targetNodeId?: string;
+  messagingResourceId?: string;
+  topic?: string;
+  payloadSchema?: Schema;
+  schema?: string | object;
+  version?: SchemaVersion;
+  category?: EventCategory;
+  delivery?: DeliveryGuarantee;
+  ordering?: EventOrdering;
+  correlationId?: string;
+  deprecated?: boolean;
+  replacementEventId?: string;
+  metadata?: ArchitectureMetadata;
+};
+
+type LegacyConsumedEvent = {
+  id?: string;
+  name?: string;
+  eventId?: string;
+  brokerNodeId?: string;
+  targetNodeId?: string;
+  messagingResourceId?: string;
+  topic?: string;
+  payloadSchema?: Schema;
+  schema?: string | object;
+  handlerLogic?: string;
+  retryPolicy?: RetryPolicy;
+  maxRetries?: number;
+  deadLetterQueue?: string;
+  isIdempotent?: boolean;
+  metadata?: ArchitectureMetadata;
+};
+
+type LegacyEndpoint = {
+  id?: string;
+  name?: string;
+  type?: string;
+  headers?: LegacyParameter[];
+  pathParams?: LegacyParameter[];
+  queryParams?: LegacyParameter[];
+  params?: LegacyParameter[];
+  requestBody?: Schema;
+  body?: string | object;
+  responseBody?: Schema;
+  output?: string | object;
+  processingSteps?: ProcessingStep[];
+  businessLogic?: string;
+  publishedEvents?: LegacyPublishedEvent[];
+  metadata?: ArchitectureMetadata;
+};
+
 export function migrateNodeDataToV2(node: BackendNode): BackendNode {
-  if ((node as any).schemaVersion === 2) {
+  const nodeWithVersion = node as BackendNode & { schemaVersion?: number };
+  if (nodeWithVersion.schemaVersion === 2) {
     return node;
   }
 
-  const data = { ...node.data };
+  const data = { ...node.data } as Record<string, unknown> & typeof node.data;
 
   if (data.endpoints && Array.isArray(data.endpoints)) {
-    data.endpoints = data.endpoints.map((ep: any) => {
-      const publishedEvents: PublishedEvent[] = (ep.publishedEvents || []).map((pe: any) => ({
+    data.endpoints = data.endpoints.map((ep: LegacyEndpoint) => {
+      const publishedEvents: PublishedEvent[] = (ep.publishedEvents || []).map((pe: LegacyPublishedEvent) => ({
         ...pe,
         id: pe.id || crypto.randomUUID(),
         name: pe.name || "",
@@ -106,7 +176,7 @@ export function migrateNodeDataToV2(node: BackendNode): BackendNode {
   }
 
   if (data.publishedEvents && Array.isArray(data.publishedEvents)) {
-    data.publishedEvents = data.publishedEvents.map((pe: any) => ({
+    data.publishedEvents = (data.publishedEvents as LegacyPublishedEvent[]).map((pe: LegacyPublishedEvent) => ({
       ...pe,
       id: pe.id || crypto.randomUUID(),
       name: pe.name || "",
@@ -122,11 +192,11 @@ export function migrateNodeDataToV2(node: BackendNode): BackendNode {
       deprecated: !!pe.deprecated,
       replacementEventId: pe.replacementEventId,
       metadata: pe.metadata || { createdByAI: false, createdAt: Date.now() },
-    })) as PublishedEvent[];
+    })) as unknown as NonNullable<BackendNode["data"]["publishedEvents"]>;
   }
 
   if (data.consumedEvents && Array.isArray(data.consumedEvents)) {
-    data.consumedEvents = data.consumedEvents.map((ce: any) => ({
+    data.consumedEvents = (data.consumedEvents as LegacyConsumedEvent[]).map((ce: LegacyConsumedEvent) => ({
       ...ce,
       id: ce.id || crypto.randomUUID(),
       name: ce.name || "",
@@ -142,10 +212,10 @@ export function migrateNodeDataToV2(node: BackendNode): BackendNode {
       metadata: ce.metadata || { createdByAI: false, createdAt: Date.now() },
       _legacyName: ce.name,
       _legacySchema: ce.schema,
-    })) as any;
+    })) as unknown as NonNullable<BackendNode["data"]["consumedEvents"]>;
   }
 
-  (node as any).schemaVersion = 2;
-  node.data = data;
+  (node as BackendNode & { schemaVersion?: number }).schemaVersion = 2;
+  node.data = data as unknown as typeof node.data;
   return node;
 }
