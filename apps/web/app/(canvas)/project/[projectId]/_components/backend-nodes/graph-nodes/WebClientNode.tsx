@@ -4,7 +4,7 @@ import { Globe, Plus, X, Play, Send, Loader2 } from "lucide-react";
 import { BackendNode, Endpoint, Parameter, UIEventItem } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
-import { NodeHeader, generateId, BaseItem } from "./shared";
+import { NodeHeader, generateId } from "./shared";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@workspace/ui/components/select";

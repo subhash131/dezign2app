@@ -1,7 +1,9 @@
 import React, { useState } from "react";
-import { Handle, Position, NodeProps } from "@xyflow/react";
+import { Handle, Position, NodeProps, Node } from "@xyflow/react";
 import { Server, Container, User, Globe, Plus, X, Trash2, Check, ChevronDown, ChevronUp } from "lucide-react";
 import { BackendNode, Endpoint, Parameter } from "@/types/canvas";
+
+type AppNode = Node<BackendNode["data"], BackendNode["type"]>;
 import { cn } from "@workspace/ui/lib/utils";
 import { Input } from "@workspace/ui/components/input";
 import { Button } from "@workspace/ui/components/button";
@@ -442,7 +444,7 @@ const NodeHeader = ({ id, data, icon: Icon, title, colorClass, selected }: NodeH
 };
 
 // --- Web Client Node ---
-export const WebClientNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
+export const WebClientNode = ({ id, data, selected }: NodeProps<AppNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
 
   return (
@@ -454,7 +456,7 @@ export const WebClientNode = ({ id, data, selected }: NodeProps<BackendNode>) =>
 };
 
 // --- Service Node ---
-export const ServiceNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
+export const ServiceNode = ({ id, data, selected }: NodeProps<AppNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
 
   return (
@@ -512,7 +514,7 @@ export const ServiceNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
 };
 
 // --- External Node ---
-export const ExternalNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
+export const ExternalNode = ({ id, data, selected }: NodeProps<AppNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
 
   return (
@@ -532,7 +534,7 @@ export const ExternalNode = ({ id, data, selected }: NodeProps<BackendNode>) => 
 };
 
 // --- Messaging Node ---
-export const MessagingNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
+export const MessagingNode = ({ id, data, selected }: NodeProps<AppNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
 
   return (

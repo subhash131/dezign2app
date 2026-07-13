@@ -1,6 +1,6 @@
 import { v, ConvexError } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { isValidConnection, RULES_VERSION } from "@workspace/canvas";
+import { isValidConnection, RULES_VERSION, BackendNodeType, BackendNode, BackendEdgeType, BackendEdge } from "@workspace/canvas";
 
 // ---------------------------------------------------------------------------
 // FRONTEND CANVAS — tldraw granular records
@@ -153,18 +153,18 @@ export const upsertBackendNode = mutation({
 
     if (existing) {
       await ctx.db.patch(existing._id, {
-        type: args.type,
+        type: args.type as BackendNodeType,
         position: args.position,
-        data: args.data,
+        data: args.data as BackendNode["data"],
         fractionalIndex: args.fractionalIndex,
       });
     } else {
       await ctx.db.insert("canvas_backend_nodes", {
         projectId: args.projectId,
         nodeId: args.nodeId,
-        type: args.type,
+        type: args.type as BackendNodeType,
         position: args.position,
-        data: args.data,
+        data: args.data as BackendNode["data"],
         fractionalIndex: args.fractionalIndex,
       });
     }
@@ -303,10 +303,10 @@ export const upsertBackendEdge = mutation({
       await ctx.db.patch(existing._id, {
         source: args.source,
         target: args.target,
-        type: validatedType,
+        type: validatedType as BackendEdgeType,
         sourceHandle: args.sourceHandle,
         targetHandle: args.targetHandle,
-        data: enrichedData,
+        data: enrichedData as BackendEdge["data"],
         fractionalIndex: args.fractionalIndex,
         rulesVersion: RULES_VERSION,
       });
@@ -316,10 +316,10 @@ export const upsertBackendEdge = mutation({
         edgeId: args.edgeId,
         source: args.source,
         target: args.target,
-        type: validatedType,
+        type: validatedType as BackendEdgeType,
         sourceHandle: args.sourceHandle,
         targetHandle: args.targetHandle,
-        data: enrichedData,
+        data: enrichedData as BackendEdge["data"],
         fractionalIndex: args.fractionalIndex,
         rulesVersion: RULES_VERSION,
       });
