@@ -190,15 +190,17 @@ export const nodeDataSchemas: Record<string, z.ZodTypeAny> = {
   group: simpleDataSchema,
 };
 
-export function assignResourceIds(data: Record<string, any>) {
+export function assignResourceIds<T extends Record<string, unknown>>(data: T): T {
   const resourceKeys = ["topics", "queues", "channels", "streams"];
+  const result = { ...data };
   for (const key of resourceKeys) {
-    if (Array.isArray(data[key])) {
-      data[key] = data[key].map((item: any, i: number) => ({
+    const list = result[key];
+    if (Array.isArray(list)) {
+      (result as Record<string, unknown>)[key] = list.map((item: Record<string, unknown>, i: number) => ({
         ...item,
         id: item.id || `res-${Date.now()}-${i}-${Math.random().toString(36).substring(2, 7)}`,
       }));
     }
   }
-  return data;
+  return result;
 }

@@ -2,8 +2,8 @@
   "name": "@workspace/canvas",
   "version": "1.0.0",
   "description": "Shared pure domain models for Blueprint canvas",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "index.ts",
+  "types": "index.ts",
   "type": "module",
   "scripts": {
     "build": "tsc",

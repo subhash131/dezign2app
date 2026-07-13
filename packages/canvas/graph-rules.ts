@@ -1,4 +1,4 @@
-import type { HandleKind } from "./types.js";
+import type { HandleKind } from "./types";
 
 export const CONNECTION_RULES: Record<HandleKind, HandleKind[]> = {
   "event-source": ["endpoint-in"],

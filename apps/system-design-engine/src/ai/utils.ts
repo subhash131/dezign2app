@@ -1,5 +1,5 @@
 import { ConvexHttpClient } from "convex/browser";
-import { GraphAnnotation } from "./state.js";
+import { GraphAnnotation } from "./state";
 
 export function getConvexClient(state: typeof GraphAnnotation.State) {
   if (!state.convexUrl) throw new Error("Missing convexUrl in state");

@@ -1,7 +1,7 @@
-import type { ValidationResult } from "./types.js";
-import { CONNECTION_RULES } from "./graph-rules.js";
-import { RULES_VERSION, NODE_TYPE_TO_RESOURCE_KIND } from "./constants.js";
-import { classifyHandle, getSuggestion, getEdgeType } from "./utils.js";
+import type { ValidationResult } from "./types";
+import { CONNECTION_RULES } from "./graph-rules";
+import { RULES_VERSION, NODE_TYPE_TO_RESOURCE_KIND } from "./constants";
+import { classifyHandle, getSuggestion, getEdgeType } from "./utils";
 
 export function isValidConnection(
   sourceNodeType: string,

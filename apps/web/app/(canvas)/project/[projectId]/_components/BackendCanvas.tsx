@@ -36,7 +36,7 @@ import { ForeignKeyEdge } from "./backend-nodes/ForeignKeyEdge";
 import { HTTPConnectionEdge, MessagingEdge } from "./backend-nodes/CustomEdges";
 import { isValidConnection } from "@workspace/canvas";
 import { migrateNodeDataToV2 } from "@workspace/canvas/migrations";
-import ELK from "elkjs/lib/elk.bundled.js";
+import ELK from "elkjs/lib/elk.bundled";
 import { Connection } from "@xyflow/react";
 import { ChatContainer } from "@/app/(protected)/_components/chat/chat-container";
 

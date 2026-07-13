@@ -7,7 +7,7 @@
     "test": "cd ."
   },
   "exports": {
-    "./convex": "./convex/*.js"
+    "./convex/*": "./convex/*"
   },
   "devDependencies": {
     "@types/node": "^20.19.30",

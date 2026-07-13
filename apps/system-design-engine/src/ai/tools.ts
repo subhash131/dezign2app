@@ -1,7 +1,9 @@
 import { tool } from "@langchain/core/tools";
 import { z } from "zod";
-import { GraphAnnotation } from "./state.js";
-import { getConvexClient } from "./utils.js";
+import { GraphAnnotation } from "./state";
+import { api } from "@workspace/backend/_generated/api";
+import { Id } from "@workspace/backend/_generated/dataModel";
+import { getConvexClient } from "./utils";
 import { EDGE_TYPE_MAP } from "@workspace/canvas";
 import {
   simpleDataSchema,
@@ -12,7 +14,7 @@ import {
   redisStreamsDataSchema,
   nodeDataSchemas,
   assignResourceIds,
-} from "./schemas.js";
+} from "./schemas";
 
 export const addNodeSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("service"), label: z.string(), data: simpleDataSchema.optional() }),
@@ -47,8 +49,8 @@ export const addNodeTool = tool(
     const processedData = assignResourceIds({ label, graphPosition: position, ...(data ?? {}) });
 
     try {
-      await convex.mutation("canvas:upsertBackendNode" as any, {
-        projectId: state.projectId as string,
+      await convex.mutation(api.canvas.upsertBackendNode, {
+        projectId: state.projectId as Id<"projects">,
         nodeId,
         type,
         position,
@@ -56,8 +58,9 @@ export const addNodeTool = tool(
         fractionalIndex,
       });
       return `Added node ${label} of type ${type} with ID ${nodeId}`;
-    } catch (e: any) {
-      return `Failed to add node: ${e.message}`;
+    } catch (error: unknown) {
+      const e = error as Error;
+      return `Failed to add node: ${e.message || String(error)}`;
     }
   },
   {
@@ -86,10 +89,10 @@ export const updateNodeTool = tool(
     const convex = getConvexClient(state);
 
     try {
-      const elements: any = await convex.query("canvas:getBackendElements" as any, {
-        projectId: state.projectId as string,
+      const elements = await convex.query(api.canvas.getBackendElements, {
+        projectId: state.projectId as Id<"projects">,
       });
-      const node = elements.nodes.find((n: any) => n.nodeId === id);
+      const node = elements.nodes.find((n) => n.nodeId === id);
       if (!node) return `Error: Node ${id} not found`;
 
       const schema = nodeDataSchemas[node.type];
@@ -102,14 +105,14 @@ export const updateNodeTool = tool(
       const parsed = schema.safeParse(dataToValidate);
       if (!parsed.success) {
         return `Failed to update node: invalid fields for type '${node.type}': ${parsed.error.issues
-          .map((i: any) => `${i.path.join(".")}: ${i.message}`)
+          .map((i) => `${i.path.join(".")}: ${i.message}`)
           .join("; ")}`;
       }
 
       const processedChanges = assignResourceIds({ ...changes });
 
-      await convex.mutation("canvas:upsertBackendNode" as any, {
-        projectId: state.projectId as string,
+      await convex.mutation(api.canvas.upsertBackendNode, {
+        projectId: state.projectId as Id<"projects">,
         nodeId: id,
         type: node.type,
         position: node.position,
@@ -117,8 +120,9 @@ export const updateNodeTool = tool(
         fractionalIndex: node.fractionalIndex,
       });
       return `Updated node ${id}`;
-    } catch (e: any) {
-      return `Failed to update node: ${e.message}`;
+    } catch (error: unknown) {
+      const e = error as Error;
+      return `Failed to update node: ${e.message || String(error)}`;
     }
   },
   {
@@ -139,13 +143,14 @@ export const deleteNodeTool = tool(
     const convex = getConvexClient(state);
 
     try {
-      await convex.mutation("canvas:removeBackendNode" as any, {
-        projectId: state.projectId as string,
+      await convex.mutation(api.canvas.removeBackendNode, {
+        projectId: state.projectId as Id<"projects">,
         nodeId: id,
       });
       return `Deleted node ${id}`;
-    } catch (e: any) {
-      return `Failed to delete node: ${e.message}`;
+    } catch (error: unknown) {
+      const e = error as Error;
+      return `Failed to delete node: ${e.message || String(error)}`;
     }
   },
   {
@@ -162,19 +167,19 @@ export const addEdgeTool = tool(
     const convex = getConvexClient(state);
 
     try {
-      const elements: any = await convex.query("canvas:getBackendElements" as any, {
-        projectId: state.projectId as string,
+      const elements = await convex.query(api.canvas.getBackendElements, {
+        projectId: state.projectId as Id<"projects">,
       });
-      const sourceExists = elements.nodes.some((n: any) => n.nodeId === source);
-      const targetExists = elements.nodes.some((n: any) => n.nodeId === target);
+      const sourceExists = elements.nodes.some((n) => n.nodeId === source);
+      const targetExists = elements.nodes.some((n) => n.nodeId === target);
       if (!sourceExists) return `Failed to add edge: source node ${source} does not exist`;
       if (!targetExists) return `Failed to add edge: target node ${target} does not exist`;
 
       const edgeId = `edge-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       const fractionalIndex = "a0" + Date.now() + Math.random().toString(36).slice(2, 6);
 
-      await convex.mutation("canvas:upsertBackendEdge" as any, {
-        projectId: state.projectId as string,
+      await convex.mutation(api.canvas.upsertBackendEdge, {
+        projectId: state.projectId as Id<"projects">,
         edgeId,
         source,
         target,
@@ -185,8 +190,9 @@ export const addEdgeTool = tool(
         fractionalIndex,
       });
       return `Added edge from ${source} to ${target}`;
-    } catch (e: any) {
-      return `Failed to add edge: ${e.message}`;
+    } catch (error: unknown) {
+      const e = error as Error;
+      return `Failed to add edge: ${e.message || String(error)}`;
     }
   },
   {
@@ -217,13 +223,14 @@ export const deleteEdgeTool = tool(
     const convex = getConvexClient(state);
 
     try {
-      await convex.mutation("canvas:removeBackendEdge" as any, {
-        projectId: state.projectId as string,
+      await convex.mutation(api.canvas.removeBackendEdge, {
+        projectId: state.projectId as Id<"projects">,
         edgeId: id,
       });
       return `Deleted edge ${id}`;
-    } catch (e: any) {
-      return `Failed to delete edge: ${e.message}`;
+    } catch (error: unknown) {
+      const e = error as Error;
+      return `Failed to delete edge: ${e.message || String(error)}`;
     }
   },
   {
@@ -248,28 +255,28 @@ export const addServiceNodeTool = tool(
       : { x: 100 + offsetX, y: 100 + offsetY };
     const fractionalIndex = "a0" + Date.now() + Math.random().toString(36).slice(2, 6);
 
-    const processedEndpoints = (endpoints || []).map((ep: any) => ({
+    const processedEndpoints = (endpoints || []).map((ep) => ({
       ...ep,
-      id: ep.id || Math.random().toString(36).slice(2, 9),
-      publishedEvents: ep.publishedEvents?.map((pe: any) => ({
+      id: (ep as {id?: string}).id || Math.random().toString(36).slice(2, 9),
+      publishedEvents: ep.publishedEvents?.map((pe) => ({
         ...pe,
-        id: pe.id || Math.random().toString(36).slice(2, 9),
+        id: (pe as {id?: string}).id || Math.random().toString(36).slice(2, 9),
       })),
     }));
 
-    const processedConsumedEvents = (consumedEvents || []).map((ce: any) => ({
+    const processedConsumedEvents = (consumedEvents || []).map((ce) => ({
       ...ce,
-      id: ce.id || Math.random().toString(36).slice(2, 9),
+      id: (ce as {id?: string}).id || Math.random().toString(36).slice(2, 9),
     }));
 
-    const processedPublishedEvents = (publishedEvents || []).map((pe: any) => ({
+    const processedPublishedEvents = (publishedEvents || []).map((pe) => ({
       ...pe,
-      id: pe.id || Math.random().toString(36).slice(2, 9),
+      id: (pe as {id?: string}).id || Math.random().toString(36).slice(2, 9),
     }));
 
     try {
-      await convex.mutation("canvas:upsertBackendNode" as any, {
-        projectId: state.projectId as string,
+      await convex.mutation(api.canvas.upsertBackendNode, {
+        projectId: state.projectId as Id<"projects">,
         nodeId,
         type: "service",
         position,
@@ -335,8 +342,8 @@ export const addServiceNodeTool = tool(
       for (const edge of edgesToCreate) {
         const edgeId = `edge-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
         const edgeFractionalIndex = "a0" + Date.now() + Math.random().toString(36).slice(2, 6);
-        await convex.mutation("canvas:upsertBackendEdge" as any, {
-          projectId: state.projectId as string,
+        await convex.mutation(api.canvas.upsertBackendEdge, {
+          projectId: state.projectId as Id<"projects">,
           edgeId,
           source: edge.source,
           target: edge.target,
@@ -349,11 +356,12 @@ export const addServiceNodeTool = tool(
 
       let resultStr = `Added service node ${label} with ID ${nodeId} and ${edgesToCreate.length} event edges.`;
       if (processedEndpoints.length > 0) {
-        resultStr += `\nEndpoints:\n` + processedEndpoints.map((ep: any) => `- ${ep.type} ${ep.name}: targetHandle="endpoints-in-${ep.id}", sourceHandle="endpoints-out-${ep.id}"`).join("\n");
+        resultStr += `\nEndpoints:\n` + processedEndpoints.map((ep) => `- ${ep.type} ${ep.name}: targetHandle="endpoints-in-${ep.id}", sourceHandle="endpoints-out-${ep.id}"`).join("\n");
       }
       return resultStr;
-    } catch (e: any) {
-      return `Failed to add service node: ${e.message}`;
+    } catch (error: unknown) {
+      const e = error as Error;
+      return `Failed to add service node: ${e.message || String(error)}`;
     }
   },
   {
@@ -425,8 +433,8 @@ export const addKafkaNodeTool = tool(
     });
 
     try {
-      await convex.mutation("canvas:upsertBackendNode" as any, {
-        projectId: state.projectId as string,
+      await convex.mutation(api.canvas.upsertBackendNode, {
+        projectId: state.projectId as Id<"projects">,
         nodeId,
         type: "kafka",
         position,
@@ -435,8 +443,9 @@ export const addKafkaNodeTool = tool(
       });
 
       return `Added kafka node ${label} with ID ${nodeId} and ${topics?.length || 0} topics`;
-    } catch (e: any) {
-      return `Failed to add kafka node: ${e.message}`;
+    } catch (error: unknown) {
+      const e = error as Error;
+      return `Failed to add kafka node: ${e.message || String(error)}`;
     }
   },
   {
@@ -479,14 +488,14 @@ export const addClientNodeTool = tool(
       : { x: 100 + offsetX, y: 100 + offsetY };
     const fractionalIndex = "a0" + Date.now() + Math.random().toString(36).slice(2, 6);
 
-    const processedEvents = (events || []).map((ev: any) => ({
+    const processedEvents = (events || []).map((ev) => ({
       ...ev,
-      id: ev.id || Math.random().toString(36).slice(2, 9),
+      id: (ev as {id?: string}).id || Math.random().toString(36).slice(2, 9),
     }));
 
     try {
-      await convex.mutation("canvas:upsertBackendNode" as any, {
-        projectId: state.projectId as string,
+      await convex.mutation(api.canvas.upsertBackendNode, {
+        projectId: state.projectId as Id<"projects">,
         nodeId,
         type: "webClient",
         position,
@@ -523,12 +532,12 @@ export const addClientNodeTool = tool(
       for (const edge of edgesToCreate) {
         const edgeId = `edge-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
         const edgeFractionalIndex = "a0" + Date.now() + Math.random().toString(36).slice(2, 6);
-        await convex.mutation("canvas:upsertBackendEdge" as any, {
-          projectId: state.projectId as string,
+        await convex.mutation(api.canvas.upsertBackendEdge, {
+          projectId: state.projectId as Id<"projects">,
           edgeId,
           source: edge.source,
           target: edge.target,
-          type: edge.type as any,
+          type: edge.type,
           sourceHandle: edge.sourceHandle,
           targetHandle: edge.targetHandle,
           fractionalIndex: edgeFractionalIndex,
@@ -537,11 +546,12 @@ export const addClientNodeTool = tool(
 
       let resultStr = `Added client node ${label} with ID ${nodeId} and ${events?.length || 0} events.`;
       if (processedEvents.length > 0) {
-        resultStr += `\nEvents:\n` + processedEvents.map((ev: any) => `- ${ev.name}: sourceHandle="events-${ev.id}"`).join("\n");
+        resultStr += `\nEvents:\n` + processedEvents.map((ev) => `- ${ev.name}: sourceHandle="events-${ev.id}"`).join("\n");
       }
       return resultStr;
-    } catch (e: any) {
-      return `Failed to add client node: ${e.message}`;
+    } catch (error: unknown) {
+      const e = error as Error;
+      return `Failed to add client node: ${e.message || String(error)}`;
     }
   },
   {

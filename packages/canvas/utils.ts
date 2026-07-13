@@ -1,5 +1,5 @@
-import type { HandleKind } from "./types.js";
-import { CONNECTION_RULES, EDGE_TYPE_MAP } from "./graph-rules.js";
+import type { HandleKind } from "./types";
+import { CONNECTION_RULES, EDGE_TYPE_MAP } from "./graph-rules";
 
 export function getSuggestion(
   sourceKind: HandleKind,

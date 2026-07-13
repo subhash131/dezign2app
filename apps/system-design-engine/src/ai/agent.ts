@@ -1,12 +1,12 @@
 import { ChatGroq } from "@langchain/groq";
 import { StateGraph } from "@langchain/langgraph";
 import { ToolNode } from "@langchain/langgraph/prebuilt";
-import { HumanMessage, SystemMessage, AIMessage } from "@langchain/core/messages";
+import { SystemMessage, AIMessage, BaseMessage } from "@langchain/core/messages";
 
-import { GraphAnnotation, DEFAULT_REQUIREMENTS, DEFAULT_PLAN, requirementsSchema, ImplementationPlanState } from "./state.js";
-import { tools } from "./tools.js";
-import { systemPromptTemplate } from "./prompts.js";
-import { getConvexClient } from "./utils.js";
+import { GraphAnnotation, DEFAULT_REQUIREMENTS, DEFAULT_PLAN, requirementsSchema, ImplementationPlanState } from "./state";
+import { tools } from "./tools";
+import { systemPromptTemplate } from "./prompts";
+import { getConvexClient } from "./utils";
 
 const MAX_TOOL_CALLS = 6;
 
@@ -31,13 +31,13 @@ export function createGraph() {
     if (
       !lastMessage ||
       !("tool_calls" in lastMessage) ||
-      !Array.isArray((lastMessage as any).tool_calls) ||
-      (lastMessage as any).tool_calls.length === 0
+      !Array.isArray((lastMessage as AIMessage).tool_calls) ||
+      (lastMessage as AIMessage).tool_calls!.length === 0
     ) {
       return { messages: [] };
     }
 
-    const numCalls = (lastMessage as any).tool_calls.length;
+    const numCalls = (lastMessage as AIMessage).tool_calls!.length;
     const toolNode = new ToolNode(tools);
     const result = await toolNode.invoke(
       { messages: [lastMessage] },
@@ -61,7 +61,7 @@ export function createGraph() {
 
     const conversationContext = state.messages
       .slice(-6)
-      .map((m: any) => `${m.getType().toUpperCase()}: ${typeof m.content === "string" ? m.content : JSON.stringify(m.content)}`)
+      .map((m: BaseMessage) => `${m.type.toUpperCase()}: ${typeof m.content === "string" ? m.content : JSON.stringify(m.content)}`)
       .join("\n\n");
 
     const existing = state.requirements ?? DEFAULT_REQUIREMENTS;
@@ -153,11 +153,11 @@ ${conversationContext}`
 
   // Helper to strip tool calls from history for non-tool agents
   // Prevents Groq API errors when tool calls exist in history but tools are not bound.
-  const sanitizeMessages = (messages: any[]) => {
+  const sanitizeMessages = (messages: BaseMessage[]) => {
     return messages
-      .filter((m: any) => m.getType() !== "tool")
-      .map((m: any) => {
-        if (m.getType() === "ai" && m.tool_calls && m.tool_calls.length > 0) {
+      .filter((m) => m.type !== "tool")
+      .map((m) => {
+        if (m.type === "ai" && (m as AIMessage).tool_calls && (m as AIMessage).tool_calls!.length > 0) {
           return new AIMessage(m.content || "(System design updated)");
         }
         return m;
@@ -187,9 +187,9 @@ ${conversationContext}`
   // Node: Reflect — reviews the outcome of tool calls and either retries
   // (emits new tool_calls) or wraps up with a summary.
   const reflectAgent = async (state: typeof GraphAnnotation.State) => {
-    const recentToolMsgs = state.messages.slice(-10).filter((m: any) => m.getType() === "tool");
+    const recentToolMsgs = state.messages.slice(-10).filter((m) => m.type === "tool");
     const hasFailure = recentToolMsgs.some(
-      (m: any) => typeof m.content === "string" && m.content.startsWith("Failed to")
+      (m) => typeof m.content === "string" && m.content.startsWith("Failed to")
     );
 
     const plan = state.implementationPlan ?? DEFAULT_PLAN;
@@ -197,7 +197,7 @@ ${conversationContext}`
     const reflectionPrompt = new SystemMessage(
       hasFailure
         ? `Some of your last tool calls failed. Review the tool error messages below, correct the parameters, and retry ONLY the failed operations using your tools. If you cannot fix it, explain briefly and stop.\n\nRecent tool results:\n${recentToolMsgs
-            .map((m: any) => m.content)
+            .map((m) => m.content)
             .join("\n")}`
         : `Review the tool results below against the user's original request AND the approved
 implementation plan (technology choices, services, endpoints, messaging infra it called for).
@@ -213,7 +213,7 @@ Approved Implementation Plan:
 ${plan.content || "none"}
 
 Recent tool results:
-${recentToolMsgs.map((m: any) => m.content).join("\n")}`
+${recentToolMsgs.map((m) => m.content).join("\n")}`
     );
 
     console.log("[DEBUG] Node: reflectAgent invoking modelWithTools");
@@ -234,8 +234,8 @@ ${recentToolMsgs.map((m: any) => m.content).join("\n")}`
       try {
         const cleaned = response.content.toString().replace(/```json|```/g, "").trim();
         return requirementsSchema.parse(JSON.parse(cleaned));
-      } catch (e: any) {
-        lastError = e.message;
+      } catch (error: unknown) {
+        lastError = error instanceof Error ? error.message : String(error);
       }
     }
     return null;
@@ -258,7 +258,7 @@ ${recentToolMsgs.map((m: any) => m.content).join("\n")}`
 
     const conversation = state.messages
       .slice(-12)
-      .map((m: any) => `${m.getType()}: ${typeof m.content === "string" ? m.content : JSON.stringify(m.content)}`)
+      .map((m: BaseMessage) => `${m.type}: ${typeof m.content === "string" ? m.content : JSON.stringify(m.content)}`)
       .join("\n");
 
     const prompt = `Existing confirmed requirements (may be empty on a first-time build):
@@ -459,8 +459,8 @@ restate the requirements back to them.`
     const hasToolCalls =
       lastMessage &&
       "tool_calls" in lastMessage &&
-      Array.isArray((lastMessage as any).tool_calls) &&
-      (lastMessage as any).tool_calls.length > 0;
+      Array.isArray((lastMessage as AIMessage).tool_calls) &&
+      (lastMessage as AIMessage).tool_calls!.length > 0;
     return hasToolCalls ? "tools" : "__end__";
   };
 
@@ -478,7 +478,7 @@ restate the requirements back to them.`
       return "capReached";
     }
     const lastMessage = state.messages[state.messages.length - 1];
-    if (lastMessage && "tool_calls" in lastMessage && Array.isArray((lastMessage as any).tool_calls) && (lastMessage as any).tool_calls.length > 0) {
+    if (lastMessage && "tool_calls" in lastMessage && Array.isArray((lastMessage as AIMessage).tool_calls) && (lastMessage as AIMessage).tool_calls!.length > 0) {
       return "tools";
     }
     return "__end__";

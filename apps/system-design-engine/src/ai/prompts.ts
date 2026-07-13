@@ -1,4 +1,4 @@
-import { RequirementsState, ImplementationPlanState, DEFAULT_REQUIREMENTS, DEFAULT_PLAN } from "./state.js";
+import { RequirementsState, ImplementationPlanState, DEFAULT_REQUIREMENTS, DEFAULT_PLAN } from "./state";
 
 export const systemPromptTemplate = (
   canvasStateContext: string,

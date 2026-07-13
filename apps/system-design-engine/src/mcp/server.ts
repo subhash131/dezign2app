@@ -1,8 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { GraphTraverser } from "../graph/traverser.js";
-import { GraphRepository } from "../graph/repository.js";
+import { GraphTraverser } from "../graph/traverser";
+import { GraphRepository } from "../graph/repository";
 
 export function createMcpServer(repo: GraphRepository) {
   const server = new McpServer({

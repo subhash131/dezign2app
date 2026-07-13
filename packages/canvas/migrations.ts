@@ -1,4 +1,4 @@
-import type { BackendNode, Parameter, Schema, ProcessingStep, PublishedEvent, ConsumedEvent, Endpoint, SchemaVersion, EventCategory, DeliveryGuarantee, EventOrdering, ArchitectureMetadata, RetryPolicy } from "./types.js";
+import type { BackendNode, Parameter, Schema, ProcessingStep, PublishedEvent, ConsumedEvent, Endpoint, SchemaVersion, EventCategory, DeliveryGuarantee, EventOrdering, ArchitectureMetadata, RetryPolicy } from "./types";
 
 function stringToSchema(schemaInput: string | Record<string, unknown> | null | undefined | unknown, defaultName: string = "body"): Schema {
   if (!schemaInput) {
