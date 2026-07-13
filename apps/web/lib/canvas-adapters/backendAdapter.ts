@@ -77,6 +77,19 @@ export class BackendCanvasAdapter implements CanvasAdapter<BackendDesignDoc> {
       let extra = "";
       if (n.type === "entity" && n.data.columns) {
         extra = ` (Columns: ${n.data.columns.map((c) => c.name).join(", ")})`;
+      } else if (n.type === "service") {
+        const eps = n.data.endpoints?.map((ep) => `${ep.type} ${ep.name} (id: ${ep.id})`).join(", ");
+        const pub = n.data.publishedEvents?.map((pe) => `${pe.name} (id: ${pe.id})`).join(", ");
+        const sub = n.data.consumedEvents?.map((ce) => `${ce.name} (id: ${ce.id})`).join(", ");
+        
+        const details = [];
+        if (eps) details.push(`Endpoints: ${eps}`);
+        if (pub) details.push(`Publishes: ${pub}`);
+        if (sub) details.push(`Consumes: ${sub}`);
+        if (details.length > 0) extra = `\n  ${details.join("\n  ")}`;
+      } else if (n.type === "webClient") {
+        const evs = n.data.events?.map((ev) => `${ev.name} (id: ${ev.id})`).join(", ");
+        if (evs) extra = `\n  Events: ${evs}`;
       }
       output += `- [${n.type}] id: ${n.id}, label: "${n.data.label}"${extra}\n`;
     });

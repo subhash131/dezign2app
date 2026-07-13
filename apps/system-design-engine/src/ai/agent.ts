@@ -7,6 +7,7 @@ import { GraphAnnotation, DEFAULT_REQUIREMENTS, DEFAULT_PLAN, requirementsSchema
 import { tools } from "./tools";
 import { systemPromptTemplate } from "./prompts";
 import { getConvexClient } from "./utils";
+import { api } from "@workspace/backend/_generated/api";
 
 const MAX_TOOL_CALLS = 6;
 
@@ -204,7 +205,7 @@ implementation plan (technology choices, services, endpoints, messaging infra it
 If everything the plan called for has been built or already exists on the canvas AND all necessary connections (edges) have been drawn, respond with a brief confirmation summary
 and do NOT call any tools. If something the plan specified is still missing from BOTH the recent tool results AND the current canvas state, call the appropriate tool(s) to add it.
 
-CRITICAL: Make sure nodes are actually connected! If you just created nodes, you must now use their IDs from the tool results below to call the 'add_edge' tool and connect them together (e.g. WebClient -> Service, Service -> Database).
+CRITICAL: Make sure nodes are actually connected! If you just created nodes, you must now use their IDs from the tool results below to call the 'add_edge' tool and connect them together (e.g. WebClient -> Service, Service -> Database). Pay close attention to the generated IDs for endpoints and events to properly set sourceHandle and targetHandle.
 
 Current Canvas State:
 ${state.canvasStateContext ?? "Canvas is empty."}
@@ -290,11 +291,12 @@ user just confirmed. Only remove or modify an item if the user explicitly contra
     if (state.projectId && state.convexUrl) {
       try {
         const convex = getConvexClient(state);
-        await convex.mutation("requirements:upsert" as any, {
+        await convex.mutation(api.requirements.upsert, {
           projectId: state.projectId,
           ...requirements,
         });
-      } catch {
+      } catch (error) {
+        console.error("[DEBUG] Error upserting requirements:", error);
         // Non-fatal: this turn's in-memory state is still correct;
         // a reload later will just be stale until the next successful write.
       }
@@ -390,12 +392,13 @@ restate the requirements back to them.`
     if (state.projectId && state.convexUrl) {
       try {
         const convex = getConvexClient(state);
-        await convex.mutation("requirements:upsertPlan" as any, {
+        await convex.mutation(api.requirements.upsertPlan, {
           projectId: state.projectId,
           content,
           status: "proposed",
         });
-      } catch {
+      } catch (error) {
+        console.error("[DEBUG] Error upserting plan (proposed):", error);
         // Non-fatal — this turn's in-memory plan is still correct for the approval check.
       }
     }
@@ -412,12 +415,13 @@ restate the requirements back to them.`
     if (state.projectId && state.convexUrl) {
       try {
         const convex = getConvexClient(state);
-        await convex.mutation("requirements:upsertPlan" as any, {
+        await convex.mutation(api.requirements.upsertPlan, {
           projectId: state.projectId,
           content: approved.content,
           status: "approved",
         });
-      } catch {
+      } catch (error) {
+        console.error("[DEBUG] Error upserting plan (approved):", error);
         // Non-fatal
       }
     }
