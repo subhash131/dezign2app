@@ -27,7 +27,7 @@ import { Button } from "@workspace/ui/components/button";
 import { PlusSquare, FolderPlus, LayoutGrid, User, Server, Globe, Container, Database, GitBranch, Radio, Waves } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@workspace/backend/_generated/api";
-import { Id } from "@workspace/backend/_generated/dataModel";
+import { Id, Doc } from "@workspace/backend/_generated/dataModel";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { BackendCanvasAdapter } from "@/lib/canvas-adapters/backendAdapter";
 import { BackendCanvasView, BackendNode, BackendEdge, BackendNodeType } from "@/types/canvas";
@@ -221,7 +221,7 @@ function Flow({ projectId, view }: BackendCanvasProps) {
     const isFirstHydration = !hasHydrated.current;
     hasHydrated.current = true;
 
-    const rawNodes: BackendNode[] = (initialElements.nodes ?? []).map((row: any) => {
+    const rawNodes: BackendNode[] = (initialElements.nodes ?? []).map((row: Doc<"canvas_backend_nodes">) => {
       let activePosition = row.position;
       if (view === "schema" && row.data?.schemaPosition) {
         activePosition = row.data.schemaPosition;
@@ -243,7 +243,7 @@ function Flow({ projectId, view }: BackendCanvasProps) {
         width: row.data?.width,
         height: row.data?.height,
       };
-    }).map((node: any) => migrateNodeDataToV2(node as BackendNode));
+    }).map((node) => migrateNodeDataToV2(node as BackendNode));
     
     const store = useBackendCanvasStore.getState();
     const pendingNodeIds = new Set(store.pendingNodeUpserts.map((n) => n.id));
@@ -276,7 +276,7 @@ function Flow({ projectId, view }: BackendCanvasProps) {
 
     rawNodes.forEach(addNode);
 
-    const edges: BackendEdge[] = (initialElements.edges ?? []).map((row: any) => {
+    const edges: BackendEdge[] = (initialElements.edges ?? []).map((row: Doc<"canvas_backend_edges">) => {
       if (!isFirstHydration && pendingEdgeIds.has(row.edgeId)) {
         const localEdge = store.edges.find((e) => e.id === row.edgeId);
         if (localEdge) return localEdge;
@@ -285,9 +285,9 @@ function Flow({ projectId, view }: BackendCanvasProps) {
         id: row.edgeId,
         source: row.source,
         target: row.target,
-        type: row.type,
-        sourceHandle: row.sourceHandle,
-        targetHandle: row.targetHandle,
+        type: row.type as BackendEdge["type"],
+        sourceHandle: row.sourceHandle ?? undefined,
+        targetHandle: row.targetHandle ?? undefined,
         data: row.data,
         fractionalIndex: row.fractionalIndex,
       };
@@ -343,13 +343,12 @@ function Flow({ projectId, view }: BackendCanvasProps) {
     return () => clearTimeout(timer);
   }, [hasHydrated.current, nodes.length > 0, view, projectId, setViewport, fitView]);
 
-  const handleMoveEnd = useCallback((event: any, viewport: any) => {
+  const handleMoveEnd = useCallback((event: MouseEvent | TouchEvent | null, viewport: { x: number; y: number; zoom: number }) => {
     localStorage.setItem(`canvas_viewport_${projectId}_${view}`, JSON.stringify(viewport));
   }, [projectId, view]);
 
-  // Fix stale closure: always reference live store state for the adapter
   useEffect(() => {
-    (window as any).backendAdapter = new BackendCanvasAdapter(
+    (window as Window & typeof globalThis & { backendAdapter?: BackendCanvasAdapter }).backendAdapter = new BackendCanvasAdapter(
       useBackendCanvasStore.getState()
     );
   }, []);

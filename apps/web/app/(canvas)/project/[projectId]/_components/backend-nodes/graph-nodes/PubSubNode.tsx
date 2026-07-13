@@ -34,7 +34,7 @@ export const PubSubNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
     let eventDetail = "";
     if (edge.sourceHandle?.startsWith("publishedEvents-out-")) {
       const evId = edge.sourceHandle.replace("publishedEvents-out-", "");
-      const ev = srcNode.data.publishedEvents?.find((e: any) => e.id === evId);
+      const ev = srcNode.data.publishedEvents?.find((e) => e.id === evId);
       if (ev && ev.name) {
         eventDetail = ` (${ev.name})`;
       }
@@ -55,7 +55,7 @@ export const PubSubNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
     let eventDetail = "";
     if (edge.targetHandle?.startsWith("consumedEvents-in-")) {
       const evId = edge.targetHandle.replace("consumedEvents-in-", "");
-      const ev = targetNode.data.consumedEvents?.find((e: any) => e.id === evId);
+      const ev = targetNode.data.consumedEvents?.find((e) => e.id === evId);
       if (ev && ev.name) {
         eventDetail = ` (${ev.name})`;
       }

@@ -20,7 +20,7 @@ export const SQSNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
   // Initialize sqsBroker if not defined
   const broker = data.sqsBroker || {};
 
-  const updateBroker = (key: string, value: any) => {
+  const updateBroker = <K extends keyof NonNullable<BackendNode["data"]["sqsBroker"]>>(key: K, value: NonNullable<BackendNode["data"]["sqsBroker"]>[K]) => {
     updateNode(id, {
       data: {
         ...data,

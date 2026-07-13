@@ -1,10 +1,10 @@
 import React, { useState } from "react";
 import { NodeProps, Position, Handle } from "@xyflow/react";
 import { Globe, Plus, X, Play, Send, Loader2 } from "lucide-react";
-import { BackendNode } from "@/types/canvas";
+import { BackendNode, Endpoint, Parameter } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
-import { NodeHeader, generateId } from "./shared";
+import { NodeHeader, generateId, BaseItem } from "./shared";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@workspace/ui/components/select";
@@ -25,28 +25,28 @@ const EVENT_OPTIONS = ["pageLoad", "click", "hover", "drag", "dblclick", "keydow
 interface TriggerDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  event: any;
-  targetNode: any;
-  endpoint: any;
+  event: Record<string, unknown> & BaseItem;
+  targetNode: BackendNode;
+  endpoint: Endpoint;
 }
 
 const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint }: TriggerDialogProps) => {
-  const [headers, setHeaders] = useState<any[]>(() => {
-    return endpoint.headers?.map((h: any) => ({ ...h })) || [];
+  const [headers, setHeaders] = useState<Parameter[]>(() => {
+    return endpoint.headers?.map((h) => ({ ...h })) || [];
   });
-  const [params, setParams] = useState<any[]>(() => {
-    return endpoint.params?.map((p: any) => ({ ...p, value: "" })) || [];
+  const [params, setParams] = useState<Parameter[]>(() => {
+    return endpoint.params?.map((p) => ({ ...p, value: "" })) || [];
   });
   const [body, setBody] = useState<string>(() => {
     return endpoint.body || "";
   });
 
   const [loading, setLoading] = useState(false);
-  const [response, setResponse] = useState<any | null>(null);
+  const [response, setResponse] = useState<Record<string, unknown> | null>(null);
 
   React.useEffect(() => {
-    setHeaders(endpoint.headers?.map((h: any) => ({ ...h })) || []);
-    setParams(endpoint.params?.map((p: any) => ({ ...p, value: "" })) || []);
+    setHeaders(endpoint.headers?.map((h) => ({ ...h })) || []);
+    setParams(endpoint.params?.map((p) => ({ ...p, value: "" })) || []);
     setBody(endpoint.body || "");
     setResponse(null);
   }, [endpoint]);
@@ -55,7 +55,7 @@ const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint }: Trigger
     if (body.trim()) {
       try {
         JSON.parse(body);
-      } catch (err: any) {
+      } catch (err: unknown) {
         setResponse({
           status: 400,
           statusText: "Bad Request",
@@ -65,7 +65,7 @@ const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint }: Trigger
           },
           body: JSON.stringify({
             error: "Invalid JSON in request body",
-            message: err.message,
+            message: (err as Error).message,
           }, null, 2)
         });
         return;
@@ -78,7 +78,7 @@ const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint }: Trigger
     setTimeout(() => {
       setLoading(false);
       
-      const queryParams: Record<string, any> = {};
+      const queryParams: Record<string, unknown> = {};
       params.forEach(p => {
         if (p.key) {
           queryParams[p.key] = p.value || `[${p.type || "string"}]`;
@@ -87,7 +87,7 @@ const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint }: Trigger
 
       const reqHeaders: Record<string, string> = {};
       headers.forEach(h => {
-        if (h.key) reqHeaders[h.key.toLowerCase()] = h.value;
+        if (h.key) reqHeaders[h.key.toLowerCase()] = h.value || "";
       });
 
       let responseBody = "";
@@ -139,9 +139,9 @@ const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint }: Trigger
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-sm font-semibold">
             <span className="px-1.5 py-0.5 rounded text-[10px] font-bold font-mono bg-muted text-muted-foreground border border-border uppercase tracking-wider">
-              {event?.event || event?.name || "event"}
+              {(event?.event as string) || event?.name || "event"}
             </span>
-            <span>{event?.name && event.name !== event.event ? event.name : "Trigger Endpoint"}</span>
+            <span>{event?.name && event.name !== (event.event as string) ? event.name : "Trigger Endpoint"}</span>
           </DialogTitle>
           <DialogDescription className="flex flex-col gap-1.5 pt-1 text-xs text-muted-foreground">
             <span>
@@ -174,7 +174,7 @@ const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint }: Trigger
                       value={p.value}
                       onChange={(e) => {
                         const next = [...params];
-                        next[idx].value = e.target.value;
+                        if (next[idx]) next[idx].value = e.target.value;
                         setParams(next);
                       }}
                     />
@@ -192,7 +192,7 @@ const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint }: Trigger
                 variant="ghost" 
                 size="sm" 
                 className="h-5 px-1.5 text-[10px] text-muted-foreground hover:text-foreground"
-                onClick={() => setHeaders([...headers, { id: generateId(), key: "", value: "" }])}
+                onClick={() => setHeaders([...headers, { id: generateId(), key: "", value: "", name: "Custom Header", type: "string", required: false }])}
               >
                 + Add Custom Header
               </Button>
@@ -206,7 +206,7 @@ const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint }: Trigger
                     value={h.key}
                     onChange={(e) => {
                       const next = [...headers];
-                      next[idx].key = e.target.value;
+                      if (next[idx]) next[idx].key = e.target.value;
                       setHeaders(next);
                     }}
                   />
@@ -216,7 +216,7 @@ const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint }: Trigger
                     value={h.value}
                     onChange={(e) => {
                       const next = [...headers];
-                      next[idx].value = e.target.value;
+                      if (next[idx]) next[idx].value = e.target.value;
                       setHeaders(next);
                     }}
                   />
@@ -283,24 +283,24 @@ const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint }: Trigger
                 <h4 className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Simulated Response</h4>
                 <div className="flex items-center gap-2">
                   <span className="px-1.5 py-0.5 rounded text-[10px] font-bold font-mono border bg-muted text-muted-foreground">
-                    {response.status} {response.statusText}
+                    {response.status as string} {response.statusText as string}
                   </span>
                 </div>
               </div>
 
               {/* Response Headers */}
               <div className="p-2 border rounded-lg bg-secondary/10 flex flex-col gap-1 text-[10px] font-mono text-muted-foreground">
-                {Object.entries(response.headers).map(([k, v]: any) => (
+                {Object.entries((response.headers as Record<string, unknown>) || {}).map(([k, v]: [string, unknown]) => (
                   <div key={k} className="flex justify-between">
                     <span>{k}:</span>
-                    <span className="text-foreground">{v}</span>
+                    <span className="text-foreground">{String(v)}</span>
                   </div>
                 ))}
               </div>
 
               {/* Response Body */}
               <pre className="p-3 border rounded-lg bg-secondary/30 font-mono text-[11px] overflow-x-auto text-foreground whitespace-pre-wrap">
-                {response.body}
+                {response.body as string}
               </pre>
             </div>
           )}
@@ -310,7 +310,15 @@ const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint }: Trigger
   );
 };
 
-const WebClientEventList = ({ nodeId, items = [], updateNode, data, onTriggerEvent }: any) => {
+export interface WebClientEventListProps {
+  nodeId: string;
+  items?: (Record<string, unknown> & BaseItem)[];
+  updateNode: (id: string, changes: Partial<BackendNode>) => void;
+  data: BackendNode["data"];
+  onTriggerEvent: (triggerInfo: { event: Record<string, unknown> & BaseItem; targetNode: BackendNode; endpoint: Endpoint }) => void;
+}
+
+const WebClientEventList = ({ nodeId, items = [], updateNode, data, onTriggerEvent }: WebClientEventListProps) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editEvent, setEditEvent] = useState("");
@@ -331,12 +339,12 @@ const WebClientEventList = ({ nodeId, items = [], updateNode, data, onTriggerEve
     if (!endpointId) return null;
 
     // Search ungrouped
-    let endpoint = targetNode.data?.endpoints?.find((ep: any) => ep.id === endpointId);
+    let endpoint = targetNode.data?.endpoints?.find((ep) => ep.id === endpointId);
 
     // Search grouped
     if (!endpoint && targetNode.data?.routeGroups) {
       for (const group of targetNode.data.routeGroups) {
-        endpoint = group.endpoints?.find((ep: any) => ep.id === endpointId);
+        endpoint = group.endpoints?.find((ep) => ep.id === endpointId);
         if (endpoint) break;
       }
     }
@@ -347,21 +355,22 @@ const WebClientEventList = ({ nodeId, items = [], updateNode, data, onTriggerEve
   };
 
   const handleAdd = () => {
-    const newItems = [...items, { id: generateId(), name: "New Action", event: "click" }];
+    const newItem = { id: generateId(), name: "New Action", event: "click" };
+    const newItems = [...items, newItem];
     updateNode(nodeId, { data: { ...data, events: newItems } });
-    setEditingId(newItems[newItems.length - 1].id);
+    setEditingId(newItem.id);
     setEditName("New Action");
     setEditEvent("click");
     setCustomEvent("");
   };
 
   const handleUpdate = (id: string, name: string, event: string) => {
-    const newItems = items.map((item: any) => item.id === id ? { ...item, name, event } : item);
+    const newItems = items.map((item) => item.id === id ? { ...item, name, event } : item);
     updateNode(nodeId, { data: { ...data, events: newItems } });
   };
 
   const handleDelete = (id: string) => {
-    const newItems = items.filter((item: any) => item.id !== id);
+    const newItems = items.filter((item) => item.id !== id);
     updateNode(nodeId, { data: { ...data, events: newItems } });
   };
 
@@ -391,10 +400,10 @@ const WebClientEventList = ({ nodeId, items = [], updateNode, data, onTriggerEve
         </div>
       </div>
       <div className="flex flex-col">
-        {items.map((item: any) => {
+        {items.map((item) => {
           const isEditing = editingId === item.id;
           const link = getLinkedEndpoint(item.id);
-          const displayEvent = item.event || item.name;
+          const displayEvent = (item.event as string) || item.name;
 
           return (
             <div key={item.id} className="flex flex-col px-3 py-1.5 border-b last:border-b-0 text-xs relative group/row hover:bg-secondary/20 nodrag">
@@ -462,7 +471,7 @@ const WebClientEventList = ({ nodeId, items = [], updateNode, data, onTriggerEve
                   onClick={() => { 
                       setEditingId(item.id); 
                       setEditName(item.name || "");
-                      const evt = item.event || item.name;
+                      const evt = (item.event as string) || item.name;
                       const isStandard = EVENT_OPTIONS.includes(evt);
                       setEditEvent(isStandard ? evt : (evt ? "other" : "click")); 
                       setCustomEvent(isStandard ? "" : evt);
@@ -502,7 +511,7 @@ const WebClientEventList = ({ nodeId, items = [], updateNode, data, onTriggerEve
 
 export const WebClientNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
-  const [activeTrigger, setActiveTrigger] = useState<{ event: any; targetNode: any; endpoint: any } | null>(null);
+  const [activeTrigger, setActiveTrigger] = useState<{ event: Record<string, unknown> & BaseItem; targetNode: BackendNode; endpoint: Endpoint } | null>(null);
 
   return (
     <div className={cn("shadow-md rounded-xl bg-card border-2 min-w-[200px] max-w-[300px] flex flex-col", selected ? "border-primary" : "border-border")}>
@@ -523,7 +532,7 @@ export const WebClientNode = ({ id, data, selected }: NodeProps<BackendNode>) =>
         items={data.events} 
         updateNode={updateNode} 
         data={data} 
-        onTriggerEvent={(triggerInfo: any) => setActiveTrigger(triggerInfo)}
+        onTriggerEvent={(triggerInfo) => setActiveTrigger(triggerInfo)}
       />
 
       {activeTrigger && (

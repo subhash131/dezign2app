@@ -19,7 +19,7 @@ export const KafkaNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
   // Initialize kafkaBroker if not defined
   const broker = data.kafkaBroker || {};
 
-  const updateBroker = (key: string, value: any) => {
+  const updateBroker = <K extends keyof NonNullable<BackendNode["data"]["kafkaBroker"]>>(key: K, value: NonNullable<BackendNode["data"]["kafkaBroker"]>[K]) => {
     updateNode(id, {
       data: {
         ...data,

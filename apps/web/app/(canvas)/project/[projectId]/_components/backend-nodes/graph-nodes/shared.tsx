@@ -7,42 +7,50 @@ import { Button } from "@workspace/ui/components/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@workspace/ui/components/select";
 import { Textarea } from "@workspace/ui/components/textarea";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
-import { BackendNode, Endpoint } from "@/types/canvas";
+import { BackendNode, Endpoint, Schema } from "@/types/canvas";
 import { ParameterEditor, SchemaEditor, ProcessingStepsEditor } from "./Editors";
 
 export const generateId = () => Math.random().toString(36).substring(2, 9);
 
-export const LocalInput = ({ value, onChange, ...props }: {
-  value?: string | number | readonly string[];
-  onChange?: React.ChangeEventHandler<HTMLInputElement>;
-  [key: string]: any;
-}) => {
+export const LocalInput = ({ value, onChange, ...props }: React.ComponentProps<typeof Input>) => {
   const [localValue, setLocalValue] = useState(value);
   React.useEffect(() => {
     if (value !== localValue) setLocalValue(value);
   }, [value]);
-  return <Input {...(props as any)} value={localValue} onChange={(e: any) => {
+  return <Input {...props} value={localValue as string | undefined} onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
     setLocalValue(e.target.value);
     if (onChange) onChange(e);
   }} />;
 };
 
-export const LocalTextarea = ({ value, onChange, ...props }: {
-  value?: string | number | readonly string[];
-  onChange?: React.ChangeEventHandler<HTMLTextAreaElement>;
-  [key: string]: any;
-}) => {
+export const LocalTextarea = ({ value, onChange, ...props }: React.ComponentProps<typeof Textarea>) => {
   const [localValue, setLocalValue] = useState(value);
   React.useEffect(() => {
     if (value !== localValue) setLocalValue(value);
   }, [value]);
-  return <Textarea {...(props as any)} value={localValue} onChange={(e: any) => {
+  return <Textarea {...props} value={localValue as string | undefined} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setLocalValue(e.target.value);
     if (onChange) onChange(e);
   }} />;
 };
 
-export const EditableNodeList = ({ 
+export interface BaseItem {
+  id: string;
+  name: string;
+}
+
+export interface EditableNodeListProps<T extends BaseItem> {
+  nodeId: string;
+  title: string;
+  items?: T[];
+  field: string;
+  handleType?: "source" | "target";
+  handlePosition?: "left" | "right" | "top" | "bottom";
+  updateNode: (id: string, changes: Partial<BackendNode>) => void;
+  data: BackendNode["data"];
+}
+
+export const EditableNodeList = <T extends BaseItem>({ 
   nodeId, 
   title, 
   items = [], 
@@ -51,24 +59,24 @@ export const EditableNodeList = ({
   handlePosition, 
   updateNode,
   data 
-}: any) => {
+}: EditableNodeListProps<T>) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
 
   const handleAdd = () => {
     const newItems = [...items, { id: generateId(), name: "" }];
     updateNode(nodeId, { data: { ...data, [field]: newItems } });
-    setEditingId(newItems[newItems.length - 1].id);
+    setEditingId(newItems[newItems.length - 1]!.id);
     setEditingName("");
   };
 
   const handleUpdate = (id: string, name: string) => {
-    const newItems = items.map((item: any) => item.id === id ? { ...item, name } : item);
+    const newItems = items.map((item) => item.id === id ? { ...item, name } : item);
     updateNode(nodeId, { data: { ...data, [field]: newItems } });
   };
 
   const handleDelete = (id: string) => {
-    const newItems = items.filter((item: any) => item.id !== id);
+    const newItems = items.filter((item) => item.id !== id);
     updateNode(nodeId, { data: { ...data, [field]: newItems } });
   };
 
@@ -91,7 +99,7 @@ export const EditableNodeList = ({
         </div>
       </div>
       <div className="flex flex-col">
-        {items.map((item: any) => {
+        {items.map((item) => {
           const isEditing = editingId === item.id;
           return (
             <div key={item.id} className="flex flex-col px-3 py-1.5 border-b last:border-b-0 text-xs relative group/row hover:bg-secondary/20">
@@ -143,39 +151,55 @@ export const EditableNodeList = ({
   )
 }
 
-export const EndpointRow = ({ item, isEditing, setEditingId, setEditingName, setEditingType, handleUpdate, handleDelete, handleUpdateItem, field, handleType, handlePosition, editingName, editingType }: any) => {
+export interface EndpointRowProps {
+  item: Endpoint;
+  isEditing: boolean;
+  setEditingId: (id: string | null) => void;
+  setEditingName: (name: string) => void;
+  setEditingType: (type: string) => void;
+  handleUpdate: (id: string, name: string, type: string) => void;
+  handleDelete: (id: string) => void;
+  handleUpdateItem: (id: string, changes: Partial<Endpoint>) => void;
+  field: string;
+  handleType?: "source" | "target";
+  handlePosition?: "left" | "right" | "top" | "bottom";
+  editingName: string;
+  editingType: string;
+}
+
+export const EndpointRow = ({ item, isEditing, setEditingId, setEditingName, setEditingType, handleUpdate, handleDelete, handleUpdateItem, field, handleType, handlePosition, editingName, editingType }: EndpointRowProps) => {
   const [expanded, setExpanded] = useState(!item.name);
 
   const addHeader = () => {
      const headers = item.headers || [];
-     handleUpdateItem(item.id, { headers: [...headers, { id: generateId(), key: "", value: "" }] });
+     handleUpdateItem(item.id, { headers: [...headers, { id: generateId(), key: "", value: "", name: "", type: "string", required: false }] });
   };
   const updateHeader = (id: string, key: string, value: string) => {
-     handleUpdateItem(item.id, { headers: item.headers.map((h: any) => h.id === id ? { ...h, key, value } : h) });
+     handleUpdateItem(item.id, { headers: item.headers?.map((h) => h.id === id ? { ...h, key, value } : h) });
   };
   const deleteHeader = (id: string) => {
-     handleUpdateItem(item.id, { headers: item.headers.filter((h: any) => h.id !== id) });
+     handleUpdateItem(item.id, { headers: item.headers?.filter((h) => h.id !== id) });
   };
 
   const addParam = () => {
      const params = item.params || [];
-     handleUpdateItem(item.id, { params: [...params, { id: generateId(), key: "", type: "string" }] });
+     handleUpdateItem(item.id, { params: [...params, { id: generateId(), key: "", value: "", name: "", type: "string", required: false }] });
   };
   const updateParam = (id: string, key: string, type: string) => {
-     handleUpdateItem(item.id, { params: item.params.map((p: any) => p.id === id ? { ...p, key, type } : p) });
+     handleUpdateItem(item.id, { params: item.params?.map((p) => p.id === id ? { ...p, key, type } : p) });
   };
   const deleteParam = (id: string) => {
-     handleUpdateItem(item.id, { params: item.params.filter((p: any) => p.id !== id) });
+     handleUpdateItem(item.id, { params: item.params?.filter((p) => p.id !== id) });
   };
 
   const isEndpointEmpty = () => {
     const currentName = isEditing ? editingName : (item.name || "");
     const hasName = currentName.trim().length > 0;
-    const hasHeaders = item.headers?.some((h: any) => h.key.trim() || h.value.trim());
-    const hasParams = item.params?.some((p: any) => p.key.trim());
-    const hasBody = item.body?.trim().length > 0;
-    const hasBusinessLogic = item.businessLogic?.trim().length > 0;
-    const hasOutput = item.output?.trim().length > 0;
+    const hasHeaders = item.headers?.some((h) => (h.key || "").trim() || (h.value || "").trim());
+    const hasParams = item.params?.some((p) => (p.key || "").trim());
+    const hasBody = (item.body?.trim().length || 0) > 0;
+    const hasBusinessLogic = (item.businessLogic?.trim().length || 0) > 0;
+    const hasOutput = (item.output?.trim().length || 0) > 0;
     return !hasName && !hasHeaders && !hasParams && !hasBody && !hasBusinessLogic && !hasOutput;
   };
 
@@ -330,17 +354,17 @@ export const EndpointList = ({
   };
 
   const handleUpdate = (id: string, name: string, type: string) => {
-    const newItems = items.map((item: any) => item.id === id ? { ...item, name, type } : item);
+    const newItems = items.map((item) => item.id === id ? { ...item, name, type } : item);
     updateNode(nodeId, { data: { ...data, [field]: newItems } });
   };
 
   const handleDelete = (id: string) => {
-    const newItems = items.filter((item: any) => item.id !== id);
+    const newItems = items.filter((item) => item.id !== id);
     updateNode(nodeId, { data: { ...data, [field]: newItems } });
   };
 
-  const handleUpdateItem = (id: string, changes: any) => {
-    const newItems = items.map((item: any) => item.id === id ? { ...item, ...changes } : item);
+  const handleUpdateItem = (id: string, changes: Partial<Endpoint>) => {
+    const newItems = items.map((item) => item.id === id ? { ...item, ...changes } : item);
     updateNode(nodeId, { data: { ...data, [field]: newItems } });
   };
 
@@ -363,7 +387,7 @@ export const EndpointList = ({
         </div>
       </div>
       <div className="flex flex-col">
-        {items.map((item: any) => (
+        {items.map((item) => (
           <EndpointRow
             key={item.id}
             item={item}
@@ -384,7 +408,16 @@ export const EndpointList = ({
   )
 }
 
-export const NodeHeader = ({ id, data, icon: Icon, title, colorClass, selected }: any) => {
+export interface NodeHeaderProps {
+  id: string;
+  data: BackendNode["data"];
+  icon: React.ElementType;
+  title?: string;
+  colorClass?: string;
+  selected?: boolean;
+}
+
+export const NodeHeader = ({ id, data, icon: Icon, title, colorClass, selected }: NodeHeaderProps) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const deleteNode = useBackendCanvasStore((s) => s.deleteNode);
   const [isEditing, setIsEditing] = useState(data.label === "" || data.label === "Untitled");
@@ -428,7 +461,23 @@ export const NodeHeader = ({ id, data, icon: Icon, title, colorClass, selected }
   );
 };
 
-export const MessagingResourceRow = ({ item, isEditing, setEditingId, setEditingName, handleUpdate, handleDelete, handleUpdateItem, field, handleType, handlePosition, editingName, variant, resourceType }: any) => {
+export interface MessagingResourceRowProps {
+  item: Record<string, unknown> & BaseItem;
+  isEditing: boolean;
+  setEditingId: (id: string | null) => void;
+  setEditingName: (name: string) => void;
+  handleUpdate: (id: string, name: string) => void;
+  handleDelete: (id: string) => void;
+  handleUpdateItem: (id: string, changes: Record<string, unknown>) => void;
+  field?: string;
+  handleType?: "source" | "target";
+  handlePosition?: "left" | "right" | "top" | "bottom";
+  editingName: string;
+  variant?: "definition" | "publish" | "consume";
+  resourceType: string;
+}
+
+export const MessagingResourceRow = ({ item, isEditing, setEditingId, setEditingName, handleUpdate, handleDelete, handleUpdateItem, field, handleType, handlePosition, editingName, variant, resourceType }: MessagingResourceRowProps) => {
   const [expanded, setExpanded] = useState(!item.name);
   const isPublished = field === "publishedEvents" || variant === "publish";
   const isConsumed = field === "consumedEvents" || variant === "consume";
@@ -450,10 +499,19 @@ export const MessagingResourceRow = ({ item, isEditing, setEditingId, setEditing
   const isChannelEmpty = () => {
     const currentName = isEditing ? editingName : (item.name || "");
     const hasName = currentName.trim().length > 0;
-    const hasDesc = (item.description || item.publishedWhen)?.trim().length > 0;
-    const hasSchema = item.payloadSchema?.fields?.length > 0;
-    const hasLogic = item.handlerLogic?.trim().length > 0;
+    
+    const desc = (item.description as string | undefined) || (item.publishedWhen as string | undefined) || "";
+    const hasDesc = desc.trim().length > 0;
+    
+    const schema = item.payloadSchema as Record<string, unknown> | undefined;
+    const fields = schema?.fields as unknown[] | undefined;
+    const hasSchema = (fields?.length || 0) > 0;
+    
+    const logic = item.handlerLogic as string | undefined;
+    const hasLogic = (logic?.trim().length || 0) > 0;
+    
     const hasTarget = item.brokerNodeId && item.brokerNodeId !== "none";
+    
     return !hasName && !hasDesc && !hasSchema && !hasLogic && !hasTarget;
   };
 
@@ -546,7 +604,7 @@ export const MessagingResourceRow = ({ item, isEditing, setEditingId, setEditing
         ) : (
           <div className="flex items-center justify-between w-full cursor-pointer" onClick={() => { setEditingId(item.id); setEditingName(item.name || ""); }}>
              <div className="flex items-center gap-2 overflow-hidden">
-               <span className="font-medium truncate">{item.name || item._legacyName}</span>
+               <span className="font-medium truncate">{item.name || (item._legacyName as string | undefined)}</span>
                {variant === "definition" && item.name && (
                  <span className="text-[9px] bg-secondary/80 text-muted-foreground px-1 py-0.5 rounded font-mono shrink-0">
                    P: {publisherCount} &nbsp; C: {consumerCount}
@@ -574,7 +632,7 @@ export const MessagingResourceRow = ({ item, isEditing, setEditingId, setEditing
                  <LocalTextarea 
                    className="min-h-[30px] w-full rounded-md border border-input px-2 py-1 text-[10px] shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring nodrag"
                    placeholder={isPublished ? "e.g. Order successfully created" : "What triggers this message?"}
-                   value={item.publishedWhen || item.description || ""}
+                   value={(item.publishedWhen as string | undefined) || (item.description as string | undefined) || ""}
                    onChange={e => handleUpdateItem(item.id, { publishedWhen: e.target.value, description: e.target.value })}
                  />
                </div>
@@ -582,7 +640,7 @@ export const MessagingResourceRow = ({ item, isEditing, setEditingId, setEditing
              
              <SchemaEditor 
                 title={isConsumed ? "Expected Payload" : (isPublished ? "Payload Schema" : "Schema")} 
-                schema={item.payloadSchema} 
+                schema={item.payloadSchema as Schema | undefined} 
                 onChange={payloadSchema => handleUpdateItem(item.id, { payloadSchema })} 
              />
 
@@ -592,7 +650,7 @@ export const MessagingResourceRow = ({ item, isEditing, setEditingId, setEditing
                  <LocalTextarea 
                    className="min-h-[50px] w-full rounded-md border border-input px-2 py-1 text-[10px] shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring nodrag"
                    placeholder="What happens when this event is received?"
-                   value={item.handlerLogic || ""}
+                   value={(item.handlerLogic as string | undefined) || ""}
                    onChange={e => handleUpdateItem(item.id, { handlerLogic: e.target.value })}
                  />
                </div>
@@ -602,7 +660,7 @@ export const MessagingResourceRow = ({ item, isEditing, setEditingId, setEditing
                <div className="flex flex-col gap-2">
                  <div className="flex items-center justify-between gap-2">
                    <span className="text-[9px] font-bold text-muted-foreground">Retry Policy</span>
-                   <Select value={item.retryPolicy || "NONE"} onValueChange={v => handleUpdateItem(item.id, { retryPolicy: v })}>
+                   <Select value={(item.retryPolicy as string | undefined) || "NONE"} onValueChange={v => handleUpdateItem(item.id, { retryPolicy: v })}>
                      <SelectTrigger className="h-6 w-[120px] text-[10px] px-1.5 py-0 nodrag bg-background"><SelectValue /></SelectTrigger>
                      <SelectContent>
                        <SelectItem value="NONE" className="text-xs">None</SelectItem>
@@ -618,7 +676,7 @@ export const MessagingResourceRow = ({ item, isEditing, setEditingId, setEditing
                      type="number"
                      className="h-6 text-[10px] w-16 text-right bg-background nodrag" 
                      placeholder="e.g. 3" 
-                     value={item.maxRetries ?? ""}
+                     value={(item.maxRetries as string | undefined) ?? ""}
                      onChange={e => handleUpdateItem(item.id, { maxRetries: parseInt(e.target.value) })}
                    />
                  </div>
@@ -627,12 +685,12 @@ export const MessagingResourceRow = ({ item, isEditing, setEditingId, setEditing
                    <LocalInput 
                      className="h-6 text-[10px] flex-1 bg-background nodrag font-mono" 
                      placeholder="dlq-topic-name" 
-                     value={item.deadLetterQueue || ""}
+                     value={(item.deadLetterQueue as string | undefined) || ""}
                      onChange={e => handleUpdateItem(item.id, { deadLetterQueue: e.target.value })}
                    />
                  </div>
                  <div className="flex items-center gap-2 mt-1">
-                    <input type="checkbox" id={`idempotent-${item.id}`} checked={item.isIdempotent || false} onChange={e => handleUpdateItem(item.id, { isIdempotent: e.target.checked })} />
+                    <input type="checkbox" id={`idempotent-${item.id}`} checked={(item.isIdempotent as boolean | undefined) || false} onChange={e => handleUpdateItem(item.id, { isIdempotent: e.target.checked })} />
                     <label htmlFor={`idempotent-${item.id}`} className="text-[9px] font-bold text-muted-foreground cursor-pointer">Idempotent Consumer</label>
                  </div>
                </div>
@@ -645,13 +703,13 @@ export const MessagingResourceRow = ({ item, isEditing, setEditingId, setEditing
                     <LocalInput 
                       className="h-6 text-[10px] w-16 text-right bg-background nodrag" 
                       placeholder="v1" 
-                      value={item.version || "v1"}
+                      value={(item.version as string | undefined) || "v1"}
                       onChange={e => handleUpdateItem(item.id, { version: e.target.value })}
                     />
                  </div>
                  <div className="flex items-center justify-between gap-2">
                     <span className="text-[9px] font-bold text-muted-foreground">Category</span>
-                    <Select value={item.category || "DOMAIN"} onValueChange={v => handleUpdateItem(item.id, { category: v })}>
+                    <Select value={(item.category as string | undefined) || "DOMAIN"} onValueChange={v => handleUpdateItem(item.id, { category: v })}>
                       <SelectTrigger className="h-6 w-[100px] text-[10px] px-1.5 py-0 nodrag bg-background"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="DOMAIN" className="text-xs">Domain</SelectItem>
@@ -663,7 +721,7 @@ export const MessagingResourceRow = ({ item, isEditing, setEditingId, setEditing
                  </div>
                  <div className="flex items-center justify-between gap-2">
                     <span className="text-[9px] font-bold text-muted-foreground">Delivery</span>
-                    <Select value={item.delivery || "AT_LEAST_ONCE"} onValueChange={v => handleUpdateItem(item.id, { delivery: v })}>
+                    <Select value={(item.delivery as string | undefined) || "AT_LEAST_ONCE"} onValueChange={v => handleUpdateItem(item.id, { delivery: v })}>
                       <SelectTrigger className="h-6 w-[110px] text-[10px] px-1.5 py-0 nodrag bg-background"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="AT_LEAST_ONCE" className="text-xs">At Least Once</SelectItem>
@@ -680,13 +738,13 @@ export const MessagingResourceRow = ({ item, isEditing, setEditingId, setEditing
                  <span className="text-[9px] font-bold text-muted-foreground">
                    {isPublished ? "Publishes To Broker" : "Consumes From Broker"}
                  </span>
-                  <Select value={item.brokerNodeId || ""} onValueChange={v => handleUpdateItem(item.id, { brokerNodeId: v, messagingResourceId: "" })}>
+                  <Select value={(item.brokerNodeId as string | undefined) || ""} onValueChange={v => handleUpdateItem(item.id, { brokerNodeId: v, messagingResourceId: "" })}>
                     <SelectTrigger className="h-7 text-xs bg-background nodrag">
                       <SelectValue placeholder="Select Messaging Node" />
                     </SelectTrigger>
                     <SelectContent>
                       {messagingNodes.length === 0 && <SelectItem value="none" disabled className="text-xs">No messaging nodes found</SelectItem>}
-                      {messagingNodes.map((node: any) => (
+                      {messagingNodes.map((node) => (
                         <SelectItem key={node.id} value={node.id} className="text-xs">
                           {node.data.label || "Untitled Messaging"}
                         </SelectItem>
@@ -695,13 +753,13 @@ export const MessagingResourceRow = ({ item, isEditing, setEditingId, setEditing
                   </Select>
                   
                   {item.brokerNodeId ? (
-                    <Select value={item.messagingResourceId || ""} onValueChange={v => handleUpdateItem(item.id, { messagingResourceId: v })}>
+                    <Select value={(item.messagingResourceId as string | undefined) || ""} onValueChange={v => handleUpdateItem(item.id, { messagingResourceId: v })}>
                       <SelectTrigger className="h-7 text-xs bg-background nodrag mt-1">
                         <SelectValue placeholder="Select Topic / Queue / Stream" />
                       </SelectTrigger>
                       <SelectContent>
                         {availableResources.length === 0 && <SelectItem value="none" disabled className="text-xs">No resources defined on broker</SelectItem>}
-                        {availableResources.map((res: any) => (
+                        {availableResources.map((res) => (
                           <SelectItem key={res.id} value={res.id} className="text-xs">
                             {res.name || "Untitled Resource"}
                           </SelectItem>
@@ -723,7 +781,7 @@ export const MessagingResourceRow = ({ item, isEditing, setEditingId, setEditing
 }
 
 
-export const MessagingResourceList = ({
+export const MessagingResourceList = <T extends Record<string, unknown> & BaseItem = Record<string, unknown> & BaseItem>({
   title,
   items = [],
   variant,
@@ -731,10 +789,10 @@ export const MessagingResourceList = ({
   onChange,
 }: {
   title: string;
-  items: any[];
+  items: T[];
   variant: "definition" | "publish" | "consume";
   resourceType: "topics" | "streams" | "queues" | "channels";
-  onChange: (items: any[]) => void;
+  onChange: (items: T[]) => void;
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
@@ -761,12 +819,12 @@ export const MessagingResourceList = ({
         id: generateId(),
         name: "",
         kind: getKind(),
-      },
+      } as unknown as T,
     ];
 
     onChange(newItems);
 
-    setEditingId(newItems[newItems.length - 1].id);
+    setEditingId(newItems[newItems.length - 1]!.id);
     setEditingName("");
   };
 
@@ -774,7 +832,7 @@ export const MessagingResourceList = ({
     onChange(
       items.map((item) =>
         item.id === id ? { ...item, name } : item
-      )
+      ) as unknown as T[]
     );
   };
 
@@ -782,11 +840,11 @@ export const MessagingResourceList = ({
     onChange(items.filter((item) => item.id !== id));
   };
 
-  const handleUpdateItem = (id: string, changes: any) => {
+  const handleUpdateItem = (id: string, changes: Record<string, unknown>) => {
     onChange(
       items.map((item) =>
         item.id === id ? { ...item, ...changes } : item
-      )
+      ) as unknown as T[]
     );
   };
 
@@ -841,13 +899,21 @@ export const MessagingResourceList = ({
 
 // --- Route Group Components ---
 
-const RouteGroupSection = ({
+export interface RouteGroupEditorProps {
+  group: NonNullable<BackendNode["data"]["routeGroups"]>[0];
+  groupIndex: number;
+  nodeId: string;
+  updateNode: (id: string, changes: Partial<BackendNode>) => void;
+  data: BackendNode["data"];
+}
+
+export const RouteGroupEditor = ({
   group,
   groupIndex,
   nodeId,
   updateNode,
   data,
-}: any) => {
+}: RouteGroupEditorProps) => {
   const [collapsed, setCollapsed] = useState(false);
   const [editingName, setEditingName] = useState(!group.name);
   const [nameValue, setNameValue] = useState(group.name || "");
@@ -859,16 +925,17 @@ const RouteGroupSection = ({
   const [editingEndpointName, setEditingEndpointName] = useState("");
   const [editingEndpointType, setEditingEndpointType] = useState("GET");
 
-  const routeGroups: any[] = data.routeGroups || [];
+  const routeGroups = data.routeGroups || [];
 
-  const updateGroup = (changes: any) => {
+  const updateGroup = (changes: Partial<NonNullable<BackendNode["data"]["routeGroups"]>[0]>) => {
     const newGroups = [...routeGroups];
-    newGroups[groupIndex] = { ...newGroups[groupIndex], ...changes };
+    if (!newGroups[groupIndex]) return;
+    newGroups[groupIndex] = { ...newGroups[groupIndex]!, ...changes };
     updateNode(nodeId, { data: { ...data, routeGroups: newGroups } });
   };
 
   const deleteGroup = () => {
-    const newGroups = routeGroups.filter((_: any, i: number) => i !== groupIndex);
+    const newGroups = routeGroups.filter((_, i: number) => i !== groupIndex);
     updateNode(nodeId, { data: { ...data, routeGroups: newGroups } });
   };
 
@@ -891,7 +958,19 @@ const RouteGroupSection = ({
   const endpoints = group.endpoints || [];
 
   const handleAddEndpoint = () => {
-    const newEndpoint = { id: generateId(), name: "", type: "GET" };
+    const newEndpoint = { 
+      id: generateId(), 
+      name: "", 
+      type: "GET",
+      headers: [],
+      pathParams: [],
+      queryParams: [],
+      requestBody: { id: generateId(), fields: [] },
+      responseBody: { id: generateId(), fields: [] },
+      processingSteps: [],
+      publishedEvents: [],
+      isIdempotent: false,
+    } as Endpoint;
     updateGroup({ endpoints: [...endpoints, newEndpoint] });
     setEditingEndpointId(newEndpoint.id);
     setEditingEndpointName("");
@@ -899,19 +978,19 @@ const RouteGroupSection = ({
   };
 
   const handleUpdateEndpoint = (id: string, name: string, type: string) => {
-    const newEndpoints = endpoints.map((ep: any) =>
+    const newEndpoints = endpoints.map((ep) =>
       ep.id === id ? { ...ep, name, type } : ep
     );
     updateGroup({ endpoints: newEndpoints });
   };
 
   const handleDeleteEndpoint = (id: string) => {
-    const newEndpoints = endpoints.filter((ep: any) => ep.id !== id);
+    const newEndpoints = endpoints.filter((ep) => ep.id !== id);
     updateGroup({ endpoints: newEndpoints });
   };
 
-  const handleUpdateEndpointItem = (id: string, changes: any) => {
-    const newEndpoints = endpoints.map((ep: any) =>
+  const handleUpdateEndpointItem = (id: string, changes: Partial<Endpoint>) => {
+    const newEndpoints = endpoints.map((ep) =>
       ep.id === id ? { ...ep, ...changes } : ep
     );
     updateGroup({ endpoints: newEndpoints });
@@ -1036,7 +1115,7 @@ const RouteGroupSection = ({
               </Button>
             </div>
           ) : (
-            endpoints.map((ep: any) => (
+            endpoints.map((ep) => (
               <EndpointRow
                 key={ep.id}
                 item={ep}
@@ -1065,11 +1144,11 @@ export const RouteGroupList = ({
   updateNode,
 }: {
   nodeId: string;
-  data: any;
-  updateNode: (id: string, changes: any) => void;
+  data: BackendNode["data"];
+  updateNode: (id: string, changes: Partial<BackendNode>) => void;
 }) => {
-  const routeGroups: any[] = data.routeGroups || [];
-  const ungroupedEndpoints: any[] = data.endpoints || [];
+  const routeGroups = data.routeGroups || [];
+  const ungroupedEndpoints = data.endpoints || [];
 
   const handleAddGroup = () => {
     const newGroup = {
@@ -1084,14 +1163,16 @@ export const RouteGroupList = ({
 
   // Move an ungrouped endpoint into a specific group
   const moveToGroup = (endpointId: string, groupIndex: number) => {
-    const ep = ungroupedEndpoints.find((e: any) => e.id === endpointId);
+    const ep = ungroupedEndpoints.find((e) => e.id === endpointId);
     if (!ep) return;
 
-    const newUngrouped = ungroupedEndpoints.filter((e: any) => e.id !== endpointId);
+    const newUngrouped = ungroupedEndpoints.filter((e) => e.id !== endpointId);
     const newGroups = [...routeGroups];
+    if (!newGroups[groupIndex]) return;
+    
     newGroups[groupIndex] = {
-      ...newGroups[groupIndex],
-      endpoints: [...(newGroups[groupIndex].endpoints || []), ep],
+      ...newGroups[groupIndex]!,
+      endpoints: [...(newGroups[groupIndex]!.endpoints || []), ep],
     };
 
     updateNode(nodeId, {
@@ -1114,8 +1195,8 @@ export const RouteGroupList = ({
       )}
 
       {/* Route Groups */}
-      {routeGroups.map((group: any, index: number) => (
-        <RouteGroupSection
+      {routeGroups.map((group, index: number) => (
+        <RouteGroupEditor
           key={group.id}
           group={group}
           groupIndex={index}

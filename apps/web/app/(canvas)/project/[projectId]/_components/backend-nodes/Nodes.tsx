@@ -11,7 +11,7 @@ import { COLUMN_TYPES } from "@/lib/schema/columnTypes";
 import { SchemaGroupNode } from "./SchemaGroupNode";
 import { Textarea } from "@workspace/ui/components/textarea";
 
-const ensureUniqueColumnNames = (columns: any[]) => {
+const ensureUniqueColumnNames = (columns: NonNullable<BackendNode["data"]["columns"]>) => {
   const seen = new Set<string>();
   const result = [];
   for (const col of columns) {
@@ -68,9 +68,9 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
     setColNameError(false);
   };
 
-  const updateColumn = (index: number, changes: any) => {
+  const updateColumn = (index: number, changes: Partial<NonNullable<BackendNode["data"]["columns"]>[0]>) => {
     const newCols = [...columns];
-    newCols[index] = { ...newCols[index], ...changes };
+    newCols[index] = { ...newCols[index], ...changes } as NonNullable<BackendNode["data"]["columns"]>[0];
     updateNode(id, { data: { ...data, columns: newCols } });
   };
 
@@ -84,9 +84,9 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
     setEditingIndex(indexes.length);
   };
 
-  const updateIndexObj = (idx: number, changes: any) => {
+  const updateIndexObj = (idx: number, changes: Partial<NonNullable<BackendNode["data"]["indexes"]>[0]>) => {
     const newIndexes = [...indexes];
-    newIndexes[idx] = { ...newIndexes[idx], ...changes };
+    newIndexes[idx] = { ...newIndexes[idx], ...changes } as NonNullable<BackendNode["data"]["indexes"]>[0];
     updateNode(id, { data: { ...data, indexes: newIndexes } });
   };
 

@@ -25,10 +25,10 @@ export const DatabaseNode = ({ id, data, selected }: NodeProps<BackendNode>) => 
     let detail = "";
     if (edge.sourceHandle?.startsWith("endpoints-out-")) {
       const epId = edge.sourceHandle.replace("endpoints-out-", "");
-      let ep = srcNode.data.endpoints?.find((e: any) => e.id === epId);
+      let ep = srcNode.data.endpoints?.find((e) => e.id === epId);
       if (!ep && srcNode.data.routeGroups) {
         for (const group of srcNode.data.routeGroups) {
-          ep = group.endpoints?.find((e: any) => e.id === epId);
+          ep = group.endpoints?.find((e) => e.id === epId);
           if (ep) break;
         }
       }

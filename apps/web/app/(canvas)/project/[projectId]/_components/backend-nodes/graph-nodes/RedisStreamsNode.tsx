@@ -19,7 +19,7 @@ export const RedisStreamsNode = ({ id, data, selected }: NodeProps<BackendNode>)
   // Initialize redisBroker if not defined
   const broker = data.redisBroker || {};
 
-  const updateBroker = (key: string, value: any) => {
+  const updateBroker = <K extends keyof NonNullable<BackendNode["data"]["redisBroker"]>>(key: K, value: NonNullable<BackendNode["data"]["redisBroker"]>[K]) => {
     updateNode(id, {
       data: {
         ...data,

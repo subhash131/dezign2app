@@ -310,6 +310,8 @@ export type Parameter = {
   required: boolean;
   description?: string;
   defaultValue?: string;
+  key?: string;
+  value?: string;
 };
 
 export type Schema = {
@@ -381,5 +383,11 @@ export type Endpoint = {
   publishedEvents: PublishedEvent[];
   
   metadata?: ArchitectureMetadata;
+  
+  // Frontend specific fields
+  params?: Parameter[];
+  body?: string;
+  businessLogic?: string;
+  output?: string;
 };
 

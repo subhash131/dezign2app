@@ -24,7 +24,7 @@ interface EditableNodeListProps<T extends BaseItem> {
   items?: T[];
   field: keyof BackendNode["data"];
   handleType?: "source" | "target";
-  handlePosition?: "left" | "right" | "top" | "bottom" | any;
+  handlePosition?: "left" | "right" | "top" | "bottom";
   updateNode: (id: string, changes: Partial<BackendNode>) => void;
   data: BackendNode["data"];
 }
@@ -141,7 +141,7 @@ interface EndpointRowProps {
   handleUpdateItem: (id: string, changes: Partial<Endpoint>) => void;
   field: string;
   handleType?: "source" | "target";
-  handlePosition?: "left" | "right" | "top" | "bottom" | any;
+  handlePosition?: "left" | "right" | "top" | "bottom";
   editingName: string;
   editingType: string;
 }
@@ -151,24 +151,24 @@ const EndpointRow = ({ item, isEditing, setEditingId, setEditingName, setEditing
 
   const addHeader = () => {
      const headers = item.headers || [];
-     handleUpdateItem(item.id, { headers: [...headers, { id: generateId(), name: "", type: "string", required: false, key: "", value: "" } as unknown as Parameter] });
+     handleUpdateItem(item.id, { headers: [...headers, { id: generateId(), name: "", type: "string", required: false, key: "", value: "" }] });
   };
   const updateHeader = (id: string, key: string, value: string) => {
-     handleUpdateItem(item.id, { headers: item.headers.map((h: any) => h.id === id ? { ...h, key, value } : h) });
+     handleUpdateItem(item.id, { headers: item.headers.map((h) => h.id === id ? { ...h, key, value } : h) });
   };
   const deleteHeader = (id: string) => {
-     handleUpdateItem(item.id, { headers: item.headers.filter((h: any) => h.id !== id) });
+     handleUpdateItem(item.id, { headers: item.headers.filter((h) => h.id !== id) });
   };
 
   const addParam = () => {
      const params = item.queryParams || [];
-     handleUpdateItem(item.id, { queryParams: [...params, { id: generateId(), key: "", type: "string", name: "", required: false } as unknown as Parameter] });
+     handleUpdateItem(item.id, { queryParams: [...params, { id: generateId(), key: "", type: "string", name: "", required: false }] });
   };
   const updateParam = (id: string, key: string, type: string) => {
-     handleUpdateItem(item.id, { queryParams: item.queryParams.map((p: any) => p.id === id ? { ...p, key, type } : p) });
+     handleUpdateItem(item.id, { queryParams: item.queryParams.map((p) => p.id === id ? { ...p, key, type } : p) });
   };
   const deleteParam = (id: string) => {
-     handleUpdateItem(item.id, { queryParams: item.queryParams.filter((p: any) => p.id !== id) });
+     handleUpdateItem(item.id, { queryParams: item.queryParams.filter((p) => p.id !== id) });
   };
 
   return (
@@ -255,10 +255,10 @@ const EndpointRow = ({ item, isEditing, setEditingId, setEditingName, setEditing
                  <span className="text-[9px] font-bold text-muted-foreground uppercase">Headers</span>
                  <Plus size={12} className="cursor-pointer text-muted-foreground hover:text-foreground" onClick={addHeader} />
                </div>
-               {(item.headers || []).map((h: any) => (
+               {(item.headers || []).map((h: Parameter) => (
                  <div key={h.id} className="flex items-center gap-1">
-                   <Input className="h-6 text-[10px] px-1.5 flex-1 nodrag" placeholder="Key" value={h.key} onChange={e => updateHeader(h.id, e.target.value, h.value)} />
-                   <Input className="h-6 text-[10px] px-1.5 flex-1 nodrag" placeholder="Value" value={h.value} onChange={e => updateHeader(h.id, h.key, e.target.value)} />
+                   <Input className="h-6 text-[10px] px-1.5 flex-1 nodrag" placeholder="Key" value={h.key || ""} onChange={e => updateHeader(h.id, e.target.value, h.value || "")} />
+                   <Input className="h-6 text-[10px] px-1.5 flex-1 nodrag" placeholder="Value" value={h.value || ""} onChange={e => updateHeader(h.id, h.key || "", e.target.value)} />
                    <X size={12} className="cursor-pointer text-muted-foreground hover:text-destructive shrink-0" onClick={() => deleteHeader(h.id)} />
                  </div>
                ))}
@@ -272,10 +272,10 @@ const EndpointRow = ({ item, isEditing, setEditingId, setEditingName, setEditing
                  <span className="text-[9px] font-bold text-muted-foreground uppercase">Params / Query</span>
                  <Plus size={12} className="cursor-pointer text-muted-foreground hover:text-foreground" onClick={addParam} />
                </div>
-               {(item.queryParams || []).map((p: any) => (
+               {(item.queryParams || []).map((p: Parameter) => (
                  <div key={p.id} className="flex items-center gap-1">
-                   <Input className="h-6 text-[10px] px-1.5 flex-1 nodrag" placeholder="Name" value={p.key || p.name} onChange={e => updateParam(p.id, e.target.value, p.type)} />
-                   <Select value={p.type} onValueChange={v => updateParam(p.id, p.key || p.name, v)}>
+                   <Input className="h-6 text-[10px] px-1.5 flex-1 nodrag" placeholder="Name" value={p.key || p.name || ""} onChange={e => updateParam(p.id, e.target.value, p.type)} />
+                   <Select value={p.type} onValueChange={v => updateParam(p.id, p.key || p.name || "", v)}>
                      <SelectTrigger className="h-6 w-[70px] text-[10px] px-1.5 py-0 nodrag"><SelectValue /></SelectTrigger>
                      <SelectContent>
                        <SelectItem value="string" className="text-xs">string</SelectItem>
@@ -296,8 +296,8 @@ const EndpointRow = ({ item, isEditing, setEditingId, setEditingName, setEditing
                <Textarea 
                  className="min-h-[50px] w-full rounded-md border border-input px-2 py-1 text-[10px] shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring nodrag"
                  placeholder="{}"
-                 value={(item as any).body || ""}
-                 onChange={e => handleUpdateItem(item.id, { body: e.target.value } as any)}
+                 value={(item as Record<string, unknown>).body as string || ""}
+                 onChange={e => handleUpdateItem(item.id, { body: e.target.value })}
                />
             </div>
           </div>
@@ -313,7 +313,7 @@ interface EndpointListProps {
   items?: Endpoint[];
   field: keyof BackendNode["data"];
   handleType?: "source" | "target";
-  handlePosition?: "left" | "right" | "top" | "bottom" | any;
+  handlePosition?: "left" | "right" | "top" | "bottom";
   updateNode: (id: string, changes: Partial<BackendNode>) => void;
   data: BackendNode["data"];
 }
