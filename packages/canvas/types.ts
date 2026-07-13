@@ -263,6 +263,7 @@ export type BackendEdge = {
 };
 
 export type BackendDesignDoc = {
+  schemaVersion?: number;
   nodes: BackendNode[];
   edges: BackendEdge[];
 };
@@ -288,46 +289,97 @@ export interface CanvasAdapter<TDoc> {
 }
 
 
-export type PublishedEvent = {
+// --- Enums & Primitives ---
+
+export type RetryPolicy = "NONE" | "IMMEDIATE" | "EXPONENTIAL";
+export type DeliveryGuarantee = "EXACTLY_ONCE" | "AT_LEAST_ONCE" | "AT_MOST_ONCE" | "FIRE_AND_FORGET";
+export type EventOrdering = "NONE" | "GLOBAL" | "PER_ENTITY" | "PER_AGGREGATE";
+export type EventCategory = "DOMAIN" | "INTEGRATION" | "INTERNAL" | "NOTIFICATION";
+export type SchemaVersion = "v1" | "v2" | "v3";
+
+export type ArchitectureMetadata = {
+  createdAt?: number;
+  updatedAt?: number;
+  createdByAI?: boolean;
+};
+
+export type Parameter = {
   id: string;
   name: string;
+  type: string;
+  required: boolean;
   description?: string;
-  schema?: string;
-  version?: string;
-  targetNodeId?: string;
+  defaultValue?: string;
+};
+
+export type Schema = {
+  id: string;
+  fields: Parameter[];
+};
+
+export type ProcessingStep = {
+  id: string;
+  text: string;
+};
+
+// --- Event Models (Producer-Owned Contracts) ---
+
+export type PublishedEvent = {
+  id: string; // The canonical Event ID
+  name: string; // e.g., chat.message.sent
+  publishedWhen: string; // e.g. "Message successfully persisted"
+  
+  // Topic Mapping
+  brokerNodeId: string; 
+  messagingResourceId: string;
+  
+  // Contract
+  payloadSchema: Schema;
+  version: SchemaVersion;
+  category: EventCategory;
+  delivery: DeliveryGuarantee;
+  ordering: EventOrdering;
+  correlationId?: string;
+  
+  // Lifecycle
+  deprecated: boolean;
+  replacementEventId?: string;
+  
+  metadata?: ArchitectureMetadata;
 };
 
 export type ConsumedEvent = {
-  id: string;
-  name: string;
-  description?: string;
-  schema?: string;
-  retryPolicy?: string;
-  version?: string;
-  handlerLogic?: string;
-  targetNodeId?: string;
+  id: string; // Consumer instance ID
+  eventId: string; // References the PublishedEvent's canonical ID
+  
+  // Topic Mapping
+  brokerNodeId: string; 
+  messagingResourceId: string;
+  
+  // Consumer Behavior
+  retryPolicy: RetryPolicy;
+  maxRetries?: number;
+  deadLetterQueue?: string; // e.g. "chat.failed.messages"
+  isIdempotent: boolean;
+  
+  metadata?: ArchitectureMetadata;
 };
 
 export type Endpoint = {
   id: string;
   name: string;
   type: string;
-
-  headers?: {
-    id: string;
-    key: string;
-    value: string;
-  }[];
-
-  params?: {
-    id: string;
-    key: string;
-    type: string;
-  }[];
-
-  body?: string;
-
-  businessLogic?: string;
-  publishedEvents?: PublishedEvent[];
-  output?: string;
+  
+  headers: Parameter[];
+  pathParams: Parameter[];
+  queryParams: Parameter[];
+  
+  requestBody: Schema;
+  responseBody: Schema;
+  
+  processingSteps: ProcessingStep[];
+  publishedEvents: PublishedEvent[];
+  
+  metadata?: ArchitectureMetadata;
 };
+

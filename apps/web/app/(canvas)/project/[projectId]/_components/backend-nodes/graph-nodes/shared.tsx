@@ -7,9 +7,40 @@ import { Button } from "@workspace/ui/components/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@workspace/ui/components/select";
 import { Textarea } from "@workspace/ui/components/textarea";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
-import { BackendNode, ConsumedEvent, Endpoint, PublishedEvent } from "@/types/canvas";
+import { BackendNode, Endpoint } from "@/types/canvas";
+import { ParameterEditor, SchemaEditor, ProcessingStepsEditor } from "./Editors";
 
 export const generateId = () => Math.random().toString(36).substring(2, 9);
+
+export const LocalInput = ({ value, onChange, ...props }: {
+  value?: string | number | readonly string[];
+  onChange?: React.ChangeEventHandler<HTMLInputElement>;
+  [key: string]: any;
+}) => {
+  const [localValue, setLocalValue] = useState(value);
+  React.useEffect(() => {
+    if (value !== localValue) setLocalValue(value);
+  }, [value]);
+  return <Input {...(props as any)} value={localValue} onChange={(e: any) => {
+    setLocalValue(e.target.value);
+    if (onChange) onChange(e);
+  }} />;
+};
+
+export const LocalTextarea = ({ value, onChange, ...props }: {
+  value?: string | number | readonly string[];
+  onChange?: React.ChangeEventHandler<HTMLTextAreaElement>;
+  [key: string]: any;
+}) => {
+  const [localValue, setLocalValue] = useState(value);
+  React.useEffect(() => {
+    if (value !== localValue) setLocalValue(value);
+  }, [value]);
+  return <Textarea {...(props as any)} value={localValue} onChange={(e: any) => {
+    setLocalValue(e.target.value);
+    if (onChange) onChange(e);
+  }} />;
+};
 
 export const EditableNodeList = ({ 
   nodeId, 
@@ -74,12 +105,12 @@ export const EditableNodeList = ({
                 />
               )}
               {isEditing ? (
-                 <Input 
+                 <LocalInput 
                     value={editingName} 
                     onChange={(e) => setEditingName(e.target.value)} 
                     className="h-6 text-xs"
                     autoFocus
-                    onKeyDown={(e) => {
+                    onKeyDown={(e: React.KeyboardEvent) => {
                       if (e.key === "Enter") {
                         if (!editingName.trim()) handleDelete(item.id);
                         else handleUpdate(item.id, editingName.trim());
@@ -97,7 +128,7 @@ export const EditableNodeList = ({
                     }}
                   />
               ) : (
-                <div className="flex items-center justify-between w-full cursor-pointer" onClick={() => { setEditingId(item.id); setEditingName(item.name); }}>
+                <div className="flex items-center justify-between w-full cursor-pointer" onClick={() => { setEditingId(item.id); setEditingName(item.name || ""); }}>
                    <span className="font-medium truncate">{item.name}</span>
                    <div className="opacity-0 group-hover/row:opacity-100 flex items-center justify-center p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all" onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }}>
                       <X size={12} />
@@ -198,13 +229,13 @@ export const EndpointRow = ({ item, isEditing, setEditingId, setEditingName, set
                  <SelectItem value="RTC" className="text-xs">WebRTC</SelectItem>
                </SelectContent>
              </Select>
-             <Input 
+             <LocalInput 
                 value={editingName} 
                 onChange={(e) => setEditingName(e.target.value)} 
                 className="h-6 text-xs flex-1 nodrag"
                 placeholder="e.g. /users"
                 autoFocus
-                onKeyDown={(e) => {
+                onKeyDown={(e: React.KeyboardEvent) => {
                   if (e.key === "Enter") {
                     if (!editingName.trim()) handleDelete(item.id);
                     else handleUpdate(item.id, editingName.trim(), editingType);
@@ -217,15 +248,15 @@ export const EndpointRow = ({ item, isEditing, setEditingId, setEditingName, set
                 }}
               />
               <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground" onClick={() => {
-                  if (!editingName.trim()) handleDelete(item.id);
-                  else handleUpdate(item.id, editingName.trim(), editingType);
+                  if (!(editingName || "").trim()) handleDelete(item.id);
+                  else handleUpdate(item.id, (editingName || "").trim(), editingType || "GET");
                   setEditingId(null);
               }}>
                  <Check size={14} />
               </Button>
            </div>
         ) : (
-          <div className="flex items-center justify-between w-full cursor-pointer" onClick={() => { setEditingId(item.id); setEditingName(item.name); setEditingType(item.type || "GET"); }}>
+          <div className="flex items-center justify-between w-full cursor-pointer" onClick={() => { setEditingId(item.id); setEditingName(item.name || ""); setEditingType(item.type || "GET"); }}>
              <div className="flex items-center gap-2 overflow-hidden">
                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0 bg-secondary text-secondary-foreground">
                  {item.type || "GET"}
@@ -245,86 +276,25 @@ export const EndpointRow = ({ item, isEditing, setEditingId, setEditingName, set
 
         {expanded && (
           <div className="flex flex-col gap-3 pt-3 mt-2 border-t cursor-default nodrag" onClick={e => e.stopPropagation()}>
-            <div className="flex flex-col gap-1.5">
-               <div className="flex items-center justify-between">
-                 <span className="text-[9px] font-bold text-muted-foreground uppercase">Headers</span>
-                 <Plus size={12} className="cursor-pointer text-muted-foreground hover:text-foreground" onClick={addHeader} />
-               </div>
-               {(item.headers || []).map((h: any) => (
-                 <div key={h.id} className="flex items-center gap-1">
-                   <Input className="h-6 text-[10px] px-1.5 flex-1 nodrag" placeholder="Key" value={h.key} onChange={e => updateHeader(h.id, e.target.value, h.value)} />
-                   <Input className="h-6 text-[10px] px-1.5 flex-1 nodrag" placeholder="Value" value={h.value} onChange={e => updateHeader(h.id, h.key, e.target.value)} />
-                   <X size={12} className="cursor-pointer text-muted-foreground hover:text-destructive shrink-0" onClick={() => deleteHeader(h.id)} />
-                 </div>
-               ))}
-               {(!item.headers || item.headers.length === 0) && (
-                 <span className="text-[10px] text-muted-foreground italic">No headers added</span>
-               )}
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-               <div className="flex items-center justify-between">
-                 <span className="text-[9px] font-bold text-muted-foreground uppercase">Params / Query</span>
-                 <Plus size={12} className="cursor-pointer text-muted-foreground hover:text-foreground" onClick={addParam} />
-               </div>
-               {(item.params || []).map((p: any) => (
-                 <div key={p.id} className="flex items-center gap-1">
-                   <Input className="h-6 text-[10px] px-1.5 flex-1 nodrag" placeholder="Name" value={p.key} onChange={e => updateParam(p.id, e.target.value, p.type)} />
-                   <Select value={p.type} onValueChange={v => updateParam(p.id, p.key, v)}>
-                     <SelectTrigger className="h-6 w-[70px] text-[10px] px-1.5 py-0 nodrag"><SelectValue /></SelectTrigger>
-                     <SelectContent>
-                       <SelectItem value="string" className="text-xs">string</SelectItem>
-                       <SelectItem value="number" className="text-xs">number</SelectItem>
-                       <SelectItem value="boolean" className="text-xs">boolean</SelectItem>
-                     </SelectContent>
-                   </Select>
-                   <X size={12} className="cursor-pointer text-muted-foreground hover:text-destructive shrink-0" onClick={() => deleteParam(p.id)} />
-                 </div>
-               ))}
-               {(!item.params || item.params.length === 0) && (
-                 <span className="text-[10px] text-muted-foreground italic">No parameters added</span>
-               )}
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-               <span className="text-[9px] font-bold text-muted-foreground uppercase">Body</span>
-               <Textarea 
-                 className="min-h-[50px] w-full rounded-md border border-input px-2 py-1 text-[10px] shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring nodrag"
-                 placeholder="{}"
-                 value={item.body || ""}
-                 onChange={e => handleUpdateItem(item.id, { body: e.target.value })}
+             <ParameterEditor title="Headers" parameters={item.headers || []} onChange={headers => handleUpdateItem(item.id, { headers })} />
+             <ParameterEditor title="Path Params" parameters={item.pathParams || []} onChange={pathParams => handleUpdateItem(item.id, { pathParams })} />
+             <ParameterEditor title="Query Params" parameters={item.queryParams || []} onChange={queryParams => handleUpdateItem(item.id, { queryParams })} />
+             <SchemaEditor title="Request Body Schema" schema={item.requestBody} onChange={requestBody => handleUpdateItem(item.id, { requestBody })} />
+             <ProcessingStepsEditor steps={item.processingSteps || []} onChange={processingSteps => handleUpdateItem(item.id, { processingSteps })} />
+             
+             <div className="flex flex-col gap-1.5">
+               <MessagingResourceList
+                 title="Published Events"
+                 items={item.publishedEvents || []}
+                 variant="publish"
+                 resourceType="topics"
+                 onChange={(publishedEvents) =>
+                   handleUpdateItem(item.id, { publishedEvents })
+                 }
                />
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-               <span className="text-[9px] font-bold text-muted-foreground">Business Logic</span>
-               <Textarea 
-                 className="min-h-[50px] w-full rounded-md border border-input px-2 py-1 text-[10px] shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring nodrag"
-                 placeholder="Describe business logic here..."
-                 value={item.businessLogic || ""}
-                 onChange={e => handleUpdateItem(item.id, { businessLogic: e.target.value })}
-               />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <MessagingResourceList
-                title="Published Events"
-                items={item.publishedEvents || []}
-                variant="publish"
-                resourceType="topics"
-                onChange={(publishedEvents) =>
-                  handleUpdateItem(item.id, { publishedEvents })
-                }
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-               <span className="text-[9px] font-bold text-muted-foreground uppercase">Output</span>
-               <Textarea 
-                 className="min-h-[50px] w-full rounded-md border border-input px-2 py-1 text-[10px] shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring nodrag"
-                 placeholder="Describe expected output..."
-                 value={item.output || ""}
-                 onChange={e => handleUpdateItem(item.id, { output: e.target.value })}
-               />
-            </div>
+             </div>
+             
+             <SchemaEditor title="Response Schema" schema={item.responseBody} onChange={responseBody => handleUpdateItem(item.id, { responseBody })} />
           </div>
         )}
       </div>
@@ -430,12 +400,12 @@ export const NodeHeader = ({ id, data, icon: Icon, title, colorClass, selected }
       <div className="flex items-center flex-1">
         <Icon size={14} className="mr-2 shrink-0" />
         {isEditing ? (
-          <Input 
+          <LocalInput 
             value={name} 
             onChange={(e) => setName(e.target.value)} 
             className="h-6 text-xs px-1 bg-background/50" 
             autoFocus 
-            onKeyDown={(e) => { if (e.key === "Enter") handleSave(); if (e.key === "Escape") setIsEditing(false); }}
+            onKeyDown={(e:React.KeyboardEvent) => { if (e.key === "Enter") handleSave(); if (e.key === "Escape") setIsEditing(false); }}
             onBlur={handleSave}
           />
         ) : (
@@ -465,6 +435,14 @@ export const MessagingResourceRow = ({ item, isEditing, setEditingId, setEditing
   const nodes = useBackendCanvasStore(s => s.nodes);
   const messagingNodes = nodes.filter(n => n.type === "queue" || n.type === "pubsub" || n.type === "eventstream" || n.type === "kafka" || n.type === "redis-streams" || n.type === "sqs");
   
+  const selectedBroker = messagingNodes.find(n => n.id === item.brokerNodeId);
+  const availableResources = selectedBroker ? (
+    selectedBroker.data.topics || 
+    selectedBroker.data.streams || 
+    selectedBroker.data.queues || 
+    selectedBroker.data.channels || []
+  ) : [];
+
   const edges = useBackendCanvasStore(s => s.edges);
   const publisherCount = edges.filter(e => e.targetResourceId === item.id).length;
   const consumerCount = edges.filter(e => e.sourceResourceId === item.id).length;
@@ -472,13 +450,11 @@ export const MessagingResourceRow = ({ item, isEditing, setEditingId, setEditing
   const isChannelEmpty = () => {
     const currentName = isEditing ? editingName : (item.name || "");
     const hasName = currentName.trim().length > 0;
-    const hasDesc = item.description?.trim().length > 0;
-    const hasSchema = item.schema?.trim().length > 0;
+    const hasDesc = (item.description || item.publishedWhen)?.trim().length > 0;
+    const hasSchema = item.payloadSchema?.fields?.length > 0;
     const hasLogic = item.handlerLogic?.trim().length > 0;
-    const hasRetry = item.retryPolicy?.trim().length > 0;
-    const hasVersion = item.version?.trim().length > 0;
-    const hasTarget = item.targetNodeId && item.targetNodeId !== "none";
-    return !hasName && !hasDesc && !hasSchema && !hasLogic && !hasRetry && !hasVersion && !hasTarget;
+    const hasTarget = item.brokerNodeId && item.brokerNodeId !== "none";
+    return !hasName && !hasDesc && !hasSchema && !hasLogic && !hasTarget;
   };
 
   return (
@@ -541,13 +517,13 @@ export const MessagingResourceRow = ({ item, isEditing, setEditingId, setEditing
 
         {isEditing ? (
            <div className="flex items-center gap-1 nodrag">
-             <Input 
+             <LocalInput 
                 value={editingName} 
                 onChange={(e) => setEditingName(e.target.value)} 
                 className="h-6 text-xs flex-1 nodrag"
                 placeholder="e.g. OrderCreated"
                 autoFocus
-                onKeyDown={(e) => {
+                onKeyDown={(e: React.KeyboardEvent) => {
                   if (e.key === "Enter") {
                     if (!editingName.trim()) handleDelete(item.id);
                     else handleUpdate(item.id, editingName.trim());
@@ -568,9 +544,9 @@ export const MessagingResourceRow = ({ item, isEditing, setEditingId, setEditing
               </Button>
            </div>
         ) : (
-          <div className="flex items-center justify-between w-full cursor-pointer" onClick={() => { setEditingId(item.id); setEditingName(item.name); }}>
+          <div className="flex items-center justify-between w-full cursor-pointer" onClick={() => { setEditingId(item.id); setEditingName(item.name || ""); }}>
              <div className="flex items-center gap-2 overflow-hidden">
-               <span className="font-medium truncate">{item.name}</span>
+               <span className="font-medium truncate">{item.name || item._legacyName}</span>
                {variant === "definition" && item.name && (
                  <span className="text-[9px] bg-secondary/80 text-muted-foreground px-1 py-0.5 rounded font-mono shrink-0">
                    P: {publisherCount} &nbsp; C: {consumerCount}
@@ -590,34 +566,30 @@ export const MessagingResourceRow = ({ item, isEditing, setEditingId, setEditing
 
         {expanded && (
           <div className="flex flex-col gap-3 pt-3 mt-2 border-t cursor-default nodrag" onClick={e => e.stopPropagation()}>
-             <div className="flex flex-col gap-1.5">
-               <span className="text-[9px] font-bold text-muted-foreground">
-                 {isPublished ? "When Published (Trigger)" : "Description"}
-               </span>
-               <Textarea 
-                 className="min-h-[30px] w-full rounded-md border border-input px-2 py-1 text-[10px] shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring nodrag"
-                 placeholder={isPublished ? "e.g. Order successfully created" : "What triggers this message?"}
-                 value={item.description || ""}
-                 onChange={e => handleUpdateItem(item.id, { description: e.target.value })}
-               />
-             </div>
+             {!isConsumed && (
+               <div className="flex flex-col gap-1.5">
+                 <span className="text-[9px] font-bold text-muted-foreground">
+                   {isPublished ? "When Published (Trigger)" : "Description"}
+                 </span>
+                 <LocalTextarea 
+                   className="min-h-[30px] w-full rounded-md border border-input px-2 py-1 text-[10px] shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring nodrag"
+                   placeholder={isPublished ? "e.g. Order successfully created" : "What triggers this message?"}
+                   value={item.publishedWhen || item.description || ""}
+                   onChange={e => handleUpdateItem(item.id, { publishedWhen: e.target.value, description: e.target.value })}
+                 />
+               </div>
+             )}
              
-             <div className="flex flex-col gap-1.5">
-               <span className="text-[9px] font-bold text-muted-foreground">
-                 {isConsumed ? "Expected Payload" : (isPublished ? "Payload" : "Schema")}
-               </span>
-               <Textarea 
-                 className="min-h-[50px] w-full rounded-md border border-input px-2 py-1 text-[10px] shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring nodrag font-mono"
-                 placeholder="{}"
-                 value={item.schema || ""}
-                 onChange={e => handleUpdateItem(item.id, { schema: e.target.value })}
-               />
-             </div>
+             <SchemaEditor 
+                title={isConsumed ? "Expected Payload" : (isPublished ? "Payload Schema" : "Schema")} 
+                schema={item.payloadSchema} 
+                onChange={payloadSchema => handleUpdateItem(item.id, { payloadSchema })} 
+             />
 
              {isConsumed && (
                <div className="flex flex-col gap-1.5">
                  <span className="text-[9px] font-bold text-muted-foreground">Handler Logic</span>
-                 <Textarea 
+                 <LocalTextarea 
                    className="min-h-[50px] w-full rounded-md border border-input px-2 py-1 text-[10px] shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring nodrag"
                    placeholder="What happens when this event is received?"
                    value={item.handlerLogic || ""}
@@ -626,34 +598,89 @@ export const MessagingResourceRow = ({ item, isEditing, setEditingId, setEditing
                </div>
              )}
 
-             {!isPublished && variant !== "definition" && (
-               <div className="flex items-center justify-between gap-2">
-                 <span className="text-[9px] font-bold text-muted-foreground">Retry Policy</span>
-                 <Input 
-                   className="h-6 text-[10px] w-24 text-right bg-background nodrag" 
-                   placeholder="e.g. 3 times" 
-                   value={item.retryPolicy || ""}
-                   onChange={e => handleUpdateItem(item.id, { retryPolicy: e.target.value })}
-                 />
+             {isConsumed && (
+               <div className="flex flex-col gap-2">
+                 <div className="flex items-center justify-between gap-2">
+                   <span className="text-[9px] font-bold text-muted-foreground">Retry Policy</span>
+                   <Select value={item.retryPolicy || "NONE"} onValueChange={v => handleUpdateItem(item.id, { retryPolicy: v })}>
+                     <SelectTrigger className="h-6 w-[120px] text-[10px] px-1.5 py-0 nodrag bg-background"><SelectValue /></SelectTrigger>
+                     <SelectContent>
+                       <SelectItem value="NONE" className="text-xs">None</SelectItem>
+                       <SelectItem value="EXPONENTIAL_BACKOFF" className="text-xs">Exponential Backoff</SelectItem>
+                       <SelectItem value="FIXED_INTERVAL" className="text-xs">Fixed Interval</SelectItem>
+                     </SelectContent>
+                   </Select>
+                 </div>
+                 
+                 <div className="flex items-center justify-between gap-2">
+                   <span className="text-[9px] font-bold text-muted-foreground">Max Retries</span>
+                   <LocalInput 
+                     type="number"
+                     className="h-6 text-[10px] w-16 text-right bg-background nodrag" 
+                     placeholder="e.g. 3" 
+                     value={item.maxRetries ?? ""}
+                     onChange={e => handleUpdateItem(item.id, { maxRetries: parseInt(e.target.value) })}
+                   />
+                 </div>
+                 <div className="flex items-center justify-between gap-2">
+                   <span className="text-[9px] font-bold text-muted-foreground">DLQ</span>
+                   <LocalInput 
+                     className="h-6 text-[10px] flex-1 bg-background nodrag font-mono" 
+                     placeholder="dlq-topic-name" 
+                     value={item.deadLetterQueue || ""}
+                     onChange={e => handleUpdateItem(item.id, { deadLetterQueue: e.target.value })}
+                   />
+                 </div>
+                 <div className="flex items-center gap-2 mt-1">
+                    <input type="checkbox" id={`idempotent-${item.id}`} checked={item.isIdempotent || false} onChange={e => handleUpdateItem(item.id, { isIdempotent: e.target.checked })} />
+                    <label htmlFor={`idempotent-${item.id}`} className="text-[9px] font-bold text-muted-foreground cursor-pointer">Idempotent Consumer</label>
+                 </div>
                </div>
              )}
 
-             <div className="flex items-center justify-between gap-2">
-                <span className="text-[9px] font-bold text-muted-foreground">Version</span>
-                <Input 
-                  className="h-6 text-[10px] w-16 text-right bg-background nodrag" 
-                  placeholder="v1" 
-                  value={item.version || ""}
-                  onChange={e => handleUpdateItem(item.id, { version: e.target.value })}
-                />
-             </div>
+             {!isConsumed && variant !== "definition" && (
+                <>
+                 <div className="flex items-center justify-between gap-2">
+                    <span className="text-[9px] font-bold text-muted-foreground">Version</span>
+                    <LocalInput 
+                      className="h-6 text-[10px] w-16 text-right bg-background nodrag" 
+                      placeholder="v1" 
+                      value={item.version || "v1"}
+                      onChange={e => handleUpdateItem(item.id, { version: e.target.value })}
+                    />
+                 </div>
+                 <div className="flex items-center justify-between gap-2">
+                    <span className="text-[9px] font-bold text-muted-foreground">Category</span>
+                    <Select value={item.category || "DOMAIN"} onValueChange={v => handleUpdateItem(item.id, { category: v })}>
+                      <SelectTrigger className="h-6 w-[100px] text-[10px] px-1.5 py-0 nodrag bg-background"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="DOMAIN" className="text-xs">Domain</SelectItem>
+                        <SelectItem value="INTEGRATION" className="text-xs">Integration</SelectItem>
+                        <SelectItem value="CDC" className="text-xs">CDC</SelectItem>
+                        <SelectItem value="AUDIT" className="text-xs">Audit</SelectItem>
+                      </SelectContent>
+                    </Select>
+                 </div>
+                 <div className="flex items-center justify-between gap-2">
+                    <span className="text-[9px] font-bold text-muted-foreground">Delivery</span>
+                    <Select value={item.delivery || "AT_LEAST_ONCE"} onValueChange={v => handleUpdateItem(item.id, { delivery: v })}>
+                      <SelectTrigger className="h-6 w-[110px] text-[10px] px-1.5 py-0 nodrag bg-background"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="AT_LEAST_ONCE" className="text-xs">At Least Once</SelectItem>
+                        <SelectItem value="AT_MOST_ONCE" className="text-xs">At Most Once</SelectItem>
+                        <SelectItem value="EXACTLY_ONCE" className="text-xs">Exactly Once</SelectItem>
+                      </SelectContent>
+                    </Select>
+                 </div>
+                </>
+             )}
 
              {(isPublished || isConsumed) && variant !== "definition" && (
                <div className="flex flex-col gap-1.5 border-t border-border/50 pt-2 mt-1">
                  <span className="text-[9px] font-bold text-muted-foreground">
-                   {isPublished ? "Publishes To" : "Consumes From"}
+                   {isPublished ? "Publishes To Broker" : "Consumes From Broker"}
                  </span>
-                  <Select value={item.targetNodeId || ""} onValueChange={v => handleUpdateItem(item.id, { targetNodeId: v })}>
+                  <Select value={item.brokerNodeId || ""} onValueChange={v => handleUpdateItem(item.id, { brokerNodeId: v, messagingResourceId: "" })}>
                     <SelectTrigger className="h-7 text-xs bg-background nodrag">
                       <SelectValue placeholder="Select Messaging Node" />
                     </SelectTrigger>
@@ -666,6 +693,26 @@ export const MessagingResourceRow = ({ item, isEditing, setEditingId, setEditing
                       ))}
                     </SelectContent>
                   </Select>
+                  
+                  {item.brokerNodeId ? (
+                    <Select value={item.messagingResourceId || ""} onValueChange={v => handleUpdateItem(item.id, { messagingResourceId: v })}>
+                      <SelectTrigger className="h-7 text-xs bg-background nodrag mt-1">
+                        <SelectValue placeholder="Select Topic / Queue / Stream" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableResources.length === 0 && <SelectItem value="none" disabled className="text-xs">No resources defined on broker</SelectItem>}
+                        {availableResources.map((res: any) => (
+                          <SelectItem key={res.id} value={res.id} className="text-xs">
+                            {res.name || "Untitled Resource"}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <div className="h-7 mt-1 text-[10px] text-muted-foreground flex items-center px-2 bg-background/50 border rounded-md border-dashed">
+                      Select a broker first
+                    </div>
+                  )}
                </div>
              )}
           </div>
@@ -803,7 +850,7 @@ const RouteGroupSection = ({
 }: any) => {
   const [collapsed, setCollapsed] = useState(false);
   const [editingName, setEditingName] = useState(!group.name);
-  const [nameValue, setNameValue] = useState(group.name);
+  const [nameValue, setNameValue] = useState(group.name || "");
   const [editingBasePath, setEditingBasePath] = useState(false);
   const [basePathValue, setBasePathValue] = useState(group.basePath || "");
 
@@ -892,16 +939,16 @@ const RouteGroupSection = ({
           </div>
 
           {editingName ? (
-            <Input
-              value={nameValue}
+            <LocalInput
+              value={nameValue || ""}
               onChange={(e) => setNameValue(e.target.value)}
               className="h-5 text-xs px-1 w-24 nodrag"
               autoFocus
-              onClick={(e) => e.stopPropagation()}
-              onKeyDown={(e) => {
+              onClick={(e: React.MouseEvent) => e.stopPropagation()}
+              onKeyDown={(e: React.KeyboardEvent) => {
                 if (e.key === "Enter") handleSaveName();
                 if (e.key === "Escape") {
-                  setNameValue(group.name);
+                  setNameValue(group.name || "");
                   setEditingName(false);
                 }
               }}
@@ -913,7 +960,7 @@ const RouteGroupSection = ({
               onClick={(e) => {
                 e.stopPropagation();
                 setEditingName(true);
-                setNameValue(group.name);
+                setNameValue(group.name || "");
               }}
             >
               {group.name || "Untitled Group"}
@@ -921,14 +968,14 @@ const RouteGroupSection = ({
           )}
 
           {editingBasePath ? (
-            <Input
+            <LocalInput
               value={basePathValue}
               onChange={(e) => setBasePathValue(e.target.value)}
               className="h-5 text-[10px] px-1 w-20 text-muted-foreground nodrag"
               placeholder="/path"
               autoFocus
-              onClick={(e) => e.stopPropagation()}
-              onKeyDown={(e) => {
+              onClick={(e: React.MouseEvent) => e.stopPropagation()}
+              onKeyDown={(e: React.KeyboardEvent) => {
                 if (e.key === "Enter") handleSaveBasePath();
                 if (e.key === "Escape") {
                   setBasePathValue(group.basePath || "");

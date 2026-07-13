@@ -35,6 +35,7 @@ import { nodeTypes } from "./backend-nodes/Nodes";
 import { ForeignKeyEdge } from "./backend-nodes/ForeignKeyEdge";
 import { HTTPConnectionEdge, MessagingEdge } from "./backend-nodes/CustomEdges";
 import { isValidConnection } from "@workspace/canvas";
+import { migrateNodeDataToV2 } from "@workspace/canvas/migrations";
 import ELK from "elkjs/lib/elk.bundled.js";
 import { Connection } from "@xyflow/react";
 import { ChatContainer } from "@/app/(protected)/_components/chat/chat-container";
@@ -242,7 +243,7 @@ function Flow({ projectId, view }: BackendCanvasProps) {
         width: row.data?.width,
         height: row.data?.height,
       };
-    });
+    }).map((node: any) => migrateNodeDataToV2(node as BackendNode));
     
     const store = useBackendCanvasStore.getState();
     const pendingNodeIds = new Set(store.pendingNodeUpserts.map((n) => n.id));

@@ -491,4 +491,3 @@ export const MessagingNode = ({ id, data, selected }: NodeProps<BackendNode>) =>
     </div>
   );
 };
-
