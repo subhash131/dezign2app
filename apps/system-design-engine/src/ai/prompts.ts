@@ -50,5 +50,8 @@ export const systemPromptTemplate = (
     
     VERY IMPORTANT: DO NOT add nodes that already exist in the Current Canvas State. Carefully review the Current Canvas State before calling add_node. If a component (e.g., a database, a service, a web client) is already present on the canvas, do not create it again. Only add missing components.
     
-    CRITICAL: Nodes MUST be connected. Use the 'add_edge' tool to draw lines between components that interact (e.g., WebClient to Service, Service to Database). You may need to create the nodes first, receive their generated IDs in the next turn, and then call add_edge to connect them. Pay close attention to the generated IDs for endpoints and events (visible in the Canvas State or tool results) to properly set sourceHandle and targetHandle.`;
+    CRITICAL: Nodes MUST be connected. Use the 'add_edge' tool to draw lines between components that interact. You may need to create the nodes first, receive their generated IDs in the next turn, and then call add_edge to connect them. 
+    - WebClient to Service: connects events to endpoints.
+    - Service to Database: YOU MUST connect the service endpoints to the database reference nodes if the endpoints read/write from the database. Use 'add_edge' tool with type 'connection', sourceHandle="endpoints-out-{id}", and targetHandle="database-target".
+    Pay close attention to the generated IDs for endpoints and events (visible in the Canvas State or tool results) to properly set sourceHandle and targetHandle.`;
 };

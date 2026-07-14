@@ -197,7 +197,7 @@ ${conversationContext}`
 
     const reflectionPrompt = new HumanMessage(
       hasFailure
-        ? `Some of your last tool calls failed. Review the tool error messages below, correct the parameters, and retry ONLY the failed operations using your tools. If you cannot fix it, explain briefly and stop. DO NOT hallucinate tools like 'add_entity' - use 'add_schema' or 'add_schema_group' instead.\n\nRecent tool results:\n${recentToolMsgs
+        ? `Some of your last tool calls failed. Review the tool error messages below, correct the parameters, and retry ONLY the failed operations using your tools. If the error is DUPLICATE_EDGE, it means the connection already exists and you can ignore it and stop. If you cannot fix an error, explain briefly and stop. DO NOT hallucinate tools like 'add_entity' - use 'add_schema' or 'add_schema_group' instead.\n\nRecent tool results:\n${recentToolMsgs
             .map((m) => m.content)
             .join("\n")}`
         : `Review the tool results below against the user's original request AND the approved
@@ -207,7 +207,10 @@ and do NOT call any tools. If something the plan specified is still missing from
 
 CRITICAL: DO NOT hallucinate tools like 'add_entity'. If you need to add a schema/entity, use the 'add_schema' or 'add_schema_group' tools.
 
-CRITICAL: Make sure nodes are actually connected! If you just created nodes, you must now use their IDs from the tool results below to call the 'add_edge' tool and connect them together (e.g. WebClient -> Service, Service -> Database). Pay close attention to the generated IDs for endpoints and events to properly set sourceHandle and targetHandle.
+CRITICAL: Make sure nodes are actually connected! If you just created nodes, you must now use their IDs from the tool results below to call the 'add_edge' tool and connect them together. 
+- You MUST connect WebClient events to Service endpoints.
+- You MUST connect Service endpoints to Database references (db_ref) if the service reads/writes data (use sourceHandle="endpoints-out-{id}" and targetHandle="database-target").
+Pay close attention to the generated IDs for endpoints and events to properly set sourceHandle and targetHandle.
 
 Current Canvas State:
 ${state.canvasStateContext ?? "Canvas is empty."}

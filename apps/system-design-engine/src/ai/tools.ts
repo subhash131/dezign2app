@@ -592,8 +592,8 @@ export const addClientNodeTool = tool(
       events: z.array(z.object({
         name: z.string().describe("Logical name of the action (e.g., 'sendMessage', 'fetchData')"),
         event: z.string().optional().describe("The DOM event that triggers it (e.g., 'click', 'submit', 'pageLoad')"),
-        targetNodeId: z.string().optional().describe("If this event triggers an API call, specify the target service node ID"),
-        targetEndpointId: z.string().optional().describe("If this event triggers an API call, specify the target endpoint ID on the service node"),
+        targetNodeId: z.string().optional().describe("If this event triggers an API call, specify the target service node ID to AUTOMATICALLY create an edge"),
+        targetEndpointId: z.string().optional().describe("If this event triggers an API call, specify the target endpoint ID on the service node to AUTOMATICALLY create an edge"),
       })).optional(),
     })
   }
