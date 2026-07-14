@@ -3,10 +3,11 @@ import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { stream } from 'hono/streaming';
 import { createGraph } from './ai/agent';
-import { formatToolCallLog } from './ai/utils';
+import { formatToolCallLog, formatCanvasState } from './ai/utils';
 import { HumanMessage, AIMessage } from '@langchain/core/messages';
 import { ConvexHttpClient } from 'convex/browser';
 import { api } from "@workspace/backend/_generated/api";
+import { SupermemorySync } from './knowledge/sync';
 
 const app = new Hono();
 
@@ -40,37 +41,7 @@ app.post('/canvas-ai', async (c) => {
     
     // Fetch canvas state directly from backend
     const elements = await client.query(api.canvas.getBackendElements, { projectId });
-    let backendCanvasState = "Canvas is empty.";
-    if (elements && elements.nodes && elements.nodes.length > 0) {
-      let output = "Backend Canvas Nodes:\n";
-      elements.nodes.forEach((n) => {
-        let extra = "";
-        if (n.type === "entity" && n.data.columns) {
-          extra += `\n  Columns (use for 'sourceHandle'/'targetHandle'): ` + (n.data.columns as any[]).map((c) => `${c.name} (ID: ${c.id})`).join(", ");
-        }
-        if (n.type === "service" && n.data.endpoints) {
-          extra += `\n  Endpoints: ` + (n.data.endpoints as any[]).map((ep) => `${ep.type} ${ep.name} (targetHandle="endpoints-in-${ep.id}", sourceHandle="endpoints-out-${ep.id}")`).join("\n    ");
-        }
-        if (n.type === "webClient" && n.data.events) {
-          extra += `\n  Events: ` + (n.data.events as any[]).map((ev) => `${ev.name} (sourceHandle="events-${ev.id}")`).join("\n    ");
-        }
-        if (n.type === "kafka" && n.data.topics) {
-          extra += `\n  Topics: ` + (n.data.topics as any[]).map((t) => `${t.name} (targetHandle="topics:in:${t.id}", sourceHandle="topics:out:${t.id}")`).join("\n    ");
-        }
-        output += `- [${n.type}] id: ${n.nodeId}, label: "${n.data.label}"${extra}\n`;
-      });
-
-      if (elements.edges && elements.edges.length > 0) {
-        output += "\nConnections:\n";
-        elements.edges.forEach((e) => {
-          const sourceNode = elements.nodes.find((n) => n.nodeId === e.source)?.data.label || e.source;
-          const targetNode = elements.nodes.find((n) => n.nodeId === e.target)?.data.label || e.target;
-          const label = e.data?.label ? ` (label: ${e.data.label})` : "";
-          output += `- ${sourceNode} -> ${targetNode} [${e.type}]${label}\n`;
-        });
-      }
-      backendCanvasState = output;
-    }
+    const backendCanvasState = formatCanvasState(elements);
     
     // Prepare initial state
     const formattedMessages = messages.map((m) => 
@@ -122,6 +93,92 @@ app.post('/canvas-ai', async (c) => {
 
   } catch (error) {
     console.error("API error:", error);
+    return c.text("Internal Server Error", 500);
+  }
+});
+
+app.post('/sync-supermemory', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { projectId, convexUrl: bodyConvexUrl, token } = body;
+
+    if (!projectId) {
+      return c.text("Missing projectId", 400);
+    }
+
+    const convexUrl = bodyConvexUrl || process.env.CONVEX_URL;
+    if (!convexUrl) {
+      return c.text("Missing CONVEX_URL environment variable", 500);
+    }
+
+    const client = new ConvexHttpClient(convexUrl);
+    if (token) client.setAuth(token);
+
+    // Fetch canvas state
+    const elements = await client.query(api.canvas.getBackendElements, { projectId });
+    
+    const nodes = (elements?.nodes || []).map((n: any) => {
+      let facts: string[] = [];
+      if (n.data?.description) facts.push(`Description: ${n.data.description}`);
+      if (n.type === "entity" && n.data.columns) {
+        facts.push(`Columns: ` + (n.data.columns as any[]).map(c => `${c.name}`).join(", "));
+      }
+      if (n.type === "service" && n.data.endpoints) {
+        facts.push(`Endpoints: ` + (n.data.endpoints as any[]).map(ep => `${ep.type} ${ep.name}`).join(", "));
+      }
+      if (n.type === "webClient" && n.data.events) {
+        facts.push(`Events: ` + (n.data.events as any[]).map(ev => `${ev.name}`).join(", "));
+      }
+      if (n.type === "kafka" && n.data.topics) {
+        facts.push(`Topics: ` + (n.data.topics as any[]).map(t => `${t.name}`).join(", "));
+      }
+
+      return {
+        projectId,
+        nodeId: n.nodeId,
+        type: n.type,
+        name: n.data?.label || n.nodeId,
+        facts,
+        version: 1
+      };
+    });
+
+    const edges = (elements?.edges || []).map((e: any) => {
+      return {
+        projectId,
+        edgeId: e.edgeId,
+        sourceId: e.source,
+        targetId: e.target,
+        relationType: e.type || 'connects',
+        version: 1
+      };
+    });
+
+    const supermemorySync = new SupermemorySync();
+    await supermemorySync.syncGraph(projectId, nodes, edges);
+
+    return c.json({ success: true });
+  } catch (error) {
+    console.error("Sync error:", error);
+    return c.text("Internal Server Error", 500);
+  }
+});
+
+app.post('/test-supermemory-fetch', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { projectId, query } = body;
+
+    if (!projectId || !query) {
+      return c.text("Missing projectId or query", 400);
+    }
+
+    const supermemorySync = new SupermemorySync();
+    const result = await supermemorySync.searchProjectContext(projectId, query);
+
+    return c.json(result);
+  } catch (error) {
+    console.error("Test fetch error:", error);
     return c.text("Internal Server Error", 500);
   }
 });

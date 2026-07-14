@@ -44,3 +44,37 @@ export function formatToolCallLog(name: string, args: any): string {
   }
   return `\n\`\`\`json\n${JSON.stringify(args, null, 2)}\n\`\`\`\n`;
 }
+
+export function formatCanvasState(elements: any): string {
+  let output = "Canvas is empty.";
+  if (elements && elements.nodes && elements.nodes.length > 0) {
+    output = "Backend Canvas Nodes:\n";
+    elements.nodes.forEach((n: any) => {
+      let extra = "";
+      if (n.type === "entity" && n.data.columns) {
+        extra += `\n  Columns (use for 'sourceHandle'/'targetHandle'): ` + (n.data.columns as any[]).map((c) => `${c.name} (ID: ${c.id})`).join(", ");
+      }
+      if (n.type === "service" && n.data.endpoints) {
+        extra += `\n  Endpoints: ` + (n.data.endpoints as any[]).map((ep) => `${ep.type} ${ep.name} (targetHandle="endpoints-in-${ep.id}", sourceHandle="endpoints-out-${ep.id}")`).join("\n    ");
+      }
+      if (n.type === "webClient" && n.data.events) {
+        extra += `\n  Events: ` + (n.data.events as any[]).map((ev) => `${ev.name} (sourceHandle="events-${ev.id}")`).join("\n    ");
+      }
+      if (n.type === "kafka" && n.data.topics) {
+        extra += `\n  Topics: ` + (n.data.topics as any[]).map((t) => `${t.name} (targetHandle="topics:in:${t.id}", sourceHandle="topics:out:${t.id}")`).join("\n    ");
+      }
+      output += `- [${n.type}] id: ${n.nodeId}, label: "${n.data.label}"${extra}\n`;
+    });
+
+    if (elements.edges && elements.edges.length > 0) {
+      output += "\nConnections:\n";
+      elements.edges.forEach((e: any) => {
+        const sourceNode = elements.nodes.find((n: any) => n.nodeId === e.source)?.data.label || e.source;
+        const targetNode = elements.nodes.find((n: any) => n.nodeId === e.target)?.data.label || e.target;
+        const label = e.data?.label ? ` (label: ${e.data.label})` : "";
+        output += `- ${sourceNode} -> ${targetNode} [${e.type}]${label}\n`;
+      });
+    }
+  }
+  return output;
+}

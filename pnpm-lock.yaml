@@ -109,6 +109,9 @@ importers:
       hono:
         specifier: ^4.6.14
         version: 4.11.9
+      supermemory:
+        specifier: ^4.24.12
+        version: 4.24.12
       zod:
         specifier: ^3.25.76
         version: 3.25.76
@@ -148,7 +151,7 @@ importers:
         version: 1.1.4(react@19.2.4)
       '@upstash/realtime':
         specifier: latest
-        version: 1.0.3(@upstash/redis@1.36.3)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(zod@3.25.76)
+        version: 1.0.4(@upstash/redis@1.36.3)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(zod@3.25.76)
       '@upstash/redis':
         specifier: ^1.36.3
         version: 1.36.3
@@ -308,7 +311,7 @@ importers:
         version: 1.26.0(@cfworker/json-schema@4.1.1)(zod@4.3.6)
       '@upstash/realtime':
         specifier: latest
-        version: 1.0.3(@upstash/redis@1.36.3)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(zod@4.3.6)
+        version: 1.0.4(@upstash/redis@1.36.3)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(zod@4.3.6)
       '@upstash/redis':
         specifier: ^1.36.3
         version: 1.36.3
@@ -3729,8 +3732,8 @@ packages:
     resolution: {integrity: sha512-WmoN8qaIAo7WTYWbAZuG8PYEhn5fkz7dZrqTBZ7dtt//lL2Gwms1IcnQ5yHqjDfX8Ft5j4YzDM23f87zBfDe9g==}
     deprecated: Potential CWE-502 - Update to 1.3.1 or higher
 
-  '@upstash/realtime@1.0.3':
-    resolution: {integrity: sha512-cF5O0GqTW+yfb1PUzAQTvC0LZccLg8kgFHMc4MxTpQxSV5SKSHr3jl5xogLd772CCO0of9awZdWnbtyH2FHhQg==}
+  '@upstash/realtime@1.0.4':
+    resolution: {integrity: sha512-MRedphuGyfIVhWYC8EG62MFVyavjpuQslLD5m1yxDyHdWKZOZs9a/2R2AHcI+ChJs14DfErd8INPWgLQsSJ2Gw==}
     peerDependencies:
       '@upstash/redis': '>=1.35.4'
       react: '>=16.8.0'
@@ -6609,6 +6612,10 @@ packages:
         optional: true
       babel-plugin-macros:
         optional: true
+
+  supermemory@4.24.12:
+    resolution: {integrity: sha512-xAFextuqk4JuoW33jJaFGqT1oMppN2IgfWUrV18Fv3qAAZ6M1SR1tb+7EBq8vrEQIx4iY2MQh5p+qnfL6lI8Yw==}
+    hasBin: true
 
   supports-color@7.2.0:
     resolution: {integrity: sha512-qpCAvRl9stuOHveKsn7HncJRvv501qIacKzQlO/+Lwxc9+0q2wLyv4Dfvt80/DPn2pqOBsJdDiogXGR9+OvwRw==}
@@ -11383,7 +11390,7 @@ snapshots:
 
   '@ungap/structured-clone@1.3.0': {}
 
-  '@upstash/realtime@1.0.3(@upstash/redis@1.36.3)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(zod@3.25.76)':
+  '@upstash/realtime@1.0.4(@upstash/redis@1.36.3)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(zod@3.25.76)':
     dependencies:
       '@upstash/redis': 1.36.3
       zod: 3.25.76
@@ -11391,7 +11398,7 @@ snapshots:
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
 
-  '@upstash/realtime@1.0.3(@upstash/redis@1.36.3)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(zod@4.3.6)':
+  '@upstash/realtime@1.0.4(@upstash/redis@1.36.3)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(zod@4.3.6)':
     dependencies:
       '@upstash/redis': 1.36.3
       zod: 4.3.6
@@ -15201,6 +15208,8 @@ snapshots:
     dependencies:
       client-only: 0.0.1
       react: 19.2.4
+
+  supermemory@4.24.12: {}
 
   supports-color@7.2.0:
     dependencies:

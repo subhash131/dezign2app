@@ -1,15 +1,18 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Network, Workflow, Sparkles, Database } from "lucide-react";
+import { ArrowLeft, Network, Workflow, Sparkles, Database, RefreshCw } from "lucide-react";
 import { BackendCanvasView } from "@/types/canvas";
 import { Button } from "@workspace/ui/components/button";
 import { Tabs, TabsList, TabsTrigger } from "@workspace/ui/components/tabs";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { toast } from "sonner";
+import { useAuth } from "@clerk/nextjs";
 
 interface CanvasToolbarProps {
   projectName: string;
+  projectId: string;
   view: BackendCanvasView;
   setView: (view: BackendCanvasView) => void;
   aiPanelOpen: boolean;
@@ -18,13 +21,37 @@ interface CanvasToolbarProps {
 
 export function CanvasToolbar({
   projectName,
+  projectId,
   view,
   setView,
   aiPanelOpen,
   setAiPanelOpen,
 }: CanvasToolbarProps) {
-  // We can hook into the store for auto-layout if needed
-  // const runAutoLayout = useBackendCanvasStore(s => s.runAutoLayout); // to be implemented
+  const [isSyncing, setIsSyncing] = useState(false);
+  const { getToken } = useAuth();
+
+  const handleSync = async () => {
+    setIsSyncing(true);
+    try {
+      const token = await getToken({ template: "convex" });
+      const res = await fetch("/api/sync-supermemory", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId, token }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to sync");
+      }
+
+      toast.success("Successfully synced context to Supermemory!");
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to sync context.");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   return (
     <div className="flex items-center justify-between h-14 px-4 border-b bg-background shrink-0">
@@ -55,7 +82,17 @@ export function CanvasToolbar({
         </Tabs>
       </div>
 
-      <div className="flex items-center">
+      <div className="flex items-center space-x-2">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-9"
+          onClick={handleSync}
+          disabled={isSyncing}
+        >
+          <RefreshCw className={`w-4 h-4 mr-2 ${isSyncing ? "animate-spin" : ""}`} />
+          {isSyncing ? "Syncing..." : "Sync Context"}
+        </Button>
         <Button
           variant={aiPanelOpen ? "secondary" : "ghost"}
           size="sm"

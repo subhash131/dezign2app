@@ -49,6 +49,7 @@ export default function ProjectCanvasPage({ params }: { params: Promise<{ projec
       <div className="flex flex-col h-full w-full relative">
         <CanvasToolbar
           projectName={project.name}
+          projectId={projectId}
           view={view}
           setView={setView}
           aiPanelOpen={aiPanelOpen}
