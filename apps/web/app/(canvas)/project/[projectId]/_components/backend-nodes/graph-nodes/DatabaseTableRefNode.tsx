@@ -8,7 +8,7 @@ import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useShallow } from "zustand/react/shallow";
 import { Textarea } from "@workspace/ui/components/textarea";
 
-export const DatabaseNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
+export const DatabaseTableRefNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const deleteNode = useBackendCanvasStore((s) => s.deleteNode);
   const edges = useBackendCanvasStore((s) => s.edges);
@@ -101,8 +101,8 @@ export const DatabaseNode = ({ id, data, selected }: NodeProps<BackendNode>) => 
         </div>
       </div>
 
-      <Handle type="target" position={Position.Left} className="w-2 h-2" style={{ top: '20px' }} />
-      <Handle type="source" position={Position.Right} className="w-2 h-2" style={{ top: '20px' }} />
+      <Handle type="target" position={Position.Left} id="database-target" className="w-2 h-2" style={{ top: '20px' }} />
+      <Handle type="source" position={Position.Right} id="database-source" className="w-2 h-2" style={{ top: '20px' }} />
     </div>
   );
 };

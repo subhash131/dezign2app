@@ -2,7 +2,8 @@ import 'dotenv/config';
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { stream } from 'hono/streaming';
-import { createGraph } from './ai/agent.js';
+import { createGraph } from './ai/agent';
+import { formatToolCallLog } from './ai/utils';
 import { HumanMessage, AIMessage } from '@langchain/core/messages';
 import { ConvexHttpClient } from 'convex/browser';
 import { api } from "@workspace/backend/_generated/api";
@@ -111,10 +112,8 @@ app.post('/canvas-ai', async (c) => {
           if (chunk.tool_calls && chunk.tool_calls.length > 0) {
              for (const call of chunk.tool_calls) {
                const name = call.name;
-               // We no longer need to translate and send CanvasOperation
-               // because the tools apply mutations directly to Convex.
-               // We stream a notification to the frontend that a tool was used along with its arguments.
-               await streamWriter.write(JSON.stringify({ type: 'tool_call', name, args: call.args }) + '\n');
+               const message = formatToolCallLog(name, call.args);
+               await streamWriter.write(JSON.stringify({ type: 'tool_call', name, message }) + '\n');
              }
           }
         }

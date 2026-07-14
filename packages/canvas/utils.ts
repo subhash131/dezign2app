@@ -51,9 +51,9 @@ export function classifyHandle(
 
   if (id.startsWith("actions-")) return "action-target";
 
-  if (nodeType === "database") {
-    if (handleDirection === "target") return "database-target";
-    if (handleDirection === "source") return "database-source";
+  if (nodeType === "database" || nodeType === "db_ref") {
+    if (id.startsWith("database-target") || handleDirection === "target") return "database-target";
+    if (id.startsWith("database-source") || handleDirection === "source") return "database-source";
   }
 
   if (["queue", "eventstream", "pubsub", "kafka", "redis-streams", "sqs", "redis-pubsub"].includes(nodeType)) {

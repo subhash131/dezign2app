@@ -91,6 +91,14 @@ export const simpleDataSchema = z
   })
   .strict();
 
+export const dbRefDataSchema = z
+  .object({
+    label: z.string().optional(),
+    description: z.string().optional(),
+    tableRef: z.string().optional(),
+  })
+  .strict();
+
 export const externalDataSchema = simpleDataSchema.extend({
   baseUrl: z.string().optional(),
   actions: z.array(resourceItemSchema).optional(),
@@ -190,7 +198,7 @@ export const nodeDataSchemas: Record<string, z.ZodTypeAny> = {
   "redis-streams": redisStreamsDataSchema,
   entity: entityDataSchema,
   service: serviceDataSchema,
-  database: simpleDataSchema,
+  db_ref: dbRefDataSchema,
   webClient: simpleDataSchema,
   external: externalDataSchema,
   group: simpleDataSchema,

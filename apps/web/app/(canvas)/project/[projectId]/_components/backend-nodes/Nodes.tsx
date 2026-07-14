@@ -541,7 +541,7 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
 // Import Graph Nodes
 import { 
   ServiceNode, 
-  DatabaseNode, 
+  DatabaseTableRefNode, 
   QueueNode,
   PubSubNode,
   EventStreamNode,
@@ -557,7 +557,7 @@ import { Badge } from "@workspace/ui/components/badge";
 // Map for React Flow
 export const nodeTypes = {
   service: ServiceNode,
-  database: DatabaseNode,
+  db_ref: DatabaseTableRefNode,
   queue: QueueNode,
   pubsub: PubSubNode,
   eventstream: EventStreamNode,

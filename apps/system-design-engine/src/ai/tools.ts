@@ -13,13 +13,14 @@ import {
   redisPubSubDataSchema,
   redisStreamsDataSchema,
   externalDataSchema,
+  dbRefDataSchema,
   nodeDataSchemas,
   assignResourceIds,
 } from "./schemas";
 
 export const addNodeSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("service"), label: z.string(), data: simpleDataSchema.optional() }),
-  z.object({ type: z.literal("database"), label: z.string(), data: simpleDataSchema.optional() }),
+  z.object({ type: z.literal("db_ref"), label: z.string(), data: dbRefDataSchema.optional() }),
   z.object({ type: z.literal("webClient"), label: z.string(), data: simpleDataSchema.optional() }),
   z.object({ type: z.literal("external"), label: z.string(), data: externalDataSchema.optional() }),
   z.object({ type: z.literal("group"), label: z.string(), data: simpleDataSchema.optional() }),
@@ -81,7 +82,7 @@ export const addNodeTool = tool(
     name: "add_node",
     description: `Add a node to the backend canvas. Node types:
 - 'service': A backend API / microservice
-- 'database': A database reference node
+- 'db_ref': A database table reference node
 - 'sqs': Amazon SQS broker (data.queues, data.sqsBroker)
 - 'redis-pubsub': Redis Pub/Sub broker (data.channels, data.redisPubSubBroker)
 - 'kafka': Apache Kafka broker (data.topics, data.kafkaBroker)
@@ -769,4 +770,46 @@ export const addSchemaTool = tool(
   }
 );
 
-export const tools = [addNodeTool, updateNodeTool, deleteNodeTool, addEdgeTool, deleteEdgeTool, addServiceNodeTool, addKafkaNodeTool, addClientNodeTool, addSchemaGroupTool, addSchemaTool];
+export const addTableRefNodeTool = tool(
+  async (input, config) => {
+    const { label, description, tableRef } = input;
+    const state = config.configurable?.state as typeof GraphAnnotation.State;
+    if (!state?.projectId) return "Error: projectId missing";
+    const convex = getConvexClient(state);
+
+    const nodeId = `node-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const offsetX = Math.floor(Math.random() * 600) - 300;
+    const offsetY = Math.floor(Math.random() * 600) - 300;
+    const position = state.viewportCenter
+      ? { x: state.viewportCenter.x + offsetX, y: state.viewportCenter.y + offsetY }
+      : { x: 100 + offsetX, y: 100 + offsetY };
+    const fractionalIndex = "a0" + Date.now() + Math.random().toString(36).slice(2, 6);
+
+    try {
+      await convex.mutation(api.canvas.upsertBackendNode, {
+        projectId: state.projectId as Id<"projects">,
+        nodeId,
+        type: "db_ref",
+        position,
+        data: { label, description, tableRef, graphPosition: position },
+        fractionalIndex,
+      });
+
+      return `Added table reference node '${label}' with ID ${nodeId}`;
+    } catch (error: unknown) {
+      const e = error as Error;
+      return `Failed to add table reference node: ${e.message || String(error)}`;
+    }
+  },
+  {
+    name: "add_table_ref_node",
+    description: "Add a database table reference node to the canvas. Use this to represent a reference to an existing database table (entity) so services can connect to it.",
+    schema: z.object({
+      label: z.string().describe("Name of the table reference (e.g. 'Users Table')"),
+      description: z.string().optional(),
+      tableRef: z.string().optional().describe("The ID of the target entity node this references, if known"),
+    })
+  }
+);
+
+export const tools = [addNodeTool, updateNodeTool, deleteNodeTool, addEdgeTool, deleteEdgeTool, addServiceNodeTool, addKafkaNodeTool, addClientNodeTool, addSchemaGroupTool, addSchemaTool, addTableRefNodeTool];
