@@ -359,6 +359,26 @@ Assumptions: ${req.assumptions.join("; ") || "none"}
 
 ${isRevision ? `Previously Proposed Plan:\n${priorPlan.content}` : ""}
 
+SCALE THE ARCHITECTURE TO THE STATED REQUIREMENTS — this overrides any default instinct
+toward a "textbook" or "impressive" design:
+- Infer an approximate scale tier from the requirements (e.g. DAU/traffic figures, read/write
+  ratio, number of features). If no scale is given, assume small/MVP scale rather than defaulting
+  to enterprise-scale patterns.
+- For small scale (roughly hundreds to low tens-of-thousands of users, or whenever the
+  requirements don't call for independent scaling of separate concerns): prefer a single
+  monolithic service over microservices. Only split into multiple services if the
+  requirements name distinct domains that need to scale, deploy, or fail independently.
+- Only introduce container orchestration (Kubernetes) if the stated scale or requirements
+  explicitly justify it (e.g. multi-region, elastic autoscaling, many independently-scaled
+  services). Otherwise prefer a single container/VM/managed platform deployment.
+- Only introduce a caching layer (Redis, CDN edge cache, etc.) if the requirements name a
+  latency target or read volume that a plain database query wouldn't satisfy. Do not add
+  caching "just in case."
+- Only introduce message brokers/queues if the requirements involve asynchronous processing,
+  fan-out, or decoupled services. Do not add messaging infra for a simple synchronous CRUD flow.
+- If you are unsure whether a piece of infrastructure is justified by the requirements, leave
+  it out rather than including it for completeness.
+
 FORMAT — this is as important as the content:
 - Target 150-250 words total. Hard cap 350.
 - One short bullet line per item. No paragraphs, no markdown tables, no sub-bullets more
@@ -371,14 +391,19 @@ FORMAT — this is as important as the content:
   "a suitable database" — but state each in a single clause, not a justified paragraph.
 
 CONTENT — cover only what applies, each as terse bullets:
-- **Architecture**: one line naming the pattern (monolith/microservices/serverless/event-driven).
+- **Architecture**: one line naming the pattern (monolith/microservices/serverless/event-driven),
+  chosen per the scaling rules above.
 - **Services**: one line per service — name, tech stack, one-clause responsibility, 2-4
-  representative endpoints as "METHOD /path" (no request/response bodies here).
+  representative endpoints as "METHOD /path" (no request/response bodies here). For a
+  monolith, this is a single line for the one service.
 - **Data storage**: one line per store — engine + what it holds.
-- **Messaging** (only if needed): one line — which broker + what flows through it.
-- **Caching** (only if needed): one line — what's cached.
+- **Messaging** (only if the async/decoupling rule above applies): one line — which broker
+  + what flows through it.
+- **Caching** (only if the latency/volume rule above applies): one line — what's cached.
 - **Client**: one line — framework + how it talks to the backend.
-- **Ops**: one line — scaling/deployment, one line — security/auth.
+- **Ops**: EXACTLY two lines, no more — one line for scaling/deployment, one line for
+  security/auth. Do NOT add a monitoring/observability line, a CI/CD line, or any other
+  Ops line beyond these two unless the user's stated requirements explicitly asked for it.
 
 End with a single short line asking the user to approve or say what to change. Do not
 restate the requirements back to them.`

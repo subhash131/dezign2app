@@ -58,7 +58,20 @@ export const addNodeTool = tool(
         data: processedData,
         fractionalIndex,
       });
-      return `Added node ${label} of type ${type} with ID ${nodeId}`;
+      let resultStr = `Added node ${label} of type ${type} with ID ${nodeId}`;
+      if (type === "kafka" && "topics" in processedData && Array.isArray(processedData.topics)) {
+         resultStr += `\nTopics:\n` + processedData.topics.map((t: {name?: string; id?: string}) => `- ${t.name || 'Untitled'}: targetHandle="topics:in:${t.id}", sourceHandle="topics:out:${t.id}"`).join("\n");
+      }
+      if (type === "sqs" && "queues" in processedData && Array.isArray(processedData.queues)) {
+         resultStr += `\nQueues:\n` + processedData.queues.map((t: {name?: string; id?: string}) => `- ${t.name || 'Untitled'}: targetHandle="queues:in:${t.id}", sourceHandle="queues:out:${t.id}"`).join("\n");
+      }
+      if (type === "redis-pubsub" && "channels" in processedData && Array.isArray(processedData.channels)) {
+         resultStr += `\nChannels:\n` + processedData.channels.map((t: {name?: string; id?: string}) => `- ${t.name || 'Untitled'}: targetHandle="channels:in:${t.id}", sourceHandle="channels:out:${t.id}"`).join("\n");
+      }
+      if (type === "redis-streams" && "streams" in processedData && Array.isArray(processedData.streams)) {
+         resultStr += `\nStreams:\n` + processedData.streams.map((t: {name?: string; id?: string}) => `- ${t.name || 'Untitled'}: targetHandle="streams:in:${t.id}", sourceHandle="streams:out:${t.id}"`).join("\n");
+      }
+      return resultStr;
     } catch (error: unknown) {
       const e = error as Error;
       return `Failed to add node: ${e.message || String(error)}`;
@@ -201,8 +214,8 @@ export const addEdgeTool = tool(
     description: `Connect two nodes on the backend canvas. Both nodes must already exist.
 Important handle rules:
 - Client to Service: sourceHandle="events-{id}" -> targetHandle="endpoints-in-{id}" (type: "connection")
-- Service to Broker (Queue/Kafka/PubSub): sourceHandle="publishedEvents-out-{id}" or "endpoints-out-{id}" -> targetHandle is omitted/empty (type: "message")
-- Broker to Service: sourceHandle is omitted/empty -> targetHandle="consumedEvents-in-{id}" (type: "message")
+- Service to Broker: sourceHandle="publishedEvents-out-{id}" -> targetHandle="topics:in:{topicId}" (or queues:in:{id}, streams:in:{id}, channels:in:{id}) (type: "message")
+- Broker to Service: sourceHandle="topics:out:{topicId}" (or queues:out:{id}, streams:out:{id}, channels:out:{id}) -> targetHandle="consumedEvents-in-{id}" (type: "message")
 - Service to Service: sourceHandle="endpoints-out-{id}" -> targetHandle="endpoints-in-{id}" (type: "connection")
 - Service to External API: sourceHandle="endpoints-out-{id}" -> targetHandle="actions-{id}" (type: "connection")
 - DB Entity to DB Entity: sourceHandle="source-{id}" -> targetHandle="target-{id}" (type: "foreign-key")
@@ -309,7 +322,7 @@ export const addServiceNodeTool = tool(
                 source: nodeId,
                 target: pe.targetNodeId,
                 sourceHandle: `publishedEvents-out-${pe.id}`,
-                targetHandle: undefined,
+                targetHandle: pe.targetResourceId ? `topics:in:${pe.targetResourceId}` : undefined,
                 type: EDGE_TYPE_MAP["published-event-out→resource-def-in"] || "message",
               });
             }
@@ -322,7 +335,7 @@ export const addServiceNodeTool = tool(
           edgesToCreate.push({
             source: ce.targetNodeId,
             target: nodeId,
-            sourceHandle: undefined,
+            sourceHandle: ce.targetResourceId ? `topics:out:${ce.targetResourceId}` : undefined,
             targetHandle: `consumedEvents-in-${ce.id}`,
             type: EDGE_TYPE_MAP["resource-def-out→consumed-event-in"] || "message",
           });
@@ -335,7 +348,7 @@ export const addServiceNodeTool = tool(
             source: nodeId,
             target: pe.targetNodeId,
             sourceHandle: `publishedEvents-out-${pe.id}`,
-            targetHandle: undefined,
+            targetHandle: pe.targetResourceId ? `topics:in:${pe.targetResourceId}` : undefined,
             type: EDGE_TYPE_MAP["published-event-out→resource-def-in"] || "message",
           });
         }
@@ -359,6 +372,12 @@ export const addServiceNodeTool = tool(
       let resultStr = `Added service node ${label} with ID ${nodeId} and ${edgesToCreate.length} event edges.`;
       if (processedEndpoints.length > 0) {
         resultStr += `\nEndpoints:\n` + processedEndpoints.map((ep) => `- ${ep.type} ${ep.name}: targetHandle="endpoints-in-${ep.id}", sourceHandle="endpoints-out-${ep.id}"`).join("\n");
+      }
+      if (processedConsumedEvents.length > 0) {
+        resultStr += `\nConsumed Events:\n` + processedConsumedEvents.map((ce) => `- ${ce.name}: targetHandle="consumedEvents-in-${ce.id}"`).join("\n");
+      }
+      if (processedPublishedEvents.length > 0) {
+        resultStr += `\nPublished Events:\n` + processedPublishedEvents.map((pe) => `- ${pe.name}: sourceHandle="publishedEvents-out-${pe.id}"`).join("\n");
       }
       return resultStr;
     } catch (error: unknown) {
@@ -385,7 +404,8 @@ export const addServiceNodeTool = tool(
           name: z.string(),
           kind: z.string().optional(),
           schema: z.string().optional(),
-          targetNodeId: z.string().optional().describe("Target node ID to automatically connect to (e.g. queue or pubsub node)")
+          targetNodeId: z.string().optional().describe("Target node ID to automatically connect to (e.g. queue or pubsub node)"),
+          targetResourceId: z.string().optional().describe("The specific topic/queue/stream ID on the broker to connect to")
         })).optional()
       })).optional(),
       consumedEvents: z.array(z.object({
@@ -393,13 +413,15 @@ export const addServiceNodeTool = tool(
         kind: z.string().optional(),
         schema: z.string().optional(),
         handlerLogic: z.string().optional(),
-        targetNodeId: z.string().optional().describe("Source node ID to automatically connect from (e.g. queue or pubsub node)")
+        targetNodeId: z.string().optional().describe("Source node ID to automatically connect from (e.g. queue or pubsub node)"),
+        targetResourceId: z.string().optional().describe("The specific topic/queue/stream ID on the broker to connect to")
       })).optional(),
       publishedEvents: z.array(z.object({
         name: z.string(),
         kind: z.string().optional(),
         schema: z.string().optional(),
-        targetNodeId: z.string().optional().describe("Target node ID to automatically connect to (e.g. queue or pubsub node)")
+        targetNodeId: z.string().optional().describe("Target node ID to automatically connect to (e.g. queue or pubsub node)"),
+        targetResourceId: z.string().optional().describe("The specific topic/queue/stream ID on the broker to connect to")
       })).optional(),
       inputs: z.array(z.any()).optional(),
       outputs: z.array(z.any()).optional(),
@@ -444,7 +466,11 @@ export const addKafkaNodeTool = tool(
         fractionalIndex,
       });
 
-      return `Added kafka node ${label} with ID ${nodeId} and ${topics?.length || 0} topics`;
+      let resultStr = `Added kafka node ${label} with ID ${nodeId} and ${topics?.length || 0} topics`;
+      if ("topics" in processedData && Array.isArray(processedData.topics) && processedData.topics.length) {
+         resultStr += `\nTopics:\n` + processedData.topics.map((t: {name?: string; id?: string}) => `- ${t.name || 'Untitled'}: targetHandle="topics:in:${t.id}", sourceHandle="topics:out:${t.id}"`).join("\n");
+      }
+      return resultStr;
     } catch (error: unknown) {
       const e = error as Error;
       return `Failed to add kafka node: ${e.message || String(error)}`;
