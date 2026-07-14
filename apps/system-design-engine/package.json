@@ -5,6 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "mcp": "tsx src/mcp/index.ts",
     "build": "tsc",
     "start": "tsx src/index.ts",
     "test": "vitest run"

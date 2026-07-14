@@ -105,6 +105,9 @@ app.post('/sync-supermemory', async (c) => {
     if (!projectId) {
       return c.text("Missing projectId", 400);
     }
+    if (!token) {
+      return c.text("Missing authentication token", 401);
+    }
 
     const convexUrl = bodyConvexUrl || process.env.CONVEX_URL;
     if (!convexUrl) {
@@ -112,52 +115,86 @@ app.post('/sync-supermemory', async (c) => {
     }
 
     const client = new ConvexHttpClient(convexUrl);
-    if (token) client.setAuth(token);
+    client.setAuth(token);
 
-    // Fetch canvas state
-    const elements = await client.query(api.canvas.getBackendElements, { projectId });
+    // Fetch canvas state. If the user doesn't have access to this project,
+    // this query should fail or return null, serving as our authz check.
+    let elements;
+    try {
+      elements = await client.query(api.canvas.getBackendElements, { projectId });
+    } catch (e) {
+      return c.text("Unauthorized or project not found", 403);
+    }
+
+    if (!elements) {
+      return c.text("Project not found", 404);
+    }
     
-    const nodes = (elements?.nodes || []).map((n: any) => {
-      let facts: string[] = [];
-      if (n.data?.description) facts.push(`Description: ${n.data.description}`);
-      if (n.type === "entity" && n.data.columns) {
-        facts.push(`Columns: ` + (n.data.columns as any[]).map(c => `${c.name}`).join(", "));
+    // Fetch architecture document
+    const existingPlan = await client.query(api.requirements.getPlan, { projectId });
+    const architectureContent = existingPlan?.content || "";
+
+    const rawNodes = elements.nodes || [];
+    const rawEdges = elements.edges || [];
+
+    const nodeNameMap = new Map<string, string>();
+    for (const n of rawNodes) {
+      nodeNameMap.set(n.nodeId, n.data?.label || n.nodeId);
+    }
+
+    const edgeDeps = new Map<string, string[]>(); // nodeId -> array of dependency nodeIds
+    const edgeDepsBy = new Map<string, string[]>(); // nodeId -> array of dependent nodeIds
+    
+    for (const e of rawEdges) {
+       if (!edgeDeps.has(e.source)) edgeDeps.set(e.source, []);
+       edgeDeps.get(e.source)!.push(e.target);
+       
+       if (!edgeDepsBy.has(e.target)) edgeDepsBy.set(e.target, []);
+       edgeDepsBy.get(e.target)!.push(e.source);
+    }
+
+    const nodes = rawNodes.map((n) => {
+      const facts: string[] = [];
+      const responsibilities: string[] = [];
+      
+      if (n.data?.description) {
+        responsibilities.push(n.data.description as string);
       }
-      if (n.type === "service" && n.data.endpoints) {
-        facts.push(`Endpoints: ` + (n.data.endpoints as any[]).map(ep => `${ep.type} ${ep.name}`).join(", "));
+      
+      if (n.type === "entity" && Array.isArray(n.data?.columns)) {
+        facts.push(`Columns:\n` + n.data.columns.map((c: { name: string }) => `- ${c.name}`).join("\n"));
       }
-      if (n.type === "webClient" && n.data.events) {
-        facts.push(`Events: ` + (n.data.events as any[]).map(ev => `${ev.name}`).join(", "));
+      if (n.type === "service" && Array.isArray(n.data?.endpoints)) {
+        facts.push(`Endpoints:\n` + n.data.endpoints.map((ep: { type: string; name: string }) => `- ${ep.type} ${ep.name}`).join("\n"));
       }
-      if (n.type === "kafka" && n.data.topics) {
-        facts.push(`Topics: ` + (n.data.topics as any[]).map(t => `${t.name}`).join(", "));
+      if (n.type === "webClient" && Array.isArray(n.data?.events)) {
+        facts.push(`Events:\n` + n.data.events.map((ev: { name: string }) => `- ${ev.name}`).join("\n"));
       }
+      if (n.type === "kafka" && Array.isArray(n.data?.topics)) {
+        facts.push(`Topics:\n` + n.data.topics.map((t: { name: string }) => `- ${t.name}`).join("\n"));
+      }
+
+      const dependencies = (edgeDeps.get(n.nodeId) || []).map(id => nodeNameMap.get(id) || id);
+      const dependents = (edgeDepsBy.get(n.nodeId) || []).map(id => nodeNameMap.get(id) || id);
 
       return {
         projectId,
         nodeId: n.nodeId,
-        type: n.type,
-        name: n.data?.label || n.nodeId,
+        kind: n.type || "unknown",
+        name: nodeNameMap.get(n.nodeId)!,
+        dependencies,
+        dependents,
+        responsibilities,
         facts,
         version: 1
       };
     });
 
-    const edges = (elements?.edges || []).map((e: any) => {
-      return {
-        projectId,
-        edgeId: e.edgeId,
-        sourceId: e.source,
-        targetId: e.target,
-        relationType: e.type || 'connects',
-        version: 1
-      };
-    });
-
+    const syncId = Date.now().toString();
     const supermemorySync = new SupermemorySync();
-    await supermemorySync.syncGraph(projectId, nodes, edges);
+    await supermemorySync.syncGraph(projectId, syncId, nodes, architectureContent);
 
-    return c.json({ success: true });
+    return c.json({ success: true, syncId });
   } catch (error) {
     console.error("Sync error:", error);
     return c.text("Internal Server Error", 500);
@@ -174,7 +211,7 @@ app.post('/test-supermemory-fetch', async (c) => {
     }
 
     const supermemorySync = new SupermemorySync();
-    const result = await supermemorySync.searchProjectContext(projectId, query);
+    const result = await supermemorySync.buildCodingContext(projectId, query);
 
     return c.json(result);
   } catch (error) {

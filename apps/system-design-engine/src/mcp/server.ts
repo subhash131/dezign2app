@@ -1,52 +1,46 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { GraphTraverser } from "../graph/traverser";
-import { GraphRepository } from "../graph/repository";
+import { SupermemorySync } from "../knowledge/sync.js";
 
-export function createMcpServer(repo: GraphRepository) {
+export function createMcpServer() {
   const server = new McpServer({
     name: "System Design Engine",
     version: "1.0.0",
   });
 
-  const traverser = new GraphTraverser(repo);
+  const syncEngine = new SupermemorySync();
 
-  server.tool(
-    "trace_upstream",
-    "Find all upstream dependencies of a node",
+  server.registerTool(
+    "get_system_design_context",
     {
-      projectId: z.string(),
-      targetId: z.string()
+      description: "Retrieve semantic architectural context (services, entities, clients, architecture plan) for a given project. Use this to understand the system design before writing code.",
+      inputSchema: {
+        projectId: z.string().describe("The ID of the project to retrieve context for"),
+        query: z.string().describe("The specific query to search the architecture for (e.g. 'How does authentication work?' or 'What databases exist?')")
+      }
     },
-    async ({ projectId, targetId }) => {
-      const dependencies = await traverser.traceUpstream(projectId, targetId);
-      return {
-        content: [{ type: "text", text: JSON.stringify(dependencies, null, 2) }]
-      };
-    }
-  );
-
-  server.tool(
-    "trace_downstream",
-    "Find all downstream dependencies of a node",
-    {
-      projectId: z.string(),
-      sourceId: z.string()
-    },
-    async ({ projectId, sourceId }) => {
-      const dependencies = await traverser.traceDownstream(projectId, sourceId);
-      return {
-        content: [{ type: "text", text: JSON.stringify(dependencies, null, 2) }]
-      };
+    async ({ projectId, query }) => {
+      try {
+        const context = await syncEngine.buildCodingContext(projectId, query);
+        return {
+          content: [{ type: "text", text: JSON.stringify(context, null, 2) }]
+        };
+      } catch (error: any) {
+         return {
+            content: [{ type: "text", text: `Error retrieving context: ${error.message}` }],
+            isError: true
+         }
+      }
     }
   );
 
   return server;
 }
 
-export async function startStdioServer(repo: GraphRepository) {
-  const server = createMcpServer(repo);
+export async function startStdioServer() {
+  const server = createMcpServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
+  console.error("System Design Engine MCP Server running on stdio");
 }
