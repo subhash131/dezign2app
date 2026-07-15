@@ -89,19 +89,19 @@ export function CanvasToolbar({
       </div>
       <div className="flex items-center justify-center flex-1">
         <Tabs value={view} onValueChange={(v) => setView(v as BackendCanvasView)} className="w-[300px]">
-          <TabsList className="grid w-full grid-cols-3 h-9">
-            <TabsTrigger value="graph" className="text-xs">
+          <TabsList className="grid w-fit grid-cols-2 h-9">
+            <TabsTrigger value="graph" className={`${view === "graph" ? "text-foreground!" : ""}`}>
               <Network className="w-3 h-3 mr-1.5" />
               Graph
             </TabsTrigger>
-            <TabsTrigger value="sequence" className="text-xs">
-              <Workflow className="w-3 h-3 mr-1.5" />
-              Sequence
-            </TabsTrigger>
-            <TabsTrigger value="schema" className="text-xs">
+            <TabsTrigger value="schema" className={`${view === "schema" ? "text-foreground!" : ""}`}>
               <Database className="w-3 h-3 mr-1.5" />
               Schema
             </TabsTrigger>
+            {/* <TabsTrigger value="sequence" className="text-xs">
+              <Workflow className="w-3 h-3 mr-1.5" />
+              Sequence
+            </TabsTrigger> */}
           </TabsList>
         </Tabs>
       </div>

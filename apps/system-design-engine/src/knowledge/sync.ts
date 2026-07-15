@@ -249,5 +249,28 @@ export class SupermemorySync {
       throw error;
     }
   }
+
+  async searchMemories(projectId: string, query: string) {
+    console.log(`Searching memories for ${projectId} with query: ${query}`);
+    try {
+      const response = await this.client.search.memories({
+        q: query,
+        containerTag: projectId,
+        filters: {
+          AND: [
+            {
+              key: "projectId",
+              value: projectId,
+              filterType: "metadata"
+            }
+          ]
+        }
+      });
+      return response.results || [];
+    } catch (error) {
+      console.error(`Failed to search memories for ${projectId}:`, error);
+      throw error;
+    }
+  }
 }
 

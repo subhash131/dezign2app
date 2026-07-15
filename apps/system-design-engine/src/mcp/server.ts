@@ -35,6 +35,30 @@ export function createMcpServer() {
     }
   );
 
+  server.registerTool(
+    "search_system_design_memories",
+    {
+      description: "Perform a raw search against the architecture knowledge base for a project. Returns raw matching chunks and metadata.",
+      inputSchema: {
+        projectId: z.string().describe("The ID of the project to search"),
+        query: z.string().describe("The search query string")
+      }
+    },
+    async ({ projectId, query }) => {
+      try {
+        const results = await syncEngine.searchMemories(projectId, query);
+        return {
+          content: [{ type: "text", text: JSON.stringify(results, null, 2) }]
+        };
+      } catch (error: any) {
+         return {
+            content: [{ type: "text", text: `Error searching memories: ${error.message}` }],
+            isError: true
+         }
+      }
+    }
+  );
+
   return server;
 }
 
