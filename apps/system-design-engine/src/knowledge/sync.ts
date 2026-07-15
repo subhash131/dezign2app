@@ -1,14 +1,11 @@
 import { NodeMemory } from './documents';
 import { Supermemory } from 'supermemory';
 
-interface SearchResultChunk {
-  content: string;
-  score: number;
-}
-
 interface SearchResult {
-  documentId?: string;
-  chunks?: SearchResultChunk[];
+  id?: string;
+  memory?: string;
+  chunk?: string;
+  similarity?: number;
   metadata?: {
     projectId?: string;
     syncId?: string;
@@ -16,11 +13,12 @@ interface SearchResult {
     nodeId?: string;
     [key: string]: string | undefined;
   };
+  relatedMemories?: SearchResult[];
 }
 
 interface ChunkMatch {
   content: string;
-  score: number;
+  similarity: number;
   metadata?: SearchResult['metadata'];
 }
 
@@ -51,12 +49,16 @@ export class SupermemorySync {
         await this.client.documents.add({
           content: `System Architecture Plan:\n\n${architectureContent}`,
           containerTag: projectId,
+          dreaming: "instant",
+          include:{
+            relatedMemories: true,
+          },  
           metadata: {
             projectId,
             syncId,
             kind: 'architecture'
           }
-        });
+        }as any);
       }
 
       console.log(`Successfully synced graph for ${projectId} to Supermemory.`);
@@ -86,13 +88,17 @@ export class SupermemorySync {
     await this.client.documents.add({
       content: content.trim(),
       containerTag: node.projectId,
+      dreaming: "instant",
+      include:{
+        relatedMemories: true,
+      },
       metadata: {
         projectId: node.projectId,
         nodeId: node.nodeId,
         syncId,
         kind: node.kind,
       }
-    });
+    } as any);
   }
 
 
@@ -106,9 +112,9 @@ export class SupermemorySync {
 
       while (hasMore && loopCount < 20) {
         loopCount++;
-        const response = await this.client.search.documents({
+        const response = await this.client.search.memories({
           q: "*", 
-          containerTags: [projectId],
+          containerTag: projectId,
           filters: {
             AND: [
               {
@@ -125,16 +131,16 @@ export class SupermemorySync {
           break;
         }
 
-        const results = response.results;
+        const results = response.results as SearchResult[];
         console.log(`Deleting ${results.length} documents for project ${projectId} (Page ${loopCount})...`);
 
         for (const doc of results) {
-          if (doc.documentId) {
+          if (doc.id) {
             try {
-              await (this.client.documents as unknown as { delete: (id: string) => Promise<void> }).delete(doc.documentId); 
+              await (this.client.documents as unknown as { delete: (id: string) => Promise<void> }).delete(doc.id); 
               totalDeleted++;
             } catch(e) {
-              console.error(`Failed to delete document ${doc.documentId}`, e);
+              console.error(`Failed to delete document ${doc.id}`, e);
             }
           }
         }
@@ -150,9 +156,14 @@ export class SupermemorySync {
   async buildCodingContext(projectId: string, query: string) {
     console.log(`Building coding context for ${projectId} with query: ${query}`);
     try {
-      const response = await this.client.search.documents({
+      const response = await this.client.search.memories({
         q: query,
-        containerTags: [projectId],
+        containerTag: projectId,
+        include: {
+          relatedMemories: true,
+          documents: false,
+          summaries: false,
+        },
         filters: {
           AND: [
             {
@@ -168,19 +179,41 @@ export class SupermemorySync {
         return { services: [], entities: [], clients: [], architecture: "", resources: [] };
       }
 
-      // 1. Flatten all chunks
-      const allChunks: ChunkMatch[] = (response.results as SearchResult[]).flatMap((result) => 
-        (result.chunks || []).map((chunk) => ({
-          content: chunk.content,
-          score: chunk.score,
-          metadata: result.metadata
-        }))
-      );
+      // 1. Flatten all results and related memories
+      const results = response.results as SearchResult[];
+      const allMatches: ChunkMatch[] = [];
 
-      // 2. Filter by relevance score (e.g. > 0.5)
-      const strongMatches = allChunks.filter((c) => c.score > 0.5);
+      for (const result of results) {
+        const content = result.memory || result.chunk || "";
+        const similarity = result.similarity ?? 0;
+        
+        if (content) {
+          allMatches.push({
+            content,
+            similarity,
+            metadata: result.metadata
+          });
+        }
 
-      // 3. Dedupe by nodeId (keep highest score)
+        if (result.relatedMemories && Array.isArray(result.relatedMemories)) {
+          for (const related of result.relatedMemories) {
+            const relContent = related.memory || related.chunk || "";
+            const relSimilarity = related.similarity ?? similarity ?? 0;
+            if (relContent) {
+              allMatches.push({
+                content: relContent,
+                similarity: relSimilarity,
+                metadata: related.metadata
+              });
+            }
+          }
+        }
+      }
+
+      // 2. Filter by relevance similarity (e.g. > 0.5)
+      const strongMatches = allMatches.filter((c) => c.similarity > 0.5);
+
+      // 3. Dedupe by nodeId (keep highest similarity)
       const dedupedByNode = new Map<string, ChunkMatch>();
       const architectureChunks: string[] = [];
 
@@ -191,7 +224,7 @@ export class SupermemorySync {
           const nodeId = chunk.metadata?.nodeId;
           if (nodeId) {
             const existing = dedupedByNode.get(nodeId);
-            if (!existing || existing.score < chunk.score) {
+            if (!existing || existing.similarity < chunk.similarity) {
               dedupedByNode.set(nodeId, chunk);
             }
           }
