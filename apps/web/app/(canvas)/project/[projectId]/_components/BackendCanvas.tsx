@@ -24,7 +24,7 @@ import {
   AlertDialogTitle,
 } from "@workspace/ui/components/alert-dialog";
 import { Button } from "@workspace/ui/components/button";
-import { PlusSquare, FolderPlus, LayoutGrid, User, Server, Globe, Container, Database, GitBranch, Radio, Waves } from "lucide-react";
+import { PlusSquare, FolderPlus, LayoutGrid, User, Server, Globe, Container, Database, GitBranch, Radio, Waves, TerminalSquare } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@workspace/backend/_generated/api";
 import { Id, Doc } from "@workspace/backend/_generated/dataModel";
@@ -39,6 +39,8 @@ import { migrateNodeDataToV2 } from "@workspace/canvas/migrations";
 import ELK from "elkjs/lib/elk.bundled";
 import { Connection } from "@xyflow/react";
 import { ChatContainer } from "@/app/(protected)/_components/chat/chat-container";
+import { useSimulationStore } from "@/lib/stores/simulationStore";
+import { SimulationTerminal } from "./SimulationTerminal";
 
 const edgeTypes = {
   "foreign-key": ForeignKeyEdge,
@@ -105,6 +107,7 @@ function Flow({ projectId, view }: BackendCanvasProps) {
     pendingEdgeRemovals,
     clearPending,
   } = useBackendCanvasStore();
+  const simulation = useSimulationStore();
 
   const addTableNode = useBackendCanvasStore(s => s.addTableNode);
   const addNode = useBackendCanvasStore(s => s.addNode);
@@ -529,6 +532,62 @@ function Flow({ projectId, view }: BackendCanvasProps) {
 
   // Filter out schema specific things in graph view
   const graphNodes = nodes.filter((n) => n.type !== "group" && n.type !== "entity");
+  const visualGraphNodes = graphNodes.map((node) => {
+    const hasRun = simulation.status !== "idle";
+    let isVisited = simulation.activeNodeIds.includes(node.id);
+    let isCurrent = simulation.currentNodeId === node.id;
+
+    if (node.type === "db_ref") {
+      const activeEndpointIds = simulation.trace
+        .slice(0, simulation.activeIndex + 1)
+        .filter((t) => t.kind === "endpoint")
+        .map((t) => t.id);
+
+      const connectedToActive = edges.some((edge) => {
+        if (edge.target === node.id && simulation.activeNodeIds.includes(edge.source)) {
+          if (edge.sourceHandle?.startsWith("endpoints-out-")) {
+            const endpointId = edge.sourceHandle.replace("endpoints-out-", "");
+            return activeEndpointIds.includes(endpointId);
+          }
+          return true;
+        }
+        if (edge.source === node.id && simulation.activeNodeIds.includes(edge.target)) {
+          return true;
+        }
+        return false;
+      });
+      if (connectedToActive) isVisited = true;
+
+      const currentEndpointIds = simulation.trace[simulation.activeIndex]?.kind === "endpoint"
+        ? [simulation.trace[simulation.activeIndex]?.id]
+        : [];
+
+      const connectedToCurrent = edges.some((edge) => {
+        if (edge.target === node.id && simulation.currentNodeId === edge.source) {
+          if (edge.sourceHandle?.startsWith("endpoints-out-")) {
+            const endpointId = edge.sourceHandle.replace("endpoints-out-", "");
+            return currentEndpointIds.includes(endpointId);
+          }
+          return true;
+        }
+        if (edge.source === node.id && simulation.currentNodeId === edge.target) {
+          return true;
+        }
+        return false;
+      });
+      if (connectedToCurrent) isCurrent = true;
+    }
+
+    return {
+      ...node,
+      style: {
+        ...node.style,
+        opacity: hasRun && !isVisited ? 0.14 : 1,
+        transition: "opacity 180ms ease, filter 180ms ease",
+        filter: isCurrent ? "drop-shadow(0 0 8px hsl(var(--primary)))" : undefined,
+      },
+    };
+  });
   // If we still want entities in graph view, we can just do n.type !== "group"
   // The spec said: "New 3rd view — 'Schema' tab, dedicated to DB table nodes only, clean slate"
   // This implies graph view probably doesn't need entity nodes, or if it does, it doesn't need groups.
@@ -562,7 +621,7 @@ function Flow({ projectId, view }: BackendCanvasProps) {
   return (
     <div className="w-full h-full bg-muted/20">
       <ReactFlow
-        nodes={graphNodes}
+        nodes={visualGraphNodes}
         edges={edges}
         onNodesChange={handleNodesChange}
         onEdgesChange={onEdgesChange}
@@ -579,9 +638,23 @@ function Flow({ projectId, view }: BackendCanvasProps) {
         onMoveEnd={handleMoveEnd}
         attributionPosition="bottom-right"
       >
-        <Background gap={12} size={1} />
-        <Controls />
-        <MiniMap />
+          <Background gap={12} size={1} />
+          <Controls />
+          <MiniMap />
+          <Panel position="top-left">
+            <Button
+              variant="outline"
+              size="sm"
+              className="bg-background/95 shadow-sm text-xs"
+              onClick={simulation.toggleTerminal}
+            >
+              <TerminalSquare className="mr-2 h-3.5 w-3.5" />
+              {simulation.terminalOpen ? "Hide terminal" : "Show terminal"}
+            </Button>
+          </Panel>
+          <Panel position="bottom-center">
+            <SimulationTerminal />
+          </Panel>
         <Panel position="top-right" className="flex gap-1.5 flex-col bg-background/95 backdrop-blur border rounded-lg p-2.5 shadow-md max-w-[180px]">
           <div className="text-[9px] uppercase font-extrabold text-muted-foreground/60 px-1 pt-1 pb-1">Computing</div>
           <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8" onClick={() => handleAddGraphNode('webClient', 'New Client')}>

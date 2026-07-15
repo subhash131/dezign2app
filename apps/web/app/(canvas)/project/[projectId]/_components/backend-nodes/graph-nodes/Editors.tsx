@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Plus, X, GripVertical } from "lucide-react";
 import { Input } from "@workspace/ui/components/input";
+import { Textarea } from "@workspace/ui/components/textarea";
 import { Button } from "@workspace/ui/components/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@workspace/ui/components/select";
 import { Switch } from "@workspace/ui/components/switch";
@@ -11,11 +12,24 @@ import { generateId, LocalInput } from "./shared";
 
 export const ProcessingStepsEditor = ({ steps, onChange }: { steps: ProcessingStep[], onChange: (steps: ProcessingStep[]) => void }) => {
   const addStep = () => {
-    onChange([...steps, { id: generateId(), text: "" }]);
+    onChange([...steps, { id: generateId(), text: "", operation: "passthrough" }]);
   };
 
   const updateStep = (id: string, text: string) => {
     onChange(steps.map(s => s.id === id ? { ...s, text } : s));
+  };
+
+  const updateOperation = (id: string, operation: ProcessingStep["operation"]) => {
+    onChange(steps.map(s => s.id === id ? { ...s, operation } : s));
+  };
+
+  const updateConfig = (id: string, raw: string) => {
+    try {
+      const config = raw.trim() ? JSON.parse(raw) : {};
+      onChange(steps.map(s => s.id === id ? { ...s, config } : s));
+    } catch {
+      // Keep the last valid config while the user is typing JSON.
+    }
   };
 
   const removeStep = (id: string) => {
@@ -29,15 +43,33 @@ export const ProcessingStepsEditor = ({ steps, onChange }: { steps: ProcessingSt
         <Plus size={12} className="cursor-pointer text-muted-foreground hover:text-foreground" onClick={addStep} />
       </div>
       {steps.map((step, index) => (
-        <div key={step.id} className="flex items-center gap-1 group/step">
-          <span className="text-[9px] text-muted-foreground font-mono w-4 text-right select-none">{index + 1}.</span>
-          <LocalInput 
-            className="h-6 text-[10px] px-1.5 flex-1 nodrag bg-background" 
-            placeholder="Describe step..." 
-            value={step.text || ""} 
-            onChange={e => updateStep(step.id, e.target.value)} 
-          />
-          <X size={12} className="cursor-pointer opacity-0 group-hover/step:opacity-100 text-muted-foreground hover:text-destructive shrink-0" onClick={() => removeStep(step.id)} />
+        <div key={step.id} className="flex flex-col gap-1 group/step">
+          <div className="flex items-center gap-1">
+            <span className="text-[9px] text-muted-foreground font-mono w-4 text-right select-none">{index + 1}.</span>
+            <LocalInput
+              className="h-6 text-[10px] px-1.5 flex-1 nodrag bg-background"
+              placeholder="Describe step..."
+              value={step.text || ""}
+              onChange={e => updateStep(step.id, e.target.value)}
+            />
+            <Select value={step.operation || "passthrough"} onValueChange={(value) => updateOperation(step.id, value as ProcessingStep["operation"])}>
+              <SelectTrigger className="h-6 w-[105px] text-[9px] px-1.5 nodrag bg-background"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {['passthrough', 'validate', 'pick', 'omit', 'rename', 'set', 'filter', 'map', 'db_get', 'db_get_many', 'db_insert', 'db_update', 'db_delete', 'return'].map(operation => (
+                  <SelectItem key={operation} value={operation} className="text-xs">{operation}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <X size={12} className="cursor-pointer opacity-0 group-hover/step:opacity-100 text-muted-foreground hover:text-destructive shrink-0" onClick={() => removeStep(step.id)} />
+          </div>
+          {step.operation && step.operation !== "passthrough" && (
+            <Textarea
+              className="min-h-[36px] text-[9px] px-1.5 py-1 nodrag bg-background font-mono"
+              placeholder={'Config JSON, e.g. {"tableRef":"users-ref","where":{"id":"$request.params.userId"}}'}
+              value={JSON.stringify(step.config || {}, null, 0)}
+              onChange={e => updateConfig(step.id, e.target.value)}
+            />
+          )}
         </div>
       ))}
       {steps.length === 0 && (

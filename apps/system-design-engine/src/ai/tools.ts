@@ -282,12 +282,25 @@ export const addServiceNodeTool = tool(
       : { x: 100 + offsetX, y: 100 + offsetY };
     const fractionalIndex = "a0" + Date.now() + Math.random().toString(36).slice(2, 6);
 
+    const makeId = () => Math.random().toString(36).slice(2, 9);
     const processedEndpoints = (endpoints || []).map((ep) => ({
       ...ep,
-      id: (ep as {id?: string}).id || Math.random().toString(36).slice(2, 9),
+      id: (ep as {id?: string}).id || makeId(),
+      headers: ((ep as any).headers ?? []).map((item: any) => ({ ...item, id: item.id || makeId() })),
+      pathParams: ((ep as any).pathParams ?? []).map((item: any) => ({ ...item, id: item.id || makeId() })),
+      queryParams: ((ep as any).queryParams ?? []).map((item: any) => ({ ...item, id: item.id || makeId() })),
+      requestBody: {
+        id: (ep as any).requestBody?.id || makeId(),
+        fields: ((ep as any).requestBody?.fields ?? []).map((item: any) => ({ ...item, id: item.id || makeId() })),
+      },
+      responseBody: {
+        id: (ep as any).responseBody?.id || makeId(),
+        fields: ((ep as any).responseBody?.fields ?? [{ name: "response", type: "object", required: true, description: ep.output || "Endpoint response" }]).map((item: any) => ({ ...item, id: item.id || makeId() })),
+      },
+      processingSteps: ((ep as any).processingSteps ?? []).map((step: any) => ({ ...step, id: step.id || makeId() })),
       publishedEvents: ep.publishedEvents?.map((pe) => ({
         ...pe,
-        id: (pe as {id?: string}).id || Math.random().toString(36).slice(2, 9),
+        id: (pe as {id?: string}).id || makeId(),
       })),
     }));
 
@@ -429,8 +442,28 @@ export const addServiceNodeTool = tool(
       endpoints: z.array(z.object({
         name: z.string().describe("Endpoint path (e.g., /api/users)"),
         type: z.string().describe("HTTP method (GET, POST, etc.)"),
-        output: z.string().optional().describe("JSON response schema"),
-        businessLogic: z.string().optional(),
+        headers: z.array(z.object({
+          name: z.string(), type: z.string(), required: z.boolean(), description: z.string().optional(), defaultValue: z.string().optional()
+        })).describe("Request headers. Use [] when none are required."),
+        pathParams: z.array(z.object({
+          name: z.string(), type: z.string(), required: z.boolean(), description: z.string().optional(), defaultValue: z.string().optional()
+        })).describe("Path parameters, such as id in /products/{id}. Use [] when none."),
+        queryParams: z.array(z.object({
+          name: z.string(), type: z.string(), required: z.boolean(), description: z.string().optional(), defaultValue: z.string().optional()
+        })).describe("Query parameters such as page, limit, or q. Use [] when none."),
+        requestBody: z.object({
+          fields: z.array(z.object({ name: z.string(), type: z.string(), required: z.boolean(), description: z.string().optional() }))
+        }).describe("Request body schema. Use fields: [] only for endpoints with no body."),
+        responseBody: z.object({
+          fields: z.array(z.object({ name: z.string(), type: z.string(), required: z.boolean(), description: z.string().optional() }))
+        }).describe("Response body schema; define the actual returned fields."),
+        processingSteps: z.array(z.object({
+          text: z.string(),
+          operation: z.enum(["passthrough", "validate", "pick", "omit", "rename", "set", "filter", "map", "db_get", "db_get_many", "db_insert", "db_update", "db_delete", "return"]).optional(),
+          config: z.record(z.any()).optional(),
+        })).describe("Executable request-processing steps in order."),
+        output: z.string().optional().describe("Short response description; do not use this instead of responseBody."),
+        businessLogic: z.string().optional().describe("Human-readable purpose of the endpoint."),
         databaseNodeIds: z.array(z.string()).optional().describe("IDs of db_ref nodes this endpoint reads from or writes to. REQUIRED whenever this endpoint uses a database; one endpoint may target multiple tables."),
         databaseNodeId: z.string().optional().describe("Single db_ref node ID this endpoint uses; prefer databaseNodeIds when there is more than one."),
         publishedEvents: z.array(z.object({

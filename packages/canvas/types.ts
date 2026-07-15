@@ -119,7 +119,8 @@ export type BackendNodeType =
   | "entity"
   | "webClient"
   | "external"
-  | "group";
+  | "group"
+  | "db_ref";
 
 export type BackendNode = {
   id: string;
@@ -322,7 +323,25 @@ export type Schema = {
 export type ProcessingStep = {
   id: string;
   text: string;
+  operation?: ProcessingOperation;
+  config?: Record<string, unknown>;
 };
+
+export type ProcessingOperation =
+  | "passthrough"
+  | "validate"
+  | "pick"
+  | "omit"
+  | "rename"
+  | "set"
+  | "filter"
+  | "map"
+  | "db_get"
+  | "db_get_many"
+  | "db_insert"
+  | "db_update"
+  | "db_delete"
+  | "return";
 
 // --- Event Models (Producer-Owned Contracts) ---
 
@@ -408,6 +427,8 @@ export type Endpoint = {
   
   processingSteps: ProcessingStep[];
   publishedEvents: PublishedEvent[];
+  databaseNodeIds?: string[];
+  databaseNodeId?: string;
   
   metadata?: ArchitectureMetadata;
   

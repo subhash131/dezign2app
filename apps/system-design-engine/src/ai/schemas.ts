@@ -126,6 +126,11 @@ export const schemaModelSchema = z.object({
 export const processingStepSchema = z.object({
   id: z.string(),
   text: z.string(),
+  operation: z.enum([
+    "passthrough", "validate", "pick", "omit", "rename", "set", "filter", "map",
+    "db_get", "db_get_many", "db_insert", "db_update", "db_delete", "return",
+  ]).optional(),
+  config: z.record(z.any()).optional(),
 });
 
 export const architectureMetadataSchema = z.object({

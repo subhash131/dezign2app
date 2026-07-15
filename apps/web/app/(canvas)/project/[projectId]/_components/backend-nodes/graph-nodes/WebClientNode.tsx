@@ -19,8 +19,27 @@ import {
 } from "@workspace/ui/components/dialog";
 import { Label } from "@workspace/ui/components/label";
 import { Textarea } from "@workspace/ui/components/textarea";
+import { simulateEndpoint, SimulationTraceEntry } from "@/lib/simulation/runtime";
+import { useSimulationStore } from "@/lib/stores/simulationStore";
 
 const EVENT_OPTIONS = ["pageLoad", "click", "hover", "drag", "dblclick", "keydown", "keyup", "submit", "other"];
+
+function endpointInputParams(endpoint: Endpoint): Parameter[] {
+  if (endpoint.params?.length) return endpoint.params.map((param) => ({ ...param, value: param.value ?? param.defaultValue ?? "" }));
+  return [...(endpoint.pathParams ?? []), ...(endpoint.queryParams ?? [])].map((param) => ({
+    ...param,
+    key: param.name,
+    value: param.value ?? param.defaultValue ?? "",
+  }));
+}
+
+function endpointBodyTemplate(endpoint: Endpoint): string {
+  if (endpoint.body) return endpoint.body;
+  const fields = endpoint.requestBody?.fields ?? [];
+  if (fields.length === 0) return "";
+  const valueFor = (type: string) => type === "number" ? 0 : type === "boolean" ? false : type === "array" ? [] : type === "object" ? {} : "";
+  return JSON.stringify(Object.fromEntries(fields.map((field) => [field.name, valueFor(field.type)])), null, 2);
+}
 
 interface TriggerDialogProps {
   isOpen: boolean;
@@ -28,33 +47,39 @@ interface TriggerDialogProps {
   event: UIEventItem;
   targetNode: BackendNode;
   endpoint: Endpoint;
+  sourceNodeId: string;
 }
 
-const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint }: TriggerDialogProps) => {
+const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint, sourceNodeId }: TriggerDialogProps) => {
   const [headers, setHeaders] = useState<Parameter[]>(() => {
-    return endpoint.headers?.map((h) => ({ ...h })) || [];
+    return endpoint.headers?.map((h) => ({ ...h, key: h.key ?? h.name, value: h.value ?? h.defaultValue ?? "" })) || [];
   });
   const [params, setParams] = useState<Parameter[]>(() => {
-    return endpoint.params?.map((p) => ({ ...p, value: "" })) || [];
+    return endpointInputParams(endpoint);
   });
   const [body, setBody] = useState<string>(() => {
-    return endpoint.body || "";
+    return endpointBodyTemplate(endpoint);
   });
+  const bodyFields = endpoint.requestBody?.fields ?? [];
 
   const [loading, setLoading] = useState(false);
-  const [response, setResponse] = useState<{ headers?: Record<string, string>; status?: number; statusText?: string; body?: string | object } | null>(null);
+  const [response, setResponse] = useState<{ headers?: Record<string, string>; status?: number; statusText?: string; body?: unknown; trace?: SimulationTraceEntry[] } | null>(null);
+  const nodes = useBackendCanvasStore((state) => state.nodes);
+  const edges = useBackendCanvasStore((state) => state.edges);
+  const startSimulation = useSimulationStore((state) => state.start);
 
   React.useEffect(() => {
-    setHeaders(endpoint.headers?.map((h) => ({ ...h })) || []);
-    setParams(endpoint.params?.map((p) => ({ ...p, value: "" })) || []);
-    setBody(endpoint.body || "");
+    setHeaders(endpoint.headers?.map((h) => ({ ...h, key: h.key ?? h.name, value: h.value ?? h.defaultValue ?? "" })) || []);
+    setParams(endpointInputParams(endpoint));
+    setBody(endpointBodyTemplate(endpoint));
     setResponse(null);
   }, [endpoint]);
 
-  const handleSend = () => {
+  const handleSend = async () => {
+    let parsedBody: unknown = null;
     if (body.trim()) {
       try {
-        JSON.parse(body);
+        parsedBody = JSON.parse(body);
       } catch (err) {
         setResponse({
           status: 400,
@@ -63,10 +88,10 @@ const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint }: Trigger
             "content-type": "application/json",
             "x-simulated": "true",
           },
-          body: JSON.stringify({
+          body: {
             error: "Invalid JSON in request body",
             message: err instanceof Error ? err.message : String(err),
-          }, null, 2)
+          }
         });
         return;
       }
@@ -75,60 +100,24 @@ const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint }: Trigger
     setLoading(true);
     setResponse(null);
 
-    setTimeout(() => {
-      setLoading(false);
-      
-      const queryParams: Record<string, string> = {};
-      params.forEach(p => {
-        if (p.key) {
-          queryParams[p.key] = p.value || `[${p.type || "string"}]`;
-        }
-      });
+    const queryParams: Record<string, string> = {};
+    params.forEach(p => { if (p.key) queryParams[p.key] = p.value || `[${p.type || "string"}]`; });
+    const reqHeaders: Record<string, string> = {};
+    headers.forEach(h => { if (h.key) reqHeaders[h.key.toLowerCase()] = h.value || ""; });
 
-      const reqHeaders: Record<string, string> = {};
-      headers.forEach(h => {
-        if (h.key) reqHeaders[h.key.toLowerCase()] = h.value || "";
-      });
-
-      let responseBody = "";
-      if (endpoint.output?.trim()) {
-        try {
-          const parsed = JSON.parse(endpoint.output);
-          responseBody = JSON.stringify(parsed, null, 2);
-        } catch {
-          responseBody = JSON.stringify({
-            success: true,
-            message: "Request processed successfully",
-            output: endpoint.output,
-            timestamp: new Date().toISOString()
-          }, null, 2);
-        }
-      } else {
-        responseBody = JSON.stringify({
-          success: true,
-          message: `Simulated response for ${endpoint.type || "GET"} ${endpoint.name}`,
-          timestamp: new Date().toISOString(),
-          received: {
-            method: endpoint.type || "GET",
-            path: endpoint.name,
-            params: queryParams,
-            headers: reqHeaders,
-            body: body ? JSON.parse(body) : null
-          }
-        }, null, 2);
-      }
-
-      setResponse({
-        status: endpoint.type === "POST" ? 201 : 200,
-        statusText: endpoint.type === "POST" ? "Created" : "OK",
-        headers: {
-          "content-type": "application/json",
-          "x-simulated": "true",
-          "x-powered-by": "Blueprint Simulation Engine"
-        },
-        body: responseBody
-      });
-    }, 600);
+    // The input dialog is only for composing the request. Once sent, the
+    // canvas and terminal become the live simulation surface.
+    onClose();
+    const result = await simulateEndpoint({
+      service: targetNode,
+      endpoint,
+      nodes,
+      edges,
+      request: { method: endpoint.type || "GET", path: endpoint.name || "/", headers: reqHeaders, params: queryParams, body: parsedBody },
+      sourceNodeId,
+      sourceEventId: event.id,
+    });
+    startSimulation(result.trace);
   };
 
   const url = endpoint?.name || "/";
@@ -185,31 +174,12 @@ const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint }: Trigger
           )}
 
           {/* Headers Section */}
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <h4 className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Headers</h4>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="h-5 px-1.5 text-[10px] text-muted-foreground hover:text-foreground"
-                onClick={() => setHeaders([...headers, { id: generateId(), key: "", value: "", name: "Custom Header", type: "string", required: false }])}
-              >
-                + Add Custom Header
-              </Button>
-            </div>
+          {headers.length > 0 && <div className="flex flex-col gap-2">
+            <h4 className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Defined Headers</h4>
             <div className="grid gap-2 border p-2.5 rounded-lg bg-secondary/10">
               {headers.map((h, idx) => (
                 <div key={h.id || idx} className="flex items-center gap-2">
-                  <Input
-                    className="h-7 text-xs font-mono flex-1 bg-background"
-                    placeholder="Key"
-                    value={h.key}
-                    onChange={(e) => {
-                      const next = [...headers];
-                      if (next[idx]) next[idx].key = e.target.value;
-                      setHeaders(next);
-                    }}
-                  />
+                  <span className="h-7 flex items-center flex-1 text-xs font-mono text-muted-foreground">{h.name || h.key}</span>
                   <Input
                     className="h-7 text-xs font-mono flex-1 bg-background"
                     placeholder="Value"
@@ -220,32 +190,42 @@ const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint }: Trigger
                       setHeaders(next);
                     }}
                   />
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0"
-                    onClick={() => setHeaders(headers.filter((_, i) => i !== idx))}
-                  >
-                    <X size={12} />
-                  </Button>
                 </div>
               ))}
-              {headers.length === 0 && (
-                <span className="text-[10px] text-muted-foreground italic text-center py-1">No headers configured</span>
-              )}
             </div>
-          </div>
+          </div>}
 
           {/* Request Body Section */}
-          {(endpoint?.type !== "GET" || body.trim().length > 0) && (
+          {bodyFields.length > 0 && (
             <div className="flex flex-col gap-2">
-              <h4 className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Request Body (JSON)</h4>
-              <Textarea
-                className="min-h-[100px] font-mono text-xs p-2 bg-background border focus-visible:ring-1 focus-visible:ring-ring"
-                placeholder="{}"
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-              />
+              <h4 className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Defined Request Body</h4>
+              <div className="grid gap-2 border p-2.5 rounded-lg bg-secondary/10">
+                {bodyFields.map((field) => {
+                  let parsed: Record<string, unknown> = {};
+                  try { parsed = body ? JSON.parse(body) : {}; } catch { /* reset below */ }
+                  const currentValue = parsed[field.name];
+                  return (
+                    <div key={field.id || field.name} className="grid grid-cols-3 items-center gap-2">
+                      <Label className="text-xs font-mono text-muted-foreground">
+                        {field.name}{field.required ? " *" : ""}
+                        <span className="block text-[9px] opacity-60">{field.type}</span>
+                      </Label>
+                      <Input
+                        className="col-span-2 h-7 text-xs font-mono bg-background"
+                        placeholder={field.description || field.type}
+                        value={typeof currentValue === "object" ? JSON.stringify(currentValue) : String(currentValue ?? "")}
+                        onChange={(e) => {
+                          let next: Record<string, unknown> = {};
+                          try { next = body ? JSON.parse(body) : {}; } catch { next = {}; }
+                          const raw = e.target.value;
+                          next[field.name] = field.type === "number" ? (raw === "" ? "" : Number(raw)) : field.type === "boolean" ? raw === "true" : (field.type === "object" || field.type === "array" ? (() => { try { return JSON.parse(raw); } catch { return raw; } })() : raw);
+                          setBody(JSON.stringify(next));
+                        }}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 
@@ -289,6 +269,18 @@ const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint }: Trigger
               </div>
 
               {/* Response Headers */}
+              {response.trace && response.trace.length > 0 && (
+                <div className="flex flex-col gap-1 border rounded-lg p-2 bg-secondary/10">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Execution Trace</span>
+                  {response.trace.map((entry) => (
+                    <div key={entry.id} className="flex items-start gap-2 text-[10px] font-mono">
+                      <span className={entry.status === "failed" ? "text-destructive" : "text-green-600"}>{entry.status === "failed" ? "✕" : "✓"}</span>
+                      <span className="flex-1">{entry.label}{entry.detail ? ` — ${entry.detail}` : ""}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <div className="p-2 border rounded-lg bg-secondary/10 flex flex-col gap-1 text-[10px] font-mono text-muted-foreground">
                 {Object.entries((response.headers as Record<string, string>) || {}).map(([k, v]: [string, string]) => (
                   <div key={k} className="flex justify-between">
@@ -300,7 +292,7 @@ const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint }: Trigger
 
               {/* Response Body */}
               <pre className="p-3 border rounded-lg bg-secondary/30 font-mono text-[11px] overflow-x-auto text-foreground whitespace-pre-wrap">
-                {response.body as string}
+                {typeof response.body === "string" ? response.body : JSON.stringify(response.body, null, 2)}
               </pre>
             </div>
           )}
@@ -542,6 +534,7 @@ export const WebClientNode = ({ id, data, selected }: NodeProps<BackendNode>) =>
           event={activeTrigger.event}
           targetNode={activeTrigger.targetNode}
           endpoint={activeTrigger.endpoint}
+          sourceNodeId={id}
         />
       )}
     </div>

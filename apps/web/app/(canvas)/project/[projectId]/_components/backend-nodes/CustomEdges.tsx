@@ -7,6 +7,36 @@ import {
 import { BackendEdge } from "@/types/canvas";
 
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { useSimulationStore } from "@/lib/stores/simulationStore";
+
+function useSimulationEdgeState(edgeId: string, sourceId?: string, targetId?: string) {
+  const { status, activeEdgeIds, currentEdgeId, activeNodeIds, trace, activeIndex } = useSimulationStore();
+  const hasRun = status !== "idle";
+  let isVisited = activeEdgeIds.includes(edgeId);
+  let isCurrent = currentEdgeId === edgeId;
+
+  if (targetId) {
+    const targetNode = useBackendCanvasStore.getState().nodes.find(n => n.id === targetId);
+    if (targetNode && (targetNode.type === "database" || targetNode.type === "db_ref")) {
+      if (sourceId && activeNodeIds.includes(sourceId)) {
+        const edge = useBackendCanvasStore.getState().edges.find(e => e.id === edgeId);
+        const sourceHandle = edge?.sourceHandle;
+        
+        if (sourceHandle?.startsWith("endpoints-out-")) {
+          const endpointId = sourceHandle.replace("endpoints-out-", "");
+          const activeEndpointIds = trace.slice(0, activeIndex + 1).filter(t => t.kind === "endpoint").map(t => t.id);
+          if (activeEndpointIds.includes(endpointId)) {
+            isVisited = true;
+          }
+        } else {
+          isVisited = true;
+        }
+      }
+    }
+  }
+
+  return { hasRun, isVisited, isCurrent };
+}
 
 // Inline styles for animations
 const EdgeStyles = () => (
@@ -74,6 +104,7 @@ const EdgeMarkers = () => (
 // 3. Database Reference Edge (Amber/Orange Dashed)
 export const DatabaseRefEdge = (props: EdgeProps<BackendEdge>) => {
   const { sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, style } = props;
+  const simulation = useSimulationEdgeState(props.id, props.source, props.target);
 
   const [edgePath] = getBezierPath({
     sourceX,
@@ -96,6 +127,7 @@ export const DatabaseRefEdge = (props: EdgeProps<BackendEdge>) => {
           ...style,
           strokeWidth: 3,
           stroke: "rgba(245, 158, 11, 0.1)",
+          opacity: simulation.hasRun && !simulation.isVisited ? 0.05 : 1,
         }}
       />
 
@@ -108,6 +140,8 @@ export const DatabaseRefEdge = (props: EdgeProps<BackendEdge>) => {
           strokeWidth: 1.5,
           stroke: "#f59e0b", // amber-500
           strokeDasharray: "4, 4",
+          opacity: simulation.hasRun && !simulation.isVisited ? 0.08 : 1,
+          filter: simulation.isCurrent ? "drop-shadow(0 0 5px #f59e0b)" : undefined,
         }}
       />
     </>
@@ -119,6 +153,7 @@ export const HTTPConnectionEdge = (props: EdgeProps<BackendEdge>) => {
   const targetNode = useBackendCanvasStore(
     (s) => s.nodes.find((n) => n.id === props.target)
   );
+  const simulation = useSimulationEdgeState(props.id, props.source, props.target);
 
   if (targetNode?.type === "database") {
     return <DatabaseRefEdge {...props} />;
@@ -147,6 +182,7 @@ export const HTTPConnectionEdge = (props: EdgeProps<BackendEdge>) => {
           ...style,
           strokeWidth: 3,
           stroke: "rgba(14, 165, 233, 0.15)",
+          opacity: simulation.hasRun && !simulation.isVisited ? 0.05 : 1,
         }}
       />
 
@@ -158,20 +194,23 @@ export const HTTPConnectionEdge = (props: EdgeProps<BackendEdge>) => {
           ...style,
           strokeWidth: 1.5,
           stroke: "#0ea5e9", // sky-500
+          opacity: simulation.hasRun && !simulation.isVisited ? 0.08 : 1,
+          filter: simulation.isCurrent ? "drop-shadow(0 0 5px #0ea5e9)" : undefined,
         }}
       />
 
       {/* Animated Flow dots */}
-      <path
-        d={edgePath}
-        fill="none"
-        className="edge-flow-animated-fast"
-        style={{
-          strokeWidth: 1.5,
-          stroke: "#e0f2fe", // sky-100 overlay
-          pointerEvents: "none",
-        }}
-      />
+      {(!simulation.hasRun || simulation.isVisited) && <path
+          d={edgePath}
+          fill="none"
+          className={simulation.isCurrent ? "edge-flow-animated-fast" : undefined}
+          style={{
+            strokeWidth: 1.5,
+            stroke: "#e0f2fe", // sky-100 overlay
+            pointerEvents: "none",
+            opacity: simulation.hasRun && !simulation.isCurrent ? 0.35 : 1,
+          }}
+        />}
     </>
   );
 };
@@ -179,6 +218,7 @@ export const HTTPConnectionEdge = (props: EdgeProps<BackendEdge>) => {
 // 2. Messaging Edge (Purple/Lavender)
 export const MessagingEdge = (props: EdgeProps<BackendEdge>) => {
   const { sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, style } = props;
+  const simulation = useSimulationEdgeState(props.id, props.source, props.target);
 
   const [edgePath] = getBezierPath({
     sourceX,
@@ -201,6 +241,7 @@ export const MessagingEdge = (props: EdgeProps<BackendEdge>) => {
           ...style,
           strokeWidth: 3.5,
           stroke: "rgba(168, 85, 247, 0.12)",
+          opacity: simulation.hasRun && !simulation.isVisited ? 0.05 : 1,
         }}
       />
 
@@ -212,20 +253,23 @@ export const MessagingEdge = (props: EdgeProps<BackendEdge>) => {
           ...style,
           strokeWidth: 1.5,
           stroke: "#a855f7", // purple-500
+          opacity: simulation.hasRun && !simulation.isVisited ? 0.08 : 1,
+          filter: simulation.isCurrent ? "drop-shadow(0 0 5px #a855f7)" : undefined,
         }}
       />
 
       {/* Animated messaging pulses */}
-      <path
-        d={edgePath}
-        fill="none"
-        className="edge-flow-animated"
-        style={{
-          strokeWidth: 1.5,
-          stroke: "#f3e8ff", // purple-100 overlay
-          pointerEvents: "none",
-        }}
-      />
+      {(!simulation.hasRun || simulation.isVisited) && <path
+          d={edgePath}
+          fill="none"
+          className={simulation.isCurrent ? "edge-flow-animated" : undefined}
+          style={{
+            strokeWidth: 1.5,
+            stroke: "#f3e8ff", // purple-100 overlay
+            pointerEvents: "none",
+            opacity: simulation.hasRun && !simulation.isCurrent ? 0.35 : 1,
+          }}
+        />}
     </>
   );
 };
