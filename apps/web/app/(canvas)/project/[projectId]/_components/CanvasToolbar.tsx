@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Network, Workflow, Sparkles, Database, RefreshCw } from "lucide-react";
+import { ArrowLeft, Network, Workflow, Sparkles, Database, RefreshCw, Trash2 } from "lucide-react";
 import { BackendCanvasView } from "@/types/canvas";
 import { Button } from "@workspace/ui/components/button";
 import { Tabs, TabsList, TabsTrigger } from "@workspace/ui/components/tabs";
@@ -28,6 +28,7 @@ export function CanvasToolbar({
   setAiPanelOpen,
 }: CanvasToolbarProps) {
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
   const { getToken } = useAuth();
 
   const handleSync = async () => {
@@ -50,6 +51,29 @@ export function CanvasToolbar({
       toast.error("Failed to sync context.");
     } finally {
       setIsSyncing(false);
+    }
+  };
+
+  const handleClear = async () => {
+    setIsClearing(true);
+    try {
+      const token = await getToken({ template: "convex" });
+      const res = await fetch("/api/clear-supermemory", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId, token }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to clear");
+      }
+
+      toast.success("Successfully cleared context from Supermemory!");
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to clear context.");
+    } finally {
+      setIsClearing(false);
     }
   };
 
@@ -86,9 +110,19 @@ export function CanvasToolbar({
         <Button
           variant="outline"
           size="sm"
+          className="h-9 text-destructive hover:text-destructive hover:bg-destructive/10"
+          onClick={handleClear}
+          disabled={isClearing || isSyncing}
+        >
+          <Trash2 className={`w-4 h-4 mr-2 ${isClearing ? "animate-pulse" : ""}`} />
+          {isClearing ? "Clearing..." : "Clear Context"}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
           className="h-9"
           onClick={handleSync}
-          disabled={isSyncing}
+          disabled={isSyncing || isClearing}
         >
           <RefreshCw className={`w-4 h-4 mr-2 ${isSyncing ? "animate-spin" : ""}`} />
           {isSyncing ? "Syncing..." : "Sync Context"}

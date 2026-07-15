@@ -201,6 +201,43 @@ app.post('/sync-supermemory', async (c) => {
   }
 });
 
+app.post('/clear-supermemory', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { projectId, token, convexUrl: bodyConvexUrl } = body;
+
+    if (!projectId) {
+      return c.text("Missing projectId", 400);
+    }
+    if (!token) {
+      return c.text("Missing authentication token", 401);
+    }
+
+    const convexUrl = bodyConvexUrl || process.env.CONVEX_URL;
+    if (!convexUrl) {
+      return c.text("Missing CONVEX_URL environment variable", 500);
+    }
+
+    const client = new ConvexHttpClient(convexUrl);
+    client.setAuth(token);
+
+    // Fetch canvas state as an authorization check.
+    try {
+      await client.query(api.canvas.getBackendElements, { projectId });
+    } catch (e) {
+      return c.text("Unauthorized or project not found", 403);
+    }
+
+    const supermemorySync = new SupermemorySync();
+    await supermemorySync.clearProject(projectId);
+
+    return c.json({ success: true });
+  } catch (error) {
+    console.error("Clear error:", error);
+    return c.text("Internal Server Error", 500);
+  }
+});
+
 app.post('/test-supermemory-fetch', async (c) => {
   try {
     const body = await c.req.json();
