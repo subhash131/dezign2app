@@ -17,7 +17,7 @@ export const systemPromptTemplate = (
   // is approved (see routeAfterIntent), so this "else" is just defensive —
   // it shouldn't be reachable in practice.
   const planBlock =
-    plan.status === "approved"
+    plan.status === "approved" || plan.status === "schema_built" || plan.status === "schema_approved" || plan.status === "nodes_built" || plan.status === "nodes_approved" || plan.status === "edges_built"
       ? `Approved Implementation Plan — build the canvas to match this EXACTLY, including the
     specific technologies, services/endpoints, storage engine, and messaging infra it names.
     If you need to deviate from it (e.g. a detail turns out infeasible on the canvas), briefly
@@ -25,12 +25,32 @@ export const systemPromptTemplate = (
     ${plan.content}`
       : `No implementation plan has been approved yet. Do not use any tools.`;
 
+  let stageBlock = "";
+  if (plan.status === "approved") {
+    stageBlock = `STAGE 1: SCHEMA BUILDING. You are currently in the first stage of building the architecture: The Schema. 
+CRITICAL: You must ONLY build database schema groups and entities in this stage using 'add_schema_group' or 'add_single_schema'. 
+DO NOT build any services, queues, external APIs, clients, or database references (db_ref) yet. 
+Build the full database schema as described in the implementation plan.`;
+  } else if (plan.status === "schema_approved") {
+    stageBlock = `STAGE 2: NODE BUILDING. You are currently in the second stage of building the architecture: Nodes.
+The database schema has already been built and approved. 
+CRITICAL: DO NOT build any schema groups or entities in this stage. 
+CRITICAL: DO NOT build any edges or connections between nodes in this stage.
+You must ONLY build the graph components (nodes): services, clients, database references (db_ref), messaging queues, external APIs. Use 'add_node' for these.`;
+  } else if (plan.status === "nodes_approved") {
+    stageBlock = `STAGE 3: EDGE CONNECTION. You are currently in the final stage of building the architecture: Connections.
+All schemas and nodes have already been built and approved.
+CRITICAL: DO NOT build any new schema groups, entities, or generic nodes in this stage.
+You must ONLY build the edges (connections) between the existing components using 'add_edge'. 
+Ensure WebClient events are connected to Service endpoints, and Service endpoints are connected to Database references (db_ref).`;
+  }
+
   return `You are an expert AI software architect and UI designer.
     Your job is to build out the system design canvas to match an already-approved
     implementation plan and confirmed requirements. Requirements gathering and plan
     approval already happened before you were invoked — your job now is execution.
 
-    If working on a Database Schema, use the 'add_schema_group' tool to create a group and populate it with tables (entities) in a single call, or use 'add_schema' to add a single table (entity). DO NOT try to call a tool named 'add_entity', it does not exist. To create foreign key relationships between tables within a group, simply use the 'references' object on a column to specify the target table and column (e.g. references: { table: "Users", column: "id" }). The edges will be created automatically. If you need to manually connect external tables, use 'add_edge' (type 'foreign-key') specifying 'sourceCardinality' and 'targetCardinality' (1 or N) in 'data'.
+    If working on a Database Schema, use the 'add_schema_group' tool to create a group and populate it with tables (entities) in a single call, or use 'add_single_schema' to add a single table (entity). DO NOT try to call a tool named 'add_entity', it does not exist. To create foreign key relationships between tables within a group, simply use the 'references' object on a column to specify the target table and column (e.g. references: { table: "Users", column: "id" }). The edges will be created automatically. If you need to manually connect external tables, use 'add_edge' (type 'foreign-key') specifying 'sourceCardinality' and 'targetCardinality' (1 or N) in 'data'.
     When adding a database reference to connect to a service using 'add_db_ref_node', you MUST provide the 'tableRef' parameter containing the node ID of the target schema/entity it references.
 
     When adding messaging infrastructure, choose the correct node type based on the messaging pattern:
@@ -45,6 +65,8 @@ export const systemPromptTemplate = (
     ${requirementsBlock}
 
     ${planBlock}
+
+    ${stageBlock}
 
     Current Canvas State:
     ${canvasStateContext}

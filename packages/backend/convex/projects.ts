@@ -149,6 +149,69 @@ export const removeProject = mutation({
     if (project.createdBy !== identity.subject) {
       throw new ConvexError("Unauthorized");
     }
+
+    // Cascade-delete: canvas backend nodes
+    const nodes = await ctx.db
+      .query("canvas_backend_nodes")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
+    for (const node of nodes) {
+      await ctx.db.delete(node._id);
+    }
+
+    // Cascade-delete: canvas backend edges
+    const edges = await ctx.db
+      .query("canvas_backend_edges")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
+    for (const edge of edges) {
+      await ctx.db.delete(edge._id);
+    }
+
+    // Cascade-delete: canvas frontend records
+    const frontendRecords = await ctx.db
+      .query("canvas_frontend_records")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
+    for (const record of frontendRecords) {
+      await ctx.db.delete(record._id);
+    }
+
+    // Cascade-delete: project chats and their messages
+    const chats = await ctx.db
+      .query("project_chats")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
+    for (const chat of chats) {
+      const messages = await ctx.db
+        .query("project_chat_messages")
+        .withIndex("by_chat", (q) => q.eq("chatId", chat._id))
+        .collect();
+      for (const message of messages) {
+        await ctx.db.delete(message._id);
+      }
+      await ctx.db.delete(chat._id);
+    }
+
+    // Cascade-delete: project requirements
+    const requirements = await ctx.db
+      .query("projectRequirements")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
+    for (const req of requirements) {
+      await ctx.db.delete(req._id);
+    }
+
+    // Cascade-delete: project plans
+    const plans = await ctx.db
+      .query("projectPlans")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
+    for (const plan of plans) {
+      await ctx.db.delete(plan._id);
+    }
+
+    // Finally delete the project itself
     await ctx.db.delete(args.projectId);
   },
 });

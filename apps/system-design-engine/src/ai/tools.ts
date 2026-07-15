@@ -817,8 +817,8 @@ export const addSchemaTool = tool(
     }
   },
   {
-    name: "add_schema",
-    description: "Add a single database schema (table/entity) to the canvas.",
+    name: "add_single_schema",
+    description: "Add a single database schema (table/entity) to the canvas. DO NOT use this if you want to add a group of schemas with 'groupLabel' and 'schemas', use 'add_schema_group' for that.",
     schema: z.object({
       label: z.string().describe("Name of the table/entity (e.g. 'Users')"),
       description: z.string().optional(),

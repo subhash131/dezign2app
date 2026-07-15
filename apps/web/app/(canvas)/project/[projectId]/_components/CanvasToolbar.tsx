@@ -115,7 +115,7 @@ export function CanvasToolbar({
           disabled={isClearing || isSyncing}
         >
           <Trash2 className={`w-4 h-4 mr-2 ${isClearing ? "animate-pulse" : ""}`} />
-          {isClearing ? "Clearing..." : "Clear Context"}
+          {isClearing ? "Clearing..." : "Clear MCP"}
         </Button>
         <Button
           variant="outline"
@@ -125,7 +125,7 @@ export function CanvasToolbar({
           disabled={isSyncing || isClearing}
         >
           <RefreshCw className={`w-4 h-4 mr-2 ${isSyncing ? "animate-spin" : ""}`} />
-          {isSyncing ? "Syncing..." : "Sync Context"}
+          {isSyncing ? "Syncing..." : "Sync MCP"}
         </Button>
         <Button
           variant={aiPanelOpen ? "secondary" : "ghost"}

@@ -43,7 +43,7 @@ export const upsertPlan = mutation({
   args: {
     projectId: v.string(),
     content: v.string(),
-    status: v.union(v.literal("proposed"), v.literal("approved")),
+    status: v.union(v.literal("proposed"), v.literal("approved"), v.literal("schema_built"), v.literal("schema_approved"), v.literal("nodes_built"), v.literal("nodes_approved"), v.literal("edges_built")),
   },
   handler: async (ctx, args) => {
     const existing = await ctx.db.query("projectPlans")

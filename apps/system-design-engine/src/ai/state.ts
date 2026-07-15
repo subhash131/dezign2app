@@ -24,7 +24,7 @@ export const GraphAnnotation = Annotation.Root({
   }),
   implementationPlan: Annotation<{
     content: string;
-    status: "none" | "proposed" | "approved";
+    status: "none" | "proposed" | "approved" | "schema_built" | "schema_approved" | "nodes_built" | "nodes_approved" | "edges_built";
   }>({
     reducer: (_, y) => y,
     default: () => ({ content: "", status: "none" }),

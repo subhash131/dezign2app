@@ -15,10 +15,13 @@ import { useReactFlow } from "@xyflow/react";
 import { Textarea } from "@workspace/ui/components/textarea";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 
+import { BackendCanvasView } from "@/types/canvas";
+
 interface AiPanelProps {
   projectId: string;
   isOpen: boolean;
   onClose: () => void;
+  setView?: (view: BackendCanvasView) => void;
 }
 
 type Message = {
@@ -66,7 +69,7 @@ function serializeBackendCanvasForAI(
   return output;
 }
 
-export function AiPanel({ projectId, isOpen, onClose }: AiPanelProps) {
+export function AiPanel({ projectId, isOpen, onClose, setView }: AiPanelProps) {
   const [activeChatId, setActiveChatId] = useState<Id<"project_chats"> | null>(null);
   const [hasInitializedChat, setHasInitializedChat] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
@@ -204,6 +207,16 @@ export function AiPanel({ projectId, isOpen, onClose }: AiPanelProps) {
               // The tool mutation is now executed directly on the backend by the agent.
               const argsStr = data.message || "";
               assistantContent += `\n*🔧 Tool used: \`${data.name}\`*${argsStr}\n`;
+              
+              // Automatically switch tabs based on what the AI is building
+              if (setView) {
+                if (data.name === "add_schema_group" || data.name === "add_single_schema") {
+                  setView("schema");
+                } else {
+                  setView("graph");
+                }
+              }
+
               setMessages(prev => {
                 const newMsgs = [...prev];
                 const lastMsg = newMsgs[newMsgs.length - 1];

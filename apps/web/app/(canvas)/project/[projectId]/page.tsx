@@ -65,6 +65,7 @@ export default function ProjectCanvasPage({ params }: { params: Promise<{ projec
             projectId={projectId} 
             isOpen={aiPanelOpen} 
             onClose={() => setAiPanelOpen(false)} 
+            setView={setView}
           />
         </div>
       </div>

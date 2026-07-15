@@ -9,19 +9,29 @@ import { tools } from "./tools";
 import { systemPromptTemplate } from "./prompts";
 import { getConvexClient, formatCanvasState } from "./utils";
 import { api } from "@workspace/backend/_generated/api";
-const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+import { Id } from "@workspace/backend/_generated/dataModel";
 // ----------------------------------------------------------------------------
 // AGENT NODES
 // ----------------------------------------------------------------------------
 
+let apiKeyIndex = 0;
+
 export function createGraph() {
-  const apiKey = process.env.GROQ_API_KEY;
+  const apiKeyStr = process.env.GROQ_API_KEY;
   const model = process.env.GROQ_LLM_MODEL;
-  if (!apiKey || !model) {
+  if (!apiKeyStr || !model) {
     throw new Error("Missing environment variables: GROQ_API_KEY or GROQ_LLM_MODEL");
   }
 
-  const llm = new ChatGroq({ apiKey, model, temperature: 0 });
+  const apiKeys = apiKeyStr.split(',').map(k => k.trim()).filter(k => k.length > 0);
+  if (apiKeys.length === 0) {
+    throw new Error("GROQ_API_KEY is empty or invalid");
+  }
+  
+  const apiKey = apiKeys[apiKeyIndex];
+  apiKeyIndex = (apiKeyIndex + 1) % apiKeys.length;
+
+  const llm = new ChatGroq({ apiKey, model, temperature: 0, maxTokens: 4000 });
   const modelWithTools = llm.bindTools(tools);
 
   // Custom tool node: injects state into tool config and tracks how many
@@ -83,9 +93,9 @@ doesn't address the plan at all.`
     const intentPrompt = new SystemMessage(
       `Analyze the user's latest message in the context of the recent conversation and determine the intent.
 Available Intents:
-- CREATE_SYSTEM: The user wants to build a new system architecture, add nodes, or create a new design from scratch. ALSO use this if the user is providing system requirements for a design.
-- EDIT_SYSTEM: The user wants to modify the existing system (update nodes, delete nodes, connect nodes, auto-layout).
-- CHAT: The user is just asking a question, making a general comment, or having a conversation that does NOT require modifying the canvas.
+- CREATE_SYSTEM: The user wants to build a new system architecture from scratch.
+- EDIT_SYSTEM: The user wants to modify the existing system (add nodes, delete nodes, connect nodes, update schema, add services, add Kafka topics, add edges, or describes any system changes in any format including diagrams, tables, or specs).
+- CHAT: The user is ONLY asking a pure question or making a trivial comment that does NOT involve any system change whatsoever.
 
 Also determine "affectsRequirements": true only if the message introduces a NEW capability,
 feature, scale target, or constraint that is NOT already covered by the confirmed requirements
@@ -167,7 +177,7 @@ ${conversationContext}`
   // Node: Chat Agent (No Tools)
   const chatAgent = async (state: typeof GraphAnnotation.State, config: RunnableConfig) => {
     const systemMsg = new SystemMessage(
-      `You are a helpful system architecture assistant. The user is just chatting or asking questions. Do NOT attempt to use tools. Base your answers on the current canvas state: ${state.canvasStateContext ?? "Canvas is empty."}`
+      `You are a concise system architecture assistant. The user is asking a quick question — answer in 1-3 sentences max. Do NOT write essays, lists, bullet points, code snippets, or long explanations. Do NOT use tools. Base your answers on the current canvas state: ${state.canvasStateContext ?? "Canvas is empty."}`
     );
     console.log("[DEBUG] Node: chatAgent invoking LLM");
     const response = await llm.invoke([systemMsg, ...sanitizeMessages(state.messages)], config);
@@ -180,7 +190,6 @@ ${conversationContext}`
       systemPromptTemplate(state.canvasStateContext ?? "", state.requirements, state.implementationPlan)
     );
     console.log("[DEBUG] Node: canvasAgent invoking modelWithTools");
-    await delay(1500);
     const response = await modelWithTools.invoke([systemMsg, ...state.messages], config);
     return { messages: [response] };
   };
@@ -199,21 +208,33 @@ ${conversationContext}`
     // before the tool calls in this turn.
     const convex = getConvexClient(state);
     const currentElements = await convex.query(api.canvas.getBackendElements, {
-      projectId: state.projectId as any,
+      projectId: state.projectId as Id<"projects">,
     });
     const currentCanvasState = formatCanvasState(currentElements);
 
+    // Build a stage-specific closing instruction so the LLM explicitly asks for
+    // approval at the end of each build stage instead of silently moving on.
+    const stageClosingInstruction =
+      plan.status === "approved"
+        ? `\n\nSTAGE CLOSING: If everything for the schema stage is complete (no more tool calls needed), end your response with a short, friendly question asking the user to approve the schema or request any changes before you proceed to building the service nodes and graph. Example: "Does the schema look good to you, or would you like any changes before I proceed to building the service nodes?"`
+        : plan.status === "schema_approved"
+        ? `\n\nSTAGE CLOSING: If everything for the nodes stage is complete (no more tool calls needed), end your response with a short, friendly question asking the user to approve the nodes or request any changes before you proceed to connecting them. Example: "Do the service nodes look correct, or would you like any adjustments before I proceed to wiring up the connections?"`
+        : plan.status === "nodes_approved"
+        ? `\n\nSTAGE CLOSING: If all edges have been added and everything looks connected, end your response with a short summary confirming the architecture is complete and ask if there is anything the user would like to adjust.`
+        : "";
+
     const reflectionPrompt = new HumanMessage(
       hasFailure
-        ? `Some of your last tool calls failed. Review the tool error messages below, correct the parameters, and retry ONLY the failed operations using your tools. If the error is DUPLICATE_EDGE, it means the connection already exists and you can ignore it and stop. If a database connection is missing, NEVER use update_node to create it: use add_edge with the existing service node ID, db_ref node ID, sourceHandle="endpoints-out-{endpointId}", targetHandle="database-target", and type="connection". If you cannot fix an error, explain briefly and stop. DO NOT hallucinate tools like 'add_entity' - use 'add_schema' or 'add_schema_group' instead. DO NOT hallucinate tools like 'add_external', 'add_sqs', or 'add_redis' - use the general 'add_node' tool for those.\n\nRecent tool results:\n${recentToolMsgs
+        ? `Some of your last tool calls failed. Review the tool error messages below, correct the parameters, and retry ONLY the failed operations using your tools. If the error is DUPLICATE_EDGE, it means the connection already exists and you can ignore it and stop. If a database connection is missing, NEVER use update_node to create it: use add_edge with the existing service node ID, db_ref node ID, sourceHandle="endpoints-out-{endpointId}", targetHandle="database-target", and type="connection". If you cannot fix an error, explain briefly and stop. DO NOT hallucinate tools like 'add_entity' - use 'add_single_schema' or 'add_schema_group' instead. DO NOT hallucinate tools like 'add_external', 'add_sqs', or 'add_redis' - use the general 'add_node' tool for those.\n\nRecent tool results:\n${recentToolMsgs
             .map((m) => m.content)
             .join("\n")}`
         : `Review the tool results below against the user's original request AND the approved
 implementation plan (technology choices, services, endpoints, messaging infra it called for).
-If everything the plan called for has been built or already exists on the canvas AND all necessary connections (edges) have been drawn, respond with a brief confirmation summary
-and do NOT call any tools. If something the plan specified is still missing from BOTH the recent tool results AND the current canvas state, call the appropriate tool(s) to add it.
+Ensure you only evaluate what is required for the CURRENT STAGE (as defined in the system prompt).
+If everything required for the current stage has been built or already exists on the canvas, respond with a brief confirmation summary and do NOT call any tools. 
+If something required for the current stage is still missing from BOTH the recent tool results AND the current canvas state, call the appropriate tool(s) to add it.
 
-CRITICAL: DO NOT hallucinate tools like 'add_entity'. If you need to add a schema/entity, use the 'add_schema' or 'add_schema_group' tools. For 'external', 'sqs', 'redis', or 'group' nodes, you MUST use the general 'add_node' tool. DO NOT hallucinate 'add_external', 'add_sqs', etc.
+CRITICAL: DO NOT hallucinate tools like 'add_entity'. If you need to add a schema/entity, use the 'add_single_schema' or 'add_schema_group' tools. For 'external', 'sqs', 'redis', or 'group' nodes, you MUST use the general 'add_node' tool. DO NOT hallucinate 'add_external', 'add_sqs', etc.
 
 CRITICAL: Make sure nodes are actually connected! If you just created nodes, you must now use their IDs from the tool results below to call the 'add_edge' tool and connect them together. 
 - You MUST connect WebClient events to Service endpoints.
@@ -229,13 +250,54 @@ Approved Implementation Plan:
 ${plan.content || "none"}
 
 Recent tool results:
-${recentToolMsgs.map((m) => m.content).join("\n")}`
+${recentToolMsgs.map((m) => m.content).join("\n")}${stageClosingInstruction}`
+    );
+
+    const systemMsg = new SystemMessage(
+      systemPromptTemplate(state.canvasStateContext ?? "", state.requirements, state.implementationPlan)
     );
 
     console.log("[DEBUG] Node: reflectAgent invoking modelWithTools");
-    await delay(1500);
-    const response = await modelWithTools.invoke([...state.messages, reflectionPrompt], config);
-    return { messages: [response] };
+    const response = await modelWithTools.invoke([systemMsg, ...state.messages, reflectionPrompt], config);
+    type AgentUpdate = {
+      messages: BaseMessage[];
+      implementationPlan?: ImplementationPlanState;
+    };
+    const update: AgentUpdate = { messages: [response] };
+    
+    const hasNewToolCalls = response.tool_calls && response.tool_calls.length > 0;
+    if (!hasNewToolCalls) {
+      type ValidStatus = "proposed" | "approved" | "schema_built" | "schema_approved" | "nodes_built" | "nodes_approved" | "edges_built";
+      let nextStatus: ValidStatus | "none" = plan.status;
+      
+      if (plan.status === "approved") {
+        nextStatus = "schema_built";
+      } else if (plan.status === "schema_approved") {
+        nextStatus = "nodes_built";
+      } else if (plan.status === "nodes_approved") {
+        nextStatus = "edges_built";
+      }
+
+      if (nextStatus !== plan.status && nextStatus !== "none") {
+        const nextPlan: ImplementationPlanState = { ...plan, status: nextStatus };
+        update.implementationPlan = nextPlan;
+        
+        if (state.projectId && state.convexUrl) {
+          try {
+            const convex = getConvexClient(state);
+            await convex.mutation(api.requirements.upsertPlan, {
+              projectId: state.projectId,
+              content: nextPlan.content,
+              status: nextStatus,
+            });
+          } catch (error) {
+            console.error(`[DEBUG] Error upserting plan (${nextStatus}):`, error);
+          }
+        }
+      }
+    }
+    
+    return update;
   };
 
   // Helper: ask the LLM for requirements JSON, retrying once on malformed output
@@ -292,7 +354,12 @@ Return the FULL updated requirements as JSON only:
 { "functional": string[], "nonFunctional": string[], "assumptions": string[] }
 Keep everything from the existing requirements that is still valid — do not drop items the
 user didn't contradict. Add whatever new functional/non-functional needs or assumptions the
-user just confirmed. Only remove or modify an item if the user explicitly contradicted it.`;
+user just confirmed. Only remove or modify an item if the user explicitly contradicted it.
+
+IMPORTANT — EXCLUDE the following categories entirely; do NOT add them to any field:
+- Deployment/hosting details (Docker containers, VM specs, CPU/RAM sizing, managed DB config)
+- Operational concerns (health-check endpoints, auto-restart policies, HTTPS termination, load-balancer config, rate-limiting at the edge, backup schedules, read replicas, uptime SLA percentages)
+These are ops concerns, not architecture requirements.`;
 
     const parsed = await parseRequirementsWithRetry(prompt, config);
 
@@ -341,9 +408,11 @@ Ask 3-4 focused clarifying questions about ONLY the new addition — its scale, 
 interacts with the existing system, and any constraints. Do not re-ask about anything
 already confirmed above. Do not propose an implementation plan yet; that happens after
 this. Be concise.`
-        : `The user wants to design a new system. Ask 3-4 clarifying questions about their
-requirements — scale, read/write ratio, key features, constraints — before anything is
-built. Do not propose an implementation plan yet; that happens after this. Be concise.`
+        : `The user wants to design a new system. Ask 2-3 short clarifying questions about ONLY:
+- What core features/actions users can perform
+- Approximate number of users or expected traffic scale
+- Any hard constraints (e.g. must use a specific database, real-time updates needed)
+Do NOT ask about read/write ratio, ops, deployment, or infrastructure. Do not propose an implementation plan yet; that happens after this. Be concise.`
     );
 
     console.log("[DEBUG] Node: requirementsAgent invoking LLM");
@@ -413,7 +482,6 @@ CONTENT — cover only what applies, each as terse bullets:
 - **Messaging** (only if needed): one line — which broker + what flows through it. Mention key event schemas/payloads.
 - **Caching** (only if needed): one line — what's cached.
 - **Client**: one line — framework + how it talks to the backend.
-- **Ops**: one line — scaling/deployment, one line — security/auth.
 
 End with a single short line asking the user to approve or say what to change. Do not
 restate the requirements back to them.`
@@ -464,6 +532,46 @@ restate the requirements back to them.`
     return { implementationPlan: approved };
   };
 
+  const approveSchema = async (state: typeof GraphAnnotation.State) => {
+    const plan = state.implementationPlan ?? DEFAULT_PLAN;
+    const approved: ImplementationPlanState = { ...plan, status: "schema_approved" };
+
+    if (state.projectId && state.convexUrl) {
+      try {
+        const convex = getConvexClient(state);
+        await convex.mutation(api.requirements.upsertPlan, {
+          projectId: state.projectId,
+          content: approved.content,
+          status: "schema_approved",
+        });
+      } catch (error) {
+        console.error("[DEBUG] Error upserting plan (schema_approved):", error);
+      }
+    }
+
+    return { implementationPlan: approved };
+  };
+
+  const approveNodes = async (state: typeof GraphAnnotation.State) => {
+    const plan = state.implementationPlan ?? DEFAULT_PLAN;
+    const approved: ImplementationPlanState = { ...plan, status: "nodes_approved" };
+
+    if (state.projectId && state.convexUrl) {
+      try {
+        const convex = getConvexClient(state);
+        await convex.mutation(api.requirements.upsertPlan, {
+          projectId: state.projectId,
+          content: approved.content,
+          status: "nodes_approved",
+        });
+      } catch (error) {
+        console.error("[DEBUG] Error upserting plan (nodes_approved):", error);
+      }
+    }
+
+    return { implementationPlan: approved };
+  };
+
   // Router: after intent classification, walk the three gates in order —
   // requirements confirmed? plan approved? only then reach canvasAgent (with tools).
   const routeAfterIntent = (state: typeof GraphAnnotation.State) => {
@@ -473,7 +581,15 @@ restate the requirements back to them.`
     }
 
     const plan = state.implementationPlan ?? DEFAULT_PLAN;
-    if (plan.status !== "approved") {
+    const isBuildingPhase = 
+      plan.status === "approved" || 
+      plan.status === "schema_built" || 
+      plan.status === "schema_approved" || 
+      plan.status === "nodes_built" || 
+      plan.status === "nodes_approved" || 
+      plan.status === "edges_built";
+
+    if (!isBuildingPhase) {
       if (plan.status === "proposed" && state.planDecision === "approve") {
         return "approvePlan";
       }
@@ -481,6 +597,34 @@ restate the requirements back to them.`
         return "chatAgent";
       }
       return "planAgent";
+    }
+
+    if (plan.status === "schema_built") {
+      if (state.planDecision === "approve") {
+        return "approveSchema";
+      }
+      if (state.intent === "CHAT" && state.planDecision === "not_applicable") {
+        return "chatAgent";
+      }
+      return "canvasAgent";
+    }
+
+    if (plan.status === "nodes_built") {
+      if (state.planDecision === "approve") {
+        return "approveNodes";
+      }
+      if (state.intent === "CHAT" && state.planDecision === "not_applicable") {
+        return "chatAgent";
+      }
+      return "canvasAgent";
+    }
+
+    if (plan.status === "edges_built") {
+      // Nothing left to approve automatically after edges, but we can let them chat or edit manually.
+      if (state.intent !== "CREATE_SYSTEM" && state.intent !== "EDIT_SYSTEM") {
+        return "chatAgent";
+      }
+      return "canvasAgent";
     }
 
     if (state.intent !== "CREATE_SYSTEM" && state.intent !== "EDIT_SYSTEM") {
@@ -524,6 +668,8 @@ restate the requirements back to them.`
     .addNode("syncRequirements", syncRequirements)
     .addNode("planAgent", planAgent)
     .addNode("approvePlan", approvePlan)
+    .addNode("approveSchema", approveSchema)
+    .addNode("approveNodes", approveNodes)
     .addNode("canvasAgent", canvasAgent)
     .addNode("tools", customToolNode)
     .addNode("reflectAgent", reflectAgent)
@@ -536,6 +682,8 @@ restate the requirements back to them.`
     .addEdge("syncRequirements", "planAgent")
     .addEdge("planAgent", "__end__")
     .addEdge("approvePlan", "canvasAgent")
+    .addEdge("approveSchema", "canvasAgent")
+    .addEdge("approveNodes", "canvasAgent")
 
     .addConditionalEdges("canvasAgent", shouldContinue)
     .addConditionalEdges("tools", afterTools)
