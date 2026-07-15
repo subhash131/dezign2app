@@ -770,9 +770,11 @@ export const addSchemaTool = tool(
   }
 );
 
-export const addTableRefNodeTool = tool(
+export const addDbRefNodeTool = tool(
   async (input, config) => {
-    const { label, description, tableRef } = input;
+    const { label, type, data } = input;
+    const description = input.description || data?.description;
+    const tableRef = input.tableRef || data?.tableRef;
     const state = config.configurable?.state as typeof GraphAnnotation.State;
     if (!state?.projectId) return "Error: projectId missing";
     const convex = getConvexClient(state);
@@ -802,14 +804,16 @@ export const addTableRefNodeTool = tool(
     }
   },
   {
-    name: "add_table_ref_node",
+    name: "add_db_ref_node",
     description: "Add a database table reference node to the canvas. Use this to represent a reference to an existing database table (entity) so services can connect to it.",
     schema: z.object({
       label: z.string().describe("Name of the table reference (e.g. 'Users Table')"),
       description: z.string().optional(),
       tableRef: z.string().optional().describe("The ID of the target entity node this references, if known"),
+      type: z.string().optional(),
+      data: z.any().optional(),
     })
   }
 );
 
-export const tools = [addNodeTool, updateNodeTool, deleteNodeTool, addEdgeTool, deleteEdgeTool, addServiceNodeTool, addKafkaNodeTool, addClientNodeTool, addSchemaGroupTool, addSchemaTool, addTableRefNodeTool];
+export const tools = [addNodeTool, updateNodeTool, deleteNodeTool, addEdgeTool, deleteEdgeTool, addServiceNodeTool, addKafkaNodeTool, addClientNodeTool, addSchemaGroupTool, addSchemaTool, addDbRefNodeTool];

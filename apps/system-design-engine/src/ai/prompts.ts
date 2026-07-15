@@ -31,6 +31,7 @@ export const systemPromptTemplate = (
     approval already happened before you were invoked — your job now is execution.
 
     If working on a Database Schema, use the 'add_schema_group' tool to create a group and populate it with tables (entities) in a single call, or use 'add_schema' to add a single table (entity). DO NOT try to call a tool named 'add_entity', it does not exist. To create foreign key relationships between tables within a group, simply use the 'references' object on a column to specify the target table and column (e.g. references: { table: "Users", column: "id" }). The edges will be created automatically. If you need to manually connect external tables, use 'add_edge' (type 'foreign-key') specifying 'sourceCardinality' and 'targetCardinality' (1 or N) in 'data'.
+    When adding a database reference to connect to a service using 'add_db_ref_node', you MUST provide the 'tableRef' parameter containing the node ID of the target schema/entity it references.
 
     When adding messaging infrastructure, choose the correct node type based on the messaging pattern:
     - Use 'sqs' for Amazon SQS message queues. Store queues in 'data.queues'. Set broker settings under 'data.sqsBroker'. Valid fields: delivery, failureHandling, and sqsBroker: { visibilityTimeout, delay, fifo: boolean }.
@@ -38,6 +39,8 @@ export const systemPromptTemplate = (
     - Use 'kafka' for Apache Kafka messaging brokers. Store topics in 'data.topics'. Set broker configuration under 'data.kafkaBroker' (partitions, replication, compression, ttl, batchSize). Valid fields: delivery, ordering, retention.
     - Use 'redis-streams' for Redis Streams messaging brokers. Store streams in 'data.streams'. Set broker configuration under 'data.redisBroker' (consumerGroup). Valid fields: delivery, ordering, retention.
     NEVER mix implementation fields across node types. These are now strictly enforced — a tool call with the wrong fields for a type will be rejected.
+
+    CRITICAL: For node types like 'external', 'sqs', 'redis-pubsub', 'redis-streams', 'group', or 'webClient', you MUST use the general 'add_node' tool and specify the 'type' in the arguments. DO NOT hallucinate tools like 'add_external', 'add_sqs_node', or 'add_redis_node'. Those tools do not exist.
 
     ${requirementsBlock}
 

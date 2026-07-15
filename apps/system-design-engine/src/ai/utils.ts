@@ -39,7 +39,7 @@ export function formatToolCallLog(name: string, args: any): string {
     return `\nDeleted node **${args.id}**`;
   } else if (name === "delete_edge") {
     return `\nDeleted edge **${args.id}**`;
-  } else if (name === "add_table_ref_node") {
+  } else if (name === "add_db_ref_node") {
     return `\nAdded **${args.label}** (database ref)`;
   }
   return `\n\`\`\`json\n${JSON.stringify(args, null, 2)}\n\`\`\`\n`;

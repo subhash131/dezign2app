@@ -197,7 +197,7 @@ ${conversationContext}`
 
     const reflectionPrompt = new HumanMessage(
       hasFailure
-        ? `Some of your last tool calls failed. Review the tool error messages below, correct the parameters, and retry ONLY the failed operations using your tools. If the error is DUPLICATE_EDGE, it means the connection already exists and you can ignore it and stop. If you cannot fix an error, explain briefly and stop. DO NOT hallucinate tools like 'add_entity' - use 'add_schema' or 'add_schema_group' instead.\n\nRecent tool results:\n${recentToolMsgs
+        ? `Some of your last tool calls failed. Review the tool error messages below, correct the parameters, and retry ONLY the failed operations using your tools. If the error is DUPLICATE_EDGE, it means the connection already exists and you can ignore it and stop. If you cannot fix an error, explain briefly and stop. DO NOT hallucinate tools like 'add_entity' - use 'add_schema' or 'add_schema_group' instead. DO NOT hallucinate tools like 'add_external', 'add_sqs', or 'add_redis' - use the general 'add_node' tool for those.\n\nRecent tool results:\n${recentToolMsgs
             .map((m) => m.content)
             .join("\n")}`
         : `Review the tool results below against the user's original request AND the approved
@@ -205,12 +205,13 @@ implementation plan (technology choices, services, endpoints, messaging infra it
 If everything the plan called for has been built or already exists on the canvas AND all necessary connections (edges) have been drawn, respond with a brief confirmation summary
 and do NOT call any tools. If something the plan specified is still missing from BOTH the recent tool results AND the current canvas state, call the appropriate tool(s) to add it.
 
-CRITICAL: DO NOT hallucinate tools like 'add_entity'. If you need to add a schema/entity, use the 'add_schema' or 'add_schema_group' tools.
+CRITICAL: DO NOT hallucinate tools like 'add_entity'. If you need to add a schema/entity, use the 'add_schema' or 'add_schema_group' tools. For 'external', 'sqs', 'redis', or 'group' nodes, you MUST use the general 'add_node' tool. DO NOT hallucinate 'add_external', 'add_sqs', etc.
 
 CRITICAL: Make sure nodes are actually connected! If you just created nodes, you must now use their IDs from the tool results below to call the 'add_edge' tool and connect them together. 
 - You MUST connect WebClient events to Service endpoints.
 - You MUST connect Service endpoints to Database references (db_ref) if the service reads/writes data (use sourceHandle="endpoints-out-{id}" and targetHandle="database-target").
 Pay close attention to the generated IDs for endpoints and events to properly set sourceHandle and targetHandle.
+When adding a database reference using 'add_db_ref_node', you MUST provide the 'tableRef' parameter containing the node ID of the target schema/entity it references.
 
 Current Canvas State:
 ${state.canvasStateContext ?? "Canvas is empty."}
