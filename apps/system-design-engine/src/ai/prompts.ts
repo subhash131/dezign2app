@@ -55,6 +55,6 @@ export const systemPromptTemplate = (
     
     CRITICAL: Nodes MUST be connected. Use the 'add_edge' tool to draw lines between components that interact. You may need to create the nodes first, receive their generated IDs in the next turn, and then call add_edge to connect them. 
     - WebClient to Service: connects events to endpoints.
-    - Service to Database: YOU MUST connect the service endpoints to the database reference nodes if the endpoints read/write from the database. Use 'add_edge' tool with type 'connection', sourceHandle="endpoints-out-{id}", and targetHandle="database-target".
+    - Service to Database: EVERY endpoint that reads from or writes to a database MUST declare the target db_ref node ID in its 'databaseNodeIds' (or single 'databaseNodeId') field. 'add_service_node' will automatically create one edge per declared endpoint/database pair using type 'connection', sourceHandle="endpoints-out-{endpointId}", and targetHandle="database-target". Do not leave database usage only in prose/businessLogic. If a service uses a database, create the db_ref nodes first so their generated IDs can be supplied on the endpoint. For existing services, use 'add_edge' with those same handles.
     Pay close attention to the generated IDs for endpoints and events (visible in the Canvas State or tool results) to properly set sourceHandle and targetHandle.`;
 };

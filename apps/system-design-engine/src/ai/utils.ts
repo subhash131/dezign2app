@@ -55,7 +55,19 @@ export function formatCanvasState(elements: any): string {
         extra += `\n  Columns (use for 'sourceHandle'/'targetHandle'): ` + (n.data.columns as any[]).map((c) => `${c.name} (ID: ${c.id})`).join(", ");
       }
       if (n.type === "service" && n.data.endpoints) {
-        extra += `\n  Endpoints: ` + (n.data.endpoints as any[]).map((ep) => `${ep.type} ${ep.name} (targetHandle="endpoints-in-${ep.id}", sourceHandle="endpoints-out-${ep.id}")`).join("\n    ");
+        extra += `\n  Endpoints: ` + (n.data.endpoints as any[]).map((ep) => {
+          const dbTargets = [
+            ...(Array.isArray(ep.databaseNodeIds) ? ep.databaseNodeIds : []),
+            ...(ep.databaseNodeId ? [ep.databaseNodeId] : []),
+          ];
+          const db = [...new Set(dbTargets)].length > 0
+            ? `, databaseNodeIds=[${[...new Set(dbTargets)].join(", ")}]`
+            : "";
+          return `${ep.type} ${ep.name} (targetHandle="endpoints-in-${ep.id}", sourceHandle="endpoints-out-${ep.id}"${db})`;
+        }).join("\n    ");
+      }
+      if (n.type === "db_ref") {
+        extra += `\n  Database target handle: targetHandle="database-target"${n.data.tableRef ? ` (tableRef=${n.data.tableRef})` : ""}`;
       }
       if (n.type === "webClient" && n.data.events) {
         extra += `\n  Events: ` + (n.data.events as any[]).map((ev) => `${ev.name} (sourceHandle="events-${ev.id}")`).join("\n    ");
@@ -72,9 +84,45 @@ export function formatCanvasState(elements: any): string {
         const sourceNode = elements.nodes.find((n: any) => n.nodeId === e.source)?.data.label || e.source;
         const targetNode = elements.nodes.find((n: any) => n.nodeId === e.target)?.data.label || e.target;
         const label = e.data?.label ? ` (label: ${e.data.label})` : "";
-        output += `- ${sourceNode} -> ${targetNode} [${e.type}]${label}\n`;
+        output += `- ${sourceNode} (${e.source}) -> ${targetNode} (${e.target}) [${e.type}]${label} sourceHandle="${e.sourceHandle ?? ""}" targetHandle="${e.targetHandle ?? ""}"\n`;
       });
     }
+
+    // Give the reflection model an explicit, machine-derived audit instead
+    // of making it infer completeness from the total edge count. A canvas can
+    // have many client/service edges while every database reference remains
+    // disconnected.
+    const databaseRefs = elements.nodes.filter((n: any) => n.type === "db_ref");
+    const databaseEdges = (elements.edges ?? []).filter((e: any) =>
+      e.sourceHandle?.startsWith("endpoints-out-") &&
+      e.targetHandle === "database-target" &&
+      databaseRefs.some((db: any) => db.nodeId === e.target)
+    );
+    const auditLines: string[] = [];
+
+    for (const service of elements.nodes.filter((n: any) => n.type === "service")) {
+      for (const endpoint of service.data?.endpoints ?? []) {
+        const endpointEdges = databaseEdges.filter((e: any) =>
+          e.source === service.nodeId && e.sourceHandle === `endpoints-out-${endpoint.id}`
+        );
+        if (endpointEdges.length === 0) {
+          auditLines.push(
+            `- MISSING endpoint-to-database edge: service=${service.nodeId}, endpoint=${endpoint.id} (${endpoint.type} ${endpoint.name})`
+          );
+        }
+      }
+    }
+
+    for (const db of databaseRefs) {
+      if (!databaseEdges.some((e: any) => e.target === db.nodeId)) {
+        auditLines.push(`- UNCONNECTED db_ref: ${db.nodeId} (label="${db.data?.label ?? ""}")`);
+      }
+    }
+
+    output += "\nConnection Audit:\n" +
+      (auditLines.length > 0
+        ? auditLines.join("\n")
+        : "- No missing endpoint/database-reference connections detected.") + "\n";
   }
   return output;
 }

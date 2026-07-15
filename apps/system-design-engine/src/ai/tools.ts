@@ -190,6 +190,17 @@ export const addEdgeTool = tool(
       if (!sourceExists) return `Failed to add edge: source node ${source} does not exist`;
       if (!targetExists) return `Failed to add edge: target node ${target} does not exist`;
 
+      const duplicate = elements.edges.find((edge) =>
+        edge.source === source &&
+        edge.target === target &&
+        edge.type === type &&
+        (edge.sourceHandle ?? undefined) === (sourceHandle || undefined) &&
+        (edge.targetHandle ?? undefined) === (targetHandle || undefined)
+      );
+      if (duplicate) {
+        return `DUPLICATE_EDGE: edge ${duplicate.edgeId} already connects ${source} to ${target}`;
+      }
+
       const edgeId = `edge-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       const fractionalIndex = "a0" + Date.now() + Math.random().toString(36).slice(2, 6);
 
@@ -355,6 +366,25 @@ export const addServiceNodeTool = tool(
         }
       }
 
+      // Database usage is endpoint-scoped.  Keep this automatic so a model
+      // cannot accidentally leave a declared endpoint disconnected from its
+      // table reference while building the service node.
+      for (const ep of processedEndpoints) {
+        const databaseNodeIds = [
+          ...(Array.isArray((ep as any).databaseNodeIds) ? (ep as any).databaseNodeIds : []),
+          ...((ep as any).databaseNodeId ? [(ep as any).databaseNodeId] : []),
+        ];
+        for (const databaseNodeId of [...new Set(databaseNodeIds)]) {
+          edgesToCreate.push({
+            source: nodeId,
+            target: databaseNodeId,
+            sourceHandle: `endpoints-out-${ep.id}`,
+            targetHandle: "database-target",
+            type: "connection",
+          });
+        }
+      }
+
       for (const edge of edgesToCreate) {
         const edgeId = `edge-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
         const edgeFractionalIndex = "a0" + Date.now() + Math.random().toString(36).slice(2, 6);
@@ -370,7 +400,7 @@ export const addServiceNodeTool = tool(
         });
       }
 
-      let resultStr = `Added service node ${label} with ID ${nodeId} and ${edgesToCreate.length} event edges.`;
+      let resultStr = `Added service node ${label} with ID ${nodeId} and ${edgesToCreate.length} edges.`;
       if (processedEndpoints.length > 0) {
         resultStr += `\nEndpoints:\n` + processedEndpoints.map((ep) => `- ${ep.type} ${ep.name}: targetHandle="endpoints-in-${ep.id}", sourceHandle="endpoints-out-${ep.id}"`).join("\n");
       }
@@ -401,6 +431,8 @@ export const addServiceNodeTool = tool(
         type: z.string().describe("HTTP method (GET, POST, etc.)"),
         output: z.string().optional().describe("JSON response schema"),
         businessLogic: z.string().optional(),
+        databaseNodeIds: z.array(z.string()).optional().describe("IDs of db_ref nodes this endpoint reads from or writes to. REQUIRED whenever this endpoint uses a database; one endpoint may target multiple tables."),
+        databaseNodeId: z.string().optional().describe("Single db_ref node ID this endpoint uses; prefer databaseNodeIds when there is more than one."),
         publishedEvents: z.array(z.object({
           name: z.string(),
           kind: z.string().optional(),

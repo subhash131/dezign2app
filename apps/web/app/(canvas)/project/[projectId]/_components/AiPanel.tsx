@@ -27,6 +27,45 @@ type Message = {
   isStreaming?: boolean;
 };
 
+function serializeBackendCanvasForAI(
+  nodes: Array<{ id: string; type: string; data: any }>,
+  edges: Array<{ source: string; target: string; type?: string; sourceHandle?: string | null; targetHandle?: string | null }>,
+) {
+  if (nodes.length === 0) return "Backend Canvas is empty.";
+
+  let output = "Backend Canvas Nodes:\n";
+  for (const node of nodes) {
+    const data = node.data ?? {};
+    output += `- [${node.type}] id: ${node.id}, label: "${data.label ?? ""}"`;
+
+    if (node.type === "service" && Array.isArray(data.endpoints)) {
+      output += "\n  Endpoints:\n";
+      output += data.endpoints.map((endpoint: any) => {
+        const dbIds = [
+          ...(Array.isArray(endpoint.databaseNodeIds) ? endpoint.databaseNodeIds : []),
+          ...(endpoint.databaseNodeId ? [endpoint.databaseNodeId] : []),
+        ];
+        const uniqueDbIds = [...new Set(dbIds)];
+        const db = uniqueDbIds.length > 0 ? ` databaseNodeIds=[${uniqueDbIds.join(", ")}]` : "";
+        return `    - ${endpoint.type} ${endpoint.name} id=${endpoint.id} sourceHandle="endpoints-out-${endpoint.id}" targetHandle="endpoints-in-${endpoint.id}"${db}`;
+      }).join("\n");
+    }
+
+    if (node.type === "db_ref") {
+      output += `\n  DB reference: tableRef=${data.tableRef ?? "unknown"} targetHandle="database-target"`;
+    }
+    output += "\n";
+  }
+
+  if (edges.length > 0) {
+    output += "\nConnections (use these to avoid duplicates):\n";
+    for (const edge of edges) {
+      output += `- ${edge.source} -> ${edge.target} [${edge.type ?? "connection"}] sourceHandle="${edge.sourceHandle ?? ""}" targetHandle="${edge.targetHandle ?? ""}"\n`;
+    }
+  }
+  return output;
+}
+
 export function AiPanel({ projectId, isOpen, onClose }: AiPanelProps) {
   const [activeChatId, setActiveChatId] = useState<Id<"project_chats"> | null>(null);
   const [hasInitializedChat, setHasInitializedChat] = useState(false);
@@ -37,6 +76,8 @@ export function AiPanel({ projectId, isOpen, onClose }: AiPanelProps) {
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { getToken } = useAuth();
+  const backendNodes = useBackendCanvasStore((state) => state.nodes);
+  const backendEdges = useBackendCanvasStore((state) => state.edges);
   
   const reactFlow = useReactFlow();
 
@@ -105,9 +146,9 @@ export function AiPanel({ projectId, isOpen, onClose }: AiPanelProps) {
     await addMessage({ chatId: currentChatId, role: "user", content: userMessage }).catch(console.error);
 
     try {
-      const adapter = (window as any).backendAdapter || (window as any).canvasAdapter;
-
-      const canvasStateContext = adapter?.serialize() || "Canvas is empty.";
+      // Use the live backend store so the AI receives endpoint IDs, DB-ref IDs,
+      // and existing edge handles needed to repair disconnected tables.
+      const canvasStateContext = serializeBackendCanvasForAI(backendNodes, backendEdges);
       
       const token = await getToken({ template: "convex" });
 

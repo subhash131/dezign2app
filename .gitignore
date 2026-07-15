@@ -45,3 +45,6 @@ npm-debug.log*
 
 # Agent checkpoint data
 agent-checkpoints.json
+
+
+.pnpm-store

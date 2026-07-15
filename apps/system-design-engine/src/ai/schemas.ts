@@ -7,6 +7,7 @@ export const resourceItemSchema = z.object({
 
 export const kafkaDataSchema = z
   .object({
+    description: z.string().optional(),
     topics: z
       .array(
         z.object({
@@ -34,6 +35,7 @@ export const kafkaDataSchema = z
 
 export const sqsDataSchema = z
   .object({
+    description: z.string().optional(),
     queues: z.array(resourceItemSchema).optional(),
     sqsBroker: z
       .object({
@@ -49,6 +51,7 @@ export const sqsDataSchema = z
 
 export const redisPubSubDataSchema = z
   .object({
+    description: z.string().optional(),
     channels: z.array(resourceItemSchema).optional(),
     redisPubSubBroker: z.object({}).passthrough().optional(),
     delivery: z.string().optional(),
@@ -57,6 +60,7 @@ export const redisPubSubDataSchema = z
 
 export const redisStreamsDataSchema = z
   .object({
+    description: z.string().optional(),
     streams: z.array(resourceItemSchema).optional(),
     redisBroker: z
       .object({
@@ -71,6 +75,7 @@ export const redisStreamsDataSchema = z
 
 export const entityDataSchema = z
   .object({
+    description: z.string().optional(),
     columns: z.array(
       z.object({
         name: z.string(),
@@ -162,13 +167,18 @@ export const endpointSchema = z.object({
   id: z.string(),
   name: z.string(),
   type: z.string(),
-  headers: z.array(parameterSchema),
-  pathParams: z.array(parameterSchema),
-  queryParams: z.array(parameterSchema),
-  requestBody: schemaModelSchema,
-  responseBody: schemaModelSchema,
-  processingSteps: z.array(processingStepSchema),
-  publishedEvents: z.array(publishedEventSchema),
+  databaseNodeIds: z.array(z.string()).optional(),
+  databaseNodeId: z.string().optional(),
+  // Service creation may use the compact endpoint shape. Keep these optional
+  // so updating an existing service does not fail merely because an older
+  // endpoint was created without expanded request/response metadata.
+  headers: z.array(parameterSchema).optional(),
+  pathParams: z.array(parameterSchema).optional(),
+  queryParams: z.array(parameterSchema).optional(),
+  requestBody: schemaModelSchema.optional(),
+  responseBody: schemaModelSchema.optional(),
+  processingSteps: z.array(processingStepSchema).optional(),
+  publishedEvents: z.array(publishedEventSchema).optional(),
   metadata: architectureMetadataSchema.optional(),
 });
 

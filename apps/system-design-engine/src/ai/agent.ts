@@ -7,7 +7,7 @@ import { SystemMessage, AIMessage, BaseMessage, HumanMessage } from "@langchain/
 import { GraphAnnotation, DEFAULT_REQUIREMENTS, DEFAULT_PLAN, requirementsSchema, ImplementationPlanState } from "./state";
 import { tools } from "./tools";
 import { systemPromptTemplate } from "./prompts";
-import { getConvexClient } from "./utils";
+import { getConvexClient, formatCanvasState } from "./utils";
 import { api } from "@workspace/backend/_generated/api";
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 // ----------------------------------------------------------------------------
@@ -194,10 +194,18 @@ ${conversationContext}`
     );
 
     const plan = state.implementationPlan ?? DEFAULT_PLAN;
+    // Tool calls mutate Convex after the initial request snapshot was built.
+    // Always reflect against the current backend graph, not stale state from
+    // before the tool calls in this turn.
+    const convex = getConvexClient(state);
+    const currentElements = await convex.query(api.canvas.getBackendElements, {
+      projectId: state.projectId as any,
+    });
+    const currentCanvasState = formatCanvasState(currentElements);
 
     const reflectionPrompt = new HumanMessage(
       hasFailure
-        ? `Some of your last tool calls failed. Review the tool error messages below, correct the parameters, and retry ONLY the failed operations using your tools. If the error is DUPLICATE_EDGE, it means the connection already exists and you can ignore it and stop. If you cannot fix an error, explain briefly and stop. DO NOT hallucinate tools like 'add_entity' - use 'add_schema' or 'add_schema_group' instead. DO NOT hallucinate tools like 'add_external', 'add_sqs', or 'add_redis' - use the general 'add_node' tool for those.\n\nRecent tool results:\n${recentToolMsgs
+        ? `Some of your last tool calls failed. Review the tool error messages below, correct the parameters, and retry ONLY the failed operations using your tools. If the error is DUPLICATE_EDGE, it means the connection already exists and you can ignore it and stop. If a database connection is missing, NEVER use update_node to create it: use add_edge with the existing service node ID, db_ref node ID, sourceHandle="endpoints-out-{endpointId}", targetHandle="database-target", and type="connection". If you cannot fix an error, explain briefly and stop. DO NOT hallucinate tools like 'add_entity' - use 'add_schema' or 'add_schema_group' instead. DO NOT hallucinate tools like 'add_external', 'add_sqs', or 'add_redis' - use the general 'add_node' tool for those.\n\nRecent tool results:\n${recentToolMsgs
             .map((m) => m.content)
             .join("\n")}`
         : `Review the tool results below against the user's original request AND the approved
@@ -210,11 +218,12 @@ CRITICAL: DO NOT hallucinate tools like 'add_entity'. If you need to add a schem
 CRITICAL: Make sure nodes are actually connected! If you just created nodes, you must now use their IDs from the tool results below to call the 'add_edge' tool and connect them together. 
 - You MUST connect WebClient events to Service endpoints.
 - You MUST connect Service endpoints to Database references (db_ref) if the service reads/writes data (use sourceHandle="endpoints-out-{id}" and targetHandle="database-target").
+- When the user reports disconnected tables, treat that as a repair operation: inspect every service endpoint and existing connection, then issue one add_edge call for each missing endpoint→db_ref relationship. Do not call update_node just to create an edge.
 Pay close attention to the generated IDs for endpoints and events to properly set sourceHandle and targetHandle.
 When adding a database reference using 'add_db_ref_node', you MUST provide the 'tableRef' parameter containing the node ID of the target schema/entity it references.
 
 Current Canvas State:
-${state.canvasStateContext ?? "Canvas is empty."}
+        ${currentCanvasState}
 
 Approved Implementation Plan:
 ${plan.content || "none"}
