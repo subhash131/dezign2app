@@ -6,10 +6,8 @@ import {
   Background,
   Controls,
   MiniMap,
-  ReactFlowProvider,
   useReactFlow,
   Panel,
-  type Node,
   type NodeChange,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
@@ -226,8 +224,8 @@ function Flow({ projectId, view }: BackendCanvasProps) {
 
     const rawNodes: BackendNode[] = (initialElements.nodes ?? []).map((row: Doc<"canvas_backend_nodes">) => {
       let activePosition = row.position;
-      if (view === "schema" && row.data?.schemaPosition) {
-        activePosition = row.data.schemaPosition;
+      if (view === "schema" && row.data?.graphPosition) {
+        activePosition = row.data.graphPosition;
       } else if (view === "graph" && row.data?.graphPosition) {
         activePosition = row.data.graphPosition;
       }
@@ -238,13 +236,10 @@ function Flow({ projectId, view }: BackendCanvasProps) {
         data: {
           ...row.data,
           graphPosition: row.data?.graphPosition ?? row.position,
-          schemaPosition: row.data?.schemaPosition,
+          schemaPosition: row.data?.graphPosition,
         },
         fractionalIndex: row.fractionalIndex,
         parentId: row.data?.parentId,
-        style: row.data?.style,
-        width: row.data?.width,
-        height: row.data?.height,
       };
     }).map((node) => migrateNodeDataToV2(node as BackendNode));
     
