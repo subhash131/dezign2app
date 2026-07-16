@@ -50,7 +50,7 @@ export const addNodeTool = tool(
 
     const fractionalIndex = "a0" + Date.now() + Math.random().toString(36).slice(2, 6);
 
-    const processedData = assignResourceIds({ label, graphPosition: position, ...(data ?? {}) });
+    const processedData = assignResourceIds({ label, ...(data ?? {}) });
 
     try {
       await convex.mutation(api.canvas.upsertBackendNode, {

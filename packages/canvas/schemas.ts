@@ -245,6 +245,10 @@ export const entityDataSchema = baseNodeDataSchema.extend({
     isForeignKey: z.boolean().optional(),
     isNotNull: z.boolean().optional(),
     isUnique: z.boolean().optional(),
+    references: z.object({
+      table: z.string(),
+      column: z.string(),
+    }).optional(),
   })),
 }).strict();
 

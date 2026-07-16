@@ -25,7 +25,7 @@ export function formatToolCallLog(name: string, args: any): string {
   } else if (name === "add_schema_group") {
     const label = args.groupLabel || "Unknown Schema Group";
     return `\nAdded **${label}** (schema group)`;
-  } else if (name === "add_schema") {
+  } else if (name === "add_schema" || name === "add_single_schema") {
     const label = args.label || "Unknown Schema";
     return `\nAdded **${label}** (schema)`;
   } else if (name === "add_kafka_node") {
