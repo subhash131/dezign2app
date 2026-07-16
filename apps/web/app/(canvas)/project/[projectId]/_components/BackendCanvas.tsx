@@ -490,10 +490,10 @@ function Flow({ projectId, view }: BackendCanvasProps) {
               <PlusSquare className="w-3.5 h-3.5 mr-2" />
               Table
             </Button>
-            <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs" onClick={handleAddGroup}>
+            {/* <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs" onClick={handleAddGroup}>
               <FolderPlus className="w-3.5 h-3.5 mr-2" />
               Group
-            </Button>
+            </Button> */}
             <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs" onClick={() => {
                // runAutoLayout()
             }}>

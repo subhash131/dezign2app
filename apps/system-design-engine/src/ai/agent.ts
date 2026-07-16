@@ -83,11 +83,11 @@ export function createGraph() {
 questions. Determine "readyForRequirementsSync": true if the user's latest message
 sufficiently answers those questions, or explicitly says to proceed / use assumptions.
 Otherwise false.`
-        : plan.status === "proposed"
-        ? `The assistant just proposed an implementation plan and is awaiting approval.
+        : (plan.status === "proposed" || plan.status === "schema_built" || plan.status === "nodes_built")
+        ? `The assistant just proposed an architecture stage (plan, schema, or nodes) and is awaiting approval.
 Determine "planDecision": "approve" if the user accepts it (e.g. "looks good", "proceed",
 "build it"), "revise" if they want changes to the plan, or "not_applicable" if their message
-doesn't address the plan at all.`
+doesn't address the approval at all.`
         : "";
 
     const intentPrompt = new SystemMessage(
@@ -225,7 +225,7 @@ ${conversationContext}`
 
     const reflectionPrompt = new HumanMessage(
       hasFailure
-        ? `Some of your last tool calls failed. Review the tool error messages below, correct the parameters, and retry ONLY the failed operations using your tools. If the error is DUPLICATE_EDGE, it means the connection already exists and you can ignore it and stop. If a database connection is missing, NEVER use update_node to create it: use add_edge with the existing service node ID, db_ref node ID, sourceHandle="endpoints-out-{endpointId}", targetHandle="database-target", and type="connection". If you cannot fix an error, explain briefly and stop. DO NOT hallucinate tools like 'add_entity' - use 'add_single_schema' or 'add_schema_group' instead. DO NOT hallucinate tools like 'add_external', 'add_sqs', or 'add_redis' - use the general 'add_node' tool for those.\n\nRecent tool results:\n${recentToolMsgs
+        ? `Some of your last tool calls failed. Review the tool error messages below, correct the parameters, and retry ONLY the failed operations using your tools. If the error is DUPLICATE_EDGE, it means the connection already exists and you can ignore it and stop. If a database connection is missing, NEVER use update_node to create it: use add_edge with the existing service node ID, db_ref node ID, sourceHandle="endpoints-out-{endpointId}", targetHandle="database-target", and type="connection". If you cannot fix an error, explain briefly and stop. DO NOT hallucinate tools like 'add_entity' - use 'add_single_schema' instead. DO NOT hallucinate tools like 'add_external', 'add_sqs', or 'add_redis' - use the general 'add_node' tool for those.\n\nRecent tool results:\n${recentToolMsgs
             .map((m) => m.content)
             .join("\n")}`
         : `Review the tool results below against the user's original request AND the approved
@@ -234,11 +234,12 @@ Ensure you only evaluate what is required for the CURRENT STAGE (as defined in t
 If everything required for the current stage has been built or already exists on the canvas, respond with a brief confirmation summary and do NOT call any tools. 
 If something required for the current stage is still missing from BOTH the recent tool results AND the current canvas state, call the appropriate tool(s) to add it.
 
-CRITICAL: DO NOT hallucinate tools like 'add_entity'. If you need to add a schema/entity, use the 'add_single_schema' or 'add_schema_group' tools. For 'external', 'sqs', 'redis', or 'group' nodes, you MUST use the general 'add_node' tool. DO NOT hallucinate 'add_external', 'add_sqs', etc.
+CRITICAL: DO NOT hallucinate tools like 'add_entity'. If you need to add a schema/entity, use the 'add_single_schema' tool. For 'external', 'sqs', 'redis', nodes, you MUST use the general 'add_node' tool. DO NOT hallucinate 'add_external', 'add_sqs', etc.
 
 CRITICAL: Make sure nodes are actually connected! If you just created nodes, you must now use their IDs from the tool results below to call the 'add_edge' tool and connect them together. 
 - You MUST connect WebClient events to Service endpoints.
 - You MUST connect Service endpoints to Database references (db_ref) if the service reads/writes data (use sourceHandle="endpoints-out-{id}" and targetHandle="database-target").
+- You MUST connect database entities to establish foreign keys using the 'add_schema_edge' tool. Do NOT use 'add_edge' for foreign keys.
 - When the user reports disconnected tables, treat that as a repair operation: inspect every service endpoint and existing connection, then issue one add_edge call for each missing endpoint→db_ref relationship. Do not call update_node just to create an edge.
 Pay close attention to the generated IDs for endpoints and events to properly set sourceHandle and targetHandle.
 When adding a database reference using 'add_db_ref_node', you MUST provide the 'tableRef' parameter containing the node ID of the target schema/entity it references.
@@ -478,7 +479,7 @@ CONTENT — cover only what applies, each as terse bullets:
 - **Architecture**: one line naming the pattern (monolith/microservices/serverless/event-driven).
 - **Services**: one line per service — name, tech stack, one-clause responsibility, 2-4
   representative endpoints as "METHOD /path".
-- **Data storage & Schemas**: one line per store — engine + what it holds. CRITICAL: Include sub-bullets detailing the specific schemas (tables/entities/collections) and their key fields needed to satisfy the functional requirements. These will be modeled as SchemaGroupNodes and Entity nodes.
+- **Data storage & Schemas**: one line per store — engine + what it holds. CRITICAL: Include sub-bullets detailing the specific schemas (tables/entities/collections) and their key fields needed to satisfy the functional requirements. These will be modeled as Entity nodes.
 - **Messaging** (only if needed): one line — which broker + what flows through it. Mention key event schemas/payloads.
 - **Caching** (only if needed): one line — what's cached.
 - **Client**: one line — framework + how it talks to the backend.

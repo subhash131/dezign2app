@@ -210,7 +210,7 @@ export function AiPanel({ projectId, isOpen, onClose, setView }: AiPanelProps) {
               
               // Automatically switch tabs based on what the AI is building
               if (setView) {
-                if (data.name === "add_schema_group" || data.name === "add_single_schema") {
+                if (data.name === "add_schema_group" || data.name === "add_single_schema" || data.name === "add_schema_edge") {
                   setView("schema");
                 } else {
                   setView("graph");

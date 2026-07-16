@@ -234,6 +234,7 @@ export const simpleDataSchema = baseNodeDataSchema.extend({
 export const dbRefDataSchema = baseNodeDataSchema.extend({
   description: z.string().optional(),
   tableRef: z.string().optional(),
+  graphPosition: z.object({ x: z.number(), y: z.number() }).optional(),
 }).strict();
 
 export const entityDataSchema = baseNodeDataSchema.extend({
