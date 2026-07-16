@@ -267,21 +267,43 @@ export const entityColumnInputSchema = z.object({
   }).optional().describe("If this is a foreign key, which table and column it references in this group"),
 });
 
+export const kafkaTopicSchema = z.object({
+  id: z.string(),
+  kind: z.literal("topic").optional(),
+  name: z.string(),
+  description: z.string().optional(),
+  schema: z.string().optional(),
+  version: z.string().optional(),
+});
+export type KafkaTopic = z.infer<typeof kafkaTopicSchema>;
+
+export const kafkaTopicInputSchema = kafkaTopicSchema.extend({
+  id: z.string().optional(),
+});
+
+export const kafkaBrokerSchema = z.object({
+  partitions: z.number().optional(),
+  replication: z.number().optional(),
+  batchSize: z.string().optional(),
+  compression: z.string().optional(),
+  ttl: z.string().optional(),
+});
+export type KafkaBrokerConfig = z.infer<typeof kafkaBrokerSchema>;
+
 export const kafkaDataSchema = baseNodeDataSchema.extend({
   description: z.string().optional(),
-  topics: z.array(z.object({
-    id: z.string().optional(),
-    name: z.string(),
-    schema: z.string().optional(),
-    version: z.string().optional(),
-  })).optional(),
-  kafkaBroker: z.object({
-    partitions: z.number().optional(),
-    replication: z.number().optional(),
-    batchSize: z.number().optional(),
-    compression: z.string().optional(),
-    ttl: z.string().optional(),
-  }).optional(),
+  topics: z.array(kafkaTopicSchema).optional(),
+  kafkaBroker: kafkaBrokerSchema.optional(),
+  delivery: z.string().optional(),
+  ordering: z.string().optional(),
+  retention: z.string().optional(),
+}).strict();
+export type KafkaNodeData = z.infer<typeof kafkaDataSchema>;
+
+export const kafkaDataInputSchema = baseNodeDataSchema.extend({
+  description: z.string().optional(),
+  topics: z.array(kafkaTopicInputSchema).optional(),
+  kafkaBroker: kafkaBrokerSchema.optional(),
   delivery: z.string().optional(),
   ordering: z.string().optional(),
   retention: z.string().optional(),

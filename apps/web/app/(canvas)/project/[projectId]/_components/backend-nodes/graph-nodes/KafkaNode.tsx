@@ -124,11 +124,11 @@ export const KafkaNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
           <div className="px-3 py-2 flex flex-col gap-3 border-t text-[10px] text-muted-foreground bg-secondary/5">
             <div className="flex items-center justify-between gap-2">
               <Label className="text-[10px] font-bold text-muted-foreground">Partitions</Label>
-              <Input className="h-6 text-[10px] w-16 text-right bg-background nodrag" placeholder="e.g. 3" value={broker.partitions || ""} onChange={e => updateBroker("partitions", e.target.value)} />
+              <Input type="number" className="h-6 text-[10px] w-16 text-right bg-background nodrag" placeholder="e.g. 3" value={broker.partitions || ""} onChange={e => updateBroker("partitions", e.target.value ? Number(e.target.value) : undefined)} />
             </div>
             <div className="flex items-center justify-between gap-2">
               <Label className="text-[10px] font-bold text-muted-foreground">Replication Factor</Label>
-              <Input className="h-6 text-[10px] w-16 text-right bg-background nodrag" placeholder="e.g. 3" value={broker.replication || ""} onChange={e => updateBroker("replication", e.target.value)} />
+              <Input type="number" className="h-6 text-[10px] w-16 text-right bg-background nodrag" placeholder="e.g. 3" value={broker.replication || ""} onChange={e => updateBroker("replication", e.target.value ? Number(e.target.value) : undefined)} />
             </div>
             <div className="flex items-center justify-between gap-2">
               <Label className="text-[10px] font-bold text-muted-foreground">Compression</Label>

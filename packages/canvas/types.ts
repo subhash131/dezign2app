@@ -47,14 +47,7 @@ export type BackendCanvasView = "graph" | "sequence" | "schema";
 
 // --- Backend Canvas Types ---
 
-export type KafkaTopic = {
-  id: string;
-  kind: "topic";
-  name: string;
-  description?: string;
-  payloadSchema?: Schema;
-  version?: string;
-};
+import type { KafkaTopic, KafkaBrokerConfig } from "./schemas";
 
 export type RedisStream = {
   id: string;
@@ -74,13 +67,7 @@ export type SQSQueue = {
   version?: string;
 };
 
-export type KafkaBrokerConfig = {
-  partitions?: string;
-  replication?: string;
-  compression?: string;
-  ttl?: string;
-  batchSize?: string;
-};
+
 
 export type RedisStreamsBrokerConfig = {
   consumerGroup?: string;

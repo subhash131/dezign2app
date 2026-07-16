@@ -41,6 +41,8 @@ export function formatToolCallLog(name: string, args: any): string {
     return `\nDeleted edge **${args.id}**`;
   } else if (name === "add_db_ref_node") {
     return `\nAdded **${args.label}** (database ref)`;
+  } else if(name === "add_schema_edge"){
+    return `\nLinked relationships between tables.`;
   }
   return `\n\`\`\`json\n${JSON.stringify(args, null, 2)}\n\`\`\`\n`;
 }
