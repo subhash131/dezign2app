@@ -7,7 +7,10 @@ import {
   EdgeChange,
   addEdge,
   Connection,
+  Node,
+  Edge
 } from "@xyflow/react";
+import { PublishedEventInputType, ConsumedEventInputType, BackendNodeType } from "@workspace/canvas/types";
 import { generateKeyBetween } from "fractional-indexing";
 import { isValidConnection } from "@workspace/canvas";
 
@@ -31,9 +34,9 @@ export function parseResourceHandle(handleId: string | null | undefined): {
       (direction === "in" || direction === "out")
     ) {
       return {
-        resourceType: resourceType as any,
-        direction: direction as any,
-        resourceId: resourceId as string
+        resourceType: resourceType,
+        direction: direction,
+        resourceId: resourceId!
       };
     }
   }
@@ -95,88 +98,14 @@ export const useBackendCanvasStore = create<BackendCanvasState>((set, get) => ({
   setNodesPendingDeletion: (nodes) => set({ nodesPendingDeletion: nodes }),
 
   onNodesChange: (changes) => {
-    // Clamp negative positions for child nodes before applying changes
-    for (const change of changes) {
-      if (change.type === "position" && change.position) {
-        const node = get().nodes.find(n => n.id === change.id);
-        if (node && node.parentId) {
-           if (change.position.x < 0) change.position.x = 0;
-           // Keep some top padding for the header
-           if (change.position.y < 40) change.position.y = 40;
-        }
-      }
-    }
-
-    let next = applyNodeChanges(changes, get().nodes as any) as any as BackendNode[];
-    
-    // Auto-resize parent nodes if child nodes are dragged
-    const positionChanges = changes.filter((c) => c.type === "position" && c.position);
-    const autoResizedParentIds = new Set<string>();
-    
-    if (positionChanges.length > 0) {
-      const nextNodesMap = new Map(next.map(n => [n.id, n]));
-      const parentIdsToUpdate = new Set<string>();
-      
-      for (const change of positionChanges) {
-        const node = nextNodesMap.get(change.id);
-        if (node && node.parentId) {
-          parentIdsToUpdate.add(node.parentId);
-        }
-      }
-      
-      for (const parentId of parentIdsToUpdate) {
-        const parentNode = nextNodesMap.get(parentId);
-        if (!parentNode) continue;
-        
-        const children = next.filter((n) => n.parentId === parentId);
-        if (children.length === 0) continue;
-        
-        let maxX = 0;
-        let maxY = 0;
-        
-        for (const child of children) {
-          const childX = child.position.x;
-          const childY = child.position.y;
-          const childWidth = (child as any).measured?.width ?? child.width ?? 350;
-          const childHeight = (child as any).measured?.height ?? child.height ?? 200;
-          
-          if (childX + childWidth > maxX) maxX = childX + childWidth;
-          if (childY + childHeight > maxY) maxY = childY + childHeight;
-        }
-        
-        const padding = 40;
-        const currentWidth = (parentNode as any).measured?.width ?? parentNode.width ?? 450;
-        const currentHeight = (parentNode as any).measured?.height ?? parentNode.height ?? 300;
-        
-        const newWidth = Math.max(currentWidth, maxX + padding);
-        const newHeight = Math.max(currentHeight, maxY + padding);
-        
-        if (newWidth !== currentWidth || newHeight !== currentHeight) {
-          const updatedParent = {
-             ...parentNode,
-             width: newWidth,
-             height: newHeight,
-             style: {
-               ...parentNode.style,
-               width: newWidth,
-               height: newHeight,
-             }
-          };
-          nextNodesMap.set(parentId, updatedParent);
-          autoResizedParentIds.add(parentId);
-        }
-      }
-      
-      next = Array.from(nextNodesMap.values());
-    }
+    const next = applyNodeChanges<BackendNode>(changes, get().nodes);
 
     const removedIds: string[] = changes
       .filter((c) => c.type === "remove")
-      .map((c: any) => c.id);
+      .map((c) => c.id);
 
     const upserts = next.filter((n) =>
-      changes.some((c: any) => c.id === n.id && c.type !== "remove") ||
-      autoResizedParentIds.has(n.id)
+      changes.some((c) => c.id === n.id && c.type !== "remove")
     );
 
     set({
@@ -187,13 +116,13 @@ export const useBackendCanvasStore = create<BackendCanvasState>((set, get) => ({
   },
 
   onEdgesChange: (changes) => {
-    const next = applyEdgeChanges(changes, get().edges as any) as any as BackendEdge[];
+    const next = applyEdgeChanges<BackendEdge>(changes, get().edges);
     const removedIds: string[] = changes
       .filter((c) => c.type === "remove")
-      .map((c: any) => c.id);
+      .map((c) => c.id);
 
     const upserts = next.filter((e) =>
-      changes.some((c: any) => c.id === e.id && c.type !== "remove")
+      changes.some((c) => c.id === e.id && c.type !== "remove")
     );
 
     // Sync edge deletion back to node event dropdowns
@@ -205,7 +134,7 @@ export const useBackendCanvasStore = create<BackendCanvasState>((set, get) => ({
         const eventId = edge.sourceHandle.replace("publishedEvents-out-", "");
         const sourceNode = get().nodes.find(n => n.id === edge.source);
         if (sourceNode && sourceNode.data.publishedEvents) {
-          const updatedEvents = sourceNode.data.publishedEvents.map((ev: any) =>
+          const updatedEvents = sourceNode.data.publishedEvents.map((ev) =>
             ev.id === eventId ? { ...ev, targetNodeId: "none" } : ev
           );
           get().updateNode(sourceNode.id, {
@@ -219,7 +148,7 @@ export const useBackendCanvasStore = create<BackendCanvasState>((set, get) => ({
         const eventId = edge.targetHandle.replace("consumedEvents-in-", "");
         const targetNode = get().nodes.find(n => n.id === edge.target);
         if (targetNode && targetNode.data.consumedEvents) {
-          const updatedEvents = targetNode.data.consumedEvents.map((ev: any) =>
+          const updatedEvents = targetNode.data.consumedEvents.map((ev) =>
             ev.id === eventId ? { ...ev, targetNodeId: "none" } : ev
           );
           get().updateNode(targetNode.id, {
@@ -242,9 +171,9 @@ export const useBackendCanvasStore = create<BackendCanvasState>((set, get) => ({
     if (!sourceNode || !targetNode) return;
 
     const result = isValidConnection(
-      sourceNode.type as any, connection.sourceHandle,
-      targetNode.type as any, connection.targetHandle,
-      { sourceNodeId: connection.source!, targetNodeId: connection.target!, existingEdges: get().edges as any }
+      sourceNode.type, connection.sourceHandle,
+      targetNode.type, connection.targetHandle,
+      { sourceNodeId: connection.source!, targetNodeId: connection.target!, existingEdges: get().edges }
     );
     
     if (!result.valid) {
@@ -271,7 +200,7 @@ export const useBackendCanvasStore = create<BackendCanvasState>((set, get) => ({
       id: `edge-${Date.now()}`,
       source: connection.source!,
       target: connection.target!,
-      type: edgeType as any,
+      type: edgeType as BackendEdge["type"],
       sourceHandle: connection.sourceHandle,
       targetHandle: connection.targetHandle,
       fractionalIndex,
@@ -284,8 +213,8 @@ export const useBackendCanvasStore = create<BackendCanvasState>((set, get) => ({
     if (isPublishedConnect && connection.sourceHandle) {
       const eventId = connection.sourceHandle.replace('publishedEvents-out-', '');
       if (sourceNode.data.publishedEvents) {
-        const updatedEvents = sourceNode.data.publishedEvents.map((ev: any) =>
-          ev.id === eventId ? { ...ev, targetNodeId: connection.target } : ev
+        const updatedEvents = sourceNode.data.publishedEvents.map((ev) =>
+          ev.id === eventId ? { ...ev, targetNodeId: connection.target ?? undefined } : ev
         );
         get().updateNode(sourceNode.id, {
           data: { ...sourceNode.data, publishedEvents: updatedEvents }
@@ -296,8 +225,8 @@ export const useBackendCanvasStore = create<BackendCanvasState>((set, get) => ({
     if (isConsumedConnect && connection.targetHandle) {
       const eventId = connection.targetHandle.replace('consumedEvents-in-', '');
       if (targetNode.data.consumedEvents) {
-        const updatedEvents = targetNode.data.consumedEvents.map((ev: any) =>
-          ev.id === eventId ? { ...ev, targetNodeId: connection.source } : ev
+        const updatedEvents = targetNode.data.consumedEvents.map((ev) =>
+          ev.id === eventId ? { ...ev, targetNodeId: connection.source ?? undefined } : ev
         );
         get().updateNode(targetNode.id, {
           data: { ...targetNode.data, consumedEvents: updatedEvents }
@@ -318,7 +247,7 @@ export const useBackendCanvasStore = create<BackendCanvasState>((set, get) => ({
        }
     }
 
-    const next = addEdge(newEdge as any, get().edges as any) as any as BackendEdge[];
+    const next = addEdge(newEdge, get().edges);
     set({
       edges: next,
       pendingEdgeUpserts: [...get().pendingEdgeUpserts, newEdge],
@@ -328,7 +257,7 @@ export const useBackendCanvasStore = create<BackendCanvasState>((set, get) => ({
   addNode: (nodeWithoutIndex) => {
     const lastNodeIndex = getLastIndex(get().nodes);
     const fractionalIndex = generateKeyBetween(lastNodeIndex, null);
-    const node: BackendNode = { ...nodeWithoutIndex, fractionalIndex, selected: true } as BackendNode;
+    const node = { ...nodeWithoutIndex, fractionalIndex, selected: true };
     const next = [...get().nodes.map(n => ({ ...n, selected: false })), node];
     set({
       nodes: next,
@@ -378,7 +307,7 @@ export const useBackendCanvasStore = create<BackendCanvasState>((set, get) => ({
       // 1. Remove edges that are no longer referenced or changed targetNodeId
       existingPublishEdges.forEach((edge) => {
         const eventId = edge.sourceHandle?.replace("publishedEvents-out-", "");
-        const ev = currentEvents.find((e: any) => e.id === eventId);
+        const ev = currentEvents.find((e) => e.id === eventId);
         if (!ev || ev.targetNodeId !== edge.target || ev.targetNodeId === "none") {
           nextEdges = nextEdges.filter((e) => e.id !== edge.id);
           edgesChanged = true;
@@ -387,7 +316,7 @@ export const useBackendCanvasStore = create<BackendCanvasState>((set, get) => ({
       });
 
       // 2. Add edges for newly selected targetNodeId
-      currentEvents.forEach((ev: any) => {
+      currentEvents.forEach((ev: { id?: string; targetNodeId?: string }) => {
         if (ev.targetNodeId && ev.targetNodeId !== "none") {
           const hasEdge = existingPublishEdges.some(
             (e) => e.sourceHandle === `publishedEvents-out-${ev.id}` && e.target === ev.targetNodeId
@@ -422,7 +351,7 @@ export const useBackendCanvasStore = create<BackendCanvasState>((set, get) => ({
       // 1. Remove edges that are no longer referenced or changed
       existingConsumeEdges.forEach((edge) => {
         const eventId = edge.targetHandle?.replace("consumedEvents-in-", "");
-        const ev = currentEvents.find((e: any) => e.id === eventId);
+        const ev = currentEvents.find((e) => e.id === eventId);
         if (!ev || ev.targetNodeId !== edge.source || ev.targetNodeId === "none") {
           nextEdges = nextEdges.filter((e) => e.id !== edge.id);
           edgesChanged = true;
@@ -431,7 +360,7 @@ export const useBackendCanvasStore = create<BackendCanvasState>((set, get) => ({
       });
 
       // 2. Add edges for newly selected targetNodeId
-      currentEvents.forEach((ev: any) => {
+      currentEvents.forEach((ev: { id?: string; targetNodeId?: string }) => {
         if (ev.targetNodeId && ev.targetNodeId !== "none") {
           const hasEdge = existingConsumeEdges.some(
             (e) => e.targetHandle === `consumedEvents-in-${ev.id}` && e.source === ev.targetNodeId
@@ -456,7 +385,7 @@ export const useBackendCanvasStore = create<BackendCanvasState>((set, get) => ({
       });
     }
 
-    const update: any = {
+    const update: Partial<BackendCanvasState> = {
       nodes: next,
       pendingNodeUpserts: [...get().pendingNodeUpserts, updated],
     };
@@ -489,7 +418,7 @@ export const useBackendCanvasStore = create<BackendCanvasState>((set, get) => ({
   addEdge: (edgeWithoutIndex) => {
     const lastEdgeIndex = getLastIndex(get().edges);
     const fractionalIndex = generateKeyBetween(lastEdgeIndex, null);
-    const edge: BackendEdge = { ...edgeWithoutIndex, fractionalIndex } as BackendEdge;
+    const edge = { ...edgeWithoutIndex, fractionalIndex };
     const next = [...get().edges, edge];
     set({
       edges: next,

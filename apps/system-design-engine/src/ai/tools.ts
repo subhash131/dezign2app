@@ -6,6 +6,11 @@ import { Id } from "@workspace/backend/_generated/dataModel";
 import { getConvexClient } from "./utils";
 import { EDGE_TYPE_MAP, WEB_CLIENT_EVENTS, BackendNode } from "@workspace/canvas";
 import {
+  EndpointInputType,
+  ConsumedEventInputType,
+  PublishedEventInputType
+} from "@workspace/canvas/types";
+import {
   simpleDataSchema,
   entityDataSchema,
   kafkaDataSchema,
@@ -276,11 +281,55 @@ export const deleteEdgeTool = tool(
   }
 );
 
+export interface AddServiceNodeInput {
+  label: string;
+  description?: string;
+  techStack?: string;
+  port?: string;
+  cors?: boolean;
+  corsOrigins?: string;
+  rateLimit?: string;
+  baseUrl?: string;
+  endpoints?: EndpointInputType[];
+  consumedEvents?: ConsumedEventInputType[];
+  publishedEvents?: PublishedEventInputType[];
+  inputs?: { id?: string; name: string }[];
+  outputs?: { id?: string; name: string }[];
+  logic?: { id?: string; name: string }[];
+  routeGroups?: { id?: string; name: string; basePath: string; endpoints: EndpointInputType[] }[];
+}
+
+const addServiceNodeSchema: z.ZodType<AddServiceNodeInput> = z.object({
+  label: z.string().describe("Name of the service"),
+  description: z.string().optional(),
+  techStack: z.string().optional(),
+  port: z.string().optional(),
+  cors: z.boolean().optional(),
+  corsOrigins: z.string().optional(),
+  rateLimit: z.string().optional(),
+  baseUrl: z.string().optional(),
+  endpoints: z.array(endpointInputSchema).optional(),
+  consumedEvents: z.array(consumedEventInputSchema).optional(),
+  publishedEvents: z.array(publishedEventInputSchema).optional(),
+  inputs: z.array(z.object({ id: z.string().optional(), name: z.string() })).optional(),
+  outputs: z.array(z.object({ id: z.string().optional(), name: z.string() })).optional(),
+  logic: z.array(z.object({ id: z.string().optional(), name: z.string() })).optional(),
+  routeGroups: z.array(z.object({
+    id: z.string().optional(),
+    name: z.string(),
+    basePath: z.string(),
+    endpoints: z.array(endpointInputSchema),
+  })).optional(),
+}) as unknown as z.ZodType<AddServiceNodeInput>;
+
+
+
 export const addServiceNodeTool = tool(
   async (input, config) => {
     const { label, description, techStack, port, cors, baseUrl, endpoints, consumedEvents, publishedEvents, inputs, outputs, logic } = input;
     const state = config.configurable?.state as typeof GraphAnnotation.State;
     if (!state?.projectId) return "Error: projectId missing";
+
     const convex = getConvexClient(state);
 
     const nodeId = `node-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -292,35 +341,35 @@ export const addServiceNodeTool = tool(
     const fractionalIndex = "a0" + Date.now() + Math.random().toString(36).slice(2, 6);
 
     const makeId = () => Math.random().toString(36).slice(2, 9);
-    const processedEndpoints = (endpoints || []).map((ep) => ({
+    const processedEndpoints = (endpoints || []).map((ep: EndpointInputType) => ({
       ...ep,
       id: (ep as {id?: string}).id || makeId(),
-      headers: ((ep as any).headers ?? []).map((item: any) => ({ ...item, id: item.id || makeId() })),
-      pathParams: ((ep as any).pathParams ?? []).map((item: any) => ({ ...item, id: item.id || makeId() })),
-      queryParams: ((ep as any).queryParams ?? []).map((item: any) => ({ ...item, id: item.id || makeId() })),
+      headers: (ep.headers ?? []).map((item) => ({ ...item, id: item.id || makeId() })),
+      pathParams: (ep.pathParams ?? []).map((item) => ({ ...item, id: item.id || makeId() })),
+      queryParams: (ep.queryParams ?? []).map((item) => ({ ...item, id: item.id || makeId() })),
       requestBody: {
-        id: (ep as any).requestBody?.id || makeId(),
-        fields: ((ep as any).requestBody?.fields ?? []).map((item: any) => ({ ...item, id: item.id || makeId() })),
+        id: ep.requestBody?.id || makeId(),
+        fields: (ep.requestBody?.fields ?? []).map((item) => ({ ...item, id: item.id || makeId() })),
       },
       responseBody: {
-        id: (ep as any).responseBody?.id || makeId(),
-        fields: ((ep as any).responseBody?.fields ?? [{ name: "response", type: "object", required: true, description: ep.output || "Endpoint response" }]).map((item: any) => ({ ...item, id: item.id || makeId() })),
+        id: ep.responseBody?.id || makeId(),
+        fields: (ep.responseBody?.fields ?? [{ name: "response", type: "object", required: true, description: ep.output || "Endpoint response" }]).map((item) => ({ ...item, id: item.id || makeId() })),
       },
-      processingSteps: ((ep as any).processingSteps ?? []).map((step: any) => ({ ...step, id: step.id || makeId() })),
+      processingSteps: (ep.processingSteps ?? []).map((step) => ({ ...step, id: step.id || makeId() })),
       publishedEvents: ep.publishedEvents?.map((pe) => ({
         ...pe,
-        id: (pe as {id?: string}).id || makeId(),
+        id: pe.id || makeId(),
       })),
     }));
 
-    const processedConsumedEvents = (consumedEvents || []).map((ce) => ({
+    const processedConsumedEvents = (consumedEvents || []).map((ce: ConsumedEventInputType) => ({
       ...ce,
-      id: (ce as {id?: string}).id || Math.random().toString(36).slice(2, 9),
+      id: ce.id || Math.random().toString(36).slice(2, 9),
     }));
 
-    const processedPublishedEvents = (publishedEvents || []).map((pe) => ({
+    const processedPublishedEvents = (publishedEvents || []).map((pe: PublishedEventInputType) => ({
       ...pe,
-      id: (pe as {id?: string}).id || Math.random().toString(36).slice(2, 9),
+      id: pe.id || Math.random().toString(36).slice(2, 9),
     }));
 
     try {
@@ -393,8 +442,8 @@ export const addServiceNodeTool = tool(
       // table reference while building the service node.
       for (const ep of processedEndpoints) {
         const databaseNodeIds = [
-          ...(Array.isArray((ep as any).databaseNodeIds) ? (ep as any).databaseNodeIds : []),
-          ...((ep as any).databaseNodeId ? [(ep as any).databaseNodeId] : []),
+          ...(Array.isArray(ep.databaseNodeIds) ? ep.databaseNodeIds : []),
+          ...(ep.databaseNodeId ? [ep.databaseNodeId] : []),
         ];
         for (const databaseNodeId of [...new Set(databaseNodeIds)]) {
           edgesToCreate.push({
@@ -441,20 +490,7 @@ export const addServiceNodeTool = tool(
   {
     name: "add_service_node",
     description: "Add a complete microservice node to the backend canvas, including its REST endpoints, business logic, inputs, outputs, and message broker event publications/subscriptions. Automatically creates edges to connected message brokers (targetNodeId).",
-    schema: z.object({
-      label: z.string().describe("Name of the service"),
-      description: z.string().optional(),
-      techStack: z.string().optional(),
-      port: z.string().optional(),
-      cors: z.boolean().optional(),
-      baseUrl: z.string().optional(),
-      endpoints: z.array(endpointInputSchema).optional(),
-      consumedEvents: z.array(consumedEventInputSchema).optional(),
-      publishedEvents: z.array(publishedEventInputSchema).optional(),
-      inputs: z.array(z.any()).optional(),
-      outputs: z.array(z.any()).optional(),
-      logic: z.array(z.any()).optional(),
-    })
+    schema: addServiceNodeSchema,
   }
 );
 

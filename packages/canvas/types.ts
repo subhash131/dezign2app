@@ -144,8 +144,7 @@ export type BackendNode = {
     }[];
     isWebClient?: boolean;
     parentId?: string;
-    graphPosition?: { x: number; y: number };
-    schemaPosition?: { x: number; y: number };
+    position?: { x: number; y: number };
     // New fields for Graph tab detailed nodes
     events?: { id: string; name: string; event?: string }[];
     inputs?: { id: string; name: string }[];
@@ -438,4 +437,53 @@ export type Endpoint = {
   businessLogic?: string;
   output?: string;
 };
+
+// --- Input Types (for AI tools & Store operations) ---
+
+export interface ParameterInputType {
+  id?: string;
+  name: string;
+  type: string;
+  required: boolean;
+  description?: string;
+  defaultValue?: string;
+  key?: string;
+  value?: string;
+}
+
+export interface PublishedEventInputType {
+  id?: string;
+  name: string;
+  kind?: string;
+  schema?: string;
+  targetNodeId?: string;
+  targetResourceId?: string;
+}
+
+export interface ConsumedEventInputType {
+  id?: string;
+  name: string;
+  kind?: string;
+  schema?: string;
+  handlerLogic?: string;
+  targetNodeId?: string;
+  targetResourceId?: string;
+}
+
+export interface EndpointInputType {
+  id?: string;
+  name: string;
+  type: string;
+  headers?: ParameterInputType[];
+  pathParams?: ParameterInputType[];
+  queryParams?: ParameterInputType[];
+  requestBody?: { fields: ParameterInputType[] };
+  responseBody?: { fields: ParameterInputType[] };
+  processingSteps?: { id?: string; text: string; operation?: string; config?: Record<string, string | number | boolean | null> }[];
+  output?: string;
+  businessLogic?: string;
+  databaseNodeIds?: string[];
+  databaseNodeId?: string;
+  publishedEvents?: PublishedEventInputType[];
+}
 
