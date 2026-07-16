@@ -41,16 +41,6 @@ type SidebarItem = {
 
 const projectsNavItems: SidebarItem[] = [
   {
-    title: "Dashboard",
-    url: "/dashboard",
-    icon: BookOpenText,
-  },
-  {
-    title: "Workflows",
-    url: "/workflows",
-    icon: GitBranchPlus,
-  },
-  {
     title: "Projects",
     url: "/projects",
     icon: ClipboardList,

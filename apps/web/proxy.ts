@@ -29,7 +29,7 @@ export default clerkMiddleware(async (auth, req) => {
 
   // 1. If user is signed in and tries to access auth pages, send them home
   if (session.userId && isAuthRoute(req)) {
-    return NextResponse.redirect(new URL("/workflows", req.url));
+    return NextResponse.redirect(new URL("/projects", req.url));
   }
 
   // 2. Protect non-public routes

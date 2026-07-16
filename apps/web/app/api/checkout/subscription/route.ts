@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
 
     const { productId } = await request.json();
 
-    const successUrl = `${process.env.NEXT_PUBLIC_APP_URL}/dashboard`;
+    const successUrl = `${process.env.NEXT_PUBLIC_APP_URL}/projects`;
     
     const checkout = await creem.checkouts.create({
       productId,
