@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, usePaginatedQuery } from "convex/react";
+import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import { api } from "@workspace/backend/_generated/api";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -14,6 +14,7 @@ import { Doc, Id } from "@workspace/backend/_generated/dataModel";
 
 export default function ApiKeysPage() {
   const [newKeyName, setNewKeyName] = useState(""); 
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
   const { 
     results: keys, 
@@ -24,6 +25,12 @@ export default function ApiKeysPage() {
     {},
     { initialNumItems: 20 }
   );
+
+  // Fetch all user projects for the project selector
+  const projectsResult = useQuery(api.projects.getProjectsByOrganization, { 
+    paginationOpts: { numItems: 100, cursor: null } 
+  });
+  const projects = projectsResult?.page ?? [];
 
   const generateKey = useMutation(api.api_keys.generate);
   const revokeKey = useMutation(api.api_keys.revoke);
@@ -39,14 +46,20 @@ export default function ApiKeysPage() {
       toast.error("Please enter a name for the API key");
       return;
     }
+    if (!selectedProjectId) {
+      toast.error("Please select a project for this key");
+      return;
+    }
 
     setIsGenerating(true);
     try {
       const key = await generateKey({ 
         name: newKeyName, 
+        projectId: selectedProjectId,
       });
       setJustGeneratedKey(key);
       setNewKeyName("");
+      setSelectedProjectId(null);
       toast.success("API Key generated!");
     } catch (e) {
       toast.error("Failed to generate key");
@@ -106,6 +119,9 @@ export default function ApiKeysPage() {
             setNewKeyName={setNewKeyName}
             isGenerating={isGenerating}
             handleGenerate={handleGenerate}
+            projects={projects.map(p => ({ _id: p._id, name: p.name }))}
+            selectedProjectId={selectedProjectId}
+            setSelectedProjectId={(id) => setSelectedProjectId(id)}
           />
           <SecurityTip />
         </div>

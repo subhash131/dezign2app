@@ -26,6 +26,7 @@ function generateRawKey() {
 export const generate = mutation({
   args: { 
     name: v.optional(v.string()),
+    projectId: v.optional(v.string()),
   },
   async handler(ctx, args) {
     const identity = await ctx.auth.getUserIdentity();
@@ -40,6 +41,7 @@ export const generate = mutation({
       keyHash,
       userId: identity.subject,
       name: args.name,
+      projectId: args.projectId,
       orgId: identity.org_id?.toString() || undefined,
       createdAt: Date.now(),
     });
@@ -62,20 +64,14 @@ export const list = query({
       .order("desc")
       .collect();
 
-    // Optionally join document titles
-    return await Promise.all(
-      keys.map(async (key) => {
-        return {
-          ...key,
-          documentTitle: "Unknown Document",
-        };
-      })
-    );
+    return keys;
   },
 });
 
 export const listPaginated = query({
-  args: { paginationOpts: paginationOptsValidator },
+  args: { 
+    paginationOpts: paginationOptsValidator,
+  },
   async handler(ctx, args) {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
@@ -88,17 +84,24 @@ export const listPaginated = query({
       .order("desc")
       .paginate(args.paginationOpts);
 
-    const keysWithDocTitles = await Promise.all(
+    // Enrich with project name
+    const keysWithProjects = await Promise.all(
       page.map(async (key) => {
-        return {
-          ...key,
-          documentTitle: "Unknown Document",
-        };
+        let projectName: string | undefined;
+        if (key.projectId) {
+          try {
+            const project = await ctx.db.get(key.projectId as any);
+            projectName = (project as any)?.name;
+          } catch {
+            // project may have been deleted
+          }
+        }
+        return { ...key, projectName };
       })
     );
 
     return {
-      page: keysWithDocTitles,
+      page: keysWithProjects,
       isDone,
       continueCursor,
     };
@@ -125,7 +128,9 @@ export const revoke = mutation({
 });
 
 export const validate = query({
-  args: { key: v.string() },
+  args: { 
+    key: v.string(),
+  },
   async handler(ctx, args) {
     const keyHash = await hashKey(args.key);
     const keyRecord = await ctx.db
@@ -135,12 +140,12 @@ export const validate = query({
 
     if (!keyRecord) return null;
 
+    // Update last used timestamp (best-effort, cannot do inside a query, but logged here)
     return {
       userId: keyRecord.userId,
       keyId: keyRecord._id,
       orgId: keyRecord.orgId,
+      projectId: keyRecord.projectId,
     };
   },
 });
-
-

@@ -5,7 +5,7 @@ import {
   KeyIcon, 
   TrashIcon, 
   CalendarIcon,
-  FileTextIcon
+  FolderIcon
 } from "lucide-react";
 import { Input } from "@workspace/ui/components/input";
 import { 
@@ -28,8 +28,8 @@ import { Spinner } from "@workspace/ui/components/spinner";
 import { Doc } from "@workspace/backend/_generated/dataModel";
 
 interface ApiKeyListProps {
-  keys: Doc<"api_keys">[] | undefined;
-  filteredKeys: Doc<"api_keys">[] | undefined;
+  keys: (Doc<"api_keys"> & { projectName?: string })[] | undefined;
+  filteredKeys: (Doc<"api_keys"> & { projectName?: string })[] | undefined;
   status: "LoadingFirstPage" | "CanLoadMore" | "LoadingMore" | "Exhausted";
   loadMore: () => void;
   searchQuery: string;
@@ -111,8 +111,9 @@ export function ApiKeyList({
               <TableHeader className="bg-muted/30">
                 <TableRow>
                   <TableHead className="w-[180px]">Name</TableHead>
-                  <TableHead>Associated Document</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>Bound Project</TableHead>
+                  <TableHead className="text-right">Created</TableHead>
+                  <TableHead className="w-10"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -127,12 +128,22 @@ export function ApiKeyList({
                       </div>
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
-                      <div className="flex items-center gap-1.5">
+                      {k.projectName ? (
+                        <div className="flex items-center gap-1.5">
+                          <FolderIcon className="size-3 text-primary/70" />
+                          <span className="font-medium text-foreground/80">{k.projectName}</span>
+                        </div>
+                      ) : (
+                        <span className="opacity-50 italic">All projects</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right text-xs text-muted-foreground">
+                      <div className="flex items-center justify-end gap-1.5">
                         <CalendarIcon className="size-3" />
                         {new Date(k._creationTime).toLocaleDateString()}
                       </div>
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell>
                       <button
                         className="size-8 inline-flex items-center justify-center rounded-md text-destructive opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/10"
                         onClick={() => confirmRevoke(k)}

@@ -11,6 +11,7 @@ export interface Session {
   userId?: string;
   orgId?: string;
   keyId?: string;
+  projectId?: string;
   clerkToken?: string;
 }
 
@@ -29,16 +30,28 @@ export async function createSession(
 
   const syncEngine = new SupermemorySync();
 
-  server.tool(
+  // If the API key has a bound projectId, tools are restricted to that project only.
+  const boundProjectId = auth?.projectId;
+  console.log(`[SESSION] boundProjectId for session ${sessionId}: ${boundProjectId ?? "NONE (no project bound — tools will error)"}`);
+
+  server.registerTool(
     "get_system_design_context",
-    "Retrieve semantic architectural context (services, entities, clients, architecture plan) for a given project. Use this to understand the system design before writing code.",
     {
-      projectId: z.string().describe("The ID of the project to retrieve context for"),
-      query: z.string().describe("The specific query to search the architecture for (e.g. 'How does authentication work?' or 'What databases exist?')")
+      description: "Retrieve semantic architectural context (services, entities, clients, architecture plan) for this project. Use this to understand the system design before writing code. The project is determined automatically from your API key.",
+      inputSchema: {
+        query: z.string().describe("The specific query to search the architecture for (e.g. 'How does authentication work?' or 'What databases exist?')")
+      },
     },
-    async ({ projectId, query }) => {
+    async ({ query }) => {
+      if (!boundProjectId) {
+        return {
+          content: [{ type: "text" as const, text: "Unauthorized: this API key is not bound to a project. Please regenerate your key from the Blueprint dashboard." }],
+          isError: true,
+        };
+      }
+      console.log(`[TOOL] get_system_design_context called — project=${boundProjectId}, query="${query}"`);
       try {
-        const context = await syncEngine.buildCodingContext(projectId, query);
+        const context = await syncEngine.buildCodingContext(boundProjectId, query);
         return {
           content: [{ type: "text" as const, text: JSON.stringify(context, null, 2) }]
         };
@@ -51,21 +64,31 @@ export async function createSession(
     }
   );
 
-  server.tool(
+  server.registerTool(
     "search_system_design_memories",
-    "Search the architecture knowledge base for a project. Returns filtered, deduplicated results grouped by kind (architecture, services, entities, clients, resources).",
     {
-      projectId: z.string().describe("The ID of the project to search"),
-      query: z.string().describe("The search query string"),
-      minSimilarity: z.number().optional().describe("Minimum similarity threshold (0-1). Defaults to 0.5")
+      description: "Search the architecture knowledge base for this project. Returns filtered, deduplicated results grouped by kind (architecture, services, entities, clients, resources). The project is determined automatically from your API key.",
+      inputSchema: {
+        query: z.string().describe("The search query string"),
+        minSimilarity: z.number().optional().describe("Minimum similarity threshold (0-1). Defaults to 0.5")
+      },
     },
-    async ({ projectId, query, minSimilarity }) => {
+    async ({ query, minSimilarity }) => {
+      if (!boundProjectId) {
+        return {
+          content: [{ type: "text" as const, text: "Unauthorized: this API key is not bound to a project. Please regenerate your key from the Blueprint dashboard." }],
+          isError: true,
+        };
+      }
+      console.log(`[TOOL] search_system_design_memories called — project=${boundProjectId}, query="${query}", minSimilarity=${minSimilarity ?? 0.5}`);
       try {
         const threshold = minSimilarity ?? 0.5;
-        const results = await syncEngine.searchMemories(projectId, query);
+        const results = await syncEngine.searchMemories(boundProjectId, query);
+        console.log(`[TOOL] Raw results from supermemory: ${results.length}`);
 
         // Filter by similarity
         const strongMatches = results.filter((r: any) => (r.similarity ?? 0) > threshold);
+        console.log(`[TOOL] After similarity filter (>${threshold}): ${strongMatches.length}`);
 
         // Dedup by nodeId (keep highest similarity), separate architecture chunks
         const dedupedByNode = new Map<string, { content: string; similarity: number; kind: string }>();
@@ -125,6 +148,7 @@ export async function createSession(
     userId: auth?.userId,
     orgId: auth?.orgId,
     keyId: auth?.keyId,
+    projectId: auth?.projectId,
     clerkToken: auth?.token,
   };
 }

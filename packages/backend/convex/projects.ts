@@ -211,6 +211,17 @@ export const removeProject = mutation({
       await ctx.db.delete(plan._id);
     }
 
+    // Cascade-delete: API keys bound to this project
+    const apiKeys = await ctx.db
+      .query("api_keys")
+      .withIndex("by_user", (q) => q.eq("userId", identity.subject))
+      .collect();
+    for (const key of apiKeys) {
+      if (key.projectId === args.projectId) {
+        await ctx.db.delete(key._id);
+      }
+    }
+
     // Finally delete the project itself
     await ctx.db.delete(args.projectId);
   },
