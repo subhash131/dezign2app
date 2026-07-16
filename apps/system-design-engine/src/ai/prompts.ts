@@ -50,7 +50,7 @@ Ensure WebClient events are connected to Service endpoints, and Service endpoint
     implementation plan and confirmed requirements. Requirements gathering and plan
     approval already happened before you were invoked — your job now is execution.
 
-    If working on a Database Schema, use the 'add_schema_group' tool to create a group and populate it with tables (entities) in a single call, or use 'add_single_schema' to add a single table (entity). DO NOT try to call a tool named 'add_entity', it does not exist. To create foreign key relationships between tables within a group, simply use the 'references' object on a column to specify the target table and column (e.g. references: { table: "Users", column: "id" }). The edges will be created automatically. If you need to manually connect external tables, use 'add_edge' (type 'foreign-key') specifying 'sourceCardinality' and 'targetCardinality' (1 or N) in 'data'.
+    If working on a Database Schema, use the 'add_single_schema' tool to add a single table (entity). DO NOT try to call a tool named 'add_entity', it does not exist. To create foreign key relationships between tables, use the 'add_schema_edge' tool and provide the entity IDs and column names. DO NOT use 'add_edge' for foreign keys.
     When adding a database reference to connect to a service using 'add_db_ref_node', you MUST provide the 'tableRef' parameter containing the node ID of the target schema/entity it references.
 
     When adding messaging infrastructure, choose the correct node type based on the messaging pattern:

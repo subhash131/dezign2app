@@ -6,11 +6,11 @@ export * from "./clients";
 export * from "./databases";
 
 import { addNodeTool, updateNodeTool, deleteNodeTool } from "./nodes";
-import { addEdgeTool, deleteEdgeTool } from "./edges";
+import { addEdgeTool, deleteEdgeTool, addSchemaEdgeTool } from "./edges";
 import { addServiceNodeTool } from "./services";
 import { addKafkaNodeTool } from "./brokers";
 import { addClientNodeTool } from "./clients";
-import { addSchemaGroupTool, addSchemaTool, addDbRefNodeTool } from "./databases";
+import { addSchemaTool, addDbRefNodeTool } from "./databases";
 
 export const tools = [
   addNodeTool,
@@ -18,10 +18,10 @@ export const tools = [
   deleteNodeTool,
   addEdgeTool,
   deleteEdgeTool,
+  addSchemaEdgeTool,
   addServiceNodeTool,
   addKafkaNodeTool,
   addClientNodeTool,
-  addSchemaGroupTool,
   addSchemaTool,
   addDbRefNodeTool
 ];
