@@ -40,6 +40,7 @@ export const authTables = {
     userId: v.string(),
     orgId: v.optional(v.string()),
     name: v.optional(v.string()),
+    projectId: v.optional(v.string()),
     lastUsedAt: v.optional(v.number()),
     createdAt: v.number(),
   })
