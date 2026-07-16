@@ -22,7 +22,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Workflow Template",
+  title: "Dezign 2 App",
   description: "Project by subhash",
 };
 
