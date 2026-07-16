@@ -15,6 +15,13 @@
  */
 
 import { z } from "zod";
+import {
+  ParameterInputType,
+  PublishedEventInputType,
+  ConsumedEventInputType,
+  EndpointInputType
+} from "./types";
+
 
 // ---------------------------------------------------------------------------
 // Primitives & enums
@@ -66,7 +73,7 @@ export const processingStepSchema = z.object({
   id: z.string(),
   text: z.string(),
   operation: processingOperationEnum.optional(),
-  config: z.record(z.any()).optional(),
+  config: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
 });
 
 export const processingStepInputSchema = processingStepSchema.extend({
@@ -100,7 +107,7 @@ export const publishedEventSchema = z.object({
   metadata: architectureMetadataSchema.optional(),
 });
 
-export const publishedEventInputSchema = z.object({
+export const publishedEventInputSchema: z.ZodType<PublishedEventInputType> = z.object({
   id: z.string().optional(),
   name: z.string(),
   kind: z.string().optional(),
@@ -121,7 +128,7 @@ export const consumedEventSchema = z.object({
   metadata: architectureMetadataSchema.optional(),
 });
 
-export const consumedEventInputSchema = z.object({
+export const consumedEventInputSchema: z.ZodType<ConsumedEventInputType> = z.object({
   id: z.string().optional(),
   name: z.string(),
   kind: z.string().optional(),
@@ -157,38 +164,39 @@ export const endpointSchema = z.object({
 });
 
 /** AI-input form: IDs optional, sub-objects use input variants. */
-export const endpointInputSchema = z.object({
+export const endpointInputSchema: z.ZodType<EndpointInputType> = z.object({
   id: z.string().optional(),
   name: z.string().describe("Endpoint path (e.g., /api/users)"),
   type: z.string().describe("HTTP method (GET, POST, etc.)"),
   headers: z.array(z.object({
-    name: z.string(), type: z.string(), required: z.boolean(),
+    id: z.string().optional(), name: z.string(), type: z.string(), required: z.boolean(),
     description: z.string().optional(), defaultValue: z.string().optional(),
   })).describe("Request headers. Use [] when none are required."),
   pathParams: z.array(z.object({
-    name: z.string(), type: z.string(), required: z.boolean(),
+    id: z.string().optional(), name: z.string(), type: z.string(), required: z.boolean(),
     description: z.string().optional(), defaultValue: z.string().optional(),
   })).describe("Path parameters, such as id in /products/{id}. Use [] when none."),
   queryParams: z.array(z.object({
-    name: z.string(), type: z.string(), required: z.boolean(),
+    id: z.string().optional(), name: z.string(), type: z.string(), required: z.boolean(),
     description: z.string().optional(), defaultValue: z.string().optional(),
   })).describe("Query parameters such as page, limit, or q. Use [] when none."),
   requestBody: z.object({
     fields: z.array(z.object({
-      name: z.string(), type: z.string(), required: z.boolean(),
+      id: z.string().optional(), name: z.string(), type: z.string(), required: z.boolean(),
       description: z.string().optional(),
     })),
   }).describe("Request body schema. Use fields: [] only for endpoints with no body."),
   responseBody: z.object({
     fields: z.array(z.object({
-      name: z.string(), type: z.string(), required: z.boolean(),
+      id: z.string().optional(), name: z.string(), type: z.string(), required: z.boolean(),
       description: z.string().optional(),
     })),
   }).describe("Response body schema; define the actual returned fields."),
   processingSteps: z.array(z.object({
+    id: z.string().optional(),
     text: z.string(),
     operation: processingOperationEnum.optional(),
-    config: z.record(z.any()).optional(),
+    config: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
   })).describe("Executable request-processing steps in order."),
   output: z.string().optional().describe("Short response description; do not use this instead of responseBody."),
   businessLogic: z.string().optional().describe("Human-readable purpose of the endpoint."),
@@ -199,29 +207,36 @@ export const endpointInputSchema = z.object({
     "Single db_ref node ID this endpoint uses; prefer databaseNodeIds when there is more than one."
   ),
   publishedEvents: z.array(publishedEventInputSchema).optional(),
-});
+}) as unknown as z.ZodType<EndpointInputType>;
 
 // ---------------------------------------------------------------------------
 // Node data schemas — per BackendNodeType
 // ---------------------------------------------------------------------------
+
+export const baseNodeDataSchema = z.object({
+  label: z.string().optional(),
+  position: z.object({ x: z.number(), y: z.number() }).optional(),
+  parentId: z.string().optional(),
+  style: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
+  width: z.number().optional(),
+  height: z.number().optional(),
+});
 
 export const resourceItemSchema = z.object({
   id: z.string().optional(),
   name: z.string(),
 });
 
-export const simpleDataSchema = z.object({
-  label: z.string().optional(),
+export const simpleDataSchema = baseNodeDataSchema.extend({
   description: z.string().optional(),
 }).strict();
 
-export const dbRefDataSchema = z.object({
-  label: z.string().optional(),
+export const dbRefDataSchema = baseNodeDataSchema.extend({
   description: z.string().optional(),
   tableRef: z.string().optional(),
 }).strict();
 
-export const entityDataSchema = z.object({
+export const entityDataSchema = baseNodeDataSchema.extend({
   description: z.string().optional(),
   columns: z.array(z.object({
     name: z.string(),
@@ -247,7 +262,7 @@ export const entityColumnInputSchema = z.object({
   }).optional().describe("If this is a foreign key, which table and column it references in this group"),
 });
 
-export const kafkaDataSchema = z.object({
+export const kafkaDataSchema = baseNodeDataSchema.extend({
   description: z.string().optional(),
   topics: z.array(z.object({
     id: z.string().optional(),
@@ -267,7 +282,7 @@ export const kafkaDataSchema = z.object({
   retention: z.string().optional(),
 }).strict();
 
-export const sqsDataSchema = z.object({
+export const sqsDataSchema = baseNodeDataSchema.extend({
   description: z.string().optional(),
   queues: z.array(resourceItemSchema).optional(),
   sqsBroker: z.object({
@@ -279,14 +294,14 @@ export const sqsDataSchema = z.object({
   failureHandling: z.string().optional(),
 }).strict();
 
-export const redisPubSubDataSchema = z.object({
+export const redisPubSubDataSchema = baseNodeDataSchema.extend({
   description: z.string().optional(),
   channels: z.array(resourceItemSchema).optional(),
   redisPubSubBroker: z.object({}).passthrough().optional(),
   delivery: z.string().optional(),
 }).strict();
 
-export const redisStreamsDataSchema = z.object({
+export const redisStreamsDataSchema = baseNodeDataSchema.extend({
   description: z.string().optional(),
   streams: z.array(resourceItemSchema).optional(),
   redisBroker: z.object({
@@ -318,7 +333,7 @@ export const webClientDataSchema = simpleDataSchema.extend({
   })).optional(),
 });
 
-export const serviceDataSchema = z.object({
+export const serviceDataSchema = baseNodeDataSchema.extend({
   description: z.string().optional(),
   techStack: z.string().optional(),
   port: z.string().optional(),
@@ -329,10 +344,15 @@ export const serviceDataSchema = z.object({
   endpoints: z.array(endpointSchema).optional(),
   consumedEvents: z.array(consumedEventSchema).optional(),
   publishedEvents: z.array(publishedEventSchema).optional(),
-  inputs: z.array(z.any()).optional(),
-  outputs: z.array(z.any()).optional(),
-  logic: z.array(z.any()).optional(),
-  routeGroups: z.array(z.any()).optional(),
+  inputs: z.array(resourceItemSchema).optional(),
+  outputs: z.array(resourceItemSchema).optional(),
+  logic: z.array(resourceItemSchema).optional(),
+  routeGroups: z.array(z.object({
+    id: z.string(),
+    name: z.string(),
+    basePath: z.string(),
+    endpoints: z.array(endpointSchema),
+  })).optional(),
 }).strict();
 
 // ---------------------------------------------------------------------------

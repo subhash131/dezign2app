@@ -223,20 +223,14 @@ function Flow({ projectId, view }: BackendCanvasProps) {
     hasHydrated.current = true;
 
     const rawNodes: BackendNode[] = (initialElements.nodes ?? []).map((row: Doc<"canvas_backend_nodes">) => {
-      let activePosition = row.position;
-      if (view === "schema" && row.data?.graphPosition) {
-        activePosition = row.data.graphPosition;
-      } else if (view === "graph" && row.data?.graphPosition) {
-        activePosition = row.data.graphPosition;
-      }
+      let activePosition = row.data?.position ?? row.position;
       return {
         id: row.nodeId,
         type: row.type,
         position: activePosition,
         data: {
           ...row.data,
-          graphPosition: row.data?.graphPosition ?? row.position,
-          schemaPosition: row.data?.graphPosition,
+          position: activePosition,
         },
         fractionalIndex: row.fractionalIndex,
         parentId: row.data?.parentId,
@@ -307,12 +301,7 @@ function Flow({ projectId, view }: BackendCanvasProps) {
     if (prevViewRef.current !== view && hasHydrated.current) {
       const store = useBackendCanvasStore.getState();
       const nextNodes = store.nodes.map((n) => {
-        let newPos = n.position;
-        if (view === "schema") {
-          newPos = n.data?.schemaPosition ?? n.data?.graphPosition ?? n.position;
-        } else if (view === "graph") {
-          newPos = n.data?.graphPosition ?? n.position;
-        }
+        let newPos = n.data?.position ?? n.position;
         return { ...n, position: newPos };
       });
       useBackendCanvasStore.setState({ nodes: nextNodes });
@@ -381,24 +370,16 @@ function Flow({ projectId, view }: BackendCanvasProps) {
 
       Promise.all([
         ...uniqueNodesToSync.map((n) => {
-          let graphPosition = n.data?.graphPosition ?? n.position;
-          let schemaPosition = n.data?.schemaPosition;
-          
-          if (view === "schema") {
-            schemaPosition = n.position;
-          } else if (view === "graph") {
-            graphPosition = n.position;
-          }
+          let position = n.position;
 
           return upsertNode({
             projectId: pid,
             nodeId: n.id,
             type: n.type,
-            position: graphPosition,
+            position: position,
             data: { 
               ...n.data, 
-              graphPosition,
-              schemaPosition,
+              position,
               ...(n.parentId !== undefined && { parentId: n.parentId }), 
               ...(n.style !== undefined && { style: n.style }), 
               ...(n.width !== undefined && { width: n.width }), 
