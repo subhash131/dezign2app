@@ -35,7 +35,7 @@ export function CanvasToolbar({
     setIsSyncing(true);
     try {
       const token = await getToken({ template: "convex" });
-      const res = await fetch("/api/sync-supermemory", {
+      const res = await fetch(`${window.location.origin}/api/sync-supermemory`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ projectId, token }),
