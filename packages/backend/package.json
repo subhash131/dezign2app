@@ -2,6 +2,7 @@
   "name": "@workspace/backend",
   "type": "module",
   "scripts": {
+    "build": "convex codegen",
     "dev": "convex dev",
     "setup": "convex dev --until-success",
     "test": "cd ."
