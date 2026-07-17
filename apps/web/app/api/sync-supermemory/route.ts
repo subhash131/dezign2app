@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
   try {
@@ -10,7 +10,8 @@ export async function POST(req: NextRequest) {
     }
 
     // Proxy the request to the system-design-engine
-    const response = await fetch("http://localhost:3002/sync-supermemory", {
+    const backendUrl = process.env.NEXT_PUBLIC_SYSTEM_DESIGN_ENGINE_URL || "http://localhost:3002";
+    const response = await fetch(`${backendUrl}/sync-supermemory`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
