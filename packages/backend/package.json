@@ -9,7 +9,7 @@
   },
   "exports": {
     "./convex/*": "./convex/*",
-    "./_generated/*": "./convex/_generated/*"
+    "./_generated/*": "./convex/_generated/*.js"
   },
   "devDependencies": {
     "@types/node": "^20.19.30",
