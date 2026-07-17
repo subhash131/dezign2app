@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "mcp": "tsx src/mcp/index.ts",
-    "build": "tsup src/index.ts src/mcp/index.ts --format esm --clean",
+    "build": "tsup",
     "start": "node dist/index.js",
     "start:mcp": "node dist/mcp/index.js",
     "test": "vitest run"
