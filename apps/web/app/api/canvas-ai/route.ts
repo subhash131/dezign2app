@@ -10,7 +10,8 @@ export async function POST(req: NextRequest) {
     }
 
     // Proxy the request to the system-design-engine
-    const response = await fetch("http://localhost:3002/canvas-ai", {
+    const systemDesignEngineUrl = process.env.SYSTEM_DESIGN_ENGINE_URL || "http://localhost:3002";
+    const response = await fetch(`${systemDesignEngineUrl}/canvas-ai`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
