@@ -161,7 +161,7 @@ export function AiPanel({ projectId, isOpen, onClose, setView }: AiPanelProps) {
         y: window.innerHeight / 2
       });
 
-      const res = await fetch("/api/canvas-ai", {
+      const res = await fetch(`${window.location.origin}/api/canvas-ai`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
