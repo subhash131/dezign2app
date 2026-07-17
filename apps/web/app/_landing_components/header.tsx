@@ -13,14 +13,14 @@ const navLinks = [
 
 export const Header = () => {
   return (
-    <header className="h-14 sticky top-0 w-full flex justify-center px-4 lg:px-0 items-center z-50 bg-white/90 backdrop-blur-xl border-b border-gray-100">
-      <div className="size-full max-w-6xl flex justify-between items-center px-6">
+    <header className="h-14 sticky top-0 w-full flex justify-center px-4 lg:px-0 items-center z-50 backdrop-blur-xl border-b bg-transparent">
+      <div className="size-full max-w-6xl flex justify-between items-center px-6 bg-transparent">
         {/* Logo */}
         <Link href="/" className="flex gap-2 items-center group">
           <div className="w-7 h-7 bg-black rounded-md flex items-center justify-center">
             <HugeiconsIcon icon={Blockchain04Icon} className="text-white size-4" />
           </div>
-          <span className="text-sm font-bold tracking-tight text-black">Flowify</span>
+          <span className="text-sm font-bold tracking-tight text-black">dezign2app</span>
         </Link>
 
         {/* Nav */}
@@ -29,7 +29,7 @@ export const Header = () => {
             <Link
               key={link.name}
               href={link.href}
-              className="text-xs text-gray-500 hover:text-black transition-colors font-medium"
+              className="text-xs  transition-colors font-medium"
             >
               {link.name}
             </Link>

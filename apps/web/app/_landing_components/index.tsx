@@ -12,9 +12,6 @@ export const Landing = () => {
       <main className="w-full flex flex-col">
         <Intro />
         <Features />
-        <div id="pricing">
-          <Pricing />
-        </div>
       </main>
       <Footer />
     </div>
