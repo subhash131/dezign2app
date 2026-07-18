@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@workspace/ui/components/sheet";
 import { ChevronLeft } from "lucide-react";
-import { Schema, Endpoint, AnyMessagingResource, PublishedEvent } from "@/types/canvas";
+import { Endpoint, AnyMessagingResource, BackendNode } from "@/types/canvas";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { ParameterEditor, SchemaEditor } from "./backend-nodes/graph-nodes/Editors";
 import { MessagingResourceList } from "./backend-nodes/graph-nodes/shared";
@@ -177,18 +177,51 @@ export const ConfigSidebar = () => {
   };
 
   const renderEventConfig = () => {
-    let item = events.find(e => e.id === id);
+    type ConfigItemData = AnyMessagingResource & { variant?: string; nodeId?: string };
+    let item: ConfigItemData | undefined = events.find(e => e.id === id);
     let parentEndpoint: Endpoint | undefined;
+    let parentNode: BackendNode | undefined;
     let isEndpointEvent = false;
+    let isNodeResource = false;
+    let resourceArrayName: 'topics' | 'streams' | 'queues' | 'channels' | "" = "";
 
     if (!item) {
       for (const ep of endpoints) {
         const publishedMatch = ep.publishedEvents?.find(e => e.id === id);
         if (publishedMatch) {
-           item = { ...publishedMatch, variant: 'publish', nodeId: ep.nodeId } as any;
+           item = { ...publishedMatch, variant: 'publish', nodeId: ep.nodeId };
            parentEndpoint = ep;
            isEndpointEvent = true;
            break;
+        }
+      }
+    }
+
+    if (!item) {
+      // Look in nodes for topics, queues, streams, channels
+      parentNode = nodes.find(n => n.id === nodeId);
+      if (parentNode && parentNode.data) {
+        const { topics, streams, queues, channels } = parentNode.data;
+        const candidateArrays: Array<{
+          name: 'topics' | 'streams' | 'queues' | 'channels';
+          arr: typeof topics | typeof streams | typeof queues | typeof channels;
+        }> = [
+          { name: "topics", arr: topics },
+          { name: "streams", arr: streams },
+          { name: "queues", arr: queues },
+          { name: "channels", arr: channels }
+        ];
+        
+        for (const candidate of candidateArrays) {
+          if (candidate.arr) {
+            const match = candidate.arr.find((r: { id: string }) => r.id === id);
+            if (match) {
+              item = { ...match, variant: 'definition', nodeId: parentNode.id };
+              isNodeResource = true;
+              resourceArrayName = candidate.name;
+              break;
+            }
+          }
         }
       }
     }
@@ -199,10 +232,27 @@ export const ConfigSidebar = () => {
       if (isEndpointEvent && parentEndpoint) {
         const list = parentEndpoint.publishedEvents;
         if (list) {
-          const updatedList = list.map(e => e.id === eventId ? { ...e, ...changes } as PublishedEvent : e);
+          const updatedList = list.map(e => e.id === eventId ? Object.assign({}, e, changes) : e);
           updateEndpoint(parentEndpoint.id, { 
             publishedEvents: updatedList 
           });
+        }
+      } else if (isNodeResource && parentNode && resourceArrayName !== "") {
+        const updateNode = useBackendCanvasStore.getState().updateNode;
+        const currentData = parentNode.data;
+        
+        if (resourceArrayName === "topics" && currentData.topics) {
+          const updatedList = currentData.topics.map(r => r.id === eventId ? Object.assign({}, r, changes) : r);
+          updateNode(parentNode.id, { data: { ...currentData, topics: updatedList } });
+        } else if (resourceArrayName === "streams" && currentData.streams) {
+          const updatedList = currentData.streams.map(r => r.id === eventId ? Object.assign({}, r, changes) : r);
+          updateNode(parentNode.id, { data: { ...currentData, streams: updatedList } });
+        } else if (resourceArrayName === "queues" && currentData.queues) {
+          const updatedList = currentData.queues.map(r => r.id === eventId ? Object.assign({}, r, changes) : r);
+          updateNode(parentNode.id, { data: { ...currentData, queues: updatedList } });
+        } else if (resourceArrayName === "channels" && currentData.channels) {
+          const updatedList = currentData.channels.map(r => r.id === eventId ? Object.assign({}, r, changes) : r);
+          updateNode(parentNode.id, { data: { ...currentData, channels: updatedList } });
         }
       } else {
         updateEvent(eventId, changes);
@@ -238,6 +288,59 @@ export const ConfigSidebar = () => {
           </div>
           <span className="text-sm text-muted-foreground">Configure event and messaging details.</span>
         </div>
+
+        {item.variant !== "definition" && (
+          <div className="flex flex-col gap-3 rounded-xl border bg-card/50 p-4 shadow-sm">
+            <span className="text-xs font-bold text-muted-foreground">
+              {isPublished ? "Publishes To Broker" : "Consumes From Broker"}
+            </span>
+            <Select value={item.brokerNodeId || ""} onValueChange={v => handleUpdate(item!.id, { brokerNodeId: v, messagingResourceId: "" })}>
+              <SelectTrigger className="text-xs">
+                <SelectValue placeholder="Select Messaging Node" />
+              </SelectTrigger>
+              <SelectContent>
+                {messagingNodes.length === 0 && <SelectItem value="none" disabled className="text-xs">No messaging nodes found</SelectItem>}
+                {messagingNodes.map((node) => (
+                  <SelectItem key={node.id} value={node.id} className="text-xs">
+                    {node.data.label || "Untitled Messaging"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {item.brokerNodeId ? (
+              <Select
+                value={item.messagingResourceId || ""}
+                onValueChange={v => {
+                  const selectedResource = availableResources.find(resource => resource.id === v);
+                  const resourceSchema = selectedResource && "payloadSchema" in selectedResource
+                    ? selectedResource.payloadSchema
+                    : undefined;
+                  handleUpdate(item!.id, {
+                    messagingResourceId: v,
+                    ...(resourceSchema ? { payloadSchema: resourceSchema } : {}),
+                  });
+                }}
+              >
+                <SelectTrigger className="text-xs">
+                  <SelectValue placeholder="Select Topic / Queue / Stream" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableResources.length === 0 && <SelectItem value="none" disabled className="text-xs">No resources defined on broker</SelectItem>}
+                  {availableResources.map((res) => (
+                    <SelectItem key={res.id} value={res.id} className="text-xs">
+                      {res.name || "Untitled Resource"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="h-9 text-xs text-muted-foreground flex items-center px-3 bg-secondary/20 border rounded-md border-dashed">
+                Select a broker first
+              </div>
+            )}
+          </div>
+        )}
 
         {!isConsumed && (
           <div className="flex flex-col gap-2.5 rounded-xl border bg-card/50 p-4 shadow-sm backdrop-blur-sm">
@@ -300,7 +403,7 @@ export const ConfigSidebar = () => {
               <LocalInput 
                 className="flex-1 text-xs font-mono" 
                 placeholder="dlq-topic-name" 
-                value={(item.deadLetterQueue as string) || ""}
+                value={item.deadLetterQueue || ""}
                 onBlur={e => handleUpdate(item!.id, { deadLetterQueue: e.target.value })}
               />
             </div>
@@ -318,20 +421,20 @@ export const ConfigSidebar = () => {
           </div>
         )}
 
-        {!isConsumed && (
+        {isPublished && (
           <div className="flex flex-col gap-4 border-t pt-4">
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs font-bold text-muted-foreground">Version</span>
               <LocalInput 
                 className="w-24 text-xs text-right" 
                 placeholder="v1" 
-                value={(item.version as string) || "v1"}
+                value={item.version || "v1"}
                 onBlur={e => handleUpdate(item!.id, { version: e.target.value })}
               />
             </div>
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs font-bold text-muted-foreground">Category</span>
-              <Select value={(item.category as string) || "DOMAIN"} onValueChange={v => handleUpdate(item!.id, { category: v })}>
+              <Select value={item.category || "DOMAIN"} onValueChange={v => handleUpdate(item!.id, { category: v })}>
                 <SelectTrigger className="w-[180px] text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="DOMAIN" className="text-xs">Domain</SelectItem>
@@ -343,7 +446,7 @@ export const ConfigSidebar = () => {
             </div>
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs font-bold text-muted-foreground">Delivery</span>
-              <Select value={(item.delivery as string) || "AT_LEAST_ONCE"} onValueChange={v => handleUpdate(item!.id, { delivery: v })}>
+              <Select value={item.delivery || "AT_LEAST_ONCE"} onValueChange={v => handleUpdate(item!.id, { delivery: v })}>
                 <SelectTrigger className="w-[180px] text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="AT_LEAST_ONCE" className="text-xs">At Least Once</SelectItem>
@@ -355,44 +458,6 @@ export const ConfigSidebar = () => {
           </div>
         )}
 
-        <div className="flex flex-col gap-3 border-t pt-4">
-          <span className="text-xs font-bold text-muted-foreground">
-            {isPublished ? "Publishes To Broker" : "Consumes From Broker"}
-          </span>
-          <Select value={(item.brokerNodeId as string) || ""} onValueChange={v => handleUpdate(item!.id, { brokerNodeId: v, messagingResourceId: "" })}>
-            <SelectTrigger className="text-xs">
-              <SelectValue placeholder="Select Messaging Node" />
-            </SelectTrigger>
-            <SelectContent>
-              {messagingNodes.length === 0 && <SelectItem value="none" disabled className="text-xs">No messaging nodes found</SelectItem>}
-              {messagingNodes.map((node) => (
-                <SelectItem key={node.id} value={node.id} className="text-xs">
-                  {node.data.label || "Untitled Messaging"}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          
-          {item.brokerNodeId ? (
-            <Select value={(item.messagingResourceId as string) || ""} onValueChange={v => handleUpdate(item!.id, { messagingResourceId: v })}>
-              <SelectTrigger className="text-xs">
-                <SelectValue placeholder="Select Topic / Queue / Stream" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableResources.length === 0 && <SelectItem value="none" disabled className="text-xs">No resources defined on broker</SelectItem>}
-                {availableResources.map((res) => (
-                  <SelectItem key={res.id} value={res.id} className="text-xs">
-                    {res.name || "Untitled Resource"}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : (
-            <div className="h-9 text-xs text-muted-foreground flex items-center px-3 bg-secondary/20 border rounded-md border-dashed">
-              Select a broker first
-            </div>
-          )}
-        </div>
       </div>
     );
   };

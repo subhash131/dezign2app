@@ -235,6 +235,7 @@ export const baseNodeDataSchema = z.object({
 export const resourceItemSchema = z.object({
   id: z.string().optional(),
   name: z.string(),
+  payloadSchema: schemaModelSchema.optional(),
 });
 
 export const simpleDataSchema = baseNodeDataSchema.extend({
@@ -290,6 +291,7 @@ export const kafkaTopicSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
   schema: z.string().optional(),
+  payloadSchema: schemaModelSchema.optional(),
   version: z.string().optional(),
 });
 export type KafkaTopic = z.infer<typeof kafkaTopicSchema>;
