@@ -104,4 +104,26 @@ export const featureTables = {
     .index("by_project", ["projectId"])
     .index("by_project_edge", ["projectId", "edgeId"]),
 
+  // Endpoints separated from Service Node
+  canvas_backend_endpoints: defineTable({
+    projectId: v.id("projects"),
+    nodeId: v.string(),
+    endpointId: v.string(),
+    data: v.any(), // Endpoint definition
+  })
+    .index("by_project", ["projectId"])
+    .index("by_project_node", ["projectId", "nodeId"])
+    .index("by_node_endpoint", ["nodeId", "endpointId"]),
+
+  // Messaging events (publish / consume) separated from Service Node
+  canvas_backend_events: defineTable({
+    projectId: v.id("projects"),
+    nodeId: v.string(),
+    eventId: v.string(),
+    variant: v.union(v.literal("publish"), v.literal("consume")),
+    data: v.any(), // AnyMessagingResource definition
+  })
+    .index("by_project", ["projectId"])
+    .index("by_project_node", ["projectId", "nodeId"])
+    .index("by_node_event", ["nodeId", "eventId"]),
 };

@@ -223,7 +223,7 @@ export type BackendNode = {
   };
   fractionalIndex: string; // For Z-order
   parentId?: string;
-  style?: Record<string, unknown>;
+  style?: Record<string, string | number | boolean | null | undefined>;
   width?: number;
   height?: number;
   selected?: boolean;

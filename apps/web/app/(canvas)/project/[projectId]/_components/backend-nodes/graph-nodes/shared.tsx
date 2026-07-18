@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Handle, Position } from "@xyflow/react";
-import { Plus, X, Trash2, Check, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, X, Trash2, Check, ChevronDown, ChevronUp, Settings } from "lucide-react";
 import { cn } from "@workspace/ui/lib/utils";
 import { Input } from "@workspace/ui/components/input";
 import { Button } from "@workspace/ui/components/button";
@@ -80,15 +80,7 @@ export const EditableNodeList = <T extends BaseItem>({
     updateNode(nodeId, { data: { ...data, [field]: newItems } });
   };
 
-  if (!items.length && !editingId) {
-     return (
-       <div className="bg-secondary/20 p-1.5 border-t">
-        <Button variant="ghost" size="sm" className="w-full h-6 text-xs text-muted-foreground hover:text-foreground" onClick={handleAdd}>
-          <Plus size={12} className="mr-1" /> Add {title.toLowerCase()}
-        </Button>
-      </div>
-     )
-  }
+
 
   return (
     <>
@@ -152,6 +144,7 @@ export const EditableNodeList = <T extends BaseItem>({
 }
 
 export interface EndpointRowProps {
+  nodeId: string;
   item: Endpoint;
   isEditing: boolean;
   setEditingId: (id: string | null) => void;
@@ -160,37 +153,14 @@ export interface EndpointRowProps {
   handleUpdate: (id: string, name: string, type: string) => void;
   handleDelete: (id: string) => void;
   handleUpdateItem: (id: string, changes: Partial<Endpoint>) => void;
-  field: string;
   handleType?: "source" | "target";
   handlePosition?: "left" | "right" | "top" | "bottom";
   editingName: string;
   editingType: string;
 }
 
-export const EndpointRow = ({ item, isEditing, setEditingId, setEditingName, setEditingType, handleUpdate, handleDelete, handleUpdateItem, field, handleType, handlePosition, editingName, editingType }: EndpointRowProps) => {
-  const [expanded, setExpanded] = useState(!item.name);
-
-  const addHeader = () => {
-     const headers = item.headers || [];
-     handleUpdateItem(item.id, { headers: [...headers, { id: generateId(), key: "", value: "", name: "", type: "string", required: false }] });
-  };
-  const updateHeader = (id: string, key: string, value: string) => {
-     handleUpdateItem(item.id, { headers: item.headers?.map((h) => h.id === id ? { ...h, key, value } : h) });
-  };
-  const deleteHeader = (id: string) => {
-     handleUpdateItem(item.id, { headers: item.headers?.filter((h) => h.id !== id) });
-  };
-
-  const addParam = () => {
-     const params = item.params || [];
-     handleUpdateItem(item.id, { params: [...params, { id: generateId(), key: "", value: "", name: "", type: "string", required: false }] });
-  };
-  const updateParam = (id: string, key: string, type: string) => {
-     handleUpdateItem(item.id, { params: item.params?.map((p) => p.id === id ? { ...p, key, type } : p) });
-  };
-  const deleteParam = (id: string) => {
-     handleUpdateItem(item.id, { params: item.params?.filter((p) => p.id !== id) });
-  };
+export const EndpointRow = ({ nodeId, item, isEditing, setEditingId, setEditingName, setEditingType, handleUpdate, handleDelete, handleUpdateItem, handleType, handlePosition, editingName, editingType }: EndpointRowProps) => {
+  const setActiveConfigItem = useBackendCanvasStore(s => s.setActiveConfigItem);
 
   const isEndpointEmpty = () => {
     const currentName = isEditing ? editingName : (item.name || "");
@@ -217,7 +187,11 @@ export const EndpointRow = ({ item, isEditing, setEditingId, setEditingName, set
             handleDelete(item.id);
             if (isEditing) setEditingId(null);
           } else if (isEditing) {
+            const wasEmpty = !item.name;
             handleUpdate(item.id, editingName.trim(), editingType);
+            if (wasEmpty && editingName.trim()) {
+              setActiveConfigItem({ type: 'endpoint', id: item.id, nodeId });
+            }
             setEditingId(null);
           }
         }
@@ -226,14 +200,14 @@ export const EndpointRow = ({ item, isEditing, setEditingId, setEditingName, set
       <Handle 
         type="target" 
         position={Position.Left} 
-        id={`${field}-in-${item.id}`} 
+        id={`endpoint-in-${item.id}`} 
         className="w-2 h-2 -left-1" 
         style={{ top: '15px' }} 
       />
       <Handle 
         type="source" 
         position={Position.Right} 
-        id={`${field}-out-${item.id}`} 
+        id={`endpoint-out-${item.id}`} 
         className="w-2 h-2 -right-1" 
         style={{ top: '15px' }} 
       />
@@ -262,7 +236,11 @@ export const EndpointRow = ({ item, isEditing, setEditingId, setEditingName, set
                 onKeyDown={(e: React.KeyboardEvent) => {
                   if (e.key === "Enter") {
                     if (!editingName.trim()) handleDelete(item.id);
-                    else handleUpdate(item.id, editingName.trim(), editingType);
+                    else {
+                      const wasEmpty = !item.name;
+                      handleUpdate(item.id, editingName.trim(), editingType);
+                      if (wasEmpty) setActiveConfigItem({ type: 'endpoint', id: item.id, nodeId });
+                    }
                     setEditingId(null);
                   }
                   if (e.key === "Escape") {
@@ -273,52 +251,55 @@ export const EndpointRow = ({ item, isEditing, setEditingId, setEditingName, set
               />
               <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground" onClick={() => {
                   if (!(editingName || "").trim()) handleDelete(item.id);
-                  else handleUpdate(item.id, (editingName || "").trim(), editingType || "GET");
+                  else {
+                    const wasEmpty = !item.name;
+                    handleUpdate(item.id, (editingName || "").trim(), editingType || "GET");
+                    if (wasEmpty) setActiveConfigItem({ type: 'endpoint', id: item.id, nodeId });
+                  }
                   setEditingId(null);
               }}>
                  <Check size={14} />
               </Button>
            </div>
         ) : (
-          <div className="flex items-center justify-between w-full cursor-pointer" onClick={() => { setEditingId(item.id); setEditingName(item.name || ""); setEditingType(item.type || "GET"); }}>
-             <div className="flex items-center gap-2 overflow-hidden">
-               <span className="px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0 bg-secondary text-secondary-foreground">
-                 {item.type || "GET"}
-               </span>
-               <span className="font-medium truncate">{item.name}</span>
-             </div>
-             <div className="flex items-center gap-1 opacity-0 group-hover/row:opacity-100 transition-all">
-                <div className="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground" onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}>
-                   {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                </div>
-                <div className="p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive" onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }}>
-                   <X size={14} />
-                </div>
-             </div>
-          </div>
-        )}
+          <div className="flex flex-col w-full gap-1.5">
+            <div className="flex items-center justify-between w-full cursor-pointer" onClick={() => { setEditingId(item.id); setEditingName(item.name || ""); setEditingType(item.type || "GET"); }}>
+               <div className="flex items-center gap-2 overflow-hidden">
+                 <span className="px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0 bg-secondary text-secondary-foreground">
+                   {item.type || "GET"}
+                 </span>
+                 <span className="font-medium truncate">{item.name}</span>
+               </div>
+               <div className="flex items-center gap-1 opacity-0 group-hover/row:opacity-100 transition-all">
+                  <div className="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground" onClick={(e) => { e.stopPropagation(); setActiveConfigItem({ type: 'endpoint', id: item.id, nodeId }); }}>
+                     <Settings size={14} />
+                  </div>
+                  <div className="p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive" onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }}>
+                     <X size={14} />
+                  </div>
+               </div>
+            </div>
 
-        {expanded && (
-          <div className="flex flex-col gap-3 pt-3 mt-2 border-t cursor-default nodrag" onClick={e => e.stopPropagation()}>
-             <ParameterEditor title="Headers" parameters={item.headers || []} onChange={headers => handleUpdateItem(item.id, { headers })} />
-             <ParameterEditor title="Path Params" parameters={item.pathParams || []} onChange={pathParams => handleUpdateItem(item.id, { pathParams })} />
-             <ParameterEditor title="Query Params" parameters={item.queryParams || []} onChange={queryParams => handleUpdateItem(item.id, { queryParams })} />
-             <SchemaEditor title="Request Body Schema" schema={item.requestBody} onChange={requestBody => handleUpdateItem(item.id, { requestBody })} />
-             <ProcessingStepsEditor steps={item.processingSteps || []} onChange={processingSteps => handleUpdateItem(item.id, { processingSteps })} />
-             
-             <div className="flex flex-col gap-1.5">
-               <MessagingResourceList
-                 title="Published Events"
-                 items={item.publishedEvents || []}
-                 variant="publish"
-                 resourceType="topics"
-                 onChange={(publishedEvents) =>
-                   handleUpdateItem(item.id, { publishedEvents })
-                 }
-               />
-             </div>
-             
-             <SchemaEditor title="Response Schema" schema={item.responseBody} onChange={responseBody => handleUpdateItem(item.id, { responseBody })} />
+            {item.publishedEvents && item.publishedEvents.length > 0 && (
+              <div className="flex flex-col gap-1 w-full pl-6 mt-0.5">
+                {item.publishedEvents.map(ev => (
+                  <div key={ev.id} className="relative flex items-center w-full group/pub cursor-default" onClick={(e) => e.stopPropagation()}>
+                    <span className="text-[9px] font-medium text-muted-foreground truncate opacity-70 group-hover/pub:opacity-100 transition-opacity flex items-center gap-1">
+                      <span className="text-[8px] opacity-50">↳</span> 
+                      <span className="px-1 py-0.5 bg-secondary/50 rounded-sm">pub</span>
+                      {ev.name}
+                    </span>
+                    <Handle
+                      type="source"
+                      position={Position.Right}
+                      id={`publishedEvents-out-${ev.id}`}
+                      className="w-2 h-2 -right-4"
+                      style={{ top: '50%' }}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -329,54 +310,41 @@ export const EndpointRow = ({ item, isEditing, setEditingId, setEditingName, set
 export const EndpointList = ({
   nodeId,
   title,
-  items = [],
-  field,
-  updateNode,
-  data,
 }: {
   nodeId: string;
   title: string;
-  items: Endpoint[];
-  field: string;
-  updateNode: (nodeId: string, changes: Partial<BackendNode>) => void;
-  data: BackendNode["data"];
 }) => {
+  const items = useBackendCanvasStore(s => s.endpoints).filter(e => e.nodeId === nodeId);
+  const addEndpoint = useBackendCanvasStore(s => s.addEndpoint);
+  const updateEndpoint = useBackendCanvasStore(s => s.updateEndpoint);
+  const deleteEndpoint = useBackendCanvasStore(s => s.deleteEndpoint);
+  const setActiveConfigItem = useBackendCanvasStore(s => s.setActiveConfigItem);
+
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [editingType, setEditingType] = useState("GET");
 
   const handleAdd = () => {
-    const newItems = [...items, { id: generateId(), name: "", type: "GET" }];
-    updateNode(nodeId, { data: { ...data, [field]: newItems } });
-    setEditingId(newItems[newItems.length - 1]!.id);
+    const newEndpoint = { id: generateId(), name: "", type: "GET" };
+    addEndpoint(nodeId, newEndpoint);
+    setEditingId(newEndpoint.id);
     setEditingName("");
     setEditingType("GET");
   };
 
   const handleUpdate = (id: string, name: string, type: string) => {
-    const newItems = items.map((item) => item.id === id ? { ...item, name, type } : item);
-    updateNode(nodeId, { data: { ...data, [field]: newItems } });
+    updateEndpoint(id, { name, type });
   };
 
   const handleDelete = (id: string) => {
-    const newItems = items.filter((item) => item.id !== id);
-    updateNode(nodeId, { data: { ...data, [field]: newItems } });
+    deleteEndpoint(id);
   };
 
   const handleUpdateItem = (id: string, changes: Partial<Endpoint>) => {
-    const newItems = items.map((item) => item.id === id ? { ...item, ...changes } : item);
-    updateNode(nodeId, { data: { ...data, [field]: newItems } });
+    updateEndpoint(id, changes);
   };
 
-  if (!items.length && !editingId) {
-     return (
-       <div className="bg-secondary/20 p-1.5 border-t">
-        <Button variant="ghost" size="sm" className="w-full h-6 text-xs text-muted-foreground hover:text-foreground" onClick={handleAdd}>
-          <Plus size={12} className="mr-1" /> Add {title.toLowerCase()}
-        </Button>
-      </div>
-     )
-  }
+
 
   return (
     <>
@@ -390,6 +358,7 @@ export const EndpointList = ({
         {items.map((item) => (
           <EndpointRow
             key={item.id}
+            nodeId={nodeId}
             item={item}
             isEditing={editingId === item.id}
             setEditingId={setEditingId}
@@ -400,7 +369,6 @@ export const EndpointList = ({
             handleUpdate={handleUpdate}
             handleDelete={handleDelete}
             handleUpdateItem={handleUpdateItem}
-            field={field}
           />
         ))}
       </div>
@@ -462,6 +430,7 @@ export const NodeHeader = ({ id, data, icon: Icon, title, colorClass, selected }
 };
 
 export interface MessagingResourceRowProps {
+  nodeId: string;
   item: AnyMessagingResource;
   isEditing: boolean;
   setEditingId: (id: string | null) => void;
@@ -477,8 +446,8 @@ export interface MessagingResourceRowProps {
   resourceType: string;
 }
 
-export const MessagingResourceRow = ({ item, isEditing, setEditingId, setEditingName, handleUpdate, handleDelete, handleUpdateItem, field, handleType, handlePosition, editingName, variant, resourceType }: MessagingResourceRowProps) => {
-  const [expanded, setExpanded] = useState(!item.name);
+export const MessagingResourceRow = ({ nodeId, item, isEditing, setEditingId, setEditingName, handleUpdate, handleDelete, handleUpdateItem, field, handleType, handlePosition, editingName, variant, resourceType }: MessagingResourceRowProps) => {
+  const setActiveConfigItem = useBackendCanvasStore(s => s.setActiveConfigItem);
   const isPublished = field === "publishedEvents" || variant === "publish";
   const isConsumed = field === "consumedEvents" || variant === "consume";
   const nodes = useBackendCanvasStore(s => s.nodes);
@@ -529,7 +498,11 @@ export const MessagingResourceRow = ({ item, isEditing, setEditingId, setEditing
             handleDelete(item.id);
             if (isEditing) setEditingId(null);
           } else if (isEditing) {
+            const wasEmpty = !item.name;
             handleUpdate(item.id, editingName.trim());
+            if (wasEmpty && editingName.trim()) {
+              setActiveConfigItem({ type: 'event', id: item.id, nodeId });
+            }
             setEditingId(null);
           }
         }
@@ -584,7 +557,11 @@ export const MessagingResourceRow = ({ item, isEditing, setEditingId, setEditing
                 onKeyDown={(e: React.KeyboardEvent) => {
                   if (e.key === "Enter") {
                     if (!editingName.trim()) handleDelete(item.id);
-                    else handleUpdate(item.id, editingName.trim());
+                    else {
+                      const wasEmpty = !item.name;
+                      handleUpdate(item.id, editingName.trim());
+                      if (wasEmpty) setActiveConfigItem({ type: 'event', id: item.id, nodeId });
+                    }
                     setEditingId(null);
                   }
                   if (e.key === "Escape") {
@@ -595,7 +572,11 @@ export const MessagingResourceRow = ({ item, isEditing, setEditingId, setEditing
               />
               <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground" onClick={() => {
                   if (!editingName.trim()) handleDelete(item.id);
-                  else handleUpdate(item.id, editingName.trim());
+                  else {
+                    const wasEmpty = !item.name;
+                    handleUpdate(item.id, editingName.trim());
+                    if (wasEmpty) setActiveConfigItem({ type: 'event', id: item.id, nodeId });
+                  }
                   setEditingId(null);
               }}>
                  <Check size={14} />
@@ -612,167 +593,13 @@ export const MessagingResourceRow = ({ item, isEditing, setEditingId, setEditing
                )}
              </div>
              <div className="flex items-center gap-1 opacity-0 group-hover/row:opacity-100 transition-all">
-                <div className="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground" onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}>
-                   {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                <div className="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground" onClick={(e) => { e.stopPropagation(); setActiveConfigItem({ type: 'event', id: item.id, nodeId }); }}>
+                   <Settings size={14} />
                 </div>
                 <div className="p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive" onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }}>
                    <X size={14} />
                 </div>
              </div>
-          </div>
-        )}
-
-        {expanded && (
-          <div className="flex flex-col gap-3 pt-3 mt-2 border-t cursor-default nodrag" onClick={e => e.stopPropagation()}>
-             {!isConsumed && (
-               <div className="flex flex-col gap-1.5">
-                 <span className="text-[9px] font-bold text-muted-foreground">
-                   {isPublished ? "When Published (Trigger)" : "Description"}
-                 </span>
-                 <LocalTextarea 
-                   className="min-h-[30px] w-full rounded-md border border-input px-2 py-1 text-[10px] shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring nodrag"
-                   placeholder={isPublished ? "e.g. Order successfully created" : "What triggers this message?"}
-                   value={(item.publishedWhen as string | undefined) || (item.description as string | undefined) || ""}
-                   onChange={e => handleUpdateItem(item.id, { publishedWhen: e.target.value, description: e.target.value })}
-                 />
-               </div>
-             )}
-             
-             <SchemaEditor 
-                title={isConsumed ? "Expected Payload" : (isPublished ? "Payload Schema" : "Schema")} 
-                schema={item.payloadSchema as Schema | undefined} 
-                onChange={payloadSchema => handleUpdateItem(item.id, { payloadSchema })} 
-             />
-
-             {isConsumed && (
-               <div className="flex flex-col gap-1.5">
-                 <span className="text-[9px] font-bold text-muted-foreground">Handler Logic</span>
-                 <LocalTextarea 
-                   className="min-h-[50px] w-full rounded-md border border-input px-2 py-1 text-[10px] shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring nodrag"
-                   placeholder="What happens when this event is received?"
-                   value={(item.handlerLogic as string | undefined) || ""}
-                   onChange={e => handleUpdateItem(item.id, { handlerLogic: e.target.value })}
-                 />
-               </div>
-             )}
-
-             {isConsumed && (
-               <div className="flex flex-col gap-2">
-                 <div className="flex items-center justify-between gap-2">
-                   <span className="text-[9px] font-bold text-muted-foreground">Retry Policy</span>
-                   <Select value={(item.retryPolicy as string | undefined) || "NONE"} onValueChange={v => handleUpdateItem(item.id, { retryPolicy: v })}>
-                     <SelectTrigger className="h-6 w-[120px] text-[10px] px-1.5 py-0 nodrag bg-background"><SelectValue /></SelectTrigger>
-                     <SelectContent>
-                       <SelectItem value="NONE" className="text-xs">None</SelectItem>
-                       <SelectItem value="EXPONENTIAL_BACKOFF" className="text-xs">Exponential Backoff</SelectItem>
-                       <SelectItem value="FIXED_INTERVAL" className="text-xs">Fixed Interval</SelectItem>
-                     </SelectContent>
-                   </Select>
-                 </div>
-                 
-                 <div className="flex items-center justify-between gap-2">
-                   <span className="text-[9px] font-bold text-muted-foreground">Max Retries</span>
-                   <LocalInput 
-                     type="number"
-                     className="h-6 text-[10px] w-16 text-right bg-background nodrag" 
-                     placeholder="e.g. 3" 
-                     value={(item.maxRetries as string | undefined) ?? ""}
-                     onChange={e => handleUpdateItem(item.id, { maxRetries: parseInt(e.target.value) })}
-                   />
-                 </div>
-                 <div className="flex items-center justify-between gap-2">
-                   <span className="text-[9px] font-bold text-muted-foreground">DLQ</span>
-                   <LocalInput 
-                     className="h-6 text-[10px] flex-1 bg-background nodrag font-mono" 
-                     placeholder="dlq-topic-name" 
-                     value={(item.deadLetterQueue as string | undefined) || ""}
-                     onChange={e => handleUpdateItem(item.id, { deadLetterQueue: e.target.value })}
-                   />
-                 </div>
-                 <div className="flex items-center gap-2 mt-1">
-                    <input type="checkbox" id={`idempotent-${item.id}`} checked={(item.isIdempotent as boolean | undefined) || false} onChange={e => handleUpdateItem(item.id, { isIdempotent: e.target.checked })} />
-                    <label htmlFor={`idempotent-${item.id}`} className="text-[9px] font-bold text-muted-foreground cursor-pointer">Idempotent Consumer</label>
-                 </div>
-               </div>
-             )}
-
-             {!isConsumed && variant !== "definition" && (
-                <>
-                 <div className="flex items-center justify-between gap-2">
-                    <span className="text-[9px] font-bold text-muted-foreground">Version</span>
-                    <LocalInput 
-                      className="h-6 text-[10px] w-16 text-right bg-background nodrag" 
-                      placeholder="v1" 
-                      value={(item.version as string | undefined) || "v1"}
-                      onChange={e => handleUpdateItem(item.id, { version: e.target.value })}
-                    />
-                 </div>
-                 <div className="flex items-center justify-between gap-2">
-                    <span className="text-[9px] font-bold text-muted-foreground">Category</span>
-                    <Select value={(item.category as string | undefined) || "DOMAIN"} onValueChange={v => handleUpdateItem(item.id, { category: v })}>
-                      <SelectTrigger className="h-6 w-[100px] text-[10px] px-1.5 py-0 nodrag bg-background"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="DOMAIN" className="text-xs">Domain</SelectItem>
-                        <SelectItem value="INTEGRATION" className="text-xs">Integration</SelectItem>
-                        <SelectItem value="CDC" className="text-xs">CDC</SelectItem>
-                        <SelectItem value="AUDIT" className="text-xs">Audit</SelectItem>
-                      </SelectContent>
-                    </Select>
-                 </div>
-                 <div className="flex items-center justify-between gap-2">
-                    <span className="text-[9px] font-bold text-muted-foreground">Delivery</span>
-                    <Select value={(item.delivery as string | undefined) || "AT_LEAST_ONCE"} onValueChange={v => handleUpdateItem(item.id, { delivery: v })}>
-                      <SelectTrigger className="h-6 w-[110px] text-[10px] px-1.5 py-0 nodrag bg-background"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="AT_LEAST_ONCE" className="text-xs">At Least Once</SelectItem>
-                        <SelectItem value="AT_MOST_ONCE" className="text-xs">At Most Once</SelectItem>
-                        <SelectItem value="EXACTLY_ONCE" className="text-xs">Exactly Once</SelectItem>
-                      </SelectContent>
-                    </Select>
-                 </div>
-                </>
-             )}
-
-             {(isPublished || isConsumed) && variant !== "definition" && (
-               <div className="flex flex-col gap-1.5 border-t border-border/50 pt-2 mt-1">
-                 <span className="text-[9px] font-bold text-muted-foreground">
-                   {isPublished ? "Publishes To Broker" : "Consumes From Broker"}
-                 </span>
-                  <Select value={(item.brokerNodeId as string | undefined) || ""} onValueChange={v => handleUpdateItem(item.id, { brokerNodeId: v, messagingResourceId: "" })}>
-                    <SelectTrigger className="h-7 text-xs bg-background nodrag">
-                      <SelectValue placeholder="Select Messaging Node" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {messagingNodes.length === 0 && <SelectItem value="none" disabled className="text-xs">No messaging nodes found</SelectItem>}
-                      {messagingNodes.map((node) => (
-                        <SelectItem key={node.id} value={node.id} className="text-xs">
-                          {node.data.label || "Untitled Messaging"}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  
-                  {item.brokerNodeId ? (
-                    <Select value={(item.messagingResourceId as string | undefined) || ""} onValueChange={v => handleUpdateItem(item.id, { messagingResourceId: v })}>
-                      <SelectTrigger className="h-7 text-xs bg-background nodrag mt-1">
-                        <SelectValue placeholder="Select Topic / Queue / Stream" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availableResources.length === 0 && <SelectItem value="none" disabled className="text-xs">No resources defined on broker</SelectItem>}
-                        {availableResources.map((res) => (
-                          <SelectItem key={res.id} value={res.id} className="text-xs">
-                            {res.name || "Untitled Resource"}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <div className="h-7 mt-1 text-[10px] text-muted-foreground flex items-center px-2 bg-background/50 border rounded-md border-dashed">
-                      Select a broker first
-                    </div>
-                  )}
-               </div>
-             )}
           </div>
         )}
       </div>
@@ -782,20 +609,39 @@ export const MessagingResourceRow = ({ item, isEditing, setEditingId, setEditing
 
 
 export const MessagingResourceList = <T extends AnyMessagingResource = AnyMessagingResource>({
+  nodeId,
   title,
   items = [],
   variant,
   resourceType,
   onChange,
+  onAdd,
+  onUpdate,
+  onDelete,
+  onUpdateItem,
+  field,
+  handleType,
+  handlePosition,
+  asCard,
 }: {
+  nodeId: string;
   title: string;
-  items: T[];
-  variant: "definition" | "publish" | "consume";
-  resourceType: "topics" | "streams" | "queues" | "channels";
-  onChange: (items: T[]) => void;
+  items?: T[];
+  variant?: "definition" | "publish" | "consume";
+  resourceType: string;
+  onChange?: (items: T[]) => void;
+  onAdd?: (item: T) => void;
+  onUpdate?: (id: string, name: string) => void;
+  onDelete?: (id: string) => void;
+  onUpdateItem?: (id: string, changes: Partial<T>) => void;
+  field?: string;
+  handleType?: "source" | "target";
+  handlePosition?: "left" | "right" | "top" | "bottom";
+  asCard?: boolean;
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
+  const setActiveConfigItem = useBackendCanvasStore(s => s.setActiveConfigItem);
 
   const getKind = () => {
     switch (resourceType) {
@@ -813,53 +659,71 @@ export const MessagingResourceList = <T extends AnyMessagingResource = AnyMessag
   };
 
   const handleAdd = () => {
-    const newItems = [
-      ...items,
-      {
-        id: generateId(),
-        name: "",
-        kind: getKind(),
-      } as T,
-    ];
-
-    onChange(newItems);
-
-    setEditingId(newItems[newItems.length - 1]!.id);
+    const newItem = { id: generateId(), name: "", kind: getKind() } as T;
+    if (onAdd) {
+      onAdd(newItem);
+    } else if (onChange) {
+      onChange([...items, newItem]);
+    }
+    setEditingId(newItem.id);
     setEditingName("");
   };
 
   const handleUpdate = (id: string, name: string) => {
-    onChange(
-      items.map((item) =>
-        item.id === id ? { ...item, name } : item
-      ) as T[]
-    );
+    if (onUpdate) {
+      onUpdate(id, name);
+    } else if (onChange) {
+      onChange(items.map((item) => (item.id === id ? { ...item, name } : item)) as T[]);
+    }
   };
 
   const handleDelete = (id: string) => {
-    onChange(items.filter((item) => item.id !== id));
+    if (onDelete) {
+      onDelete(id);
+    } else if (onChange) {
+      onChange(items.filter((item) => item.id !== id));
+    }
   };
 
   const handleUpdateItem = (id: string, changes: Partial<AnyMessagingResource>) => {
-    onChange(
-      items.map((item) =>
+    if (onUpdateItem) {
+      onUpdateItem(id, changes as Partial<T>);
+    } else if (onChange) {
+      onChange(items.map((item) =>
         item.id === id ? { ...item, ...changes } : item
-      ) as T[]
-    );
+      ) as T[]);
+    }
   };
 
-  if (!items.length && !editingId) {
+
+  if (asCard) {
     return (
-      <div className="p-1.5">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full h-6 text-xs text-muted-foreground hover:text-foreground"
-          onClick={handleAdd}
-        >
-          <Plus size={12} className="mr-1" />
-          Add {title.toLowerCase()}
-        </Button>
+      <div className="flex flex-col gap-3 rounded-xl border bg-card/50 p-4 shadow-sm backdrop-blur-sm">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-semibold text-foreground uppercase tracking-wider">{title}</span>
+          <Button variant="ghost" size="sm" className="h-7 text-xs bg-secondary/50 hover:bg-secondary border border-border/50" onClick={handleAdd}>
+            <Plus size={14} className="mr-1.5 text-muted-foreground" /> Add Event
+          </Button>
+        </div>
+        
+        <div className="flex flex-col gap-2">
+          {items.map((item, index) => (
+            <MessagingResourceRow
+              key={item.id || `item-${index}`}
+              nodeId={nodeId}
+              item={item}
+              isEditing={editingId === item.id}
+              setEditingId={setEditingId}
+              editingName={editingName}
+              setEditingName={setEditingName}
+              handleUpdate={handleUpdate}
+              handleDelete={handleDelete}
+              handleUpdateItem={handleUpdateItem}
+              variant={variant}
+              resourceType={resourceType}
+            />
+          ))}
+        </div>
       </div>
     );
   }
@@ -880,6 +744,7 @@ export const MessagingResourceList = <T extends AnyMessagingResource = AnyMessag
         {items.map((item, index) => (
           <MessagingResourceRow
             key={item.id || `item-${index}`}
+            nodeId={nodeId}
             item={item}
             isEditing={editingId === item.id}
             setEditingId={setEditingId}
@@ -1118,6 +983,7 @@ export const RouteGroupEditor = ({
             endpoints.map((ep) => (
               <EndpointRow
                 key={ep.id}
+                nodeId={nodeId}
                 item={ep}
                 isEditing={editingEndpointId === ep.id}
                 setEditingId={setEditingEndpointId}
@@ -1128,7 +994,6 @@ export const RouteGroupEditor = ({
                 handleUpdate={handleUpdateEndpoint}
                 handleDelete={handleDeleteEndpoint}
                 handleUpdateItem={handleUpdateEndpointItem}
-                field={`routeGroup-${group.id}-endpoints`}
               />
             ))
           )}
@@ -1187,10 +1052,6 @@ export const RouteGroupList = ({
         <EndpointList
           nodeId={nodeId}
           title="Routes (ungrouped)"
-          items={ungroupedEndpoints}
-          field="endpoints"
-          updateNode={updateNode}
-          data={data}
         />
       )}
 

@@ -10,7 +10,7 @@ import {
   Node,
   Edge
 } from "@xyflow/react";
-import { PublishedEventInputType, ConsumedEventInputType, BackendNodeType } from "@workspace/canvas/types";
+import { PublishedEventInputType, ConsumedEventInputType, BackendNodeType, Endpoint, AnyMessagingResource } from "@workspace/canvas/types";
 import { generateKeyBetween } from "fractional-indexing";
 import { isValidConnection } from "@workspace/canvas";
 
@@ -48,11 +48,20 @@ interface BackendCanvasState {
   edges: BackendEdge[];
   canvasView: BackendCanvasView;
 
+  endpoints: (Endpoint & { nodeId: string })[];
+  events: (AnyMessagingResource & { nodeId: string, variant: 'publish' | 'consume' })[];
+  activeConfigItem: { type: 'endpoint' | 'event', id: string, nodeId: string } | null;
+  setActiveConfigItem: (item: { type: 'endpoint' | 'event', id: string, nodeId: string } | null) => void;
+
   // Pending Convex sync ops
   pendingNodeUpserts: BackendNode[];
   pendingNodeRemovals: string[];
   pendingEdgeUpserts: BackendEdge[];
   pendingEdgeRemovals: string[];
+  pendingEndpointUpserts: (Endpoint & { nodeId: string })[];
+  pendingEndpointRemovals: { nodeId: string, endpointId: string }[];
+  pendingEventUpserts: (AnyMessagingResource & { nodeId: string, variant: 'publish' | 'consume' })[];
+  pendingEventRemovals: { nodeId: string, eventId: string }[];
 
   // Deletion confirmation
   nodesPendingDeletion: BackendNode[];
@@ -71,9 +80,22 @@ interface BackendCanvasState {
   addEdge: (edge: Omit<BackendEdge, "fractionalIndex">) => void;
   updateEdge: (id: string, changes: Partial<BackendEdge>) => void;
   deleteEdge: (id: string) => void;
+  
+  addEndpoint: (nodeId: string, endpoint: Endpoint) => void;
+  updateEndpoint: (id: string, changes: Partial<Endpoint>) => void;
+  deleteEndpoint: (id: string) => void;
+
+  addEvent: (nodeId: string, variant: 'publish' | 'consume', event: AnyMessagingResource) => void;
+  updateEvent: (id: string, changes: Partial<AnyMessagingResource>) => void;
+  deleteEvent: (id: string) => void;
 
   // Bulk load from Convex (no pending ops)
-  setNodesAndEdges: (nodes: BackendNode[], edges: BackendEdge[]) => void;
+  setNodesAndEdges: (
+    nodes: BackendNode[], 
+    edges: BackendEdge[], 
+    endpoints?: (Endpoint & { nodeId: string })[], 
+    events?: (AnyMessagingResource & { nodeId: string, variant: 'publish' | 'consume' })[]
+  ) => void;
   setView: (view: BackendCanvasView) => void;
 
   // Called after Convex sync succeeds
@@ -81,7 +103,11 @@ interface BackendCanvasState {
     syncedNodeUpserts: BackendNode[],
     syncedNodeRemovals: string[],
     syncedEdgeUpserts: BackendEdge[],
-    syncedEdgeRemovals: string[]
+    syncedEdgeRemovals: string[],
+    syncedEndpointUpserts?: (Endpoint & { nodeId: string })[],
+    syncedEndpointRemovals?: { nodeId: string, endpointId: string }[],
+    syncedEventUpserts?: (AnyMessagingResource & { nodeId: string, variant: 'publish' | 'consume' })[],
+    syncedEventRemovals?: { nodeId: string, eventId: string }[]
   ) => void;
   reset: () => void;
 }
@@ -89,11 +115,19 @@ interface BackendCanvasState {
 export const useBackendCanvasStore = create<BackendCanvasState>((set, get) => ({
   nodes: [],
   edges: [],
+  endpoints: [],
+  events: [],
   canvasView: "graph",
+  activeConfigItem: null,
+  setActiveConfigItem: (item) => set({ activeConfigItem: item }),
   pendingNodeUpserts: [],
   pendingNodeRemovals: [],
   pendingEdgeUpserts: [],
   pendingEdgeRemovals: [],
+  pendingEndpointUpserts: [],
+  pendingEndpointRemovals: [],
+  pendingEventUpserts: [],
+  pendingEventRemovals: [],
   nodesPendingDeletion: [],
   setNodesPendingDeletion: (nodes) => set({ nodesPendingDeletion: nodes }),
 
@@ -129,32 +163,14 @@ export const useBackendCanvasStore = create<BackendCanvasState>((set, get) => ({
     const removedEdges = get().edges.filter(e => removedIds.includes(e.id));
     
     removedEdges.forEach((edge) => {
-      // 1. Check if it's a published event edge
       if (edge.sourceHandle?.startsWith("publishedEvents-out-")) {
         const eventId = edge.sourceHandle.replace("publishedEvents-out-", "");
-        const sourceNode = get().nodes.find(n => n.id === edge.source);
-        if (sourceNode && sourceNode.data.publishedEvents) {
-          const updatedEvents = sourceNode.data.publishedEvents.map((ev) =>
-            ev.id === eventId ? { ...ev, targetNodeId: "none" } : ev
-          );
-          get().updateNode(sourceNode.id, {
-            data: { ...sourceNode.data, publishedEvents: updatedEvents }
-          });
-        }
+        get().updateEvent(eventId, { brokerNodeId: "" });
       }
       
-      // 2. Check if it's a consumed event edge
       if (edge.targetHandle?.startsWith("consumedEvents-in-")) {
         const eventId = edge.targetHandle.replace("consumedEvents-in-", "");
-        const targetNode = get().nodes.find(n => n.id === edge.target);
-        if (targetNode && targetNode.data.consumedEvents) {
-          const updatedEvents = targetNode.data.consumedEvents.map((ev) =>
-            ev.id === eventId ? { ...ev, targetNodeId: "none" } : ev
-          );
-          get().updateNode(targetNode.id, {
-            data: { ...targetNode.data, consumedEvents: updatedEvents }
-          });
-        }
+        get().updateEvent(eventId, { brokerNodeId: "" });
       }
     });
 
@@ -212,26 +228,12 @@ export const useBackendCanvasStore = create<BackendCanvasState>((set, get) => ({
     // Update targetNodeId on service events if connected via messaging handles
     if (isPublishedConnect && connection.sourceHandle) {
       const eventId = connection.sourceHandle.replace('publishedEvents-out-', '');
-      if (sourceNode.data.publishedEvents) {
-        const updatedEvents = sourceNode.data.publishedEvents.map((ev) =>
-          ev.id === eventId ? { ...ev, targetNodeId: connection.target ?? undefined } : ev
-        );
-        get().updateNode(sourceNode.id, {
-          data: { ...sourceNode.data, publishedEvents: updatedEvents }
-        });
-      }
+      get().updateEvent(eventId, { brokerNodeId: connection.target ?? undefined });
     }
 
     if (isConsumedConnect && connection.targetHandle) {
       const eventId = connection.targetHandle.replace('consumedEvents-in-', '');
-      if (targetNode.data.consumedEvents) {
-        const updatedEvents = targetNode.data.consumedEvents.map((ev) =>
-          ev.id === eventId ? { ...ev, targetNodeId: connection.source ?? undefined } : ev
-        );
-        get().updateNode(targetNode.id, {
-          data: { ...targetNode.data, consumedEvents: updatedEvents }
-        });
-      }
+      get().updateEvent(eventId, { brokerNodeId: connection.source ?? undefined });
     }
 
     // Update source node's column to isForeignKey: true if it's a foreign key edge
@@ -435,6 +437,64 @@ export const useBackendCanvasStore = create<BackendCanvasState>((set, get) => ({
     });
   },
 
+  addEndpoint: (nodeId, endpoint) => {
+    const newEndpoint = { ...endpoint, nodeId };
+    set({
+      endpoints: [...get().endpoints, newEndpoint],
+      pendingEndpointUpserts: [...get().pendingEndpointUpserts, newEndpoint]
+    });
+  },
+
+  updateEndpoint: (id, changes) => {
+    const next = get().endpoints.map(e => e.id === id ? { ...e, ...changes } : e);
+    const updated = next.find(e => e.id === id);
+    if (updated) {
+      set({
+        endpoints: next,
+        pendingEndpointUpserts: [...get().pendingEndpointUpserts, updated]
+      });
+    }
+  },
+
+  deleteEndpoint: (id) => {
+    const endpoint = get().endpoints.find(e => e.id === id);
+    if (endpoint) {
+      set({
+        endpoints: get().endpoints.filter(e => e.id !== id),
+        pendingEndpointRemovals: [...get().pendingEndpointRemovals, { nodeId: endpoint.nodeId, endpointId: id }]
+      });
+    }
+  },
+
+  addEvent: (nodeId, variant, event) => {
+    const newEvent = { ...event, nodeId, variant };
+    set({
+      events: [...get().events, newEvent],
+      pendingEventUpserts: [...get().pendingEventUpserts, newEvent]
+    });
+  },
+
+  updateEvent: (id, changes) => {
+    const next = get().events.map(e => e.id === id ? { ...e, ...changes } : e);
+    const updated = next.find(e => e.id === id);
+    if (updated) {
+      set({
+        events: next,
+        pendingEventUpserts: [...get().pendingEventUpserts, updated]
+      });
+    }
+  },
+
+  deleteEvent: (id) => {
+    const event = get().events.find(e => e.id === id);
+    if (event) {
+      set({
+        events: get().events.filter(e => e.id !== id),
+        pendingEventRemovals: [...get().pendingEventRemovals, { nodeId: event.nodeId, eventId: id }]
+      });
+    }
+  },
+
   deleteEdge: (id) => {
     set({
       edges: get().edges.filter((e) => e.id !== id),
@@ -442,33 +502,50 @@ export const useBackendCanvasStore = create<BackendCanvasState>((set, get) => ({
     });
   },
 
-  setNodesAndEdges: (nodes, edges) =>
+  setNodesAndEdges: (nodes, edges, endpoints = [], events = []) =>
     set({
       nodes,
       edges,
+      endpoints,
+      events,
       pendingNodeUpserts: [],
       pendingNodeRemovals: [],
       pendingEdgeUpserts: [],
       pendingEdgeRemovals: [],
+      pendingEndpointUpserts: [],
+      pendingEndpointRemovals: [],
+      pendingEventUpserts: [],
+      pendingEventRemovals: [],
     }),
 
   setView: (view) => set({ canvasView: view }),
 
-  clearPending: (syncedNodes, syncedNodeRemovals, syncedEdges, syncedEdgeRemovals) =>
+  clearPending: (syncedNodes, syncedNodeRemovals, syncedEdges, syncedEdgeRemovals, syncedEndpointUpserts = [], syncedEndpointRemovals = [], syncedEventUpserts = [], syncedEventRemovals = []) =>
     set((state) => ({
       pendingNodeUpserts: state.pendingNodeUpserts.filter(n => !syncedNodes.includes(n)),
       pendingNodeRemovals: state.pendingNodeRemovals.filter(id => !syncedNodeRemovals.includes(id)),
       pendingEdgeUpserts: state.pendingEdgeUpserts.filter(e => !syncedEdges.includes(e)),
       pendingEdgeRemovals: state.pendingEdgeRemovals.filter(id => !syncedEdgeRemovals.includes(id)),
+      pendingEndpointUpserts: state.pendingEndpointUpserts.filter(e => !syncedEndpointUpserts.includes(e)),
+      pendingEndpointRemovals: state.pendingEndpointRemovals.filter(r => !syncedEndpointRemovals.some(sr => sr.endpointId === r.endpointId)),
+      pendingEventUpserts: state.pendingEventUpserts.filter(e => !syncedEventUpserts.includes(e)),
+      pendingEventRemovals: state.pendingEventRemovals.filter(r => !syncedEventRemovals.some(sr => sr.eventId === r.eventId)),
     })),
 
   reset: () =>
     set({
       nodes: [],
       edges: [],
+      endpoints: [],
+      events: [],
       pendingNodeUpserts: [],
       pendingNodeRemovals: [],
       pendingEdgeUpserts: [],
       pendingEdgeRemovals: [],
+      pendingEndpointUpserts: [],
+      pendingEndpointRemovals: [],
+      pendingEventUpserts: [],
+      pendingEventRemovals: [],
+      activeConfigItem: null,
     }),
 }));

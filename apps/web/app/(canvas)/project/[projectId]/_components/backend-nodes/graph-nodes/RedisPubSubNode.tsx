@@ -30,6 +30,7 @@ export const RedisPubSubNode = ({ id, data, selected }: NodeProps<BackendNode>) 
 
       {/* Channels (Messaging Resources) */}
      <MessagingResourceList
+        nodeId={id}
         title="Channels"
         items={data.channels || []}
         variant="definition"

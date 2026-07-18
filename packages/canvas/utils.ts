@@ -37,8 +37,8 @@ export function classifyHandle(
     if (handleDirection === "source") return "entity-bottom-source";
   }
 
-  if (id.startsWith("endpoints-in-") || id.startsWith("routeEndpoints-in-")) return "endpoint-in";
-  if (id.startsWith("endpoints-out-") || id.startsWith("routeEndpoints-out-")) return "endpoint-out";
+  if (id.startsWith("endpoint-in-") || id.startsWith("endpoints-in-") || id.startsWith("routeEndpoints-in-")) return "endpoint-in";
+  if (id.startsWith("endpoint-out-") || id.startsWith("endpoints-out-") || id.startsWith("routeEndpoints-out-")) return "endpoint-out";
   if (id.startsWith("events-")) return "event-source";
   if (id.startsWith("publishedEvents-out-")) return "published-event-out";
   if (id.startsWith("consumedEvents-in-")) return "consumed-event-in";

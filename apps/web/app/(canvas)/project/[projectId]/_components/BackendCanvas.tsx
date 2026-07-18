@@ -39,6 +39,7 @@ import { Connection } from "@xyflow/react";
 import { ChatContainer } from "@/app/(protected)/_components/chat/chat-container";
 import { useSimulationStore } from "@/lib/stores/simulationStore";
 import { SimulationTerminal } from "./SimulationTerminal";
+import { ConfigSidebar } from "./ConfigSidebar";
 
 const edgeTypes = {
   "foreign-key": ForeignKeyEdge,
@@ -103,6 +104,10 @@ function Flow({ projectId, view }: BackendCanvasProps) {
     pendingNodeRemovals,
     pendingEdgeUpserts,
     pendingEdgeRemovals,
+    pendingEndpointUpserts,
+    pendingEndpointRemovals,
+    pendingEventUpserts,
+    pendingEventRemovals,
     clearPending,
   } = useBackendCanvasStore();
   const simulation = useSimulationStore();
@@ -212,6 +217,10 @@ function Flow({ projectId, view }: BackendCanvasProps) {
   const removeNode = useMutation(api.canvas.removeBackendNode);
   const upsertEdge = useMutation(api.canvas.upsertBackendEdge);
   const removeEdge = useMutation(api.canvas.removeBackendEdge);
+  const upsertEndpoint = useMutation(api.canvas.upsertBackendEndpoint);
+  const removeEndpoint = useMutation(api.canvas.removeBackendEndpoint);
+  const upsertEvent = useMutation(api.canvas.upsertBackendEvent);
+  const removeEvent = useMutation(api.canvas.removeBackendEvent);
 
   const hasHydrated = React.useRef(false);
 
@@ -292,7 +301,7 @@ function Flow({ projectId, view }: BackendCanvasProps) {
        // It's usually fine to just call it.
     }
 
-    setNodesAndEdges(nodes, edges);
+    setNodesAndEdges(nodes, edges, initialElements.endpoints || [], initialElements.events || []);
   }, [initialElements, setNodesAndEdges, view]);
 
   // Handle view changes: swap active positions for existing nodes
@@ -346,7 +355,11 @@ function Flow({ projectId, view }: BackendCanvasProps) {
       pendingNodeUpserts.length === 0 &&
       pendingNodeRemovals.length === 0 &&
       pendingEdgeUpserts.length === 0 &&
-      pendingEdgeRemovals.length === 0
+      pendingEdgeRemovals.length === 0 &&
+      pendingEndpointUpserts.length === 0 &&
+      pendingEndpointRemovals.length === 0 &&
+      pendingEventUpserts.length === 0 &&
+      pendingEventRemovals.length === 0
     ) {
       return;
     }
@@ -361,12 +374,18 @@ function Flow({ projectId, view }: BackendCanvasProps) {
       const syncingNodeRemovals = [...pendingNodeRemovals];
       const syncingEdges = [...pendingEdgeUpserts];
       const syncingEdgeRemovals = [...pendingEdgeRemovals];
+      const syncingEndpoints = [...pendingEndpointUpserts];
+      const syncingEndpointRemovals = [...pendingEndpointRemovals];
+      const syncingEvents = [...pendingEventUpserts];
+      const syncingEventRemovals = [...pendingEventRemovals];
 
       // Deduplicate for actual API calls (take the latest version for each ID)
       const uniqueNodesToSync = Array.from(new Map(syncingNodes.map(n => [n.id, n])).values());
       const uniqueEdgesToSync = Array.from(new Map(syncingEdges.map(e => [e.id, e])).values());
       const uniqueNodeRemovals = Array.from(new Set(syncingNodeRemovals));
       const uniqueEdgeRemovals = Array.from(new Set(syncingEdgeRemovals));
+      const uniqueEndpointsToSync = Array.from(new Map(syncingEndpoints.map(e => [e.id, e])).values());
+      const uniqueEventsToSync = Array.from(new Map(syncingEvents.map(e => [e.id, e])).values());
 
       Promise.all([
         ...uniqueNodesToSync.map((n) => {
@@ -407,10 +426,22 @@ function Flow({ projectId, view }: BackendCanvasProps) {
         ...uniqueEdgeRemovals.map((id) =>
           removeEdge({ projectId: pid, edgeId: id })
         ),
+        ...uniqueEndpointsToSync.map((e) =>
+          upsertEndpoint({ projectId: pid, nodeId: e.nodeId, endpointId: e.id, data: e })
+        ),
+        ...syncingEndpointRemovals.map((r) =>
+          removeEndpoint({ projectId: pid, nodeId: r.nodeId, endpointId: r.endpointId })
+        ),
+        ...uniqueEventsToSync.map((e) =>
+          upsertEvent({ projectId: pid, nodeId: e.nodeId, eventId: e.id, variant: e.variant, data: e })
+        ),
+        ...syncingEventRemovals.map((r) =>
+          removeEvent({ projectId: pid, nodeId: r.nodeId, eventId: r.eventId })
+        ),
       ])
         .then(() => {
           console.log("BackendCanvas sync loop: sync successful");
-          clearPending(syncingNodes, syncingNodeRemovals, syncingEdges, syncingEdgeRemovals);
+          clearPending(syncingNodes, syncingNodeRemovals, syncingEdges, syncingEdgeRemovals, syncingEndpoints, syncingEndpointRemovals, syncingEvents, syncingEventRemovals);
         })
         .catch((e) => {
           console.error("BackendCanvas sync loop: sync failed", e);
@@ -423,11 +454,19 @@ function Flow({ projectId, view }: BackendCanvasProps) {
     pendingNodeRemovals,
     pendingEdgeUpserts,
     pendingEdgeRemovals,
+    pendingEndpointUpserts,
+    pendingEndpointRemovals,
+    pendingEventUpserts,
+    pendingEventRemovals,
     projectId,
     upsertNode,
     removeNode,
     upsertEdge,
     removeEdge,
+    upsertEndpoint,
+    removeEndpoint,
+    upsertEvent,
+    removeEvent,
     clearPending,
   ]);
 
@@ -710,6 +749,7 @@ export function BackendCanvas(props: BackendCanvasProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <ConfigSidebar />
       <ChatContainer />
     </>
   );

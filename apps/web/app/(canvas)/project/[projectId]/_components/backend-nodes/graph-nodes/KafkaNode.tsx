@@ -47,6 +47,7 @@ export const KafkaNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
 
       {/* Topics (Messaging Resources) */}
       <MessagingResourceList
+          nodeId={id}
           title="Topics"
           items={data.topics || []}
           variant="definition"

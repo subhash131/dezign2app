@@ -47,6 +47,7 @@ export const RedisStreamsNode = ({ id, data, selected }: NodeProps<BackendNode>)
 
       {/* Streams (Messaging Resources) */}
       <MessagingResourceList
+        nodeId={id}
         title="Streams"
         items={data.streams || []}
         variant="definition"

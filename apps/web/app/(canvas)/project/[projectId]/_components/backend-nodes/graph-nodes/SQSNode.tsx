@@ -48,6 +48,7 @@ export const SQSNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
 
       {/* Queues (Messaging Resources) */}
       <MessagingResourceList
+        nodeId={id}
         title="Queues"
         items={data.queues || []}
         variant="definition"

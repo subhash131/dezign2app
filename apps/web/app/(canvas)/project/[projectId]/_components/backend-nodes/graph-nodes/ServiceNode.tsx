@@ -12,6 +12,13 @@ import { Textarea } from "@workspace/ui/components/textarea";
 
 export const ServiceNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
+  const addEvent = useBackendCanvasStore((s) => s.addEvent);
+  const updateEvent = useBackendCanvasStore((s) => s.updateEvent);
+  const deleteEvent = useBackendCanvasStore((s) => s.deleteEvent);
+  
+  const consumedEvents = useBackendCanvasStore((s) => s.events).filter(e => e.nodeId === id && e.variant === 'consume');
+  const publishedEvents = useBackendCanvasStore((s) => s.events).filter(e => e.nodeId === id && e.variant === 'publish');
+
   const [configOpen, setConfigOpen] = useState(false);
 
   return (
@@ -27,30 +34,33 @@ export const ServiceNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
           onChange={(e) => updateNode(id, { data: { ...data, description: e.target.value } })}
         />
       </div>
-      
       <EndpointList
         nodeId={id}
         title="Endpoints / Routes"
-        items={data.endpoints || []}
-        field="endpoints"
-        updateNode={updateNode}
-        data={data}
       />
       
       <MessagingResourceList
-        title="Consumed Events (Listeners)"
-        items={data.consumedEvents || []}
+        nodeId={id}
+        title="Consume Events (Listeners)"
+        items={consumedEvents}
         variant="consume"
         resourceType="topics"
-        onChange={(consumedEvents) => updateNode(id, { data: { ...data, consumedEvents } })}
+        onAdd={(item) => addEvent(id, 'consume', item)}
+        onUpdate={(eventId, name) => updateEvent(eventId, { name })}
+        onDelete={(eventId) => deleteEvent(eventId)}
+        onUpdateItem={(eventId, changes) => updateEvent(eventId, changes)}
       />
 
       <MessagingResourceList
-        title="Background Published Events"
-        items={data.publishedEvents || []}
+        nodeId={id}
+        title="Publish Events (Background)"
+        items={publishedEvents}
         variant="publish"
         resourceType="topics"
-        onChange={(publishedEvents) => updateNode(id, { data: { ...data, publishedEvents } })}
+        onAdd={(item) => addEvent(id, 'publish', item)}
+        onUpdate={(eventId, name) => updateEvent(eventId, { name })}
+        onDelete={(eventId) => deleteEvent(eventId)}
+        onUpdateItem={(eventId, changes) => updateEvent(eventId, changes)}
       />
 
       <div className="p-3 bg-secondary/10 flex flex-col gap-3 rounded-b-xl">

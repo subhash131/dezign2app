@@ -116,11 +116,10 @@ export const EventStreamNode = ({ id, data, selected }: NodeProps<BackendNode>) 
       <div className="flex flex-col border-b bg-secondary/20 nodrag">
         <div className="px-3 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Consumers</div>
         <div className="px-3 pb-2 flex flex-col gap-1">
-          {consumers.length === 0
-            ? <span className="text-[10px] text-muted-foreground italic px-1">No consumers connected</span>
-            : consumers.map(c => (
+          {consumers.length !== 0 &&
+            consumers.map(c => (
                 <div key={c.id} className="text-xs font-medium truncate px-1 border-l-2 border-teal-500/50 ml-1">{c.label}</div>
-              ))
+            ))
           }
         </div>
       </div>

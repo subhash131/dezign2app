@@ -204,7 +204,7 @@ export const endpointInputSchema: z.ZodType<EndpointInputType> = z.object({
     id: z.string().optional(),
     text: z.string(),
     operation: z.string().optional(),
-    config: z.record(z.any()).optional(),
+    config: z.record(z.union([z.string(), z.number(), z.boolean(), z.null(), z.record(z.union([z.string(), z.number(), z.boolean(), z.null()]))])).optional(),
   }).passthrough()).describe("Executable request-processing steps in order."),
   output: z.string().optional().describe("Short response description; do not use this instead of responseBody."),
   businessLogic: z.string().optional().describe("Human-readable purpose of the endpoint."),
@@ -215,7 +215,7 @@ export const endpointInputSchema: z.ZodType<EndpointInputType> = z.object({
     "Single db_ref node ID this endpoint uses; prefer databaseNodeIds when there is more than one."
   ),
   publishedEvents: z.array(publishedEventInputSchema).optional(),
-}) as unknown as z.ZodType<EndpointInputType>;
+}) as z.ZodType<EndpointInputType>;
 
 // ---------------------------------------------------------------------------
 // Node data schemas — per BackendNodeType
@@ -450,19 +450,24 @@ export const nodeDataSchemas: Record<string, z.ZodTypeAny> = {
  * Walk known resource-array keys (`topics`, `queues`, `channels`, `streams`,
  * `actions`) and stamp a unique `id` on every item that lacks one.
  */
-export function assignResourceIds<T extends Record<string, unknown>>(data: T): T {
+export function assignResourceIds<T extends Record<string, string | number | boolean | object | null | undefined>>(data: T): T {
   const resourceKeys = ["topics", "queues", "channels", "streams", "actions"];
   const result = { ...data };
   for (const key of resourceKeys) {
     const list = result[key];
     if (Array.isArray(list)) {
-      (result as Record<string, unknown>)[key] = list.map(
-        (item: Record<string, unknown>, i: number) => ({
-          ...item,
-          id:
-            item.id ||
-            `res-${Date.now()}-${i}-${Math.random().toString(36).substring(2, 7)}`,
-        }),
+      (result as Record<string, string | number | boolean | object | null | undefined>)[key] = list.map(
+        (item: string | number | boolean | object | null, i: number) => {
+          if (typeof item === 'object' && item !== null) {
+            return {
+              ...item,
+              id:
+                ('id' in item && typeof (item as Record<string, string | number | boolean | object | null | undefined>).id === 'string' ? (item as Record<string, string | number | boolean | object | null | undefined>).id : "") ||
+                `res-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            };
+          }
+          return item;
+        }
       );
     }
   }
