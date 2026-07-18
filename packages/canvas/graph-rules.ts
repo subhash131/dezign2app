@@ -6,7 +6,7 @@ export const CONNECTION_RULES: Record<HandleKind, HandleKind[]> = {
   "endpoint-out": ["database-target", "action-target", "resource-def-in", "endpoint-in"],
   "published-event-out": ["resource-def-in"],
   "consumed-event-in": [],
-  "consumed-event-out": ["endpoint-in"],
+  "consumed-event-out": ["endpoint-in", "resource-def-in"],
   "resource-def-in": [],
   "resource-def-out": ["consumed-event-in"],
   "entity-column-source": ["entity-column-target"],
@@ -23,6 +23,7 @@ export const EDGE_TYPE_MAP: Record<string, string> = {
   "entity-column-source→entity-column-target": "foreign-key",
   "entity-bottom-source→entity-top-target": "foreign-key",
   "published-event-out→resource-def-in": "message",
+  "consumed-event-out→resource-def-in": "message",
   "resource-def-out→consumed-event-in": "message",
 };
 
