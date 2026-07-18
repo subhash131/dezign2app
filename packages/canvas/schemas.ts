@@ -19,7 +19,7 @@ import {
   ParameterInputType,
   PublishedEventInputType,
   ConsumedEventInputType,
-  EndpointInputType
+  EndpointInputType,
 } from "./types";
 
 
@@ -158,6 +158,7 @@ export const endpointSchema = z.object({
   queryParams: z.array(parameterSchema).optional(),
   requestBody: schemaModelSchema.optional(),
   responseBody: schemaModelSchema.optional(),
+  simulationOutput: z.unknown().optional(),
   processingSteps: z.array(processingStepSchema).optional(),
   publishedEvents: z.array(publishedEventSchema).optional(),
   metadata: architectureMetadataSchema.optional(),
@@ -200,6 +201,7 @@ export const endpointInputSchema: z.ZodType<EndpointInputType> = z.object({
       description: z.string().optional(),
     }).passthrough()),
   }).passthrough().describe("Response body schema; define the actual returned fields."),
+  simulationOutput: z.unknown().optional().describe("Fixture returned by this endpoint during simulation; passed unchanged to the next connected endpoint."),
   processingSteps: z.array(z.object({
     id: z.string().optional(),
     text: z.string(),
@@ -365,6 +367,18 @@ export const clientEventInputSchema = z.object({
   event: z.string().optional().describe("The DOM event that triggers it"),
   targetNodeId: z.string().optional().describe("If this event triggers an API call, specify the target service node ID to AUTOMATICALLY create an edge"),
   targetEndpointId: z.string().optional().describe("If this event triggers an API call, specify the target endpoint ID on the service node to AUTOMATICALLY create an edge"),
+  simulationCases: z.array(z.object({
+    id: z.string().optional(),
+    name: z.string(),
+    request: z.object({
+      headers: z.record(z.string()).optional(),
+      params: z.record(z.string()).optional(),
+      body: z.unknown().optional(),
+    }).optional(),
+    expectedStatus: z.number().optional(),
+    expectedBody: z.unknown().optional(),
+    enabled: z.boolean().optional(),
+  })).optional().describe("Named repeatable inputs for client-triggered simulations"),
 });
 
 export const webClientDataSchema = simpleDataSchema.extend({
@@ -372,6 +386,18 @@ export const webClientDataSchema = simpleDataSchema.extend({
     id: z.string().optional(),
     name: z.string(),
     event: z.string().optional(),
+    simulationCases: z.array(z.object({
+      id: z.string(),
+      name: z.string(),
+      request: z.object({
+        headers: z.record(z.string()).optional(),
+        params: z.record(z.string()).optional(),
+        body: z.unknown().optional(),
+      }).optional(),
+      expectedStatus: z.number().optional(),
+      expectedBody: z.unknown().optional(),
+      enabled: z.boolean().optional(),
+    })).optional(),
   })).optional(),
 });
 

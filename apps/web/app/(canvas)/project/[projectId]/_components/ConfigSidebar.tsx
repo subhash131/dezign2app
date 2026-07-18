@@ -83,6 +83,10 @@ export const ConfigSidebar = () => {
     const item = endpoints.find(e => e.id === id);
     if (!item) return null;
 
+    const simulationOutputText = item.simulationOutput === undefined
+      ? ""
+      : JSON.stringify(item.simulationOutput, null, 2);
+
     return (
       <div className="flex flex-col gap-6 mt-6 pb-12">
         <div className="flex flex-col gap-2 border-b border-border/50 pb-6">
@@ -142,6 +146,32 @@ export const ConfigSidebar = () => {
           schema={item.responseBody} 
           onChange={responseBody => updateEndpoint(item.id, { responseBody })} 
         />
+
+        <div className="flex flex-col gap-2.5 rounded-xl border bg-card/50 p-4 shadow-sm backdrop-blur-sm">
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Simulation Output
+          </span>
+          <span className="text-xs text-muted-foreground">
+            JSON returned by this endpoint during simulation and passed unchanged to the next connected endpoint.
+          </span>
+          <LocalTextarea
+            className="min-h-[140px] text-sm resize-y bg-background/50 focus-visible:ring-1 font-mono"
+            placeholder={'{\n  "id": "user-123",\n  "name": "Ada"\n}'}
+            defaultValue={simulationOutputText}
+            onBlur={event => {
+              const value = event.currentTarget.value.trim();
+              if (!value) {
+                updateEndpoint(item.id, { simulationOutput: undefined });
+                return;
+              }
+              try {
+                updateEndpoint(item.id, { simulationOutput: JSON.parse(value) });
+              } catch {
+                // Keep invalid JSON visible until the user corrects it.
+              }
+            }}
+          />
+        </div>
       </div>
     );
   };

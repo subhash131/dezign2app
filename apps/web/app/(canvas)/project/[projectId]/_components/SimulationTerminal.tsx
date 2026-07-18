@@ -11,10 +11,10 @@ function formatPayload(payload: unknown) {
 
 export function SimulationTerminal() {
   const { status, trace, activeIndex, terminalOpen } = useSimulationStore();
-  if (status === "idle" || !terminalOpen) return null;
+  if (!terminalOpen) return null;
 
   const visibleTrace = trace.slice(0, activeIndex + 1);
-  const statusLabel = status === "running" ? "RUNNING" : status === "failed" ? "FAILED" : "COMPLETE";
+  const statusLabel = status === "idle" ? "READY" : status === "running" ? "RUNNING" : status === "failed" ? "FAILED" : "COMPLETE";
 
   return (
     <section className="w-[min(720px,calc(100vw-3rem))] max-h-48 overflow-y-auto rounded-lg border bg-background/95 shadow-lg backdrop-blur" aria-label="Simulation terminal">
@@ -24,6 +24,9 @@ export function SimulationTerminal() {
         <span className="ml-auto font-mono text-[10px] text-muted-foreground">{statusLabel}</span>
       </header>
       <div className="space-y-1 px-3 py-2 font-mono text-[10px]">
+        {visibleTrace.length === 0 && (
+          <div className="text-muted-foreground">No simulation executed. Select a test case and trigger an event to see the execution trace.</div>
+        )}
         {visibleTrace.map((entry, index) => (
           <div key={`${entry.id}-${index}`} className={entry.status === "failed" ? "text-destructive" : "text-foreground"}>
             <span className="mr-2 text-muted-foreground">{String(index + 1).padStart(2, "0")}</span>

@@ -19,7 +19,7 @@ import {
 } from "@workspace/ui/components/dialog";
 import { Label } from "@workspace/ui/components/label";
 import { Textarea } from "@workspace/ui/components/textarea";
-import { simulateEndpoint, SimulationTraceEntry } from "@/lib/simulation/runtime";
+import { simulateEndpoint, simulateTestCase, SimulationTraceEntry } from "@/lib/simulation/runtime";
 import { useSimulationStore } from "@/lib/stores/simulationStore";
 import { WEB_CLIENT_EVENTS } from "@workspace/canvas";
 
@@ -49,9 +49,10 @@ interface TriggerDialogProps {
   targetNode: BackendNode;
   endpoint: Endpoint;
   sourceNodeId: string;
+  initialCaseId?: string;
 }
 
-const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint, sourceNodeId }: TriggerDialogProps) => {
+const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint, sourceNodeId, initialCaseId }: TriggerDialogProps) => {
   const [headers, setHeaders] = useState<Parameter[]>(() => {
     return endpoint.headers?.map((h) => ({ ...h, key: h.key ?? h.name, value: h.value ?? h.defaultValue ?? "" })) || [];
   });
@@ -61,20 +62,41 @@ const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint, sourceNod
   const [body, setBody] = useState<string>(() => {
     return endpointBodyTemplate(endpoint);
   });
+  const [selectedCaseId, setSelectedCaseId] = useState<string>(initialCaseId ?? event.simulationCases?.[0]?.id ?? "");
+  const selectTestCase = useSimulationStore((state) => state.selectTestCase);
   const bodyFields = endpoint.requestBody?.fields ?? [];
 
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState<{ headers?: Record<string, string>; status?: number; statusText?: string; body?: unknown; trace?: SimulationTraceEntry[] } | null>(null);
   const nodes = useBackendCanvasStore((state) => state.nodes);
   const edges = useBackendCanvasStore((state) => state.edges);
+  const endpoints = useBackendCanvasStore((state) => state.endpoints);
   const startSimulation = useSimulationStore((state) => state.start);
 
   React.useEffect(() => {
     setHeaders(endpoint.headers?.map((h) => ({ ...h, key: h.key ?? h.name, value: h.value ?? h.defaultValue ?? "" })) || []);
     setParams(endpointInputParams(endpoint));
     setBody(endpointBodyTemplate(endpoint));
+    const nextCaseId = initialCaseId ?? event.simulationCases?.[0]?.id ?? "";
+    setSelectedCaseId(nextCaseId);
+    const selectedCase = event.simulationCases?.find((item) => item.id === nextCaseId);
+    if (selectedCase) {
+      setHeaders(endpoint.headers?.map((h) => ({ ...h, key: h.key ?? h.name, value: selectedCase.request?.headers?.[h.name] ?? h.defaultValue ?? "" })) || []);
+      setParams(endpointInputParams(endpoint).map((param) => ({ ...param, value: selectedCase.request?.params?.[param.key || param.name] ?? param.value ?? "" })));
+      setBody(selectedCase.request?.body === undefined ? endpointBodyTemplate(endpoint) : JSON.stringify(selectedCase.request.body, null, 2));
+    }
     setResponse(null);
-  }, [endpoint]);
+  }, [endpoint, initialCaseId, event]);
+
+  const loadCase = (caseId: string) => {
+    setSelectedCaseId(caseId);
+    selectTestCase(event.id, caseId);
+    const testCase = event.simulationCases?.find((item) => item.id === caseId);
+    if (!testCase) return;
+    setHeaders(endpoint.headers?.map((h) => ({ ...h, key: h.key ?? h.name, value: testCase.request?.headers?.[h.name] ?? h.defaultValue ?? "" })) || []);
+    setParams(endpointInputParams(endpoint).map((param) => ({ ...param, value: testCase.request?.params?.[param.key || param.name] ?? param.value ?? "" })));
+    setBody(testCase.request?.body === undefined ? endpointBodyTemplate(endpoint) : JSON.stringify(testCase.request.body, null, 2));
+  };
 
   const handleSend = async () => {
     let parsedBody: unknown = null;
@@ -109,22 +131,37 @@ const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint, sourceNod
     // The input dialog is only for composing the request. Once sent, the
     // canvas and terminal become the live simulation surface.
     onClose();
-    const result = await simulateEndpoint({
-      service: targetNode,
-      endpoint,
-      nodes,
-      edges,
-      request: { method: endpoint.type || "GET", path: endpoint.name || "/", headers: reqHeaders, params: queryParams, body: parsedBody },
-      sourceNodeId,
-      sourceEventId: event.id,
-    });
+    const client = nodes.find((node) => node.id === sourceNodeId);
+    const result = selectedCaseId && client
+      ? await simulateTestCase({
+        client,
+        event,
+        testCase: {
+          id: selectedCaseId,
+          name: event.simulationCases?.find((item) => item.id === selectedCaseId)?.name ?? "Test case",
+          request: { headers: reqHeaders, params: queryParams, body: parsedBody },
+        },
+        nodes,
+        edges,
+        endpoints,
+      })
+      : await simulateEndpoint({
+        service: targetNode,
+        endpoint,
+        nodes,
+        edges,
+        request: { method: endpoint.type || "GET", path: endpoint.name || "/", headers: reqHeaders, params: queryParams, body: parsedBody },
+        sourceNodeId,
+        sourceEventId: event.id,
+      });
     startSimulation(result.trace);
   };
 
   const url = endpoint?.name || "/";
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
+    <>
+      <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent className="max-h-[85vh] overflow-y-auto font-sans" onClick={(e) => e.stopPropagation()}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-sm font-semibold">
@@ -147,6 +184,15 @@ const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint, sourceNod
         </DialogHeader>
 
         <div className="flex flex-col gap-4 py-2">
+          <div className="flex items-center gap-2">
+            <Select value={selectedCaseId || "none"} onValueChange={(value) => value !== "none" && loadCase(value)}>
+              <SelectTrigger className="h-7 flex-1 text-xs"><SelectValue placeholder="Select test case" /></SelectTrigger>
+              <SelectContent>
+                {!event.simulationCases?.length && <SelectItem value="none">No saved test cases</SelectItem>}
+                {(event.simulationCases ?? []).map((testCase) => <SelectItem key={testCase.id} value={testCase.id}>{testCase.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
           {/* Query Parameters Section */}
           {params.length > 0 && (
             <div className="flex flex-col gap-2">
@@ -203,7 +249,10 @@ const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint, sourceNod
               <div className="grid gap-2 border p-2.5 rounded-lg bg-secondary/10">
                 {bodyFields.map((field) => {
                   let parsed: Record<string, unknown> = {};
-                  try { parsed = body ? JSON.parse(body) : {}; } catch { /* reset below */ }
+                  try {
+                    const value = body ? JSON.parse(body) : {};
+                    parsed = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+                  } catch { /* reset below */ }
                   const currentValue = parsed[field.name];
                   return (
                     <div key={field.id || field.name} className="grid grid-cols-3 items-center gap-2">
@@ -217,7 +266,10 @@ const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint, sourceNod
                         value={typeof currentValue === "object" ? JSON.stringify(currentValue) : String(currentValue ?? "")}
                         onChange={(e) => {
                           let next: Record<string, unknown> = {};
-                          try { next = body ? JSON.parse(body) : {}; } catch { next = {}; }
+                          try {
+                            const value = body ? JSON.parse(body) : {};
+                            next = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+                          } catch { next = {}; }
                           const raw = e.target.value;
                           next[field.name] = field.type === "number" ? (raw === "" ? "" : Number(raw)) : field.type === "boolean" ? raw === "true" : (field.type === "object" || field.type === "array" ? (() => { try { return JSON.parse(raw); } catch { return raw; } })() : raw);
                           setBody(JSON.stringify(next));
@@ -299,7 +351,8 @@ const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint, sourceNod
           )}
         </div>
       </DialogContent>
-    </Dialog>
+      </Dialog>
+    </>
   );
 };
 
@@ -320,6 +373,21 @@ const WebClientEventList = ({ nodeId, items = [], updateNode, data, onTriggerEve
   const edges = useBackendCanvasStore((s) => s.edges);
   const nodes = useBackendCanvasStore((s) => s.nodes);
 
+  React.useEffect(() => {
+    const hasMissingCases = items.some((item) => !item.simulationCases?.length);
+    if (!hasMissingCases) return;
+    updateNode(nodeId, {
+      data: {
+        ...data,
+        events: items.map((item) => item.simulationCases?.length ? item : {
+          ...item,
+          simulationCases: [{ id: `case-${item.id}-1`, name: "Test Case 1", request: { body: null }, enabled: true }],
+        }),
+      },
+    });
+  }, [nodeId]);
+  const endpoints = useBackendCanvasStore((s) => s.endpoints);
+
   const getLinkedEndpoint = (eventId: string) => {
     const edge = edges.find((e) => e.source === nodeId && e.sourceHandle === `events-${eventId}`);
     if (!edge || !edge.targetHandle) return null;
@@ -331,8 +399,12 @@ const WebClientEventList = ({ nodeId, items = [], updateNode, data, onTriggerEve
     const endpointId = parts[parts.length - 1];
     if (!endpointId) return null;
 
-    // Search ungrouped
-    let endpoint = targetNode.data?.endpoints?.find((ep) => ep.id === endpointId);
+    // Endpoints are persisted in a separate Convex collection and hydrated
+    // into the store, so they may not exist on targetNode.data.
+    let endpoint: Endpoint | undefined = endpoints.find((ep) => ep.nodeId === targetNode.id && ep.id === endpointId);
+
+    // Backward compatibility for older node snapshots that embedded endpoints.
+    if (!endpoint) endpoint = targetNode.data?.endpoints?.find((ep) => ep.id === endpointId);
 
     // Search grouped
     if (!endpoint && targetNode.data?.routeGroups) {
@@ -348,7 +420,10 @@ const WebClientEventList = ({ nodeId, items = [], updateNode, data, onTriggerEve
   };
 
   const handleAdd = () => {
-    const newItem = { id: generateId(), name: "New Action", event: "click" };
+    const newItem = {
+      id: generateId(), name: "New Action", event: "click",
+      simulationCases: [{ id: `case-${Date.now()}`, name: "Test Case 1", request: { body: null }, enabled: true }],
+    };
     const newItems = [...items, newItem];
     updateNode(nodeId, { data: { ...data, events: newItems } });
     setEditingId(newItem.id);
@@ -505,6 +580,8 @@ const WebClientEventList = ({ nodeId, items = [], updateNode, data, onTriggerEve
 export const WebClientNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const [activeTrigger, setActiveTrigger] = useState<{ event: UIEventItem; targetNode: BackendNode; endpoint: Endpoint } | null>(null);
+  const selectedEventId = useSimulationStore((state) => state.selectedEventId);
+  const selectedCaseId = useSimulationStore((state) => state.selectedCaseId);
 
   return (
     <div className={cn("shadow-md rounded-xl bg-card border-2 min-w-[200px] max-w-[300px] flex flex-col", selected ? "border-primary" : "border-border")}>
@@ -536,6 +613,7 @@ export const WebClientNode = ({ id, data, selected }: NodeProps<BackendNode>) =>
           targetNode={activeTrigger.targetNode}
           endpoint={activeTrigger.endpoint}
           sourceNodeId={id}
+          initialCaseId={selectedEventId === activeTrigger.event.id ? selectedCaseId : undefined}
         />
       )}
     </div>

@@ -1,4 +1,4 @@
-import type { BackendEdge, BackendNode, Endpoint } from "@/types/canvas";
+import type { BackendEdge, BackendNode, Endpoint, Schema, SimulationTestCase, UIEventItem } from "@/types/canvas";
 import { getSimulationTable, saveSimulationTable } from "./database";
 
 export type SimulationRequest = {
@@ -27,6 +27,12 @@ export type SimulationResult = {
   headers: Record<string, string>;
   body: unknown;
   trace: SimulationTraceEntry[];
+};
+
+export type SimulationTestCaseResult = SimulationResult & {
+  testCaseId: string;
+  testCaseName: string;
+  assertions: Array<{ name: string; passed: boolean; detail?: string }>;
 };
 
 type RuntimeContext = {
@@ -76,6 +82,28 @@ function resolveObject(value: unknown, context: RuntimeContext): unknown {
     return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, resolveObject(item, context)]));
   }
   return resolveValue(value, context);
+}
+
+function validateSchema(value: unknown, schema?: Schema): string[] {
+  if (!schema?.fields?.length) return [];
+  if (!value || typeof value !== "object" || Array.isArray(value)) return ["Expected an object response."];
+  const object = value as Record<string, unknown>;
+  const errors: string[] = [];
+  for (const field of schema.fields) {
+    const fieldValue = object[field.name];
+    if (field.required && (fieldValue === undefined || fieldValue === null)) {
+      errors.push(`Missing required output field: ${field.name}`);
+      continue;
+    }
+    if (fieldValue === undefined || fieldValue === null) continue;
+    const valid = field.type === "number" ? typeof fieldValue === "number"
+      : field.type === "boolean" ? typeof fieldValue === "boolean"
+      : field.type === "array" ? Array.isArray(fieldValue)
+      : field.type === "object" ? typeof fieldValue === "object" && !Array.isArray(fieldValue)
+      : typeof fieldValue === "string";
+    if (!valid) errors.push(`Output field ${field.name} must be ${field.type}.`);
+  }
+  return errors;
 }
 
 function findEndpointDatabaseRefs(serviceId: string, endpoint: Endpoint, nodes: BackendNode[], edges: BackendEdge[]) {
@@ -209,8 +237,10 @@ export async function simulateEndpoint(args: {
       trace.push({ id: step.id, kind: "step", label: step.text || operation, status: "completed", nodeId: service.id, input, output: clone(context.data) });
     }
 
-    const body = context.response?.body ?? context.data;
+    const body = context.response?.body ?? endpoint.simulationOutput ?? context.data;
     const status = context.response?.status ?? (endpoint.type === "POST" ? 201 : 200);
+    const schemaErrors = validateSchema(body, endpoint.responseBody);
+    if (schemaErrors.length) throw new Error(schemaErrors.join(" "));
     trace.push({ id: `${endpoint.id}-response`, kind: "response", label: `${status} ${status === 201 ? "Created" : "OK"}`, status: "completed", nodeId: service.id, output: clone(body) });
     return { status, statusText: status === 201 ? "Created" : "OK", headers: { "content-type": "application/json", "x-simulated": "true" }, body, trace };
   } catch (error) {
@@ -218,4 +248,93 @@ export async function simulateEndpoint(args: {
     trace.push({ id: `${endpoint.id}-error`, kind: "response", label: "Simulation failed", status: "failed", nodeId: service.id, detail: message, output: clone(context.data) });
     return { status: 422, statusText: "Simulation Failed", headers: { "content-type": "application/json", "x-simulated": "true" }, body: { error: message }, trace };
   }
+}
+
+function findEndpoint(nodes: BackendNode[], nodeId: string, endpointId: string, endpoints: Array<Endpoint & { nodeId: string }> = []): { service: BackendNode; endpoint: Endpoint } | undefined {
+  const service = nodes.find((node) => node.id === nodeId && node.type === "service");
+  if (!service) return undefined;
+  const endpoint = endpoints.find((item) => item.nodeId === nodeId && item.id === endpointId)
+    ?? service.data.endpoints?.find((item) => item.id === endpointId)
+    ?? service.data.routeGroups?.flatMap((group) => group.endpoints).find((item) => item.id === endpointId);
+  return endpoint ? { service, endpoint } : undefined;
+}
+
+/** Execute a named client test case through every endpoint connected by endpoint-out -> endpoint-in edges. */
+export async function simulateTestCase(args: {
+  client: BackendNode;
+  event: UIEventItem;
+  testCase: SimulationTestCase;
+  nodes: BackendNode[];
+  edges: BackendEdge[];
+  endpoints?: Array<Endpoint & { nodeId: string }>;
+}): Promise<SimulationTestCaseResult> {
+  const firstEdge = args.edges.find((edge) => edge.source === args.client.id && edge.sourceHandle === `events-${args.event.id}`);
+  const firstEndpointId = firstEdge?.targetHandle?.split("-in-").pop();
+  const first = firstEdge && firstEndpointId ? findEndpoint(args.nodes, firstEdge.target, firstEndpointId, args.endpoints) : undefined;
+  if (!first) {
+    return {
+      testCaseId: args.testCase.id,
+      testCaseName: args.testCase.name,
+      status: 422,
+      statusText: "Simulation Failed",
+      headers: { "x-simulated": "true" },
+      body: { error: "Client event is not connected to an endpoint." },
+      trace: [{ id: `${args.testCase.id}-error`, kind: "response", label: "Simulation failed", status: "failed", detail: "Client event is not connected to an endpoint." }],
+      assertions: [{ name: "client event has a connected endpoint", passed: false }],
+    };
+  }
+
+  const connectedEdge = firstEdge!;
+  const trace: SimulationTraceEntry[] = [{
+    id: `${args.testCase.id}-client`, kind: "client", label: `Test case: ${args.testCase.name}`,
+    status: "completed", nodeId: args.client.id, edgeId: connectedEdge.id, input: clone(args.testCase.request?.body),
+  }];
+  let current: { service: BackendNode; endpoint: Endpoint } | undefined = first;
+  let body: unknown = clone(args.testCase.request?.body ?? null);
+  let result: SimulationResult | undefined;
+  const visited = new Set<string>();
+
+  while (current && !visited.has(`${current.service.id}:${current.endpoint.id}`)) {
+    const step: { service: BackendNode; endpoint: Endpoint } = current;
+    visited.add(`${step.service.id}:${step.endpoint.id}`);
+    result = await simulateEndpoint({
+      service: step.service,
+      endpoint: step.endpoint,
+      nodes: args.nodes,
+      edges: args.edges,
+      request: {
+        method: step.endpoint.type || "GET",
+        path: step.endpoint.name || "/",
+        headers: args.testCase.request?.headers ?? {},
+        params: args.testCase.request?.params ?? {},
+        body,
+      },
+    });
+    trace.push(...result.trace);
+    body = clone(result.body);
+    if (result.status >= 400) break;
+
+    const outgoing: BackendEdge | undefined = args.edges.find((edge) =>
+      edge.source === step.service.id &&
+      edge.sourceHandle === `endpoint-out-${step.endpoint.id}` &&
+      edge.targetHandle?.startsWith("endpoint-in-"),
+    );
+    const nextEndpointId = outgoing?.targetHandle?.split("-in-").pop();
+    current = outgoing && nextEndpointId ? findEndpoint(args.nodes, outgoing.target, nextEndpointId, args.endpoints) : undefined;
+  }
+
+  if (!result) {
+    throw new Error("Simulation did not execute an endpoint.");
+  }
+  const assertions = [{
+    name: "expected status",
+    passed: args.testCase.expectedStatus === undefined || args.testCase.expectedStatus === result.status,
+    detail: args.testCase.expectedStatus === undefined ? undefined : `Expected ${args.testCase.expectedStatus}, received ${result.status}`,
+  }, {
+    name: "expected body",
+    passed: args.testCase.expectedBody === undefined || JSON.stringify(args.testCase.expectedBody) === JSON.stringify(result.body),
+    detail: args.testCase.expectedBody === undefined ? undefined : "Response body differs from expected body",
+  }];
+  const passed = assertions.every((assertion) => assertion.passed);
+  return { ...result, trace, testCaseId: args.testCase.id, testCaseName: args.testCase.name, assertions, status: passed ? result.status : 422, statusText: passed ? result.statusText : "Assertion Failed" };
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ReactFlow,
   Background,
@@ -40,6 +40,9 @@ import { ChatContainer } from "@/app/(protected)/_components/chat/chat-container
 import { useSimulationStore } from "@/lib/stores/simulationStore";
 import { SimulationTerminal } from "./SimulationTerminal";
 import { ConfigSidebar } from "./ConfigSidebar";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@workspace/ui/components/select";
+import { Input } from "@workspace/ui/components/input";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@workspace/ui/components/dialog";
 
 const edgeTypes = {
   "foreign-key": ForeignKeyEdge,
@@ -111,6 +114,12 @@ function Flow({ projectId, view }: BackendCanvasProps) {
     clearPending,
   } = useBackendCanvasStore();
   const simulation = useSimulationStore();
+  const selectedEventId = useSimulationStore((state) => state.selectedEventId);
+  const selectedCaseId = useSimulationStore((state) => state.selectedCaseId);
+  const selectTestCase = useSimulationStore((state) => state.selectTestCase);
+  const clearSelectedTestCase = useSimulationStore((state) => state.clearSelectedTestCase);
+  const [caseNameDialog, setCaseNameDialog] = useState<{ mode: "create" | "rename"; value: string } | null>(null);
+  const [deleteCaseOpen, setDeleteCaseOpen] = useState(false);
 
   const addTableNode = useBackendCanvasStore(s => s.addTableNode);
   const addNode = useBackendCanvasStore(s => s.addNode);
@@ -641,6 +650,31 @@ function Flow({ projectId, view }: BackendCanvasProps) {
     });
   };
 
+  const simulationCases = nodes.flatMap((node) => (node.type === "webClient" ? (node.data.events ?? []).flatMap((event) =>
+    (event.simulationCases ?? []).map((testCase) => ({ nodeId: node.id, eventId: event.id, eventName: event.name, testCase }))
+  ) : []));
+  const selectedCaseValue = selectedEventId && selectedCaseId ? `${selectedEventId}:${selectedCaseId}` : "";
+  const selectedCaseEntry = simulationCases.find(({ eventId, testCase }) => eventId === selectedEventId && testCase.id === selectedCaseId);
+
+  React.useEffect(() => {
+    if (!selectedCaseEntry && simulationCases[0]) {
+      selectTestCase(simulationCases[0].eventId, simulationCases[0].testCase.id);
+    }
+  }, [simulationCases.length, selectedEventId, selectedCaseId]);
+
+  const updateSelectedEventCases = (nextCases: NonNullable<BackendNode["data"]["events"]>[number]["simulationCases"]) => {
+    if (!selectedEventId || !selectedCaseEntry) return;
+    const nextNodes = nodes.map((node) => node.type !== "webClient" ? node : {
+      ...node,
+      data: {
+        ...node.data,
+        events: (node.data.events ?? []).map((event) => event.id === selectedEventId ? { ...event, simulationCases: nextCases } : event),
+      },
+    });
+    const changed = nextNodes.find((node) => node.id === selectedCaseEntry.nodeId);
+    if (changed) useBackendCanvasStore.getState().updateNode(changed.id, { data: changed.data });
+  };
+
   return (
     <div className="w-full h-full bg-muted/20">
       <ReactFlow
@@ -665,15 +699,68 @@ function Flow({ projectId, view }: BackendCanvasProps) {
           <Controls />
           <MiniMap />
           <Panel position="top-left">
-            <Button
-              variant="outline"
-              size="sm"
-              className="bg-background/95 shadow-sm text-xs"
-              onClick={simulation.toggleTerminal}
-            >
-              <TerminalSquare className="mr-2 h-3.5 w-3.5" />
-              {simulation.terminalOpen ? "Hide terminal" : "Show terminal"}
-            </Button>
+            <div className="flex items-center gap-2 rounded-lg border bg-background/95 p-2 shadow-sm backdrop-blur">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Test case</span>
+              <Select
+                value={selectedCaseValue || "none"}
+                onValueChange={(value) => {
+                  if (value === "none") return;
+                  const [eventId, caseId] = value.split(":");
+                  if (eventId && caseId) selectTestCase(eventId, caseId);
+                }}
+              >
+                <SelectTrigger className="h-7 w-[190px] text-xs"><SelectValue placeholder="Select test case" /></SelectTrigger>
+                <SelectContent>
+                  {simulationCases.length === 0 ? (
+                    <SelectItem value="none">No saved test cases</SelectItem>
+                  ) : simulationCases.map(({ eventId, eventName, testCase }) => (
+                    <SelectItem key={`${eventId}:${testCase.id}`} value={`${eventId}:${testCase.id}`}>
+                      {eventName} / {testCase.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 bg-background text-xs"
+                onClick={() => {
+                  if (!selectedCaseEntry) return;
+                  const count = simulationCases.filter(({ eventId }) => eventId === selectedEventId).length;
+                  setCaseNameDialog({ mode: "create", value: `Test Case ${count + 1}` });
+                }}
+                disabled={!selectedCaseEntry}
+              >
+                + New
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 bg-background text-xs"
+                onClick={() => {
+                  if (!selectedCaseEntry) return;
+                  setCaseNameDialog({ mode: "rename", value: selectedCaseEntry.testCase.name });
+                }}
+                disabled={!selectedCaseEntry}
+              >
+                Rename
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 bg-background text-xs text-destructive"
+                onClick={() => {
+                  if (selectedCaseEntry) setDeleteCaseOpen(true);
+                }}
+                disabled={!selectedCaseEntry}
+              >
+                Delete
+              </Button>
+              <Button variant="outline" size="sm" className="h-7 bg-background text-xs" onClick={simulation.toggleTerminal}>
+                <TerminalSquare className="mr-1.5 h-3.5 w-3.5" />
+                Terminal
+              </Button>
+            </div>
           </Panel>
           <Panel position="bottom-center">
             <SimulationTerminal />
@@ -724,6 +811,56 @@ function Flow({ projectId, view }: BackendCanvasProps) {
           </Button>
         </Panel>
       </ReactFlow>
+      <Dialog open={caseNameDialog !== null} onOpenChange={(open) => !open && setCaseNameDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{caseNameDialog?.mode === "rename" ? "Rename test case" : "Create test case"}</DialogTitle>
+            <DialogDescription>Choose the name shown in the canvas test-case selector.</DialogDescription>
+          </DialogHeader>
+          <Input
+            autoFocus
+            value={caseNameDialog?.value ?? ""}
+            onChange={(event) => setCaseNameDialog((current) => current ? { ...current, value: event.target.value } : current)}
+            onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.form?.requestSubmit(); }}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCaseNameDialog(null)}>Cancel</Button>
+            <Button onClick={() => {
+              const name = caseNameDialog?.value.trim();
+              if (!name || !selectedCaseEntry) return;
+              const mode = caseNameDialog?.mode;
+              const cases = simulationCases.filter(({ eventId }) => eventId === selectedEventId).map(({ testCase }) => testCase);
+              if (mode === "create") {
+                const nextCase = { id: `case-${Date.now()}`, name, request: { body: null }, enabled: true };
+                updateSelectedEventCases([...cases, nextCase]);
+                selectTestCase(selectedEventId!, nextCase.id);
+              } else {
+                updateSelectedEventCases(cases.map((testCase) => testCase.id === selectedCaseId ? { ...testCase, name } : testCase));
+              }
+              setCaseNameDialog(null);
+            }}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <AlertDialog open={deleteCaseOpen} onOpenChange={setDeleteCaseOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete test case?</AlertDialogTitle>
+            <AlertDialogDescription>This will remove “{selectedCaseEntry?.testCase.name}” from this frontend event.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              if (!selectedCaseEntry) return;
+              const remaining = simulationCases.filter(({ eventId }) => eventId === selectedEventId).map(({ testCase }) => testCase).filter((testCase) => testCase.id !== selectedCaseId);
+              updateSelectedEventCases(remaining);
+              const next = remaining[0];
+              if (next) selectTestCase(selectedEventId!, next.id); else clearSelectedTestCase();
+              setDeleteCaseOpen(false);
+            }}>Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -12,6 +12,10 @@ type SimulationState = {
   currentNodeId?: string;
   currentEdgeId?: string;
   terminalOpen: boolean;
+  selectedEventId?: string;
+  selectedCaseId?: string;
+  selectTestCase: (eventId: string, caseId: string) => void;
+  clearSelectedTestCase: () => void;
   start: (trace: SimulationTraceEntry[]) => void;
   toggleTerminal: () => void;
   clear: () => void;
@@ -28,6 +32,10 @@ export const useSimulationStore = create<SimulationState>((set) => ({
   currentNodeId: undefined,
   currentEdgeId: undefined,
   terminalOpen: true,
+  selectedEventId: undefined,
+  selectedCaseId: undefined,
+  selectTestCase: (eventId, caseId) => set({ selectedEventId: eventId, selectedCaseId: caseId }),
+  clearSelectedTestCase: () => set({ selectedEventId: undefined, selectedCaseId: undefined }),
   start: (trace) => {
     const run = ++activeRun;
     const first = trace[0];
@@ -72,6 +80,8 @@ export const useSimulationStore = create<SimulationState>((set) => ({
       activeEdgeIds: [],
       currentNodeId: undefined,
       currentEdgeId: undefined,
+      selectedEventId: undefined,
+      selectedCaseId: undefined,
     });
   },
   toggleTerminal: () => set((state) => ({ terminalOpen: !state.terminalOpen })),

@@ -134,7 +134,7 @@ export type BackendNode = {
     parentId?: string;
     position?: { x: number; y: number };
     // New fields for Graph tab detailed nodes
-    events?: { id: string; name: string; event?: string }[];
+    events?: UIEventItem[];
     inputs?: { id: string; name: string }[];
     logic?: { id: string; name: string }[];
     outputs?: { id: string; name: string }[];
@@ -374,6 +374,21 @@ export type UIEventItem = {
   id: string;
   name: string;
   event?: string;
+  simulationCases?: SimulationTestCase[];
+};
+
+/** A named, repeatable input for a client-triggered simulation. */
+export type SimulationTestCase = {
+  id: string;
+  name: string;
+  request?: {
+    headers?: Record<string, string>;
+    params?: Record<string, string>;
+    body?: unknown;
+  };
+  expectedStatus?: number;
+  expectedBody?: unknown;
+  enabled?: boolean;
 };
 
 export type AnyMessagingResource = {
@@ -439,6 +454,7 @@ export interface EndpointInputType {
   queryParams?: ParameterInputType[];
   requestBody?: { fields: ParameterInputType[] };
   responseBody?: { fields: ParameterInputType[] };
+  simulationOutput?: unknown;
   processingSteps?: { id?: string; text: string; operation?: string; config?: Record<string, string | number | boolean | null> }[];
   output?: string;
   businessLogic?: string;
