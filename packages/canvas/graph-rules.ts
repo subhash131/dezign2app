@@ -6,6 +6,7 @@ export const CONNECTION_RULES: Record<HandleKind, HandleKind[]> = {
   "endpoint-out": ["database-target", "action-target", "resource-def-in", "endpoint-in"],
   "published-event-out": ["resource-def-in"],
   "consumed-event-in": [],
+  "consumed-event-out": ["endpoint-in"],
   "resource-def-in": [],
   "resource-def-out": ["consumed-event-in"],
   "entity-column-source": ["entity-column-target"],

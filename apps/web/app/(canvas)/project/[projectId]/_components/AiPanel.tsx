@@ -16,6 +16,7 @@ import { Textarea } from "@workspace/ui/components/textarea";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 
 import { BackendCanvasView } from "@/types/canvas";
+import { Badge } from "@workspace/ui/components/badge";
 
 interface AiPanelProps {
   projectId: string;
@@ -73,7 +74,7 @@ export function AiPanel({ projectId, isOpen, onClose, setView }: AiPanelProps) {
   const [activeChatId, setActiveChatId] = useState<Id<"project_chats"> | null>(null);
   const [hasInitializedChat, setHasInitializedChat] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
-    { role: "assistant", content: `Hi! I'm your Blueprint AI. I can help you design your system architecture. What would you like to build?` }
+    { role: "assistant", content: `Hi! I'm your AI Assistant. I can help you design your system architecture. What would you like to build?` }
   ]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -107,12 +108,12 @@ export function AiPanel({ projectId, isOpen, onClose, setView }: AiPanelProps) {
         setMessages(convexMessages.map(m => ({ role: m.role as "user" | "assistant", content: m.content })));
       } else {
         setMessages([
-          { role: "assistant", content: `Hi! I'm your Blueprint AI. I can help you design your system architecture. What would you like to build?` }
+          { role: "assistant", content: `Hi! I'm your AI Assistant. I can help you design your system architecture. What would you like to build?` }
         ]);
       }
     } else if (!activeChatId) {
       setMessages([
-        { role: "assistant", content: `Hi! I'm your Blueprint AI. I can help you design your system architecture. What would you like to build?` }
+        { role: "assistant", content: `Hi! I'm your AI Assistant. I can help you design your system architecture. What would you like to build?` }
       ]);
     }
   }, [convexMessages, activeChatId]);
@@ -266,7 +267,7 @@ export function AiPanel({ projectId, isOpen, onClose, setView }: AiPanelProps) {
       <div className="flex items-center justify-between p-4 border-b shrink-0 bg-secondary/30 gap-2">
         <div className="flex items-center text-sm font-medium whitespace-nowrap">
           <Sparkles className="w-4 h-4 mr-2 text-primary" />
-          Blueprint AI
+          AI Assistant <Badge className="ml-2">Beta</Badge>
         </div>
         {chats !== undefined && (
           <div className="flex-1 px-2 overflow-hidden flex justify-end">

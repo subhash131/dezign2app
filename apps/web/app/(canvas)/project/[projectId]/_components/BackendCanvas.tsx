@@ -26,7 +26,7 @@ import { PlusSquare, FolderPlus, LayoutGrid, User, Server, Globe, Container, Dat
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@workspace/backend/_generated/api";
 import { Id, Doc } from "@workspace/backend/_generated/dataModel";
-import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { parseResourceHandle, useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { BackendCanvasAdapter } from "@/lib/canvas-adapters/backendAdapter";
 import { BackendCanvasView, BackendNode, BackendEdge, BackendNodeType } from "@/types/canvas";
 import { nodeTypes } from "./backend-nodes/Nodes";
@@ -282,6 +282,11 @@ function Flow({ projectId, view }: BackendCanvasProps) {
         const localEdge = store.edges.find((e) => e.id === row.edgeId);
         if (localEdge) return localEdge;
       }
+
+      // Resource IDs are persisted in the handle strings. Rehydrate the
+      // derived metadata because messaging-node counts use these fields.
+      const sourceResource = parseResourceHandle(row.sourceHandle);
+      const targetResource = parseResourceHandle(row.targetHandle);
       return {
         id: row.edgeId,
         source: row.source,
@@ -289,6 +294,9 @@ function Flow({ projectId, view }: BackendCanvasProps) {
         type: row.type as BackendEdge["type"],
         sourceHandle: row.sourceHandle ?? undefined,
         targetHandle: row.targetHandle ?? undefined,
+        sourceResourceId: sourceResource?.resourceId,
+        targetResourceId: targetResource?.resourceId,
+        resourceType: targetResource?.resourceType ?? sourceResource?.resourceType,
         data: row.data,
         fractionalIndex: row.fractionalIndex,
       };

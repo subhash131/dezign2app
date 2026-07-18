@@ -15,6 +15,7 @@ export type HandleKind =
   // --- Service messaging ---
   | "published-event-out"
   | "consumed-event-in"
+  | "consumed-event-out"
 
   // --- Messaging resource definitions ---
   | "resource-def-in"

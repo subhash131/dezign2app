@@ -42,6 +42,7 @@ export function classifyHandle(
   if (id.startsWith("events-")) return "event-source";
   if (id.startsWith("publishedEvents-out-")) return "published-event-out";
   if (id.startsWith("consumedEvents-in-")) return "consumed-event-in";
+  if (id.startsWith("consumedEvents-out-")) return "consumed-event-out";
 
   const resourceMatch = id.match(/^(topics|queues|streams|channels):(in|out):(.+)$/);
   if (resourceMatch) {

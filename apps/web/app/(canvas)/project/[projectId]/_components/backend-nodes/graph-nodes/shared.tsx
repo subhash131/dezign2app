@@ -518,13 +518,22 @@ export const MessagingResourceRow = ({ nodeId, item, isEditing, setEditingId, se
         />
       )}
       {isConsumed && variant !== "definition" && (
-        <Handle
-          type="target"
-          position={Position.Left}
-          id={`consumedEvents-in-${item.id}`}
-          className="w-2 h-2 -left-1"
-          style={{ top: '15px' }}
-        />
+        <>
+          <Handle
+            type="target"
+            position={Position.Left}
+            id={`consumedEvents-in-${item.id}`}
+            className="w-2 h-2 -left-1"
+            style={{ top: '15px' }}
+          />
+          <Handle
+            type="source"
+            position={Position.Right}
+            id={`consumedEvents-out-${item.id}`}
+            className="w-2 h-2 -right-1"
+            style={{ top: '15px' }}
+          />
+        </>
       )}
       {variant === "definition" && resourceType && (
         <>
