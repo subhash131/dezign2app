@@ -225,6 +225,8 @@ app.post('/clear-supermemory', async (req, res) => {
   }
 });
 
+import { generateCacheConfig } from './ai/cache-generator';
+
 app.post('/test-supermemory-fetch', async (req, res) => {
   try {
     const body = req.body;
@@ -239,6 +241,21 @@ app.post('/test-supermemory-fetch', async (req, res) => {
   } catch (error) {
     console.error("Test fetch error:", error);
     res.status(500).send("Internal Server Error");
+  }
+});
+
+app.post('/generate-cache-config', async (req, res) => {
+  try {
+    const { description } = req.body;
+    if (!description) {
+      res.status(400).json({ error: "Missing description" });
+      return;
+    }
+    const config = await generateCacheConfig(description);
+    res.json(config);
+  } catch (error) {
+    console.error("Generate cache config error:", error);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 });
 

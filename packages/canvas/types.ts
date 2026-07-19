@@ -417,7 +417,17 @@ export type AnyMessagingResource = {
   ttl?: string;
   cacheEviction?: string;
   cacheDataType?: string;
-  keyPrefix?: string;
+  keyPrefix?: string; // legacy, can keep for compatibility
+  namespace?: string;
+  keyPattern?: string;
+  cacheStrategy?: string;
+  sourceOfTruth?: string;
+  invalidationRules?: string;
+  compression?: string;
+  serialization?: string;
+  maxObjectSize?: string;
+  persistence?: string;
+  replication?: string;
 };
 
 

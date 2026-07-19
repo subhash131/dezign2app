@@ -22,6 +22,16 @@ export const resourceItemSchema = z.object({
   cacheDataType: z.string().optional(),
   keyPrefix: z.string().optional(),
   description: z.string().optional(),
+  namespace: z.string().optional(),
+  keyPattern: z.string().optional(),
+  cacheStrategy: z.string().optional(),
+  sourceOfTruth: z.string().optional(),
+  invalidationRules: z.string().optional(),
+  compression: z.string().optional(),
+  serialization: z.string().optional(),
+  maxObjectSize: z.string().optional(),
+  persistence: z.string().optional(),
+  replication: z.string().optional(),
 });
 
 export const simpleDataSchema = baseNodeDataSchema.extend({
