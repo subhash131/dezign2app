@@ -265,6 +265,146 @@ export const serviceDataInputSchema = baseNodeDataSchema.extend({
   }).passthrough()).optional(),
 }).passthrough();
 
+// --- Worker Node ---
+export const workerDataSchema = baseNodeDataSchema.extend({
+  description:   z.string().optional(),
+  // Core Resources
+  tasks:         z.array(resourceItemSchema).optional(),
+  // Implementation
+  queueSources:  z.array(z.string()).optional(),          // IDs of broker nodes it pulls from
+  // Configuration (Advanced)
+  concurrency:   z.number().optional(),
+  retryPolicy:   z.enum(["NONE", "EXPONENTIAL_BACKOFF", "FIXED_INTERVAL"]).optional(),
+  maxRetries:    z.number().optional(),
+  // Tags
+  tags:          z.array(z.string()).optional(),
+}).strict();
+export type WorkerNodeData = z.infer<typeof workerDataSchema>;
+
+// --- Serverless Function Node ---
+export const serverlessDataSchema = baseNodeDataSchema.extend({
+  description:  z.string().optional(),
+  // Core Resources
+  endpoints:    z.array(endpointSchema).optional(),
+  // Implementation
+  triggerType:  z.enum(["HTTP", "Event", "CRON", "Queue"]).optional(),
+  runtime:      z.string().optional(),                    // "nodejs20.x", "python3.12", "go1.x"
+  // Configuration (Advanced)
+  memoryMb:     z.number().optional(),
+  timeoutSec:   z.number().optional(),
+  // Tags
+  tags:         z.array(z.string()).optional(),
+}).strict();
+export type ServerlessNodeData = z.infer<typeof serverlessDataSchema>;
+
+// --- Vector DB Node ---
+export const vectorDbDataSchema = baseNodeDataSchema.extend({
+  description:    z.string().optional(),
+  // Core Resources
+  collections:    z.array(resourceItemSchema).optional(),
+  // Implementation
+  implementation: z.enum(["Pinecone", "Qdrant", "Milvus", "Weaviate", "pgvector", "Chroma", "Other"]).optional(),
+  // Configuration (Advanced)
+  dimensions:     z.number().optional(),
+  metric:         z.enum(["Cosine", "Dot Product", "Euclidean"]).optional(),
+  embeddingModel: z.string().optional(),                  // "text-embedding-3-small", "bge-large", etc.
+  // Tags
+  tags:           z.array(z.string()).optional(),
+}).strict();
+export type VectorDbNodeData = z.infer<typeof vectorDbDataSchema>;
+
+// --- Search Index Node ---
+export const searchIndexDataSchema = baseNodeDataSchema.extend({
+  description:    z.string().optional(),
+  // Core Resources
+  searchIndexes:  z.array(resourceItemSchema).optional(),
+  // Implementation
+  implementation: z.enum(["Elasticsearch", "OpenSearch", "Algolia", "Meilisearch", "Typesense", "Other"]).optional(),
+  // Configuration (Advanced)
+  analyzer:       z.string().optional(),                  // "standard", "english", "icu_analyzer"
+  // Tags
+  tags:           z.array(z.string()).optional(),
+}).strict();
+export type SearchIndexNodeData = z.infer<typeof searchIndexDataSchema>;
+
+// --- API Gateway Node ---
+export const apiGatewayDataSchema = baseNodeDataSchema.extend({
+  description:    z.string().optional(),
+  // Core Resources
+  routes:         z.array(resourceItemSchema).optional(),
+  // Implementation
+  implementation: z.enum(["AWS API Gateway", "Kong", "Nginx", "Traefik", "Custom", "Other"]).optional(),
+  // Security
+  authType:       z.enum(["None", "JWT", "API Key", "OAuth2", "mTLS"]).optional(),
+  // Configuration (Advanced)
+  rateLimit:      z.string().optional(),                  // "1000/min", "100/s"
+  // Tags
+  tags:           z.array(z.string()).optional(),
+}).strict();
+export type ApiGatewayNodeData = z.infer<typeof apiGatewayDataSchema>;
+
+// --- Load Balancer Node ---
+export const loadBalancerDataSchema = baseNodeDataSchema.extend({
+  description:     z.string().optional(),
+  // Core Resources
+  targetGroups:    z.array(resourceItemSchema).optional(),
+  // Implementation
+  implementation:  z.enum(["AWS ALB", "AWS NLB", "Nginx", "HAProxy", "Cloudflare", "Other"]).optional(),
+  // Configuration (Advanced)
+  algorithm:       z.enum(["Round Robin", "Least Connections", "IP Hash", "Random"]).optional(),
+  healthCheckPath: z.string().optional(),                 // "/health", "/ping"
+  // Tags
+  tags:            z.array(z.string()).optional(),
+}).strict();
+export type LoadBalancerNodeData = z.infer<typeof loadBalancerDataSchema>;
+
+// --- Webhook Node ---
+export const webhookDataSchema = baseNodeDataSchema.extend({
+  description:    z.string().optional(),
+  // Core Resources
+  events:         z.array(resourceItemSchema).optional(),
+  // Security
+  authentication: z.enum(["None", "HMAC", "Bearer", "Basic", "Custom"]).optional(),
+  // Tags
+  tags:           z.array(z.string()).optional(),
+}).strict();
+export type WebhookNodeData = z.infer<typeof webhookDataSchema>;
+
+// --- LLM Node ---
+export const llmDataSchema = baseNodeDataSchema.extend({
+  description:     z.string().optional(),
+  // Core Resources (Basic)
+  prompts:         z.array(resourceItemSchema).optional(),
+  // Implementation (Basic)
+  implementation:  z.enum(["OpenAI", "Anthropic", "Google Gemini", "Mistral", "Cohere", "Ollama", "Other"]).optional(),
+  model:           z.string().optional(),                 // "gpt-4o", "claude-3-5-sonnet", etc.
+  // Configuration (Advanced)
+  temperature:     z.number().optional(),
+  maxTokens:       z.number().optional(),
+  structuredOutput: z.boolean().optional(),
+  toolCalling:     z.boolean().optional(),
+  tools:           z.array(resourceItemSchema).optional(),
+  // Tags
+  tags:            z.array(z.string()).optional(),
+}).strict();
+export type LlmNodeData = z.infer<typeof llmDataSchema>;
+
+// --- MCP Server Node ---
+export const mcpServerDataSchema = baseNodeDataSchema.extend({
+  description:    z.string().optional(),
+  // Core Resources (Basic)
+  tools:          z.array(resourceItemSchema).optional(),
+  resources:      z.array(resourceItemSchema).optional(),
+  prompts:        z.array(resourceItemSchema).optional(),
+  // Implementation (Advanced)
+  connectionType: z.enum(["stdio", "SSE", "HTTP"]).optional(),
+  // Security (Advanced)
+  authentication: z.enum(["None", "Bearer", "API Key", "OAuth2"]).optional(),
+  // Tags
+  tags:           z.array(z.string()).optional(),
+}).strict();
+export type McpServerNodeData = z.infer<typeof mcpServerDataSchema>;
+
 export const nodeDataSchemas: Record<string, z.ZodTypeAny> = {
   kafka: kafkaDataSchema,
   sqs: sqsDataSchema,
@@ -278,4 +418,14 @@ export const nodeDataSchemas: Record<string, z.ZodTypeAny> = {
   external: externalDataSchema,
   group: simpleDataSchema,
   storage: storageDataSchema,
+  // New nodes
+  worker: workerDataSchema,
+  serverless: serverlessDataSchema,
+  vector_db: vectorDbDataSchema,
+  search_index: searchIndexDataSchema,
+  api_gateway: apiGatewayDataSchema,
+  load_balancer: loadBalancerDataSchema,
+  webhook: webhookDataSchema,
+  llm: llmDataSchema,
+  mcp_server: mcpServerDataSchema,
 };

@@ -552,7 +552,17 @@ import {
   RedisCacheNode,
   StorageNode,
   ExternalNode, 
-  WebClientNode 
+  WebClientNode,
+  // New nodes
+  WorkerNode,
+  ServerlessNode,
+  VectorDBNode,
+  SearchIndexNode,
+  APIGatewayNode,
+  LoadBalancerNode,
+  WebhookNode,
+  LLMNode,
+  MCPServerNode,
 } from "./graph-nodes";
 import { Badge } from "@workspace/ui/components/badge";
 
@@ -573,4 +583,14 @@ export const nodeTypes = {
   external: ExternalNode,
   webClient: WebClientNode,
   group: SchemaGroupNode,
+  // New nodes
+  worker: WorkerNode,
+  serverless: ServerlessNode,
+  vector_db: VectorDBNode,
+  search_index: SearchIndexNode,
+  api_gateway: APIGatewayNode,
+  load_balancer: LoadBalancerNode,
+  webhook: WebhookNode,
+  llm: LLMNode,
+  mcp_server: MCPServerNode,
 };

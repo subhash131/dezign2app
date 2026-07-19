@@ -14,7 +14,17 @@ import {
   redisCacheDataSchema,
   storageDataSchema,
   edgeDataSchema,
-  simulationTestCaseSchema
+  simulationTestCaseSchema,
+  // New nodes
+  workerDataSchema,
+  serverlessDataSchema,
+  vectorDbDataSchema,
+  searchIndexDataSchema,
+  apiGatewayDataSchema,
+  loadBalancerDataSchema,
+  webhookDataSchema,
+  llmDataSchema,
+  mcpServerDataSchema,
 } from "@workspace/canvas/schemas";
 
 // Test Case Data Validator
@@ -38,6 +48,16 @@ export const backendNodeDataValidator = v.union(
   zodToConvex(redisStreamsDataSchema),
   zodToConvex(redisCacheDataSchema),
   zodToConvex(storageDataSchema),
+  // New nodes
+  zodToConvex(workerDataSchema),
+  zodToConvex(serverlessDataSchema),
+  zodToConvex(vectorDbDataSchema),
+  zodToConvex(searchIndexDataSchema),
+  zodToConvex(apiGatewayDataSchema),
+  zodToConvex(loadBalancerDataSchema),
+  zodToConvex(webhookDataSchema),
+  zodToConvex(llmDataSchema),
+  zodToConvex(mcpServerDataSchema),
   // Fallback for completely empty data (allowable in some updates)
   v.object({
     label: v.optional(v.string()),

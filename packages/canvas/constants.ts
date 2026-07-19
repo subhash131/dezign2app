@@ -9,6 +9,16 @@ export const NODE_TYPE_TO_RESOURCE_KIND: Record<string, string | undefined> = {
   pubsub: "generic-pubsub",
   eventstream: "generic-eventstream",
   storage: "storage",
+  // New node types
+  worker: "worker",
+  serverless: "serverless",
+  vector_db: "vector_db",
+  search_index: "search_index",
+  api_gateway: "api_gateway",
+  load_balancer: "load_balancer",
+  webhook: "webhook",
+  llm: "llm",
+  mcp_server: "mcp_server",
 };
 
 export const MESSAGING_RESOURCE_TYPES = [
@@ -18,6 +28,14 @@ export const MESSAGING_RESOURCE_TYPES = [
   "channels",
   "caches",
   "buckets",
+  "collections",
+  "indexes",
+  "routes",
+  "targetGroups",
+  "events",
+  "prompts",
+  "tools",
+  "tasks",
 ] as const;
 
 export type MessagingResourceType = typeof MESSAGING_RESOURCE_TYPES[number];
@@ -36,3 +54,4 @@ export const MESSAGING_NODE_TYPES = [
 ] as const;
 
 export type MessagingNodeType = typeof MESSAGING_NODE_TYPES[number];
+
