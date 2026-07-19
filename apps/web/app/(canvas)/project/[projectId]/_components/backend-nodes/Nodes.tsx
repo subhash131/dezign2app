@@ -549,6 +549,7 @@ import {
   RedisStreamsNode,
   SQSNode,
   RedisPubSubNode,
+  RedisCacheNode,
   ExternalNode, 
   WebClientNode 
 } from "./graph-nodes";
@@ -565,6 +566,7 @@ export const nodeTypes = {
   "redis-streams": RedisStreamsNode,
   sqs: SQSNode,
   "redis-pubsub": RedisPubSubNode,
+  "redis-cache": RedisCacheNode,
   entity: EntityNode,
   external: ExternalNode,
   webClient: WebClientNode,

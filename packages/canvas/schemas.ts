@@ -236,6 +236,12 @@ export const resourceItemSchema = z.object({
   id: z.string().optional(),
   name: z.string(),
   payloadSchema: schemaModelSchema.optional(),
+  kind: z.string().optional(),
+  ttl: z.string().optional(),
+  cacheEviction: z.string().optional(),
+  cacheDataType: z.string().optional(),
+  keyPrefix: z.string().optional(),
+  description: z.string().optional(),
 });
 
 export const simpleDataSchema = baseNodeDataSchema.extend({
@@ -358,6 +364,11 @@ export const redisStreamsDataSchema = baseNodeDataSchema.extend({
   retention: z.string().optional(),
 }).strict();
 
+export const redisCacheDataSchema = baseNodeDataSchema.extend({
+  description: z.string().optional(),
+  caches: z.array(resourceItemSchema).optional(),
+}).strict();
+
 export const externalDataSchema = simpleDataSchema.extend({
   baseUrl: z.string().optional(),
   actions: z.array(resourceItemSchema).optional(),
@@ -462,6 +473,7 @@ export const nodeDataSchemas: Record<string, z.ZodTypeAny> = {
   sqs: sqsDataSchema,
   "redis-pubsub": redisPubSubDataSchema,
   "redis-streams": redisStreamsDataSchema,
+  "redis-cache": redisCacheDataSchema,
   entity: entityDataSchema,
   service: serviceDataSchema,
   db_ref: dbRefDataSchema,

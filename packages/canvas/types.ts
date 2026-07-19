@@ -104,6 +104,7 @@ export type BackendNodeType =
   | "redis-streams"
   | "sqs"
   | "redis-pubsub"
+  | "redis-cache"
   | "entity"
   | "webClient"
   | "external"
@@ -158,6 +159,7 @@ export type BackendNode = {
     streams?: RedisStream[];
     queues?: SQSQueue[];
     channels?: RedisPubSubChannel[];
+    caches?: AnyMessagingResource[];
     kafkaBroker?: KafkaBrokerConfig;
     redisBroker?: RedisStreamsBrokerConfig;
     sqsBroker?: SQSBrokerConfig;
@@ -241,7 +243,7 @@ export type BackendEdge = {
   targetHandle?: string | null;
   sourceResourceId?: string;
   targetResourceId?: string;
-  resourceType?: "topics" | "streams" | "queues" | "channels";
+  resourceType?: "topics" | "streams" | "queues" | "channels" | "caches";
   data?: {
     label?: string;
     sequenceOrder?: number;
@@ -410,6 +412,12 @@ export type AnyMessagingResource = {
   delivery?: DeliveryGuarantee | string;
   brokerNodeId?: string;
   messagingResourceId?: string;
+  
+  // Cache specific fields
+  ttl?: string;
+  cacheEviction?: string;
+  cacheDataType?: string;
+  keyPrefix?: string;
 };
 
 

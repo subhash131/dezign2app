@@ -183,7 +183,7 @@ export const ConfigSidebar = () => {
     let parentNode: BackendNode | undefined;
     let isEndpointEvent = false;
     let isNodeResource = false;
-    let resourceArrayName: 'topics' | 'streams' | 'queues' | 'channels' | "" = "";
+    let resourceArrayName: 'topics' | 'streams' | 'queues' | 'channels' | 'caches' | "" = "";
 
     if (!item) {
       for (const ep of endpoints) {
@@ -198,18 +198,19 @@ export const ConfigSidebar = () => {
     }
 
     if (!item) {
-      // Look in nodes for topics, queues, streams, channels
+      // Look in nodes for topics, queues, streams, channels, caches
       parentNode = nodes.find(n => n.id === nodeId);
       if (parentNode && parentNode.data) {
-        const { topics, streams, queues, channels } = parentNode.data;
+        const { topics, streams, queues, channels, caches } = parentNode.data;
         const candidateArrays: Array<{
-          name: 'topics' | 'streams' | 'queues' | 'channels';
-          arr: typeof topics | typeof streams | typeof queues | typeof channels;
+          name: 'topics' | 'streams' | 'queues' | 'channels' | 'caches';
+          arr: typeof topics | typeof streams | typeof queues | typeof channels | typeof caches;
         }> = [
           { name: "topics", arr: topics },
           { name: "streams", arr: streams },
           { name: "queues", arr: queues },
-          { name: "channels", arr: channels }
+          { name: "channels", arr: channels },
+          { name: "caches", arr: caches }
         ];
         
         for (const candidate of candidateArrays) {
@@ -253,6 +254,9 @@ export const ConfigSidebar = () => {
         } else if (resourceArrayName === "channels" && currentData.channels) {
           const updatedList = currentData.channels.map(r => r.id === eventId ? Object.assign({}, r, changes) : r);
           updateNode(parentNode.id, { data: { ...currentData, channels: updatedList } });
+        } else if (resourceArrayName === "caches" && currentData.caches) {
+          const updatedList = currentData.caches.map(r => r.id === eventId ? Object.assign({}, r, changes) : r);
+          updateNode(parentNode.id, { data: { ...currentData, caches: updatedList } });
         }
       } else {
         updateEvent(eventId, changes);
@@ -283,10 +287,14 @@ export const ConfigSidebar = () => {
       <div className="flex flex-col gap-6 mt-6 pb-12">
         <div className="flex flex-col gap-2 border-b border-border/50 pb-6">
           <div className="flex items-center gap-2.5">
-            <span className="text-[10px] font-mono font-bold px-2 py-0.5 bg-orange-500/15 text-orange-500 rounded border border-orange-500/20 shadow-sm">EVENT</span>
+            <span className="text-[10px] font-mono font-bold px-2 py-0.5 bg-orange-500/15 text-orange-500 rounded border border-orange-500/20 shadow-sm">
+              {resourceArrayName === "caches" || item.kind === 'cache' ? "CACHE" : "EVENT"}
+            </span>
             <span className="text-lg font-semibold tracking-tight text-foreground">{item.name}</span>
           </div>
-          <span className="text-sm text-muted-foreground">Configure event and messaging details.</span>
+          <span className="text-sm text-muted-foreground">
+            {resourceArrayName === "caches" || item.kind === 'cache' ? "Configure caching details and schema." : "Configure event and messaging details."}
+          </span>
         </div>
 
         {item.variant !== "definition" && (
@@ -356,11 +364,69 @@ export const ConfigSidebar = () => {
           </div>
         )}
         
+        {(resourceArrayName === 'caches' || item.kind === 'cache') && (
+          <div className="flex flex-col gap-2.5 rounded-xl border bg-card/50 p-4 shadow-sm backdrop-blur-sm">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Key Prefix / Namespace
+            </span>
+            <LocalInput 
+              className="text-sm font-mono bg-background/50 focus-visible:ring-1" 
+              placeholder="e.g. user:profile:" 
+              value={item.keyPrefix || ""}
+              onBlur={e => handleUpdate(item!.id, { keyPrefix: e.target.value })}
+            />
+          </div>
+        )}
+
         <SchemaEditor 
-          title={isConsumed ? "Expected Payload" : (isPublished ? "Payload Schema" : "Schema")} 
+          title={isConsumed ? "Expected Payload" : (isPublished ? "Payload Schema" : (resourceArrayName === 'caches' || item.kind === 'cache' ? "Cached Object Schema" : "Schema"))} 
           schema={item.payloadSchema} 
           onChange={payloadSchema => handleUpdate(item!.id, { payloadSchema })} 
         />
+
+        {(resourceArrayName === 'caches' || item.kind === 'cache') && (
+          <div className="flex flex-col gap-4 border-t pt-4">
+            <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Cache Settings</span>
+            
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-bold text-muted-foreground">TTL (Time to Live)</span>
+              <LocalInput 
+                className="w-24 text-xs text-right" 
+                placeholder="e.g. 3600s" 
+                value={item.ttl || ""}
+                onBlur={e => handleUpdate(item!.id, { ttl: e.target.value })}
+              />
+            </div>
+            
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-bold text-muted-foreground">Data Type</span>
+              <Select value={item.cacheDataType || "String"} onValueChange={v => handleUpdate(item!.id, { cacheDataType: v })}>
+                <SelectTrigger className="w-[180px] text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="String" className="text-xs">String / JSON</SelectItem>
+                  <SelectItem value="Hash" className="text-xs">Hash (HSET)</SelectItem>
+                  <SelectItem value="List" className="text-xs">List (LPUSH)</SelectItem>
+                  <SelectItem value="Set" className="text-xs">Set (SADD)</SelectItem>
+                  <SelectItem value="SortedSet" className="text-xs">Sorted Set (ZADD)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-bold text-muted-foreground">Eviction Policy</span>
+              <Select value={item.cacheEviction || "volatile-lru"} onValueChange={v => handleUpdate(item!.id, { cacheEviction: v })}>
+                <SelectTrigger className="w-[180px] text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="volatile-lru" className="text-xs">LRU (with TTL)</SelectItem>
+                  <SelectItem value="allkeys-lru" className="text-xs">LRU (All Keys)</SelectItem>
+                  <SelectItem value="volatile-lfu" className="text-xs">LFU (with TTL)</SelectItem>
+                  <SelectItem value="allkeys-lfu" className="text-xs">LFU (All Keys)</SelectItem>
+                  <SelectItem value="noeviction" className="text-xs">No Eviction</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        )}
 
         {isConsumed && (
           <div className="flex flex-col gap-1.5 border-t pt-4">

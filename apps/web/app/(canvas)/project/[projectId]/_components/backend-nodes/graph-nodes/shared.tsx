@@ -661,6 +661,8 @@ export const MessagingResourceList = <T extends AnyMessagingResource = AnyMessag
         return "queue";
       case "channels":
         return "channel";
+      case "caches":
+        return "cache";
       default:
         return "topic";
     }

@@ -9,3 +9,4 @@ export { RedisStreamsNode } from "./RedisStreamsNode";
 export { SQSNode } from "./SQSNode";
 export { RedisPubSubNode } from "./RedisPubSubNode";
 export { DatabaseTableRefNode } from "./DatabaseTableRefNode";
+export { RedisCacheNode } from "./RedisCacheNode";

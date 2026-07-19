@@ -20,7 +20,7 @@ function getLastIndex(items: { fractionalIndex?: string }[]): string | null {
   return items[items.length - 1]?.fractionalIndex ?? null;
 }
 
-type MessagingResourceType = "topics" | "streams" | "queues" | "channels";
+type MessagingResourceType = "topics" | "streams" | "queues" | "channels" | "caches";
 
 function getMessagingResourceType(node: BackendNode): MessagingResourceType | null {
   switch (node.type) {
@@ -35,6 +35,8 @@ function getMessagingResourceType(node: BackendNode): MessagingResourceType | nu
     case "pubsub":
     case "redis-pubsub":
       return "channels";
+    case "redis-cache":
+      return "caches";
     default:
       return null;
   }
@@ -128,7 +130,7 @@ function syncConfiguredEventEdge(
 }
 
 export function parseResourceHandle(handleId: string | null | undefined): {
-  resourceType: "topics" | "streams" | "queues" | "channels";
+  resourceType: "topics" | "streams" | "queues" | "channels" | "caches";
   direction: "in" | "out";
   resourceId: string;
 } | null {
@@ -137,7 +139,7 @@ export function parseResourceHandle(handleId: string | null | undefined): {
   if (parts.length === 3) {
     const [resourceType, direction, resourceId] = parts;
     if (
-      (resourceType === "topics" || resourceType === "streams" || resourceType === "queues" || resourceType === "channels") &&
+      (resourceType === "topics" || resourceType === "streams" || resourceType === "queues" || resourceType === "channels" || resourceType === "caches") &&
       (direction === "in" || direction === "out")
     ) {
       return {

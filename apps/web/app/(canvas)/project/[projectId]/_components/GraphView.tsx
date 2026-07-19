@@ -80,7 +80,7 @@ export function GraphView({ projectId }: GraphViewProps) {
     });
   };
 
-  const handleAddGraphNode = (type: "service" | "db_ref" | "queue" | "pubsub" | "eventstream" | "kafka" | "redis-streams" | "sqs" | "redis-pubsub" | "webClient" | "external", label: string) => {
+  const handleAddGraphNode = (type: "service" | "db_ref" | "queue" | "pubsub" | "eventstream" | "kafka" | "redis-streams" | "sqs" | "redis-pubsub" | "redis-cache" | "webClient" | "external", label: string) => {
     const center = getCenterPosition();
     const { x, y } = getOffsetPosition(center.x - 100, center.y - 100, nodes);
     addNode({
@@ -298,6 +298,10 @@ export function GraphView({ projectId }: GraphViewProps) {
           <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8" onClick={() => handleAddGraphNode('db_ref', 'Table Ref')}>
             <Database className="w-3.5 h-3.5 mr-2" />
             DB Ref
+          </Button>
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8" onClick={() => handleAddGraphNode('redis-cache', 'New Redis Cache')}>
+            <Database className="w-3.5 h-3.5 mr-2 text-red-500" />
+            Redis Cache
           </Button>
           <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8" onClick={() => handleAddGraphNode('external', 'New API')}>
             <Globe className="w-3.5 h-3.5 mr-2" />
