@@ -450,7 +450,7 @@ export const MessagingResourceRow = ({ nodeId, item, isEditing, setEditingId, se
   const isPublished = field === "publishedEvents" || variant === "publish";
   const isConsumed = field === "consumedEvents" || variant === "consume";
   const nodes = useBackendCanvasStore(s => s.nodes);
-  const messagingNodes = nodes.filter(n => n.type === "queue" || n.type === "pubsub" || n.type === "eventstream" || n.type === "kafka" || n.type === "redis-streams" || n.type === "sqs");
+  const messagingNodes = nodes.filter(n => n.type === "queue" || n.type === "pubsub" || n.type === "eventstream" || n.type === "kafka" || n.type === "redis-streams" || n.type === "sqs" || n.type === "redis-pubsub");
   
   const selectedBroker = messagingNodes.find(n => n.id === item.brokerNodeId);
   const availableResources = selectedBroker ? (

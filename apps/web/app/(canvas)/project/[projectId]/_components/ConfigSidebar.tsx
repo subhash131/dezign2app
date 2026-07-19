@@ -276,7 +276,8 @@ export const ConfigSidebar = () => {
       n.type === "eventstream" || 
       n.type === "kafka" || 
       n.type === "redis-streams" || 
-      n.type === "sqs"
+      n.type === "sqs" ||
+      n.type === "redis-pubsub"
     );
     
     const selectedBroker = messagingNodes.find(n => n.id === item.brokerNodeId);
