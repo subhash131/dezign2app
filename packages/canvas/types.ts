@@ -90,8 +90,8 @@ export type RedisPubSubChannel = {
 };
 
 export type RedisPubSubBrokerConfig = {
-  // Future Redis Pub/Sub configuration.
-  // Reserved for cluster/sharding-specific options if needed.
+  db?: string;
+  namespace?: string;
 };
 
 export type BackendNodeType =

@@ -4,14 +4,13 @@ import { Radio, ChevronDown, ChevronUp } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
-import { NodeHeader, MessagingResourceList } from "./shared";
+import { NodeHeader, MessagingResourceList, LocalInput } from "./shared";
 import { Textarea } from "@workspace/ui/components/textarea";
 
 export const RedisPubSubNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const [showBrokerConfig, setShowBrokerConfig] = useState(true);
 
-  // Initialize redisPubSubBroker if not defined
   const broker = data.redisPubSubBroker || {};
 
   return (
@@ -55,8 +54,29 @@ export const RedisPubSubNode = ({ id, data, selected }: NodeProps<BackendNode>) 
           Broker Configuration
         </div>
         {showBrokerConfig && (
-          <div className="px-3 py-2 flex flex-col gap-1 border-t text-[10px] text-muted-foreground bg-secondary/5">
-            <span className="italic">Standard Redis Pub/Sub channels. No sharding or cluster settings configured.</span>
+          <div className="px-3 py-2 flex flex-col gap-2 border-t bg-secondary/5">
+             <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-muted-foreground">Mode</span>
+                <span className="text-xs font-medium">Standard Pub/Sub</span>
+             </div>
+             <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-muted-foreground">DB</span>
+                <LocalInput 
+                  className="w-20 h-6 text-xs text-right bg-background/50 border-border/50" 
+                  placeholder="e.g. 0" 
+                  value={broker?.db || ""} 
+                  onChange={(e) => updateNode(id, { data: { ...data, redisPubSubBroker: { ...broker, db: e.target.value } } })}
+                />
+             </div>
+             <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-muted-foreground">Namespace</span>
+                <LocalInput 
+                  className="w-28 h-6 text-xs text-right bg-background/50 border-border/50" 
+                  placeholder="e.g. ai" 
+                  value={broker.namespace || ""} 
+                  onChange={(e) => updateNode(id, { data: { ...data, redisPubSubBroker: { ...broker, namespace: e.target.value } } })}
+                />
+             </div>
           </div>
         )}
       </div>

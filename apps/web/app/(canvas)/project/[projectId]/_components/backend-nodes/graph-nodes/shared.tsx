@@ -591,23 +591,25 @@ export const MessagingResourceRow = ({ nodeId, item, isEditing, setEditingId, se
               </Button>
            </div>
         ) : (
-          <div className="flex items-center justify-between w-full cursor-pointer" onClick={() => { setEditingId(item.id); setEditingName(item.name || ""); }}>
-             <div className="flex items-center gap-2 overflow-hidden">
-               <span className="font-medium truncate">{item.name || (item._legacyName as string | undefined)}</span>
-               {variant === "definition" && item.name && (
-                 <span className="text-[9px] bg-secondary/80 text-muted-foreground px-1 py-0.5 rounded font-mono shrink-0">
-                   P: {publisherCount} &nbsp; C: {consumerCount}
-                 </span>
-               )}
-             </div>
-             <div className="flex items-center gap-1 opacity-0 group-hover/row:opacity-100 transition-all">
-                <div className="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground" onClick={(e) => { e.stopPropagation(); setActiveConfigItem({ type: 'event', id: item.id, nodeId }); }}>
-                   <Settings size={14} />
-                </div>
-                <div className="p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive" onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }}>
-                   <X size={14} />
-                </div>
-             </div>
+          <div className="flex flex-col w-full">
+            <div className="flex items-center justify-between w-full cursor-pointer" onClick={() => { setEditingId(item.id); setEditingName(item.name || ""); }}>
+               <div className="flex items-center gap-2 overflow-hidden">
+                 <span className="font-medium truncate">{item.name || (item._legacyName as string | undefined)}</span>
+                 {variant === "definition" && item.name && (
+                   <span className="text-[9px] bg-secondary/80 text-muted-foreground px-1 py-0.5 rounded font-mono shrink-0">
+                     P: {publisherCount} &nbsp; C: {consumerCount}
+                   </span>
+                 )}
+               </div>
+               <div className="flex items-center gap-1 opacity-0 group-hover/row:opacity-100 transition-all">
+                  <div className="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground" onClick={(e) => { e.stopPropagation(); setActiveConfigItem({ type: 'event', id: item.id, nodeId }); }}>
+                     <Settings size={14} />
+                  </div>
+                  <div className="p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive" onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }}>
+                     <X size={14} />
+                  </div>
+               </div>
+            </div>
           </div>
         )}
       </div>

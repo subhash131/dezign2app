@@ -138,7 +138,10 @@ export const sqsDataSchema = baseNodeDataSchema.extend({
 export const redisPubSubDataSchema = baseNodeDataSchema.extend({
   description: z.string().optional(),
   channels: z.array(resourceItemSchema).optional(),
-  redisPubSubBroker: z.object({}).passthrough().optional(),
+  redisPubSubBroker: z.object({
+    db: z.string().optional(),
+    namespace: z.string().optional(),
+  }).passthrough().optional(),
   delivery: z.string().optional(),
 }).strict();
 

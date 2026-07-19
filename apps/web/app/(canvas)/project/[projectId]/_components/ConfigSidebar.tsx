@@ -19,6 +19,7 @@ export const ConfigSidebar = () => {
   const updateEndpoint = useBackendCanvasStore(s => s.updateEndpoint);
   const updateEvent = useBackendCanvasStore(s => s.updateEvent);
   const nodes = useBackendCanvasStore(s => s.nodes);
+  const edges = useBackendCanvasStore(s => s.edges);
 
   const [width, setWidth] = useState(540);
   const isDragging = useRef(false);
@@ -364,6 +365,76 @@ export const ConfigSidebar = () => {
               value={item.publishedWhen || item.description || ""}
               onBlur={e => handleUpdate(item!.id, { publishedWhen: e.target.value, description: e.target.value })}
             />
+          </div>
+        )}
+
+        {item.variant === "definition" && (
+          <div className="flex gap-4">
+            <div className="flex-1 flex flex-col gap-2 rounded-xl border bg-card/50 p-4 shadow-sm">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Publishers</span>
+              {edges.filter(e => e.targetResourceId === item!.id).length === 0 ? (
+                <span className="text-xs text-muted-foreground/60 italic">No publishers connected</span>
+              ) : (
+                <div className="flex flex-col gap-1.5">
+                  {edges.filter(e => e.targetResourceId === item!.id).map((e, i) => {
+                    const n = nodes.find(n => n.id === e.source);
+                    let eventName = "";
+                    let eventId = e.sourceResourceId || "";
+                    
+                    if (!eventId && e.sourceHandle?.startsWith("publishedEvents-out-")) {
+                      eventId = e.sourceHandle.replace("publishedEvents-out-", "");
+                    }
+                    
+                    if (eventId) {
+                      const ev = events.find(ev => ev.id === eventId);
+                      if (ev) {
+                        eventName = ev.name;
+                      } else {
+                        for (const ep of endpoints) {
+                          const publishedMatch = ep.publishedEvents?.find(pev => pev.id === eventId);
+                          if (publishedMatch) {
+                            eventName = publishedMatch.name;
+                            break;
+                          }
+                        }
+                      }
+                    }
+                    
+                    const displayName = eventName ? `${n?.data.label || 'Unknown Node'} / ${eventName}` : (n?.data.label || 'Unknown Node');
+                    return <span key={i} className="text-xs font-medium" title={displayName}>{displayName}</span>;
+                  })}
+                </div>
+              )}
+            </div>
+            
+            <div className="flex-1 flex flex-col gap-2 rounded-xl border bg-card/50 p-4 shadow-sm">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Subscribers</span>
+              {edges.filter(e => e.sourceResourceId === item!.id).length === 0 ? (
+                <span className="text-xs text-muted-foreground/60 italic">No subscribers connected</span>
+              ) : (
+                <div className="flex flex-col gap-1.5">
+                  {edges.filter(e => e.sourceResourceId === item!.id).map((e, i) => {
+                    const n = nodes.find(n => n.id === e.target);
+                    let eventName = "";
+                    let eventId = e.targetResourceId || "";
+                    
+                    if (!eventId && e.targetHandle?.startsWith("consumedEvents-in-")) {
+                      eventId = e.targetHandle.replace("consumedEvents-in-", "");
+                    }
+                    
+                    if (eventId) {
+                      const ev = events.find(ev => ev.id === eventId);
+                      if (ev) {
+                        eventName = ev.name;
+                      }
+                    }
+                    
+                    const displayName = eventName ? `${n?.data.label || 'Unknown Node'} / ${eventName}` : (n?.data.label || 'Unknown Node');
+                    return <span key={i} className="text-xs font-medium" title={displayName}>{displayName}</span>;
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         )}
         
