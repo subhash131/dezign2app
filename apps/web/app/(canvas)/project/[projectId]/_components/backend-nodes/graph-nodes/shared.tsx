@@ -464,6 +464,16 @@ export const MessagingResourceRow = ({ nodeId, item, isEditing, setEditingId, se
   const publisherCount = edges.filter(e => e.targetResourceId === item.id).length;
   const consumerCount = edges.filter(e => e.sourceResourceId === item.id).length;
 
+  let pubAbbr = "P";
+  let subAbbr = "S";
+  if (resourceType === "buckets" || resourceType === "caches") {
+    pubAbbr = "W";
+    subAbbr = "R";
+  } else if (resourceType === "queues" || resourceType === "streams") {
+    pubAbbr = "P";
+    subAbbr = "C";
+  }
+
   const isChannelEmpty = () => {
     const currentName = isEditing ? editingName : (item.name || "");
     const hasName = currentName.trim().length > 0;
@@ -597,7 +607,7 @@ export const MessagingResourceRow = ({ nodeId, item, isEditing, setEditingId, se
                  <span className="font-medium truncate">{item.name || (item._legacyName as string | undefined)}</span>
                  {variant === "definition" && item.name && (
                    <span className="text-[9px] bg-secondary/80 text-muted-foreground px-1 py-0.5 rounded font-mono shrink-0">
-                     P: {publisherCount} &nbsp; C: {consumerCount}
+                     {pubAbbr}: {publisherCount} &nbsp; {subAbbr}: {consumerCount}
                    </span>
                  )}
                </div>

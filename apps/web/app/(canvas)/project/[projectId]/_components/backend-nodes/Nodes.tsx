@@ -550,6 +550,7 @@ import {
   SQSNode,
   RedisPubSubNode,
   RedisCacheNode,
+  StorageNode,
   ExternalNode, 
   WebClientNode 
 } from "./graph-nodes";
@@ -567,6 +568,7 @@ export const nodeTypes = {
   sqs: SQSNode,
   "redis-pubsub": RedisPubSubNode,
   "redis-cache": RedisCacheNode,
+  storage: StorageNode,
   entity: EntityNode,
   external: ExternalNode,
   webClient: WebClientNode,

@@ -8,4 +8,5 @@ export const NODE_TYPE_TO_RESOURCE_KIND: Record<string, string | undefined> = {
   queue: "generic-queue",
   pubsub: "generic-pubsub",
   eventstream: "generic-eventstream",
+  storage: "storage",
 };

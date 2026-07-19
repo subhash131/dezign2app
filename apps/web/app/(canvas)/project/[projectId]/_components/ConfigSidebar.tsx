@@ -187,7 +187,7 @@ export const ConfigSidebar = () => {
     let parentNode: BackendNode | undefined;
     let isEndpointEvent = false;
     let isNodeResource = false;
-    let resourceArrayName: 'topics' | 'streams' | 'queues' | 'channels' | 'caches' | "" = "";
+    let resourceArrayName: 'topics' | 'streams' | 'queues' | 'channels' | 'caches' | 'buckets' | "" = "";
 
     if (!item) {
       for (const ep of endpoints) {
@@ -205,16 +205,17 @@ export const ConfigSidebar = () => {
       // Look in nodes for topics, queues, streams, channels, caches
       parentNode = nodes.find(n => n.id === nodeId);
       if (parentNode && parentNode.data) {
-        const { topics, streams, queues, channels, caches } = parentNode.data;
+        const { topics, streams, queues, channels, caches, buckets } = parentNode.data;
         const candidateArrays: Array<{
-          name: 'topics' | 'streams' | 'queues' | 'channels' | 'caches';
-          arr: typeof topics | typeof streams | typeof queues | typeof channels | typeof caches;
+          name: 'topics' | 'streams' | 'queues' | 'channels' | 'caches' | 'buckets';
+          arr: typeof topics | typeof streams | typeof queues | typeof channels | typeof caches | typeof buckets;
         }> = [
           { name: "topics", arr: topics },
           { name: "streams", arr: streams },
           { name: "queues", arr: queues },
           { name: "channels", arr: channels },
-          { name: "caches", arr: caches }
+          { name: "caches", arr: caches },
+          { name: "buckets", arr: buckets }
         ];
         
         for (const candidate of candidateArrays) {
@@ -261,6 +262,9 @@ export const ConfigSidebar = () => {
         } else if (resourceArrayName === "caches" && currentData.caches) {
           const updatedList = currentData.caches.map(r => r.id === eventId ? Object.assign({}, r, changes) : r);
           updateNode(parentNode.id, { data: { ...currentData, caches: updatedList } });
+        } else if (resourceArrayName === "buckets" && currentData.buckets) {
+          const updatedList = currentData.buckets.map(r => r.id === eventId ? Object.assign({}, r, changes) : r);
+          updateNode(parentNode.id, { data: { ...currentData, buckets: updatedList } });
         }
       } else {
         updateEvent(eventId, changes);
@@ -293,12 +297,14 @@ export const ConfigSidebar = () => {
         <div className="flex flex-col gap-2 border-b border-border/50 pb-6">
           <div className="flex items-center gap-2.5">
             <span className="text-[10px] font-mono font-bold px-2 py-0.5 bg-orange-500/15 text-orange-500 rounded border border-orange-500/20 shadow-sm">
-              {resourceArrayName === "caches" || item.kind === 'cache' ? "CACHE" : "EVENT"}
+              {resourceArrayName === "caches" || item.kind === 'cache' ? "CACHE" : resourceArrayName === "buckets" ? "STORAGE" : "EVENT"}
             </span>
             <span className="text-lg font-semibold tracking-tight text-foreground">{item.name}</span>
           </div>
           <span className="text-sm text-muted-foreground">
-            {resourceArrayName === "caches" || item.kind === 'cache' ? "Configure caching details and schema." : "Configure event and messaging details."}
+            {resourceArrayName === "caches" || item.kind === 'cache' ? "Configure caching details and schema." : 
+             resourceArrayName === "buckets" ? "Configure data persistence, schema and events." : 
+             "Configure event and messaging details."}
           </span>
         </div>
 
@@ -369,12 +375,30 @@ export const ConfigSidebar = () => {
           </div>
         )}
 
-        {item.variant === "definition" && (
-          <div className="flex gap-4">
-            <div className="flex-1 flex flex-col gap-2 rounded-xl border bg-card/50 p-4 shadow-sm">
-              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Publishers</span>
-              {edges.filter(e => e.targetResourceId === item!.id).length === 0 ? (
-                <span className="text-xs text-muted-foreground/60 italic">No publishers connected</span>
+        {item.variant === "definition" && (() => {
+          let pubLabel = "Publishers";
+          let subLabel = "Subscribers";
+          let noPubText = "No publishers connected";
+          let noSubText = "No subscribers connected";
+
+          if (resourceArrayName === "buckets" || resourceArrayName === "caches") {
+            pubLabel = "Writers";
+            subLabel = "Readers";
+            noPubText = "No writers connected";
+            noSubText = "No readers connected";
+          } else if (resourceArrayName === "queues" || resourceArrayName === "streams") {
+            pubLabel = "Producers";
+            subLabel = "Consumers";
+            noPubText = "No producers connected";
+            noSubText = "No consumers connected";
+          }
+
+          return (
+            <div className="flex gap-4">
+              <div className="flex-1 flex flex-col gap-2 rounded-xl border bg-card/50 p-4 shadow-sm">
+                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{pubLabel}</span>
+                {edges.filter(e => e.targetResourceId === item!.id).length === 0 ? (
+                  <span className="text-xs text-muted-foreground/60 italic">{noPubText}</span>
               ) : (
                 <div className="flex flex-col gap-1.5">
                   {edges.filter(e => e.targetResourceId === item!.id).map((e, i) => {
@@ -409,9 +433,9 @@ export const ConfigSidebar = () => {
             </div>
             
             <div className="flex-1 flex flex-col gap-2 rounded-xl border bg-card/50 p-4 shadow-sm">
-              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Subscribers</span>
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{subLabel}</span>
               {edges.filter(e => e.sourceResourceId === item!.id).length === 0 ? (
-                <span className="text-xs text-muted-foreground/60 italic">No subscribers connected</span>
+                <span className="text-xs text-muted-foreground/60 italic">{noSubText}</span>
               ) : (
                 <div className="flex flex-col gap-1.5">
                   {edges.filter(e => e.sourceResourceId === item!.id).map((e, i) => {
@@ -437,11 +461,82 @@ export const ConfigSidebar = () => {
               )}
             </div>
           </div>
-        )}
+          );
+        })()}
         
+        {resourceArrayName === 'buckets' && (
+          <div className="flex flex-col gap-4 mt-2 mb-2">
+            <div className="flex flex-col gap-2.5 rounded-xl border bg-card/50 p-4 shadow-sm backdrop-blur-sm">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Storage Type</span>
+              <Select value={item.storageType || "s3"} onValueChange={v => handleUpdate(item!.id, { storageType: v })}>
+                <SelectTrigger className="w-full bg-background/50 h-9">
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="s3">AWS S3</SelectItem>
+                  <SelectItem value="blob">Azure Blob Storage</SelectItem>
+                  <SelectItem value="gcs">Google Cloud Storage</SelectItem>
+                  <SelectItem value="local">Local Disk</SelectItem>
+                  <SelectItem value="custom">Custom / Other</SelectItem>
+                </SelectContent>
+              </Select>
+              {item.storageType === 'custom' && (
+                <div className="mt-1 flex flex-col gap-1">
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Describe Custom Storage</span>
+                  <LocalInput 
+                    className="h-8 bg-background/50 text-xs" 
+                    placeholder="e.g. MinIO, Cloudflare R2, On-Prem NAS" 
+                    value={item.storageTypeOther || ""}
+                    onBlur={e => handleUpdate(item!.id, { storageTypeOther: e.target.value })}
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-2.5 rounded-xl border bg-card/50 p-4 shadow-sm backdrop-blur-sm">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Data Types</span>
+              <span className="text-xs text-muted-foreground mb-1">Categorize the kinds of objects stored</span>
+              <div className="grid grid-cols-2 gap-2">
+                {["Image", "Video", "Audio", "Document", "JSON", "Archive", "Binary", "Other"].map(type => {
+                  const currentList = Array.isArray(item.storedDataTypes) ? item.storedDataTypes : [];
+                  const isChecked = currentList.includes(type);
+                  return (
+                    <label key={type} className="flex items-center gap-2 cursor-pointer text-sm text-foreground">
+                      <input 
+                        type="checkbox"
+                        className="rounded border-border bg-background"
+                        checked={isChecked}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          const updated = checked 
+                            ? [...currentList, type]
+                            : currentList.filter((t: string) => t !== type);
+                          handleUpdate(item!.id, { storedDataTypes: updated });
+                        }}
+                      />
+                      {type}
+                    </label>
+                  );
+                })}
+              </div>
+              {(Array.isArray(item.storedDataTypes) ? item.storedDataTypes : []).includes("Other") && (
+                <div className="mt-2 flex flex-col gap-1">
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Other Data Types</span>
+                  <LocalInput 
+                    className="h-8 bg-background/50 text-xs" 
+                    placeholder="e.g. CAD Files, Parquet Files" 
+                    value={item.storedDataTypesOther || ""}
+                    onBlur={e => handleUpdate(item!.id, { storedDataTypesOther: e.target.value })}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {!(resourceArrayName === 'caches' || item.kind === 'cache') && (
           <SchemaEditor 
-            title={isConsumed ? "Expected Payload" : (isPublished ? "Payload Schema" : "Schema")} 
+            title={resourceArrayName === 'buckets' ? "Metadata" : (isConsumed ? "Expected Payload" : (isPublished ? "Payload Schema" : "Schema"))} 
             schema={item.payloadSchema} 
             onChange={payloadSchema => handleUpdate(item!.id, { payloadSchema })} 
           />

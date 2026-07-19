@@ -109,7 +109,8 @@ export type BackendNodeType =
   | "webClient"
   | "external"
   | "group"
-  | "db_ref";
+  | "db_ref"
+  | "storage";
 
 export type BackendNode = {
   id: string;
@@ -160,6 +161,7 @@ export type BackendNode = {
     queues?: SQSQueue[];
     channels?: RedisPubSubChannel[];
     caches?: AnyMessagingResource[];
+    buckets?: AnyMessagingResource[];
     kafkaBroker?: KafkaBrokerConfig;
     redisBroker?: RedisStreamsBrokerConfig;
     sqsBroker?: SQSBrokerConfig;
@@ -413,6 +415,12 @@ export type AnyMessagingResource = {
   brokerNodeId?: string;
   messagingResourceId?: string;
   
+  // Storage specific fields
+  storageType?: string;
+  storageTypeOther?: string;
+  storedDataTypes?: string[];
+  storedDataTypesOther?: string;
+
   // Cache specific fields
   ttl?: string;
   cacheEviction?: string;

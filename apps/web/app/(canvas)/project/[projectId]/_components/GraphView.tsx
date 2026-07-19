@@ -22,7 +22,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@workspace/ui/components/alert-dialog";
-import { Globe, Server, Waves, GitBranch, Radio, Database, LayoutGrid, ChevronRight, TerminalSquare, Plus, PenLine, Trash } from "lucide-react";
+import { Globe, Server, Waves, GitBranch, Radio, Database, LayoutGrid, ChevronRight, TerminalSquare, Plus, PenLine, Trash, UploadCloud, Layers, HardDrive } from "lucide-react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useSimulationStore } from "@/lib/stores/simulationStore";
 import { useMutation } from "convex/react";
@@ -80,7 +80,7 @@ export function GraphView({ projectId }: GraphViewProps) {
     });
   };
 
-  const handleAddGraphNode = (type: "service" | "db_ref" | "queue" | "pubsub" | "eventstream" | "kafka" | "redis-streams" | "sqs" | "redis-pubsub" | "redis-cache" | "webClient" | "external", label: string) => {
+  const handleAddGraphNode = (type: "service" | "db_ref" | "queue" | "pubsub" | "eventstream" | "kafka" | "redis-streams" | "sqs" | "redis-pubsub" | "redis-cache" | "webClient" | "external" | "storage", label: string) => {
     const center = getCenterPosition();
     const { x, y } = getOffsetPosition(center.x - 100, center.y - 100, nodes);
     addNode({
@@ -98,6 +98,7 @@ export function GraphView({ projectId }: GraphViewProps) {
         streams: type === 'redis-streams' ? [] : undefined,
         queues: type === 'sqs' ? [] : undefined,
         channels: type === 'redis-pubsub' ? [] : undefined,
+        buckets: type === 'storage' ? [] : undefined,
         kafkaBroker: type === 'kafka' ? {} : undefined,
         redisBroker: type === 'redis-streams' ? {} : undefined,
         sqsBroker: type === 'sqs' ? {} : undefined,
@@ -295,6 +296,10 @@ export function GraphView({ projectId }: GraphViewProps) {
           </Button>
 
           <div className="text-[9px] uppercase font-extrabold text-muted-foreground/60 px-1 pt-2 pb-1 border-t mt-1">Storage & External</div>
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8" onClick={() => handleAddGraphNode('storage', 'New Storage')}>
+            <HardDrive className="w-3.5 h-3.5 mr-2 text-amber-500" />
+            Storage Node
+          </Button>
           <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8" onClick={() => handleAddGraphNode('db_ref', 'Table Ref')}>
             <Database className="w-3.5 h-3.5 mr-2" />
             DB Ref

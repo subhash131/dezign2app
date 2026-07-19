@@ -17,6 +17,10 @@ export const resourceItemSchema = z.object({
   name: z.string(),
   payloadSchema: schemaModelSchema.optional(),
   kind: z.string().optional(),
+  storageType: z.string().optional(),
+  storageTypeOther: z.string().optional(),
+  storedDataTypes: z.array(z.string()).optional(),
+  storedDataTypesOther: z.string().optional(),
   ttl: z.string().optional(),
   cacheEviction: z.string().optional(),
   cacheDataType: z.string().optional(),
@@ -161,6 +165,11 @@ export const redisCacheDataSchema = baseNodeDataSchema.extend({
   caches: z.array(resourceItemSchema).optional(),
 }).strict();
 
+export const storageDataSchema = baseNodeDataSchema.extend({
+  description: z.string().optional(),
+  buckets: z.array(resourceItemSchema).optional(),
+}).strict();
+
 export const externalDataSchema = simpleDataSchema.extend({
   baseUrl: z.string().optional(),
   actions: z.array(resourceItemSchema).optional(),
@@ -268,4 +277,5 @@ export const nodeDataSchemas: Record<string, z.ZodTypeAny> = {
   webClient: webClientDataSchema,
   external: externalDataSchema,
   group: simpleDataSchema,
+  storage: storageDataSchema,
 };

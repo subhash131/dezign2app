@@ -12,6 +12,7 @@ import {
   redisPubSubDataSchema,
   redisStreamsDataSchema,
   redisCacheDataSchema,
+  storageDataSchema,
   edgeDataSchema,
   simulationTestCaseSchema
 } from "@workspace/canvas/schemas";
@@ -36,6 +37,7 @@ export const backendNodeDataValidator = v.union(
   zodToConvex(redisPubSubDataSchema),
   zodToConvex(redisStreamsDataSchema),
   zodToConvex(redisCacheDataSchema),
+  zodToConvex(storageDataSchema),
   // Fallback for completely empty data (allowable in some updates)
   v.object({
     label: v.optional(v.string()),
