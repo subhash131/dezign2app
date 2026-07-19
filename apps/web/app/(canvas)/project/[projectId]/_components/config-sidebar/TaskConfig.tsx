@@ -4,7 +4,6 @@ import { LocalInput, LocalTextarea, generateId } from "../backend-nodes/graph-no
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { SchemaEditor } from "../backend-nodes/graph-nodes/Editors";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@workspace/ui/components/select";
-import { Combobox, ComboboxInput, ComboboxContent, ComboboxList, ComboboxItem, ComboboxEmpty, ComboboxGroup, ComboboxLabel } from "@workspace/ui/components/combobox";
 import { Plus, Trash } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 

@@ -3,10 +3,10 @@ import type { HandleKind } from "./types";
 export const CONNECTION_RULES: Record<HandleKind, HandleKind[]> = {
   "event-source": ["endpoint-in"],
   "endpoint-in": [],
-  "endpoint-out": ["database-target", "action-target", "resource-def-in", "endpoint-in", "task-in"],
+  "endpoint-out": ["database-target", "action-target", "resource-def-in", "endpoint-in", "task-in", "index-in"],
   "published-event-out": ["resource-def-in", "task-in"],
   "consumed-event-in": [],
-  "consumed-event-out": ["endpoint-in", "resource-def-in", "task-in"],
+  "consumed-event-out": ["endpoint-in", "resource-def-in", "task-in", "index-in"],
   "resource-def-in": [],
   "resource-def-out": ["consumed-event-in", "task-in"],
   "entity-column-source": ["entity-column-target"],
@@ -14,10 +14,12 @@ export const CONNECTION_RULES: Record<HandleKind, HandleKind[]> = {
   "entity-top-target": [],
   "entity-bottom-source": ["entity-top-target"],
   "database-target": [],
-  "database-source": ["endpoint-in", "task-in"],
+  "database-source": ["endpoint-in", "task-in", "index-in"],
   "action-target": [],
   "task-in": [],
-  "task-out": ["database-target", "action-target", "resource-def-in", "endpoint-in"],
+  "task-out": ["database-target", "action-target", "resource-def-in", "endpoint-in", "index-in"],
+  "index-in": [],
+  "index-out": ["endpoint-in", "task-in"],
   "unknown": [],
 };
 
