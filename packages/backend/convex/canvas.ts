@@ -1,6 +1,6 @@
 import { v, ConvexError } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { isValidConnection, RULES_VERSION, BackendNodeType, BackendNode, BackendEdgeType, BackendEdge, nodeDataSchemas } from "@workspace/canvas";
+import { isValidConnection, isBackendNode, RULES_VERSION, BackendNodeType, BackendNode, BackendEdgeType, BackendEdge, nodeDataSchemas } from "@workspace/canvas";
 
 // ---------------------------------------------------------------------------
 // FRONTEND CANVAS — tldraw granular records
@@ -297,6 +297,10 @@ export const upsertBackendEdge = mutation({
         sourceHandle: e.sourceHandle,
         targetHandle: e.targetHandle,
       }));
+
+    if (!isBackendNode(sourceNode.type) || !isBackendNode(targetNode.type)) {
+      throw new ConvexError("Invalid node type");
+    }
 
     const result = isValidConnection(
       sourceNode.type,

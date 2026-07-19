@@ -220,7 +220,7 @@ export const ConfigSidebar = () => {
         
         for (const candidate of candidateArrays) {
           if (candidate.arr) {
-            const match = candidate.arr.find((r: { id: string }) => r.id === id);
+            const match = candidate.arr.find((r) => r.id === id);
             if (match) {
               item = { ...match, variant: 'definition', nodeId: parentNode.id };
               isNodeResource = true;
@@ -406,11 +406,19 @@ export const ConfigSidebar = () => {
                     let eventName = "";
                     let eventId = e.sourceResourceId || "";
                     
-                    if (!eventId && e.sourceHandle?.startsWith("publishedEvents-out-")) {
-                      eventId = e.sourceHandle.replace("publishedEvents-out-", "");
+                    if (!eventId) {
+                      if (e.sourceHandle?.startsWith("publishedEvents-out-")) {
+                        eventId = e.sourceHandle.replace("publishedEvents-out-", "");
+                      } else if (e.sourceHandle?.startsWith("consumedEvents-out-")) {
+                        eventId = e.sourceHandle.replace("consumedEvents-out-", "");
+                      } else if (e.sourceHandle?.match(/^(endpoint|endpoints|routeEndpoints)-out-/)) {
+                        const epId = e.sourceHandle.replace(/^(endpoint|endpoints|routeEndpoints)-out-/, "");
+                        const ep = endpoints.find(ep => ep.id === epId);
+                        if (ep) eventName = `${ep.type} ${ep.name}`;
+                      }
                     }
                     
-                    if (eventId) {
+                    if (!eventName && eventId) {
                       const ev = events.find(ev => ev.id === eventId);
                       if (ev) {
                         eventName = ev.name;
@@ -443,11 +451,19 @@ export const ConfigSidebar = () => {
                     let eventName = "";
                     let eventId = e.targetResourceId || "";
                     
-                    if (!eventId && e.targetHandle?.startsWith("consumedEvents-in-")) {
-                      eventId = e.targetHandle.replace("consumedEvents-in-", "");
+                    if (!eventId) {
+                      if (e.targetHandle?.startsWith("consumedEvents-in-")) {
+                        eventId = e.targetHandle.replace("consumedEvents-in-", "");
+                      } else if (e.targetHandle?.startsWith("publishedEvents-in-")) {
+                        eventId = e.targetHandle.replace("publishedEvents-in-", "");
+                      } else if (e.targetHandle?.match(/^(endpoint|endpoints|routeEndpoints)-in-/)) {
+                        const epId = e.targetHandle.replace(/^(endpoint|endpoints|routeEndpoints)-in-/, "");
+                        const ep = endpoints.find(ep => ep.id === epId);
+                        if (ep) eventName = `${ep.type} ${ep.name}`;
+                      }
                     }
                     
-                    if (eventId) {
+                    if (!eventName && eventId) {
                       const ev = events.find(ev => ev.id === eventId);
                       if (ev) {
                         eventName = ev.name;

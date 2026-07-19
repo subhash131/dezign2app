@@ -1,3 +1,6 @@
+import type { MessagingResourceType, MessagingNodeType } from "./constants";
+export type { MessagingResourceType, MessagingNodeType };
+
 export type HandleKind =
   // --- Entity (schema view) ---
   | "entity-column-source"
@@ -245,7 +248,7 @@ export type BackendEdge = {
   targetHandle?: string | null;
   sourceResourceId?: string;
   targetResourceId?: string;
-  resourceType?: "topics" | "streams" | "queues" | "channels" | "caches";
+  resourceType?: MessagingResourceType;
   data?: {
     label?: string;
     sequenceOrder?: number;

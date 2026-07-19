@@ -1,5 +1,16 @@
-import type { HandleKind } from "./types";
+import type { HandleKind, BackendNodeType } from "./types";
 import { CONNECTION_RULES, EDGE_TYPE_MAP } from "./graph-rules";
+import { MESSAGING_RESOURCE_TYPES, MESSAGING_NODE_TYPES } from "./constants";
+
+const ALL_BACKEND_NODE_TYPES = [
+  "service", "database", "queue", "pubsub", "eventstream", "kafka", 
+  "redis-streams", "sqs", "redis-pubsub", "redis-cache", "entity", 
+  "webClient", "external", "group", "db_ref", "storage"
+] as const;
+
+export function isBackendNode(type: string): type is BackendNodeType {
+  return ALL_BACKEND_NODE_TYPES.some(t => t === type);
+}
 
 export function getSuggestion(
   sourceKind: HandleKind,
@@ -24,7 +35,7 @@ export function getSuggestion(
 }
 
 export function classifyHandle(
-  nodeType: string,
+  nodeType: BackendNodeType,
   handleId: string | null | undefined,
   handleDirection: "source" | "target",
 ): HandleKind {
@@ -44,7 +55,8 @@ export function classifyHandle(
   if (id.startsWith("consumedEvents-in-")) return "consumed-event-in";
   if (id.startsWith("consumedEvents-out-")) return "consumed-event-out";
 
-  const resourceMatch = id.match(/^(topics|queues|streams|channels):(in|out):(.+)$/);
+  const resourceMatchRegex = new RegExp(`^(${MESSAGING_RESOURCE_TYPES.join("|")}):(in|out):(.+)$`);
+  const resourceMatch = id.match(resourceMatchRegex);
   if (resourceMatch) {
     const direction = resourceMatch[2];
     return direction === "in" ? "resource-def-in" : "resource-def-out";
@@ -57,7 +69,7 @@ export function classifyHandle(
     if (id.startsWith("database-source") || handleDirection === "source") return "database-source";
   }
 
-  if (["queue", "eventstream", "pubsub", "kafka", "redis-streams", "sqs", "redis-pubsub"].includes(nodeType)) {
+  if (MESSAGING_NODE_TYPES.some(t => t === nodeType)) {
     if (handleDirection === "target") return "resource-def-in";
     if (handleDirection === "source") return "resource-def-out";
   }

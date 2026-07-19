@@ -7,10 +7,8 @@ import {
   EdgeChange,
   addEdge,
   Connection,
-  Node,
-  Edge
 } from "@xyflow/react";
-import { PublishedEventInputType, ConsumedEventInputType, BackendNodeType, Endpoint, AnyMessagingResource } from "@workspace/canvas/types";
+import { Endpoint, AnyMessagingResource, MessagingResourceType } from "@workspace/canvas/types";
 import { generateKeyBetween } from "fractional-indexing";
 import { isValidConnection } from "@workspace/canvas";
 
@@ -19,8 +17,6 @@ function getLastIndex(items: { fractionalIndex?: string }[]): string | null {
   if (items.length === 0) return null;
   return items[items.length - 1]?.fractionalIndex ?? null;
 }
-
-type MessagingResourceType = "topics" | "streams" | "queues" | "channels" | "caches";
 
 function getMessagingResourceType(node: BackendNode): MessagingResourceType | null {
   switch (node.type) {
@@ -37,6 +33,8 @@ function getMessagingResourceType(node: BackendNode): MessagingResourceType | nu
       return "channels";
     case "redis-cache":
       return "caches";
+    case "storage":
+      return "buckets";
     default:
       return null;
   }
@@ -130,7 +128,7 @@ function syncConfiguredEventEdge(
 }
 
 export function parseResourceHandle(handleId: string | null | undefined): {
-  resourceType: "topics" | "streams" | "queues" | "channels" | "caches";
+  resourceType: MessagingResourceType;
   direction: "in" | "out";
   resourceId: string;
 } | null {
@@ -139,7 +137,7 @@ export function parseResourceHandle(handleId: string | null | undefined): {
   if (parts.length === 3) {
     const [resourceType, direction, resourceId] = parts;
     if (
-      (resourceType === "topics" || resourceType === "streams" || resourceType === "queues" || resourceType === "channels" || resourceType === "caches") &&
+      (resourceType === "topics" || resourceType === "streams" || resourceType === "queues" || resourceType === "channels" || resourceType === "caches" || resourceType === "buckets") &&
       (direction === "in" || direction === "out")
     ) {
       return {
