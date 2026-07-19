@@ -65,6 +65,8 @@ export function classifyHandle(
   }
 
   if (id.startsWith("actions-")) return "action-target";
+  if (id.startsWith("task-in-")) return "task-in";
+  if (id.startsWith("task-out-")) return "task-out";
 
   if (nodeType === "database" || nodeType === "db_ref" || nodeType === "vector_db_ref") {
     if (id.startsWith("database-target") || handleDirection === "target") return "database-target";

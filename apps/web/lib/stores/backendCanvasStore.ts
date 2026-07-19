@@ -157,8 +157,8 @@ interface BackendCanvasState {
 
   endpoints: (Endpoint & { nodeId: string })[];
   events: (AnyMessagingResource & { nodeId: string, variant: 'publish' | 'consume' })[];
-  activeConfigItem: { type: 'endpoint' | 'event', id: string, nodeId: string } | null;
-  setActiveConfigItem: (item: { type: 'endpoint' | 'event', id: string, nodeId: string } | null) => void;
+  activeConfigItem: { type: 'endpoint' | 'event' | 'task', id: string, nodeId: string } | null;
+  setActiveConfigItem: (item: { type: 'endpoint' | 'event' | 'task', id: string, nodeId: string } | null) => void;
 
   // Pending Convex sync ops
   pendingNodeUpserts: BackendNode[];

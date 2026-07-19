@@ -4,6 +4,7 @@ import { ChevronLeft } from "lucide-react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { EndpointConfig } from "./config-sidebar/EndpointConfig";
 import { EventConfig } from "./config-sidebar/EventConfig";
+import { TaskConfig } from "./config-sidebar/TaskConfig";
 
 export const ConfigSidebar = () => {
   const activeConfigItem = useBackendCanvasStore(s => s.activeConfigItem);
@@ -87,7 +88,9 @@ export const ConfigSidebar = () => {
         <SheetHeader className="hidden">
           <SheetTitle>Configuration</SheetTitle>
           <SheetDescription>
-            {type === 'endpoint' ? "Configure endpoint properties." : "Configure event and messaging properties."}
+            {type === 'endpoint' ? "Configure endpoint properties." : 
+             type === 'task' ? "Configure task properties." :
+             "Configure event and messaging properties."}
           </SheetDescription>
         </SheetHeader>
         
@@ -101,7 +104,9 @@ export const ConfigSidebar = () => {
           </div>
         )}
 
-        {type === 'endpoint' ? <EndpointConfig id={id} nodeId={nodeId} /> : <EventConfig id={id} nodeId={nodeId} />}
+        {type === 'endpoint' ? <EndpointConfig id={id} nodeId={nodeId} /> : 
+         type === 'task' ? <TaskConfig id={id} nodeId={nodeId} /> : 
+         <EventConfig id={id} nodeId={nodeId} />}
       </SheetContent>
     </Sheet>
   );

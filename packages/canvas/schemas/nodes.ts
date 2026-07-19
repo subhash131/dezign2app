@@ -278,11 +278,30 @@ export const serviceDataInputSchema = baseNodeDataSchema.extend({
   }).passthrough()).optional(),
 }).passthrough();
 
+export const workerTaskTriggerSchema = z.object({
+  id: z.string(),
+  type: z.enum(["event", "cron"]),
+  value: z.string().optional(),
+});
+export type WorkerTaskTrigger = z.infer<typeof workerTaskTriggerSchema>;
+
+export const workerTaskSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string().optional(),
+  triggers: z.array(workerTaskTriggerSchema).optional(),
+  inputSchema: schemaModelSchema.optional(),
+  outputSchema: schemaModelSchema.optional(),
+  retryPolicy: z.string().optional(),
+  timeout: z.string().optional(),
+});
+export type WorkerTask = z.infer<typeof workerTaskSchema>;
+
 // --- Worker Node ---
 export const workerDataSchema = baseNodeDataSchema.extend({
   description:   z.string().optional(),
   // Core Resources
-  tasks:         z.array(resourceItemSchema).optional(),
+  tasks:         z.array(workerTaskSchema).optional(),
   // Implementation
   queueSources:  z.array(z.string()).optional(),          // IDs of broker nodes it pulls from
   // Configuration (Advanced)

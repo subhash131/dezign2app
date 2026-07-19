@@ -31,6 +31,10 @@ export type HandleKind =
   // --- External API actions ---
   | "action-target"
 
+  // --- Worker Tasks ---
+  | "task-in"
+  | "task-out"
+
   // --- Fallback ---
   | "unknown";
 
@@ -50,8 +54,8 @@ export type ValidationResult =
 export type BackendCanvasView = "graph" | "sequence" | "schema";
 
 // --- Backend Canvas Types ---
-import type { KafkaTopic, KafkaBrokerConfig, Endpoint, ServiceNodeData, ProcessingStep } from "./schemas";
-export type { KafkaTopic, KafkaBrokerConfig, Endpoint, ServiceNodeData, ProcessingStep };
+import type { KafkaTopic, KafkaBrokerConfig, Endpoint, ServiceNodeData, ProcessingStep, WorkerTask } from "./schemas";
+export type { KafkaTopic, KafkaBrokerConfig, Endpoint, ServiceNodeData, ProcessingStep, WorkerTask };
 
 export type RedisStream = {
   id: string;
@@ -242,7 +246,7 @@ export type BackendNode = {
       endpoints: Endpoint[];
     }[];
     // --- Worker Node ---
-    tasks?: { id: string; name: string }[];
+    tasks?: WorkerTask[];
     queueSources?: string[];
     concurrency?: number;
     retryPolicy?: string;
