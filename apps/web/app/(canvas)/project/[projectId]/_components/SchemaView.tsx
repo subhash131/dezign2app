@@ -9,13 +9,14 @@ import {
   useReactFlow,
 } from "@xyflow/react";
 import { Button } from "@workspace/ui/components/button";
-import { PlusSquare, LayoutGrid, Database } from "lucide-react";
+import { PlusSquare, LayoutGrid, Database, LayoutTemplate } from "lucide-react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { nodeTypes } from "./backend-nodes/Nodes";
 import { ForeignKeyEdge } from "./backend-nodes/ForeignKeyEdge";
 import { HTTPConnectionEdge, MessagingEdge } from "./backend-nodes/CustomEdges";
 import { isValidConnection } from "@workspace/canvas";
 import { getOffsetPosition, useCanvasHandlers } from "./hooks/useCanvasHandlers";
+import { useAutoLayout } from "./hooks/useAutoLayout";
 
 const edgeTypes = {
   "foreign-key": ForeignKeyEdge,
@@ -39,6 +40,7 @@ export function SchemaView({ projectId }: SchemaViewProps) {
   
   const { handleNodesChange, handleMoveEnd } = useCanvasHandlers(projectId, "schema");
   const { screenToFlowPosition } = useReactFlow();
+  const { handleLayout } = useAutoLayout();
 
   const getCenterPosition = () => {
     if (typeof window === "undefined") return { x: 100, y: 100 };
@@ -108,18 +110,16 @@ export function SchemaView({ projectId }: SchemaViewProps) {
         <Controls />
         <MiniMap />
         <Panel position="top-right" className="flex gap-2 flex-col">
-          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs" onClick={handleAddTable}>
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start" onClick={handleAddTable}>
             <PlusSquare className="w-3.5 h-3.5 mr-2" />
             Table
           </Button>
-          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs" onClick={handleAddVectorDb}>
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start" onClick={handleAddVectorDb}>
             <Database className="w-3.5 h-3.5 mr-2 text-violet-500" />
             Vector Collection
           </Button>
-          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs" onClick={() => {
-             // runAutoLayout()
-          }}>
-            <LayoutGrid className="w-3.5 h-3.5 mr-2" />
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start" onClick={() => handleLayout("LR")}>
+            <LayoutTemplate className="w-3.5 h-3.5 mr-2" />
             Auto-layout
           </Button>
         </Panel>

@@ -22,7 +22,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@workspace/ui/components/alert-dialog";
-import { Globe, Server, Waves, GitBranch, Radio, Database, LayoutGrid, ChevronRight, TerminalSquare, Plus, PenLine, Trash, UploadCloud, Layers, HardDrive, Cog, Zap, Search, Network, Scale, Webhook, Brain, Boxes, EllipsisVertical } from "lucide-react";
+import { Globe, Server, Waves, GitBranch, Radio, Database, LayoutGrid, ChevronRight, TerminalSquare, Plus, PenLine, Trash, UploadCloud, Layers, HardDrive, Cog, Zap, Search, Network, Scale, Webhook, Brain, Boxes, EllipsisVertical, LayoutTemplate } from "lucide-react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useSimulationStore } from "@/lib/stores/simulationStore";
 import { useMutation } from "convex/react";
@@ -35,6 +35,7 @@ import { isValidConnection } from "@workspace/canvas";
 import { BackendNode } from "@/types/canvas";
 import { SimulationTerminal } from "./SimulationTerminal";
 import { getOffsetPosition, useCanvasHandlers } from "./hooks/useCanvasHandlers";
+import { useAutoLayout } from "./hooks/useAutoLayout";
 
 const edgeTypes = {
   "foreign-key": ForeignKeyEdge,
@@ -71,6 +72,7 @@ export function GraphView({ projectId }: GraphViewProps) {
 
   const { handleNodesChange, handleMoveEnd } = useCanvasHandlers(projectId, "graph");
   const { screenToFlowPosition } = useReactFlow();
+  const { handleLayout } = useAutoLayout();
 
   const getCenterPosition = () => {
     if (typeof window === "undefined") return { x: 100, y: 100 };
@@ -229,6 +231,7 @@ export function GraphView({ projectId }: GraphViewProps) {
                 <EllipsisVertical className="h-4 w-4 transition-transform duration-300 group-hover:rotate-180" />
               </Button>
               <div className="flex items-center gap-2 max-w-0 opacity-0 overflow-hidden transition-all duration-300 ease-in-out group-hover:max-w-[200px] group-hover:opacity-100 group-hover:ml-2">
+
                 <Button variant="outline" size="sm" className="h-7 px-2 shrink-0 bg-background text-xs" onClick={simulation.toggleTerminal}>
                   <TerminalSquare className="h-3.5 w-3.5" />
                 </Button>
@@ -270,6 +273,12 @@ export function GraphView({ projectId }: GraphViewProps) {
               </div>
             </div>
           </div>
+        </Panel>
+        <Panel position="top-right" className="flex gap-2 flex-col">
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs" onClick={() => handleLayout("TB")}>
+            <LayoutTemplate className="w-3.5 h-3.5 mr-2" />
+            Auto-layout
+          </Button>
         </Panel>
         <Panel position="bottom-center">
           <SimulationTerminal />
