@@ -11,3 +11,14 @@ export { RedisPubSubNode } from "./RedisPubSubNode";
 export { DatabaseTableRefNode } from "./DatabaseTableRefNode";
 export { RedisCacheNode } from "./RedisCacheNode";
 export { StorageNode } from "./StorageNode";
+// New nodes
+export { WorkerNode } from "./WorkerNode";
+export { ServerlessNode } from "./ServerlessNode";
+export { VectorDBNode } from "./VectorDBNode";
+export { SearchIndexNode } from "./SearchIndexNode";
+export { APIGatewayNode } from "./APIGatewayNode";
+export { LoadBalancerNode } from "./LoadBalancerNode";
+export { WebhookNode } from "./WebhookNode";
+export { LLMNode } from "./LLMNode";
+export { MCPServerNode } from "./MCPServerNode";
+

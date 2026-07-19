@@ -22,7 +22,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@workspace/ui/components/alert-dialog";
-import { Globe, Server, Waves, GitBranch, Radio, Database, LayoutGrid, ChevronRight, TerminalSquare, Plus, PenLine, Trash, UploadCloud, Layers, HardDrive } from "lucide-react";
+import { Globe, Server, Waves, GitBranch, Radio, Database, LayoutGrid, ChevronRight, TerminalSquare, Plus, PenLine, Trash, UploadCloud, Layers, HardDrive, Cog, Zap, Search, Network, Scale, Webhook, Brain, Boxes, EllipsisVertical } from "lucide-react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useSimulationStore } from "@/lib/stores/simulationStore";
 import { useMutation } from "convex/react";
@@ -80,7 +80,7 @@ export function GraphView({ projectId }: GraphViewProps) {
     });
   };
 
-  const handleAddGraphNode = (type: "service" | "db_ref" | "queue" | "pubsub" | "eventstream" | "kafka" | "redis-streams" | "sqs" | "redis-pubsub" | "redis-cache" | "webClient" | "external" | "storage", label: string) => {
+  const handleAddGraphNode = (type: "service" | "db_ref" | "queue" | "pubsub" | "eventstream" | "kafka" | "redis-streams" | "sqs" | "redis-pubsub" | "redis-cache" | "webClient" | "external" | "storage" | "worker" | "serverless" | "vector_db" | "search_index" | "api_gateway" | "load_balancer" | "webhook" | "llm" | "mcp_server", label: string) => {
     const center = getCenterPosition();
     const { x, y } = getOffsetPosition(center.x - 100, center.y - 100, nodes);
     addNode({
@@ -102,6 +102,15 @@ export function GraphView({ projectId }: GraphViewProps) {
         kafkaBroker: type === 'kafka' ? {} : undefined,
         redisBroker: type === 'redis-streams' ? {} : undefined,
         sqsBroker: type === 'sqs' ? {} : undefined,
+        tasks: type === 'worker' ? [] : undefined,
+        endpoints: type === 'serverless' ? [] : undefined,
+        collections: type === 'vector_db' ? [] : undefined,
+        searchIndexes: type === 'search_index' ? [] : undefined,
+        routes: type === 'api_gateway' ? [] : undefined,
+        targetGroups: type === 'load_balancer' ? [] : undefined,
+        prompts: (type === 'llm' || type === 'mcp_server') ? [] : undefined,
+        tools: (type === 'llm' || type === 'mcp_server') ? [] : undefined,
+        resources: type === 'mcp_server' ? [] : undefined,
       },
     });
   };
@@ -195,7 +204,7 @@ export function GraphView({ projectId }: GraphViewProps) {
         <Background gap={12} size={1} />
         <Controls />
         <MiniMap />
-        <Panel position="top-left">
+        <Panel position="top-center">
           <div className="flex items-center gap-2 rounded-lg border bg-background/95 p-2 shadow-sm backdrop-blur">
             <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Test case</span>
             <Select
@@ -218,7 +227,7 @@ export function GraphView({ projectId }: GraphViewProps) {
             </Select>
             <div className="group flex items-center overflow-hidden transition-all duration-300">
               <Button variant="outline" size="sm" className="h-7 w-7 p-0 shrink-0 bg-background text-xs cursor-default">
-                <ChevronRight className="h-4 w-4 transition-transform duration-300 group-hover:rotate-180" />
+                <EllipsisVertical className="h-4 w-4 transition-transform duration-300 group-hover:rotate-180" />
               </Button>
               <div className="flex items-center gap-2 max-w-0 opacity-0 overflow-hidden transition-all duration-300 ease-in-out group-hover:max-w-[200px] group-hover:opacity-100 group-hover:ml-2">
                 <Button variant="outline" size="sm" className="h-7 px-2 shrink-0 bg-background text-xs" onClick={simulation.toggleTerminal}>
@@ -266,57 +275,99 @@ export function GraphView({ projectId }: GraphViewProps) {
         <Panel position="bottom-center">
           <SimulationTerminal />
         </Panel>
-        <Panel position="top-right" className="flex gap-1.5 flex-col bg-background/95 backdrop-blur border rounded-lg p-2.5 shadow-md max-w-[180px]">
+        <Panel position="top-left" className="flex gap-1.5 flex-col bg-background/95 backdrop-blur border rounded-lg p-2.5 shadow-md max-w-[190px] max-h-[calc(100vh-120px)] overflow-y-auto overflow-x-hidden hide-scrollbar">
+          {/* COMPUTING */}
           <div className="text-[9px] uppercase font-extrabold text-muted-foreground/60 px-1 pt-1 pb-1">Computing</div>
-          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8" onClick={() => handleAddGraphNode('webClient', 'New Client')}>
-            <Globe className="w-3.5 h-3.5 mr-2" />
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0" onClick={() => handleAddGraphNode('webClient', 'Client')}>
+            <Globe className="w-3.5 h-3.5 mr-2 shrink-0" />
             Client
           </Button>
-          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8" onClick={() => handleAddGraphNode('service', 'New Service')}>
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0" onClick={() => handleAddGraphNode('service', 'Service')}>
             <Server className="w-3.5 h-3.5 mr-2" />
             Service
           </Button>
-          
-          <div className="text-[9px] uppercase font-extrabold text-muted-foreground/60 px-1 pt-2 pb-1 border-t mt-1">Messaging & Streaming</div>
-          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8" onClick={() => handleAddGraphNode('kafka', 'New Kafka Broker')}>
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0" onClick={() => handleAddGraphNode('worker', 'Worker')}>
+            <Cog className="w-3.5 h-3.5 mr-2 text-amber-500" />
+            Worker
+          </Button>
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0" onClick={() => handleAddGraphNode('serverless', 'Serverless Fn')}>
+            <Zap className="w-3.5 h-3.5 mr-2 text-yellow-500" />
+            Serverless Fn
+          </Button>
+
+          {/* MESSAGING */}
+          <div className="text-[9px] uppercase font-extrabold text-muted-foreground/60 px-1 pt-2 pb-1 border-t mt-1">Messaging</div>
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0" onClick={() => handleAddGraphNode('kafka', 'Kafka')}>
             <Waves className="w-3.5 h-3.5 mr-2 text-emerald-500" />
             Kafka
           </Button>
-          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8" onClick={() => handleAddGraphNode('redis-streams', 'New Redis Streams Broker')}>
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0" onClick={() => handleAddGraphNode('redis-streams', 'Redis Streams')}>
             <Waves className="w-3.5 h-3.5 mr-2 text-rose-500" />
             Redis Streams
           </Button>
-          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8" onClick={() => handleAddGraphNode('sqs', 'New Amazon SQS')}>
-            <GitBranch className="w-3.5 h-3.5 mr-2 text-orange-500" />
-            Amazon SQS
-          </Button>
-          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8" onClick={() => handleAddGraphNode('redis-pubsub', 'New Redis Pub/Sub')}>
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0" onClick={() => handleAddGraphNode('redis-pubsub', 'Redis Pub/Sub')}>
             <Radio className="w-3.5 h-3.5 mr-2 text-red-500" />
-            Redis Pub/Sub
+            Pub/Sub
+          </Button>
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0" onClick={() => handleAddGraphNode('sqs', 'Queue')}>
+            <GitBranch className="w-3.5 h-3.5 mr-2 text-orange-500" />
+            Queue (SQS)
           </Button>
 
-          <div className="text-[9px] uppercase font-extrabold text-muted-foreground/60 px-1 pt-2 pb-1 border-t mt-1">Storage & External</div>
-          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8" onClick={() => handleAddGraphNode('storage', 'New Storage')}>
-            <HardDrive className="w-3.5 h-3.5 mr-2 text-amber-500" />
-            Storage Node
-          </Button>
-          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8" onClick={() => handleAddGraphNode('db_ref', 'Table Ref')}>
+          {/* STORAGE */}
+          <div className="text-[9px] uppercase font-extrabold text-muted-foreground/60 px-1 pt-2 pb-1 border-t mt-1">Storage</div>
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0" onClick={() => handleAddGraphNode('db_ref', 'Database')}>
             <Database className="w-3.5 h-3.5 mr-2" />
-            DB Ref
+            Database
           </Button>
-          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8" onClick={() => handleAddGraphNode('redis-cache', 'New Redis Cache')}>
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0" onClick={() => handleAddGraphNode('redis-cache', 'Cache')}>
             <Database className="w-3.5 h-3.5 mr-2 text-red-500" />
-            Redis Cache
+            Cache
           </Button>
-          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8" onClick={() => handleAddGraphNode('external', 'New API')}>
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0" onClick={() => handleAddGraphNode('storage', 'Storage Bucket')}>
+            <HardDrive className="w-3.5 h-3.5 mr-2 text-amber-500" />
+            Storage Bucket
+          </Button>
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0" onClick={() => handleAddGraphNode('vector_db', 'Vector DB')}>
+            <Database className="w-3.5 h-3.5 mr-2 text-violet-500" />
+            Vector DB
+          </Button>
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0" onClick={() => handleAddGraphNode('search_index', 'Search Index')}>
+            <Search className="w-3.5 h-3.5 mr-2 text-sky-500" />
+            Search Index
+          </Button>
+
+          {/* NETWORK */}
+          <div className="text-[9px] uppercase font-extrabold text-muted-foreground/60 px-1 pt-2 pb-1 border-t mt-1">Network</div>
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0" onClick={() => handleAddGraphNode('api_gateway', 'API Gateway')}>
+            <Network className="w-3.5 h-3.5 mr-2 text-teal-500" />
+            API Gateway
+          </Button>
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0" onClick={() => handleAddGraphNode('load_balancer', 'Load Balancer')}>
+            <Scale className="w-3.5 h-3.5 mr-2 text-slate-500" />
+            Load Balancer
+          </Button>
+
+          {/* EXTERNAL */}
+          <div className="text-[9px] uppercase font-extrabold text-muted-foreground/60 px-1 pt-2 pb-1 border-t mt-1">External</div>
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0" onClick={() => handleAddGraphNode('external', 'External API')}>
             <Globe className="w-3.5 h-3.5 mr-2" />
-            External
+            External API
           </Button>
-          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start mt-2" onClick={() => {
-             // runAutoLayout()
-          }}>
-            <LayoutGrid className="w-3.5 h-3.5 mr-2" />
-            Auto-layout
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0" onClick={() => handleAddGraphNode('webhook', 'Webhook')}>
+            <Webhook className="w-3.5 h-3.5 mr-2 text-pink-500" />
+            Webhook
+          </Button>
+
+          {/* AI */}
+          <div className="text-[9px] uppercase font-extrabold text-muted-foreground/60 px-1 pt-2 pb-1 border-t mt-1">AI</div>
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0" onClick={() => handleAddGraphNode('llm', 'LLM')}>
+            <Brain className="w-3.5 h-3.5 mr-2 text-purple-500" />
+            LLM
+          </Button>
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0" onClick={() => handleAddGraphNode('mcp_server', 'MCP Server')}>
+            <Boxes className="w-3.5 h-3.5 mr-2 text-indigo-500" />
+            MCP Server
           </Button>
         </Panel>
       </ReactFlow>

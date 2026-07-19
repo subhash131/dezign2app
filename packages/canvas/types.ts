@@ -113,7 +113,17 @@ export type BackendNodeType =
   | "external"
   | "group"
   | "db_ref"
-  | "storage";
+  | "storage"
+  // New node types
+  | "worker"
+  | "serverless"
+  | "vector_db"
+  | "search_index"
+  | "api_gateway"
+  | "load_balancer"
+  | "webhook"
+  | "llm"
+  | "mcp_server";
 
 export type BackendNode = {
   id: string;
@@ -139,7 +149,7 @@ export type BackendNode = {
     parentId?: string;
     position?: { x: number; y: number };
     // New fields for Graph tab detailed nodes
-    events?: UIEventItem[];
+    events?: UIEventItem[] | { id: string; name: string }[];
     inputs?: { id: string; name: string }[];
     logic?: { id: string; name: string }[];
     outputs?: { id: string; name: string }[];
@@ -228,6 +238,49 @@ export type BackendNode = {
       basePath: string;
       endpoints: Endpoint[];
     }[];
+    // --- Worker Node ---
+    tasks?: { id: string; name: string }[];
+    queueSources?: string[];
+    concurrency?: number;
+    retryPolicy?: string;
+    maxRetries?: number;
+    // --- Serverless Node ---
+    triggerType?: "HTTP" | "Event" | "CRON" | "Queue";
+    runtime?: string;
+    memoryMb?: number;
+    timeoutSec?: number;
+    // --- Vector DB Node ---
+    collections?: { id: string; name: string }[];
+    dimensions?: number;
+    metric?: "Cosine" | "Dot Product" | "Euclidean";
+    embeddingModel?: string;
+    // --- Search Index Node ---
+    searchIndexes?: { id: string; name: string }[];
+    analyzer?: string;
+    // --- API Gateway Node ---
+    routes?: { id: string; name: string }[];
+    authType?: string;
+    // --- Load Balancer Node ---
+    targetGroups?: { id: string; name: string }[];
+    algorithm?: string;
+    healthCheckPath?: string;
+    // --- Webhook Node ---
+    // (events field already declared; authentication below)
+    // --- LLM Node ---
+    prompts?: { id: string; name: string }[];
+    model?: string;
+    temperature?: number;
+    maxTokens?: number;
+    structuredOutput?: boolean;
+    toolCalling?: boolean;
+    tools?: { id: string; name: string }[];
+    // --- MCP Server Node ---
+    // (tools/prompts declared above)
+    resources?: { id: string; name: string }[];
+    connectionType?: "stdio" | "SSE" | "HTTP";
+    // --- Shared fields for new nodes ---
+    authentication?: string;
+    tags?: string[];
   };
   fractionalIndex: string; // For Z-order
   parentId?: string;
