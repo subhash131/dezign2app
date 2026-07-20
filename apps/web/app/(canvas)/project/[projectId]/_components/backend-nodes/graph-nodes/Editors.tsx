@@ -2,6 +2,7 @@ import React from "react";
 import { Plus, X, Text } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@workspace/ui/components/select";
+import { Combobox, ComboboxInput, ComboboxContent, ComboboxList, ComboboxItem, ComboboxEmpty } from "@workspace/ui/components/combobox";
 import { Parameter, Schema, ProcessingStep } from "@/types/canvas";
 import { generateId, LocalInput, LocalTextarea } from "./shared";
 
@@ -89,11 +90,13 @@ export const ProcessingStepsEditor = ({ steps, onChange }: { steps: ProcessingSt
 export const ParameterEditor = ({ 
   title, 
   parameters, 
-  onChange 
+  onChange,
+  fieldOptions,
 }: { 
   title: string, 
   parameters: Parameter[], 
-  onChange: (params: Parameter[]) => void 
+  onChange: (params: Parameter[]) => void,
+  fieldOptions?: string[],
 }) => {
   const addParam = () => {
     onChange([...parameters, { id: generateId(), name: "", type: "string", required: true }]);
@@ -120,12 +123,24 @@ export const ParameterEditor = ({
         {parameters.map((p) => (
           <div key={p.id} className="flex flex-col gap-2 rounded-lg border bg-background/50 p-2.5 relative group/param transition-all hover:border-primary/30 hover:shadow-sm">
             <div className="flex items-center gap-2">
-              <LocalInput 
-                className="h-7 text-xs flex-1 nodrag bg-background font-mono border-none shadow-none focus-visible:ring-1 placeholder:font-sans" 
-                placeholder="Field name" 
-                value={p.name || ""} 
-                onBlur={e => updateParam(p.id, { name: e.target.value })} 
-              />
+              {fieldOptions ? (
+                <Combobox value={p.name || ""} onValueChange={(value) => { if (value !== null) updateParam(p.id, { name: value }); }}>
+                  <ComboboxInput className="h-7 text-xs flex-1 nodrag bg-background font-mono border-none shadow-none focus-visible:ring-1" placeholder="Select table field" />
+                  <ComboboxContent>
+                    <ComboboxList>
+                      <ComboboxEmpty className="bg-sidebar">No fields found on the selected table.</ComboboxEmpty>
+                      {fieldOptions.map((field) => <ComboboxItem key={field} value={field}>{field}</ComboboxItem>)}
+                    </ComboboxList>
+                  </ComboboxContent>
+                </Combobox>
+              ) : (
+                <LocalInput 
+                  className="h-7 text-xs flex-1 nodrag bg-background font-mono border-none shadow-none focus-visible:ring-1 placeholder:font-sans" 
+                  placeholder="Field name" 
+                  value={p.name || ""} 
+                  onBlur={e => updateParam(p.id, { name: e.target.value })} 
+                />
+              )}
               <Select value={p.type} onValueChange={v => updateParam(p.id, { type: v })}>
                 <SelectTrigger className="h-7 w-[95px] text-xs py-0 nodrag bg-secondary/50 border-none font-mono">
                   <SelectValue />
@@ -181,17 +196,20 @@ export const SchemaEditor = ({
   title,
   schema,
   onChange,
+  fieldOptions,
 }: {
   title: string;
   schema: Schema | undefined;
   onChange: (schema: Schema) => void;
+  fieldOptions?: string[];
 }) => {
   const safeSchema = schema || { id: generateId(), fields: [] };
   return (
     <ParameterEditor 
       title={title} 
       parameters={safeSchema.fields} 
-      onChange={(fields) => onChange({ ...safeSchema, fields })} 
+      onChange={(fields) => onChange({ ...safeSchema, fields })}
+      fieldOptions={fieldOptions}
     />
   );
 };

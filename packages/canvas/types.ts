@@ -58,8 +58,8 @@ export type ValidationResult =
 export type BackendCanvasView = "graph" | "sequence" | "schema";
 
 // --- Backend Canvas Types ---
-import type { KafkaTopic, KafkaBrokerConfig, Endpoint, ServiceNodeData, ProcessingStep, WorkerTask } from "./schemas";
-export type { KafkaTopic, KafkaBrokerConfig, Endpoint, ServiceNodeData, ProcessingStep, WorkerTask };
+import type { KafkaTopic, KafkaBrokerConfig, Endpoint, ServiceNodeData, ProcessingStep, WorkerTask, SearchIndexItem, SearchSource } from "./schemas";
+export type { KafkaTopic, KafkaBrokerConfig, Endpoint, ServiceNodeData, ProcessingStep, WorkerTask, SearchIndexItem, SearchSource };
 
 export type RedisStream = {
   id: string;
@@ -290,6 +290,7 @@ export type BackendNode = {
       fileDescription?: string;
       manualDetails?: string;
     }[];
+    searchSources?: SearchSource[];
     analyzer?: string;
     shards?: number;
     replicas?: number;

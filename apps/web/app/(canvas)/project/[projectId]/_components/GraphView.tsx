@@ -106,7 +106,7 @@ export function GraphView({ projectId }: GraphViewProps) {
         sqsBroker: type === 'sqs' ? {} : undefined,
         tasks: type === 'worker' ? [] : undefined,
         endpoints: type === 'serverless' ? [] : undefined,
-        searchIndexes: type === 'search_index' ? [] : undefined,
+        searchSources: type === 'search_index' ? [] : undefined,
         routes: type === 'api_gateway' ? [] : undefined,
         targetGroups: type === 'load_balancer' ? [] : undefined,
         prompts: (type === 'llm' || type === 'mcp_server') ? [] : undefined,

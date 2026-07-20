@@ -1,125 +1,160 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { NodeProps, Handle, Position } from "@xyflow/react";
 import { Search, ChevronDown, ChevronUp, Settings, Plus, X, Check } from "lucide-react";
-import { BackendNode } from "@/types/canvas";
+import { BackendNode, SearchSource } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { Label } from "@workspace/ui/components/label";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
-import { NodeHeader, LocalInput, generateId } from "./shared";
+import { NodeHeader, generateId } from "./shared";
 import { Textarea } from "@workspace/ui/components/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@workspace/ui/components/select";
 import { Input } from "@workspace/ui/components/input";
 import { Button } from "@workspace/ui/components/button";
+import { Combobox, ComboboxInput, ComboboxContent, ComboboxList, ComboboxItem, ComboboxEmpty } from "@workspace/ui/components/combobox";
 
-export const SearchIndexNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
+const tableRefTypes = new Set(["db_ref"]);
+
+function migrateLegacyIndexes(data: BackendNode["data"]): SearchSource[] {
+  const groups = new Map<string, SearchSource>();
+  for (const legacy of data.searchIndexes || []) {
+    if (!legacy.dbTable) continue;
+    const source = groups.get(legacy.dbTable) || { id: generateId(), sourceType: "Database", dbTable: legacy.dbTable, dbPrimaryKey: legacy.dbPrimaryKey, dbSyncMode: legacy.dbSyncMode, indexes: [] };
+    source.indexes.push({ id: legacy.id || generateId(), name: legacy.name || "", description: legacy.description, analyzer: legacy.analyzer, schema: legacy.schema });
+    groups.set(legacy.dbTable, source);
+  }
+  return [...groups.values()];
+}
+
+export const SearchIndexNode = ({
+  id,
+  data,
+  selected,
+}: NodeProps<BackendNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const advancedFields: {
+    label: string;
+    key: "analyzer" | "shards" | "replicas" | "refreshInterval";
+    placeholder: string;
+  }[] = [
+    { label: "Analyzer", key: "analyzer", placeholder: "standard" },
+    { label: "Shards", key: "shards", placeholder: "1" },
+    { label: "Replicas", key: "replicas", placeholder: "1" },
+    { label: "Refresh Interval", key: "refreshInterval", placeholder: "1s" },
+  ];
+
+  useEffect(() => {
+    if (!data.searchSources && data.searchIndexes?.length)
+      updateNode(id, {
+        data: {
+          ...data,
+          searchSources: migrateLegacyIndexes(data),
+          searchIndexes: undefined,
+        },
+      });
+  }, []);
 
   return (
-    <div className={cn("shadow-md rounded-xl bg-card border-2 min-w-[260px] max-w-[360px] flex flex-col", selected ? "border-primary" : "border-border")}>
-      <NodeHeader id={id} data={data} icon={Search} title="Search Index" colorClass="bg-sky-500/10 text-sky-700 dark:text-sky-400" selected={selected} />
-
-      {/* Description */}
+    <div
+      className={cn(
+        "shadow-md rounded-xl bg-card border-2 min-w-[260px] max-w-[360px] flex flex-col",
+        selected ? "border-primary" : "border-border"
+      )}
+    >
+      <NodeHeader
+        id={id}
+        data={data}
+        icon={Search}
+        title="Search Index"
+        colorClass="bg-sky-500/10 text-sky-700 dark:text-sky-400"
+        selected={selected}
+      />
       <div className="px-3 py-2 bg-secondary/5 border-b nodrag">
         <Textarea
           className="min-h-[20px] text-xs bg-transparent border-none shadow-none p-1 resize-none focus-visible:ring-0 placeholder:text-muted-foreground/50"
           placeholder="description"
           value={data.description || ""}
-          onChange={(e) => updateNode(id, { data: { ...data, description: e.target.value } })}
+          onChange={(e) =>
+            updateNode(id, { data: { ...data, description: e.target.value } })
+          }
         />
       </div>
-
-      {/* Implementation */}
       <div className="px-3 py-2 border-b nodrag flex items-center gap-2">
-        <Label className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider shrink-0">Implementation</Label>
+        <Label className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider shrink-0">
+          Implementation
+        </Label>
         <Select
           value={data.implementation || ""}
-          onValueChange={(v) => updateNode(id, { data: { ...data, implementation: v } })}
+          onValueChange={(v) =>
+            updateNode(id, { data: { ...data, implementation: v } })
+          }
         >
-          <SelectTrigger className="h-6 text-xs flex-1"><SelectValue placeholder="Select..." /></SelectTrigger>
+          <SelectTrigger className="h-6 text-xs flex-1">
+            <SelectValue placeholder="Select..." />
+          </SelectTrigger>
           <SelectContent>
-            <SelectItem value="Elasticsearch" className="text-xs">Elasticsearch</SelectItem>
-            <SelectItem value="OpenSearch" className="text-xs">OpenSearch</SelectItem>
-            <SelectItem value="Algolia" className="text-xs">Algolia</SelectItem>
-            <SelectItem value="Meilisearch" className="text-xs">Meilisearch</SelectItem>
-            <SelectItem value="Typesense" className="text-xs">Typesense</SelectItem>
-            <SelectItem value="Other" className="text-xs">Other</SelectItem>
+            {[
+              "Elasticsearch",
+              "OpenSearch",
+              "Algolia",
+              "Meilisearch",
+              "Typesense",
+              "Other",
+            ].map((v) => (
+              <SelectItem key={v} value={v} className="text-xs">
+                {v}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
-
-      {/* Indexes */}
-      <SearchIndexList nodeId={id} indexes={data.searchIndexes || []} data={data} updateNode={updateNode} />
-
-      {/* Advanced */}
+      <SearchSourceList
+        nodeId={id}
+        sources={data.searchSources || []}
+        data={data}
+        updateNode={updateNode}
+      />
       <div className="p-3 bg-secondary/10 flex flex-col gap-3 rounded-b-xl">
         <div
           className="flex items-center justify-between cursor-pointer group"
           onClick={() => setAdvancedOpen(!advancedOpen)}
         >
-          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider group-hover:text-foreground transition-colors">Advanced</span>
-          <div className="p-0.5 rounded hover:bg-secondary text-muted-foreground group-hover:text-foreground transition-all">
-            {advancedOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-          </div>
+          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+            Advanced
+          </span>
+          {advancedOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
         </div>
         {advancedOpen && (
           <div className="flex flex-col gap-2.5 pt-2 border-t border-border/50 nodrag">
-            <div className="flex items-center justify-between gap-2">
-              <Label className="text-[10px] shrink-0 text-muted-foreground uppercase font-bold tracking-wider">Analyzer</Label>
-              <Input
-                className="h-6 text-xs w-[160px] bg-background"
-                placeholder="standard"
-                value={data.analyzer || ""}
-                onChange={(e) => updateNode(id, { data: { ...data, analyzer: e.target.value } })}
-              />
-            </div>
-            
-            <div className="flex items-center justify-between gap-2">
-              <Label className="text-[10px] shrink-0 text-muted-foreground uppercase font-bold tracking-wider">Shards</Label>
-              <Input
-                type="number"
-                className="h-6 text-xs w-[160px] bg-background"
-                placeholder="1"
-                value={data.shards || ""}
-                onChange={(e) => updateNode(id, { data: { ...data, shards: parseInt(e.target.value) || undefined } })}
-              />
-            </div>
-
-            <div className="flex items-center justify-between gap-2">
-              <Label className="text-[10px] shrink-0 text-muted-foreground uppercase font-bold tracking-wider">Replicas</Label>
-              <Input
-                type="number"
-                className="h-6 text-xs w-[160px] bg-background"
-                placeholder="1"
-                value={data.replicas || ""}
-                onChange={(e) => updateNode(id, { data: { ...data, replicas: parseInt(e.target.value) || undefined } })}
-              />
-            </div>
-
-            <div className="flex items-center justify-between gap-2">
-              <Label className="text-[10px] shrink-0 text-muted-foreground uppercase font-bold tracking-wider">Refresh Interval</Label>
-              <Input
-                className="h-6 text-xs w-[160px] bg-background"
-                placeholder="1s"
-                value={data.refreshInterval || ""}
-                onChange={(e) => updateNode(id, { data: { ...data, refreshInterval: e.target.value } })}
-              />
-            </div>
-
-            <div className="flex items-center justify-between gap-2">
-              <Label className="text-[10px] shrink-0 text-muted-foreground uppercase font-bold tracking-wider">Reindex Strategy</Label>
-              <Select
-                value={data.reindexStrategy || ""}
-                onValueChange={(v) => updateNode(id, { data: { ...data, reindexStrategy: v } })}
+            {advancedFields.map(({ label, key, placeholder }) => (
+              <div
+                key={key}
+                className="flex items-center justify-between gap-2"
               >
-                <SelectTrigger className="h-6 text-xs w-[160px] bg-background"><SelectValue placeholder="None" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="None" className="text-xs">None</SelectItem>
-                  <SelectItem value="Incremental" className="text-xs">Incremental</SelectItem>
-                  <SelectItem value="Batch" className="text-xs">Batch</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+                <Label className="text-[10px] shrink-0 text-muted-foreground uppercase font-bold tracking-wider">
+                  {label}
+                </Label>
+                <Input
+                  type={
+                    key === "shards" || key === "replicas" ? "number" : "text"
+                  }
+                  className="h-6 text-xs w-[160px] bg-background"
+                  placeholder={placeholder}
+                  value={data[key] || ""}
+                  onChange={(e) =>
+                    updateNode(id, {
+                      data: {
+                        ...data,
+                        [key]:
+                          key === "shards" || key === "replicas"
+                            ? parseInt(e.target.value) || undefined
+                            : e.target.value,
+                      },
+                    })
+                  }
+                />
+              </div>
+            ))}
           </div>
         )}
       </div>
@@ -127,109 +162,323 @@ export const SearchIndexNode = ({ id, data, selected }: NodeProps<BackendNode>) 
   );
 };
 
-// --- Custom Index List for SearchIndexNode ---
-const SearchIndexList = ({ nodeId, indexes, data, updateNode }: { nodeId: string, indexes: any[], data: any, updateNode: any }) => {
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingName, setEditingName] = useState("");
-  const setActiveConfigItem = useBackendCanvasStore(s => s.setActiveConfigItem);
 
-  const handleAdd = () => {
-    const newItems = [...indexes, { id: generateId(), name: "" }];
-    updateNode(nodeId, { data: { ...data, searchIndexes: newItems } });
-    setEditingId(newItems[newItems.length - 1]!.id);
-    setEditingName("");
+const SearchSourceList = ({
+  nodeId,
+  sources,
+  data,
+  updateNode,
+}: {
+  nodeId: string;
+  sources: SearchSource[];
+  data: BackendNode["data"];
+  updateNode: (id: string, changes: Partial<BackendNode>) => void;
+}) => {
+  const nodes = useBackendCanvasStore((s) => s.nodes);
+  const setActiveConfigItem = useBackendCanvasStore(
+    (s) => s.setActiveConfigItem
+  );
+  const [addingSource, setAddingSource] = useState(false);
+  const [newTable, setNewTable] = useState("");
+  const [editing, setEditing] = useState<string | null>(null);
+  const [name, setName] = useState("");
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const tableRefs = nodes.filter((n) => tableRefTypes.has(n.type));
+  const availableTables = tableRefs.filter(
+    (n) => !sources.some((s) => s.dbTable === n.id)
+  );
+  const updateSources = (next: SearchSource[]) =>
+    updateNode(nodeId, { data: { ...data, searchSources: next } });
+  const tableName = (tableId: string) =>
+    tableRefs.find((n) => n.id === tableId)?.data?.label || "Untitled table";
+  const tableFields = (tableId: string) => {
+    const tableRef = tableRefs.find((node) => node.id === tableId);
+    const entity = nodes.find(
+      (node) => node.type === "entity" && node.id === tableRef?.data.tableRef
+    );
+    return entity?.data.columns?.map((column) => column.name) ?? [];
   };
-
-  const handleUpdate = (id: string, name: string) => {
-    const newItems = indexes.map((item) => item.id === id ? { ...item, name } : item);
-    updateNode(nodeId, { data: { ...data, searchIndexes: newItems } });
+  const addSource = () => {
+    if (!newTable) return;
+    const tableRef = tableRefs.find((node) => node.id === newTable);
+    const entity = nodes.find(
+      (node) => node.type === "entity" && node.id === tableRef?.data.tableRef
+    );
+    const primaryKey = entity?.data.columns?.find(
+      (column) => column.isPrimaryKey
+    )?.name;
+    updateSources([
+      ...sources,
+      {
+        id: generateId(),
+        sourceType: "Database",
+        dbTable: newTable,
+        dbPrimaryKey: primaryKey,
+        indexes: [],
+      },
+    ]);
+    setNewTable("");
+    setAddingSource(false);
   };
-
-  const handleDelete = (id: string) => {
-    const newItems = indexes.filter((item) => item.id !== id);
-    updateNode(nodeId, { data: { ...data, searchIndexes: newItems } });
+  const addIndex = (sourceId: string) => {
+    const index = { id: generateId(), name: "" };
+    updateSources(
+      sources.map((source) =>
+        source.id === sourceId
+          ? { ...source, indexes: [...source.indexes, index] }
+          : source
+      )
+    );
+    setEditing(index.id);
+    setName("");
+  };
+  const removeIndex = (sourceId: string, indexId: string) =>
+    updateSources(
+      sources.map((source) =>
+        source.id === sourceId
+          ? {
+              ...source,
+              indexes: source.indexes.filter((index) => index.id !== indexId),
+            }
+          : source
+      )
+    );
+  const commitName = (
+    sourceId: string,
+    indexId: string,
+    selectedName: string
+  ) => {
+    if (!selectedName.trim()) return;
+    updateSources(
+      sources.map((source) =>
+        source.id === sourceId
+          ? {
+              ...source,
+              indexes: source.indexes.map((index) =>
+                index.id === indexId
+                  ? { ...index, name: selectedName.trim() }
+                  : index
+              ),
+            }
+          : source
+      )
+    );
+    setEditing(null);
+    setActiveConfigItem({ type: "searchIndex", id: indexId, nodeId, sourceId });
   };
 
   return (
     <>
       <div className="px-3 py-1 bg-secondary/40 border-t border-b text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex justify-between items-center group">
-        Indexes
-        <div className="opacity-0 group-hover:opacity-100 cursor-pointer text-muted-foreground hover:text-foreground transition-all" onClick={handleAdd}>
+        Tables
+        <button
+          className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground"
+          onClick={() => setAddingSource(true)}
+        >
           <Plus size={12} />
+        </button>
+      </div>
+      {!sources.length && !addingSource && (
+        <div className="px-3 py-3 text-[11px] text-muted-foreground text-center nodrag">
+          Add one or more table references to create indexes.
+          <button
+            className="block mx-auto mt-1.5 text-sky-600 dark:text-sky-400 font-medium hover:underline"
+            onClick={() => setAddingSource(true)}
+          >
+            + Add table
+          </button>
         </div>
-      </div>
-      <div className="flex flex-col">
-        {indexes.map((item) => {
-          const isEditing = editingId === item.id;
-          return (
-            <div key={item.id} className="flex flex-col px-3 py-1.5 border-b last:border-b-0 text-xs relative group/row hover:bg-secondary/20 nodrag">
-              <Handle 
-                type="target" 
-                position={Position.Left} 
-                id={`index-in-${item.id}`} 
-                className="w-2 h-2 -left-1" 
-                style={{ top: '15px' }} 
-              />
-              <Handle 
-                type="source" 
-                position={Position.Right} 
-                id={`index-out-${item.id}`} 
-                className="w-2 h-2 -right-1" 
-                style={{ top: '15px' }} 
-              />
-              {isEditing ? (
-                 <div className="flex items-center gap-1 nodrag">
-                   <LocalInput 
-                      value={editingName} 
-                      onChange={(e) => setEditingName(e.target.value)} 
-                      className="h-6 text-xs flex-1 nodrag"
-                      placeholder="Index Name"
-                      autoFocus
-                      onKeyDown={(e: React.KeyboardEvent) => {
-                        if (e.key === "Enter") {
-                          if (!editingName.trim()) handleDelete(item.id);
-                          else {
-                            const wasEmpty = !item.name;
-                            handleUpdate(item.id, editingName.trim());
-                            if (wasEmpty) setActiveConfigItem({ type: 'searchIndex', id: item.id, nodeId });
-                          }
-                          setEditingId(null);
-                        }
-                        if (e.key === "Escape") {
-                           if (!item.name) handleDelete(item.id);
-                           setEditingId(null);
-                        }
-                      }}
-                    />
-                    <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground" onClick={() => {
-                        if (!editingName.trim()) handleDelete(item.id);
-                        else {
-                          const wasEmpty = !item.name;
-                          handleUpdate(item.id, editingName.trim());
-                          if (wasEmpty) setActiveConfigItem({ type: 'searchIndex', id: item.id, nodeId });
-                        }
-                        setEditingId(null);
-                    }}>
-                       <Check size={14} />
-                    </Button>
-                 </div>
+      )}
+      {sources.map((source) => (
+        <div key={source.id} className="border-b last:border-b-0">
+          <div className="relative flex items-center justify-between px-3 py-1.5 bg-secondary/10 group/src nodrag">
+            <Handle
+              type="target"
+              position={Position.Left}
+              id={`source-in-${source.id}`}
+              className="w-2 h-2 -left-1"
+            />
+            <div
+              className="flex items-center gap-1.5 min-w-0 cursor-pointer"
+              onClick={() =>
+                setCollapsed((current) => ({
+                  ...current,
+                  [source.id]: !current[source.id],
+                }))
+              }
+            >
+              {collapsed[source.id] ? (
+                <ChevronDown size={12} />
               ) : (
-                <div className="flex items-center justify-between w-full cursor-pointer" onClick={() => { setEditingId(item.id); setEditingName(item.name || ""); }}>
-                   <span className="font-medium truncate">{item.name}</span>
-                   <div className="flex items-center gap-1 opacity-0 group-hover/row:opacity-100 transition-all">
-                      <div className="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground" onClick={(e) => { e.stopPropagation(); setActiveConfigItem({ type: 'searchIndex', id: item.id, nodeId }); }}>
-                         <Settings size={14} />
-                      </div>
-                      <div className="p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive" onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }}>
-                         <X size={14} />
-                      </div>
-                   </div>
-                </div>
+                <ChevronUp size={12} />
               )}
+              <span className="text-xs font-medium truncate">
+                {tableName(source.dbTable)}
+              </span>
+              <span className="text-[9px] text-muted-foreground">
+                · Database
+              </span>
             </div>
-          )
-        })}
-      </div>
+            <button
+              className="opacity-0 group-hover/src:opacity-100 text-muted-foreground hover:text-destructive"
+              onClick={() =>
+                updateSources(
+                  sources.filter((candidate) => candidate.id !== source.id)
+                )
+              }
+            >
+              <X size={13} />
+            </button>
+          </div>
+          {!collapsed[source.id] && (
+            <div className="pl-4 border-l border-border/60 ml-3">
+              {source.indexes.map((item) => (
+                <div
+                  key={item.id}
+                  className="relative flex items-center px-3 py-1.5 text-xs group/row hover:bg-secondary/20 nodrag"
+                >
+                  <Handle
+                    type="source"
+                    position={Position.Right}
+                    id={`index-out-${item.id}`}
+                    className="w-2 h-2 -right-1"
+                  />
+                  {editing === item.id ? (
+                    <div className="flex items-center gap-1 w-full">
+                      <TableFieldCombobox
+                        value={name}
+                        fields={tableFields(source.dbTable)}
+                        onValueChange={(value) => {
+                          setName(value);
+                          commitName(source.id, item.id, value);
+                        }}
+                      />
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-6 w-6"
+                        disabled={!name.trim()}
+                        onClick={() => commitName(source.id, item.id, name)}
+                      >
+                        <Check size={14} />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div
+                      className="flex items-center justify-between w-full cursor-pointer"
+                      onClick={() => {
+                        setEditing(item.id);
+                        setName(item.name || "");
+                      }}
+                    >
+                      <span className="font-medium truncate">
+                        {item.name || "Untitled"}
+                      </span>
+                      <div className="flex items-center gap-1 opacity-0 group-hover/row:opacity-100">
+                        <button
+                          className="p-0.5 text-muted-foreground hover:text-foreground"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setActiveConfigItem({
+                              type: "searchIndex",
+                              id: item.id,
+                              nodeId,
+                              sourceId: source.id,
+                            });
+                          }}
+                        >
+                          <Settings size={13} />
+                        </button>
+                        <button
+                          className="p-0.5 text-muted-foreground hover:text-destructive"
+                          onClick={() => removeIndex(source.id, item.id)}
+                        >
+                          <X size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+              <button
+                className="px-3 py-1 text-[11px] text-muted-foreground hover:text-foreground nodrag"
+                onClick={() => addIndex(source.id)}
+              >
+                + Add index
+              </button>
+            </div>
+          )}
+        </div>
+      ))}
+      {addingSource && (
+        <div className="flex items-center gap-1.5 px-3 py-2 border-t nodrag bg-secondary/5">
+          <Select value={newTable} onValueChange={setNewTable}>
+            <SelectTrigger className="h-6 text-xs flex-1">
+              <SelectValue placeholder={availableTables.length === 0 ? "No table refs available" : "table reference..."} />
+            </SelectTrigger>
+            <SelectContent>
+              {availableTables.map((node) => (
+                <SelectItem key={node.id} value={node.id} className="text-xs">
+                  {node.data.label || "Untitled table"}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-6 w-6"
+            disabled={!newTable}
+            onClick={addSource}
+          >
+            <Check size={14} />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-6 w-6"
+            onClick={() => {
+              setAddingSource(false);
+              setNewTable("");
+            }}
+          >
+            <X size={14} />
+          </Button>
+        </div>
+      )}
     </>
   );
 };
+
+
+const TableFieldCombobox = ({
+  value,
+  fields,
+  onValueChange,
+}: {
+  value: string;
+  fields: string[];
+  onValueChange: (value: string) => void;
+}) => (
+  <Combobox
+    value={value}
+    onValueChange={(nextValue) => {
+      if (nextValue !== null) onValueChange(nextValue);
+    }}
+  >
+    <ComboboxInput
+      className="h-6 text-xs flex-1"
+      placeholder="Select table field"
+      autoFocus
+    />
+    <ComboboxContent>
+      <ComboboxList className={"bg-sidebar"}>
+        {fields.map((field) => (
+          <ComboboxItem key={field} value={field}>
+            {field}
+          </ComboboxItem>
+        ))}
+      </ComboboxList>
+    </ComboboxContent>
+  </Combobox>
+);
