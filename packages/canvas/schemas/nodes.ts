@@ -341,7 +341,6 @@ export type VectorDbRefNodeData = z.infer<typeof vectorDbRefDataSchema>;
 export const searchIndexDataSchema = baseNodeDataSchema.extend({
   description:    z.string().optional(),
   // Core Resources
-  searchIndexes:  z.array(resourceItemSchema).optional(),
   searchSources: z.array(z.object({
     id: z.string(),
     sourceType: z.literal("Database"),

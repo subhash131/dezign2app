@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { NodeProps, Handle, Position } from "@xyflow/react";
 import { Search, ChevronDown, ChevronUp, Settings, Plus, X, Check } from "lucide-react";
 import { BackendNode, SearchSource } from "@/types/canvas";
@@ -13,17 +13,6 @@ import { Button } from "@workspace/ui/components/button";
 import { Combobox, ComboboxInput, ComboboxContent, ComboboxList, ComboboxItem, ComboboxEmpty } from "@workspace/ui/components/combobox";
 
 const tableRefTypes = new Set(["db_ref"]);
-
-function migrateLegacyIndexes(data: BackendNode["data"]): SearchSource[] {
-  const groups = new Map<string, SearchSource>();
-  for (const legacy of data.searchIndexes || []) {
-    if (!legacy.dbTable) continue;
-    const source = groups.get(legacy.dbTable) || { id: generateId(), sourceType: "Database", dbTable: legacy.dbTable, dbPrimaryKey: legacy.dbPrimaryKey, dbSyncMode: legacy.dbSyncMode, indexes: [] };
-    source.indexes.push({ id: legacy.id || generateId(), name: legacy.name || "", description: legacy.description, analyzer: legacy.analyzer, schema: legacy.schema });
-    groups.set(legacy.dbTable, source);
-  }
-  return [...groups.values()];
-}
 
 export const SearchIndexNode = ({
   id,
@@ -42,17 +31,6 @@ export const SearchIndexNode = ({
     { label: "Replicas", key: "replicas", placeholder: "1" },
     { label: "Refresh Interval", key: "refreshInterval", placeholder: "1s" },
   ];
-
-  useEffect(() => {
-    if (!data.searchSources && data.searchIndexes?.length)
-      updateNode(id, {
-        data: {
-          ...data,
-          searchSources: migrateLegacyIndexes(data),
-          searchIndexes: undefined,
-        },
-      });
-  }, []);
 
   return (
     <div
@@ -175,6 +153,9 @@ const SearchSourceList = ({
   updateNode: (id: string, changes: Partial<BackendNode>) => void;
 }) => {
   const nodes = useBackendCanvasStore((s) => s.nodes);
+  const edges = useBackendCanvasStore((s) => s.edges);
+  const addEdge = useBackendCanvasStore((s) => s.addEdge);
+  const deleteEdge = useBackendCanvasStore((s) => s.deleteEdge);
   const setActiveConfigItem = useBackendCanvasStore(
     (s) => s.setActiveConfigItem
   );
@@ -207,16 +188,27 @@ const SearchSourceList = ({
     const primaryKey = entity?.data.columns?.find(
       (column) => column.isPrimaryKey
     )?.name;
+    const sourceId = generateId();
     updateSources([
       ...sources,
       {
-        id: generateId(),
+        id: sourceId,
         sourceType: "Database",
         dbTable: newTable,
         dbPrimaryKey: primaryKey,
         indexes: [],
       },
     ]);
+    if (!edges.some((edge) => edge.source === newTable && edge.target === nodeId && edge.targetHandle === `source-in-${sourceId}`)) {
+      addEdge({
+        id: generateId(),
+        source: newTable,
+        target: nodeId,
+        type: "connection",
+        sourceHandle: "database-source",
+        targetHandle: `index-in-${sourceId}`,
+      });
+    }
     setNewTable("");
     setAddingSource(false);
   };
@@ -243,6 +235,12 @@ const SearchSourceList = ({
           : source
       )
     );
+  const removeSource = (sourceId: string) => {
+    edges
+      .filter((edge) => edge.target === nodeId && edge.targetHandle === `index-in-${sourceId}`)
+      .forEach((edge) => deleteEdge(edge.id));
+    updateSources(sources.filter((source) => source.id !== sourceId));
+  };
   const commitName = (
     sourceId: string,
     indexId: string,
@@ -295,7 +293,7 @@ const SearchSourceList = ({
             <Handle
               type="target"
               position={Position.Left}
-              id={`source-in-${source.id}`}
+                id={`index-in-${source.id}`}
               className="w-2 h-2 -left-1"
             />
             <div
@@ -321,11 +319,7 @@ const SearchSourceList = ({
             </div>
             <button
               className="opacity-0 group-hover/src:opacity-100 text-muted-foreground hover:text-destructive"
-              onClick={() =>
-                updateSources(
-                  sources.filter((candidate) => candidate.id !== source.id)
-                )
-              }
+              onClick={() => removeSource(source.id)}
             >
               <X size={13} />
             </button>

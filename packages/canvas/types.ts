@@ -269,27 +269,6 @@ export type BackendNode = {
     collectionRef?: string;
     dbRef?: string;
     // --- Search Index Node ---
-    searchIndexes?: { 
-      id: string; 
-      name: string;
-      description?: string;
-      schema?: Schema;
-      analyzer?: string;
-      // Optional Data Source fields
-      dataSourceType?: "Database" | "Kafka" | "API" | "Redis" | "File Storage" | "Manual" | string;
-      dbName?: string;
-      dbTable?: string;
-      dbPrimaryKey?: string;
-      dbSyncMode?: "Real-time (CDC)" | "Event-driven" | "Batch" | string;
-      kafkaTopic?: string;
-      kafkaDocumentId?: string;
-      apiEndpoint?: string;
-      apiPollingInterval?: string;
-      redisNodeId?: string;
-      fileLink?: string;
-      fileDescription?: string;
-      manualDetails?: string;
-    }[];
     searchSources?: SearchSource[];
     analyzer?: string;
     shards?: number;
