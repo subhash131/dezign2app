@@ -342,6 +342,20 @@ export const searchIndexDataSchema = baseNodeDataSchema.extend({
   description:    z.string().optional(),
   // Core Resources
   searchIndexes:  z.array(resourceItemSchema).optional(),
+  searchSources: z.array(z.object({
+    id: z.string(),
+    sourceType: z.literal("Database"),
+    dbTable: z.string(),
+    dbPrimaryKey: z.string().optional(),
+    dbSyncMode: z.string().optional(),
+    indexes: z.array(z.object({
+      id: z.string(),
+      name: z.string(),
+      description: z.string().optional(),
+      analyzer: z.string().optional(),
+      schema: schemaModelSchema.optional(),
+    })),
+  })).optional(),
   // Implementation
   implementation: z.enum(["Elasticsearch", "OpenSearch", "Algolia", "Meilisearch", "Typesense", "Other"]).optional(),
   // Configuration (Advanced)
@@ -350,6 +364,8 @@ export const searchIndexDataSchema = baseNodeDataSchema.extend({
   tags:           z.array(z.string()).optional(),
 }).strict();
 export type SearchIndexNodeData = z.infer<typeof searchIndexDataSchema>;
+export type SearchSource = NonNullable<z.infer<typeof searchIndexDataSchema>["searchSources"]>[number];
+export type SearchIndexItem = SearchSource["indexes"][number];
 
 // --- API Gateway Node ---
 export const apiGatewayDataSchema = baseNodeDataSchema.extend({

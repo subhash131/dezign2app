@@ -108,7 +108,7 @@ export const ConfigSidebar = () => {
 
         {type === 'endpoint' ? <EndpointConfig id={id} nodeId={nodeId} /> : 
          type === 'task' ? <TaskConfig id={id} nodeId={nodeId} /> : 
-         type === 'searchIndex' ? <SearchIndexConfig id={id} nodeId={nodeId} /> : 
+         type === 'searchIndex' ? <SearchIndexConfig id={id} nodeId={nodeId} sourceId={activeConfigItem.sourceId} /> :
          <EventConfig id={id} nodeId={nodeId} />}
       </SheetContent>
     </Sheet>
