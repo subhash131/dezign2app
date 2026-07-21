@@ -133,7 +133,7 @@ export function CanvasToolbar({
         <Button
           variant={aiPanelOpen ? "secondary" : "ghost"}
           size="sm"
-          className="h-9"
+          className="py-3.5"
           onClick={() => setAiPanelOpen(!aiPanelOpen)}
         >
           <Sparkles className="w-4 h-4 mr-2 text-primary" />
