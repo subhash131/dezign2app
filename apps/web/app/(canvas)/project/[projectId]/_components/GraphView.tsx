@@ -301,10 +301,10 @@ export function GraphView({ projectId }: GraphViewProps) {
             <Cog className="w-3.5 h-3.5 mr-2 text-amber-500" />
             Worker
           </Button>
-          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0" onClick={() => handleAddGraphNode('serverless', 'Serverless Fn')}>
+          {/* <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0" onClick={() => handleAddGraphNode('serverless', 'Serverless Fn')}>
             <Zap className="w-3.5 h-3.5 mr-2 text-yellow-500" />
             Serverless Fn
-          </Button>
+          </Button> */}
 
           {/* MESSAGING */}
           <div className="text-[9px] uppercase font-extrabold text-muted-foreground/60 px-1 pt-2 pb-1 border-t mt-1">Messaging</div>
@@ -354,10 +354,10 @@ export function GraphView({ projectId }: GraphViewProps) {
             <Network className="w-3.5 h-3.5 mr-2 text-teal-500" />
             API Gateway
           </Button>
-          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0" onClick={() => handleAddGraphNode('load_balancer', 'Load Balancer')}>
+          {/* <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0" onClick={() => handleAddGraphNode('load_balancer', 'Load Balancer')}>
             <Scale className="w-3.5 h-3.5 mr-2 text-slate-500" />
             Load Balancer
-          </Button>
+          </Button> */}
           <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0" onClick={() => handleAddGraphNode('identity_provider', 'Identity Provider')}>
             <Key className="w-3.5 h-3.5 mr-2 text-blue-500" />
             Identity Provider
