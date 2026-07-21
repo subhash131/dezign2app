@@ -6,6 +6,8 @@ import { EndpointConfig } from "./config-sidebar/EndpointConfig";
 import { EventConfig } from "./config-sidebar/EventConfig";
 import { TaskConfig } from "./config-sidebar/TaskConfig";
 import { SearchIndexConfig } from "./config-sidebar/SearchIndexConfig";
+import { AuthRuleConfig } from "./config-sidebar/AuthRuleConfig";
+import { IdentityProviderConfig } from "./config-sidebar/IdentityProviderConfig";
 
 export const ConfigSidebar = () => {
   const activeConfigItem = useBackendCanvasStore(s => s.activeConfigItem);
@@ -92,14 +94,16 @@ export const ConfigSidebar = () => {
             {type === 'endpoint' ? "Configure endpoint properties." : 
              type === 'task' ? "Configure task properties." :
              type === 'searchIndex' ? "Configure search index properties." :
+             type === 'authRule' ? "Configure reusable authentication policy." :
+             type === 'identityProvider' ? "Configure identity provider." :
              "Configure event and messaging properties."}
           </SheetDescription>
         </SheetHeader>
-        
+
         {history.length > 1 && (
           <div 
             onClick={handleBack}
-            className="flex items-center w-fit text-xs font-medium text-muted-foreground hover:text-foreground cursor-pointer transition-colors -mb-2 mt-2"
+            className="flex items-center text-sm text-muted-foreground hover:text-foreground cursor-pointer mb-6 transition-colors"
           >
             <ChevronLeft size={14} className="mr-0.5" />
             Back
@@ -109,6 +113,8 @@ export const ConfigSidebar = () => {
         {type === 'endpoint' ? <EndpointConfig id={id} nodeId={nodeId} /> : 
          type === 'task' ? <TaskConfig id={id} nodeId={nodeId} /> : 
          type === 'searchIndex' ? <SearchIndexConfig id={id} nodeId={nodeId} sourceId={activeConfigItem.sourceId} /> :
+         type === 'authRule' ? <AuthRuleConfig id={id} nodeId={nodeId} /> :
+         type === 'identityProvider' ? <IdentityProviderConfig id={id} nodeId={nodeId} /> :
          <EventConfig id={id} nodeId={nodeId} />}
       </SheetContent>
     </Sheet>

@@ -1,6 +1,7 @@
 import { v, ConvexError } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { isValidConnection, isBackendNode, RULES_VERSION, BackendNodeType, BackendNode, BackendEdgeType, BackendEdge, nodeDataSchemas } from "@workspace/canvas";
+import { backendNodeDataValidator, backendEdgeDataValidator, backendEndpointDataValidator, backendEventDataValidator, backendIdentityProviderDataValidator, backendTestCaseDataValidator } from "./schema/canvasValidators";
 
 // ---------------------------------------------------------------------------
 // FRONTEND CANVAS — tldraw granular records
@@ -106,6 +107,11 @@ export const getBackendElements = query({
       .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
       .collect();
 
+    const identityProviders = await ctx.db
+      .query("canvas_backend_identity_providers")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
+
     // Sort by fractionalIndex for correct ordering
     nodes.sort((a, b) => (a.fractionalIndex < b.fractionalIndex ? -1 : 1));
     edges.sort((a, b) => (a.fractionalIndex < b.fractionalIndex ? -1 : 1));
@@ -115,7 +121,8 @@ export const getBackendElements = query({
       edges, 
       endpoints: endpoints.map(e => ({ ...e.data, nodeId: e.nodeId, id: e.endpointId })), 
       events: events.map(e => ({ ...e.data, nodeId: e.nodeId, variant: e.variant, id: e.eventId })),
-      testCases: testCases.map(t => ({ ...t.data, id: t.testCaseId }))
+      testCases: testCases.map(t => ({ ...t.data, id: t.testCaseId })),
+      identityProviders: identityProviders.map(p => ({ ...p.data, nodeId: p.nodeId, id: p.providerId }))
     };
   },
 });
@@ -126,11 +133,12 @@ export const upsertBackendNode = mutation({
     nodeId: v.string(),
     type: v.string(),
     position: v.object({ x: v.number(), y: v.number() }),
-    data: v.any(),
+    data: backendNodeDataValidator,
     fractionalIndex: v.string(),
   },
   async handler(ctx, args) {
-    console.log("upsertBackendNode called with args:", { nodeId: args.nodeId, type: args.type, label: args.data?.label });
+    const labelToLog = "label" in args.data && typeof args.data.label === "string" ? args.data.label : undefined;
+    console.log("upsertBackendNode called with args:", { nodeId: args.nodeId, type: args.type, label: labelToLog });
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError("Not authenticated");
 
@@ -146,29 +154,31 @@ export const upsertBackendNode = mutation({
       args.data = parsed.data;
     }
 
-    if ((args.type === "entity" || args.type === "group") && args.data?.label) {
+    if ((args.type === "entity" || args.type === "group") && "label" in args.data && typeof args.data.label === "string") {
       const allNodes = await ctx.db
         .query("canvas_backend_nodes")
         .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
         .collect();
 
+      const label = args.data.label;
       const exists = allNodes.some(
         (n) =>
           n.nodeId !== args.nodeId &&
           n.type === args.type &&
-          n.data?.label?.toLowerCase() === args.data.label.toLowerCase()
+          "label" in (n.data || {}) && typeof (n.data as Record<string, unknown>).label === "string" &&
+          ((n.data as Record<string, unknown>).label as string).toLowerCase() === label.toLowerCase()
       );
 
       if (exists) {
         const typeName = args.type === "entity" ? "table" : "schema group";
-        throw new ConvexError(`A ${typeName} with the name "${args.data.label}" already exists.`);
+        throw new ConvexError(`A ${typeName} with the name "${label}" already exists.`);
       }
     }
 
-    if (args.type === "entity" && Array.isArray(args.data?.columns)) {
+    if (args.type === "entity" && "columns" in args.data && Array.isArray(args.data.columns)) {
       const seen = new Set<string>();
       for (const col of args.data.columns) {
-        if (!col.name || typeof col.name !== "string" || col.name.trim() === "") continue;
+        if (!col || typeof col !== "object" || !("name" in col) || typeof col.name !== "string" || col.name.trim() === "") continue;
         const lowerName = col.name.toLowerCase();
         if (seen.has(lowerName)) {
           throw new ConvexError(`A column with the name "${col.name}" already exists in this table.`);
@@ -186,18 +196,18 @@ export const upsertBackendNode = mutation({
 
     if (existing) {
       await ctx.db.patch(existing._id, {
-        type: args.type as BackendNodeType,
+        type: args.type,
         position: args.position,
-        data: args.data as BackendNode["data"],
+        data: args.data,
         fractionalIndex: args.fractionalIndex,
       });
     } else {
       await ctx.db.insert("canvas_backend_nodes", {
         projectId: args.projectId,
         nodeId: args.nodeId,
-        type: args.type as BackendNodeType,
+        type: args.type,
         position: args.position,
-        data: args.data as BackendNode["data"],
+        data: args.data,
         fractionalIndex: args.fractionalIndex,
       });
     }
@@ -247,7 +257,7 @@ export const upsertBackendEdge = mutation({
     type: v.string(),
     sourceHandle: v.optional(v.string()),
     targetHandle: v.optional(v.string()),
-    data: v.optional(v.any()),
+    data: v.optional(backendEdgeDataValidator),
     fractionalIndex: v.string(),
   },
   async handler(ctx, args) {
@@ -340,10 +350,10 @@ export const upsertBackendEdge = mutation({
       await ctx.db.patch(existing._id, {
         source: args.source,
         target: args.target,
-        type: validatedType as BackendEdgeType,
+        type: validatedType,
         sourceHandle: args.sourceHandle,
         targetHandle: args.targetHandle,
-        data: enrichedData as BackendEdge["data"],
+        data: enrichedData as any,
         fractionalIndex: args.fractionalIndex,
         rulesVersion: RULES_VERSION,
       });
@@ -353,10 +363,10 @@ export const upsertBackendEdge = mutation({
         edgeId: args.edgeId,
         source: args.source,
         target: args.target,
-        type: validatedType as BackendEdgeType,
+        type: validatedType,
         sourceHandle: args.sourceHandle,
         targetHandle: args.targetHandle,
-        data: enrichedData as BackendEdge["data"],
+        data: enrichedData as any,
         fractionalIndex: args.fractionalIndex,
         rulesVersion: RULES_VERSION,
       });
@@ -394,7 +404,7 @@ export const upsertBackendEndpoint = mutation({
     projectId: v.id("projects"),
     nodeId: v.string(),
     endpointId: v.string(),
-    data: v.any(),
+    data: backendEndpointDataValidator,
   },
   async handler(ctx, args) {
     const identity = await ctx.auth.getUserIdentity();
@@ -408,7 +418,7 @@ export const upsertBackendEndpoint = mutation({
       .unique();
 
     if (existing) {
-      await ctx.db.patch(existing._id, { data: args.data });
+      await ctx.db.patch(existing._id, { data: args.data as any });
     } else {
       await ctx.db.insert("canvas_backend_endpoints", {
         projectId: args.projectId,
@@ -439,13 +449,63 @@ export const removeBackendEndpoint = mutation({
   },
 });
 
+export const upsertBackendIdentityProvider = mutation({
+  args: {
+    projectId: v.id("projects"),
+    nodeId: v.string(),
+    providerId: v.string(),
+    data: backendIdentityProviderDataValidator,
+  },
+  async handler(ctx, args) {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new ConvexError("Not authenticated");
+
+    const existing = await ctx.db
+      .query("canvas_backend_identity_providers")
+      .withIndex("by_node_provider", (q) =>
+        q.eq("nodeId", args.nodeId).eq("providerId", args.providerId)
+      )
+      .unique();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, { data: args.data as any });
+    } else {
+      await ctx.db.insert("canvas_backend_identity_providers", {
+        projectId: args.projectId,
+        nodeId: args.nodeId,
+        providerId: args.providerId,
+        data: args.data,
+      });
+    }
+  },
+});
+
+export const removeBackendIdentityProvider = mutation({
+  args: { projectId: v.id("projects"), nodeId: v.string(), providerId: v.string() },
+  async handler(ctx, args) {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new ConvexError("Not authenticated");
+
+    const existing = await ctx.db
+      .query("canvas_backend_identity_providers")
+      .withIndex("by_node_provider", (q) =>
+        q.eq("nodeId", args.nodeId).eq("providerId", args.providerId)
+      )
+      .unique();
+
+    if (existing) {
+      await ctx.db.delete(existing._id);
+    }
+  },
+});
+
 export const upsertBackendEvent = mutation({
   args: {
     projectId: v.id("projects"),
     nodeId: v.string(),
     eventId: v.string(),
     variant: v.union(v.literal("publish"), v.literal("consume")),
-    data: v.any(),
+    data: backendEventDataValidator,
   },
   async handler(ctx, args) {
     const identity = await ctx.auth.getUserIdentity();
@@ -459,7 +519,7 @@ export const upsertBackendEvent = mutation({
       .unique();
 
     if (existing) {
-      await ctx.db.patch(existing._id, { variant: args.variant, data: args.data });
+      await ctx.db.patch(existing._id, { variant: args.variant, data: args.data as any });
     } else {
       await ctx.db.insert("canvas_backend_events", {
         projectId: args.projectId,
@@ -499,7 +559,7 @@ export const upsertBackendTestCase = mutation({
   args: {
     projectId: v.id("projects"),
     testCaseId: v.string(),
-    data: v.any(), // uses simulationTestCaseSchema
+    data: backendTestCaseDataValidator, // uses simulationTestCaseSchema
   },
   async handler(ctx, args) {
     const identity = await ctx.auth.getUserIdentity();
@@ -513,7 +573,7 @@ export const upsertBackendTestCase = mutation({
       .unique();
 
     if (existing) {
-      await ctx.db.patch(existing._id, { data: args.data });
+      await ctx.db.patch(existing._id, { data: args.data as any });
     } else {
       await ctx.db.insert("canvas_backend_test_cases", {
         projectId: args.projectId,

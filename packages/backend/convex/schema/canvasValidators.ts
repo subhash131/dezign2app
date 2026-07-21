@@ -25,6 +25,11 @@ import {
   llmDataSchema,
   mcpServerDataSchema,
   vectorDbRefDataSchema,
+  endpointSchema,
+  identityProviderDataSchema,
+  identityProviderSchema,
+  publishedEventSchema,
+  consumedEventSchema,
 } from "@workspace/canvas/schemas";
 
 // Test Case Data Validator
@@ -58,6 +63,7 @@ export const backendNodeDataValidator = v.union(
   zodToConvex(llmDataSchema),
   zodToConvex(mcpServerDataSchema),
   zodToConvex(vectorDbRefDataSchema),
+  zodToConvex(identityProviderDataSchema),
   // Fallback for completely empty data (allowable in some updates)
   v.object({
     label: v.optional(v.string()),
@@ -68,3 +74,9 @@ export const backendNodeDataValidator = v.union(
     height: v.optional(v.number()),
   })
 );
+
+import { z } from "zod";
+
+export const backendEndpointDataValidator = zodToConvex(endpointSchema);
+export const backendIdentityProviderDataValidator = zodToConvex(identityProviderSchema);
+export const backendEventDataValidator = zodToConvex(z.union([publishedEventSchema, consumedEventSchema]));

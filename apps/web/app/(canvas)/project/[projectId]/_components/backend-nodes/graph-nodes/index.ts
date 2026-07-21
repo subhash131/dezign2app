@@ -21,3 +21,4 @@ export { LoadBalancerNode } from "./LoadBalancerNode";
 export { WebhookNode } from "./WebhookNode";
 export { LLMNode } from "./LLMNode";
 export { MCPServerNode } from "./MCPServerNode";
+export { IdentityProviderNode } from "./IdentityProviderNode";

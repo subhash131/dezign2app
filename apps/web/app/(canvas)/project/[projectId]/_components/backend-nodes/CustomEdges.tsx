@@ -274,3 +274,49 @@ export const MessagingEdge = (props: EdgeProps<BackendEdge>) => {
   );
 };
 
+// 4. Identity Connection Edge (Emerald/Teal Dashed)
+export const IdentityConnectionEdge = (props: EdgeProps<BackendEdge>) => {
+  const { sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, style } = props;
+  const simulation = useSimulationEdgeState(props.id, props.source, props.target);
+
+  const [edgePath] = getBezierPath({
+    sourceX,
+    sourceY,
+    sourcePosition,
+    targetX,
+    targetY,
+    targetPosition,
+  });
+
+  return (
+    <>
+      <EdgeStyles />
+      <EdgeMarkers />
+
+      {/* Base path */}
+      <BaseEdge
+        path={edgePath}
+        style={{
+          ...style,
+          strokeWidth: 3,
+          stroke: "rgba(16, 185, 129, 0.1)",
+          opacity: simulation.hasRun && !simulation.isVisited ? 0.05 : 1,
+        }}
+      />
+
+      {/* Main dashed edge */}
+      <BaseEdge
+        path={edgePath}
+        style={{
+          ...style,
+          strokeWidth: 1.5,
+          stroke: "#10b981", // emerald-500
+          strokeDasharray: "4, 4",
+          opacity: simulation.hasRun && !simulation.isVisited ? 0.08 : 1,
+          filter: simulation.isCurrent ? "drop-shadow(0 0 5px #10b981)" : undefined,
+        }}
+      />
+    </>
+  );
+};
+

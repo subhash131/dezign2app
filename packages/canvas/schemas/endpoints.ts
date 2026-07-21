@@ -12,6 +12,7 @@ export const endpointSchema = z.object({
   id: z.string(),
   name: z.string(),
   type: z.string(),
+  authRuleId: z.string().optional(),
   databaseNodeIds: z.array(z.string()).optional(),
   databaseNodeId: z.string().optional(),
   headers: z.array(parameterSchema).optional(),
@@ -27,6 +28,10 @@ export const endpointSchema = z.object({
   params: z.array(parameterSchema).optional(),
   body: z.string().optional(),
   businessLogic: z.string().optional(),
+  summary: z.string().optional(),
+  requiredRoles: z.array(z.string()).optional(),
+  requiredScopes: z.array(z.string()).optional(),
+  audience: z.string().optional(),
   output: z.string().optional(),
 });
 export type Endpoint = z.infer<typeof endpointSchema>;
@@ -35,6 +40,7 @@ export const endpointInputSchema: z.ZodType<EndpointInputType> = z.object({
   id: z.string().optional(),
   name: z.string().describe("Endpoint path (e.g., /api/users)"),
   type: z.string().describe("HTTP method (GET, POST, etc.)"),
+  authRuleId: z.string().optional().describe("Reusable API gateway auth rule ID, when this endpoint is routed through a gateway."),
   headers: z.array(z.object({
     id: z.string().optional(), name: z.string(), type: z.string(), required: z.boolean(),
     description: z.string().optional(), defaultValue: z.string().optional(),
@@ -70,6 +76,10 @@ export const endpointInputSchema: z.ZodType<EndpointInputType> = z.object({
   }).passthrough()).describe("Executable request-processing steps in order."),
   output: z.string().optional().describe("Short response description; do not use this instead of responseBody."),
   businessLogic: z.string().optional().describe("Human-readable purpose of the endpoint."),
+  summary: z.string().optional().describe("Summary of what the endpoint does."),
+  requiredRoles: z.array(z.string()).optional().describe("List of roles required to access this endpoint."),
+  requiredScopes: z.array(z.string()).optional().describe("List of scopes required to access this endpoint."),
+  audience: z.string().optional().describe("The intended audience for this endpoint."),
   databaseNodeIds: z.array(z.string()).optional().describe(
     "IDs of db_ref nodes this endpoint reads from or writes to. REQUIRED whenever this endpoint uses a database; one endpoint may target multiple tables."
   ),

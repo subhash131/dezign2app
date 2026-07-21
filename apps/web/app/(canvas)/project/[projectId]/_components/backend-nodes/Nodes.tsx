@@ -622,6 +622,7 @@ import {
   LLMNode,
   MCPServerNode,
   VectorDBRefNode,
+  IdentityProviderNode,
 } from "./graph-nodes";
 import { Badge } from "@workspace/ui/components/badge";
 
@@ -652,4 +653,5 @@ export const nodeTypes = {
   llm: LLMNode,
   mcp_server: MCPServerNode,
   vector_db_ref: VectorDBRefNode,
+  identity_provider: IdentityProviderNode,
 };
