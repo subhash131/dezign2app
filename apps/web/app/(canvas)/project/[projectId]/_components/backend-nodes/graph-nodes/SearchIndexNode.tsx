@@ -277,10 +277,9 @@ const SearchSourceList = ({
         </button>
       </div>
       {!sources.length && !addingSource && (
-        <div className="px-3 py-3 text-[11px] text-muted-foreground text-center nodrag">
-          Add one or more table references to create indexes.
+        <div className="px-3 border-b py-2 text-[11px] text-muted-foreground text-center nodrag">
           <button
-            className="block mx-auto mt-1.5 text-sky-600 dark:text-sky-400 font-medium hover:underline"
+            className="block mx-auto text-sky-600 dark:text-sky-400 font-medium hover:underline"
             onClick={() => setAddingSource(true)}
           >
             + Add table

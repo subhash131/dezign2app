@@ -22,7 +22,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@workspace/ui/components/alert-dialog";
-import { Globe, Server, Waves, GitBranch, Radio, Database, LayoutGrid, ChevronRight, TerminalSquare, Plus, PenLine, Trash, UploadCloud, Layers, HardDrive, Cog, Zap, Search, Network, Scale, Webhook, Brain, Boxes, EllipsisVertical, LayoutTemplate } from "lucide-react";
+import { Globe, Server, Waves, GitBranch, Radio, Database, LayoutGrid, ChevronRight, TerminalSquare, Plus, PenLine, Trash, UploadCloud, Layers, HardDrive, Cog, Zap, Search, Network, Scale, Webhook, Brain, Boxes, EllipsisVertical, LayoutTemplate, Key } from "lucide-react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useSimulationStore } from "@/lib/stores/simulationStore";
 import { useMutation } from "convex/react";
@@ -30,17 +30,19 @@ import { api } from "@workspace/backend/_generated/api";
 import { Id } from "@workspace/backend/_generated/dataModel";
 import { nodeTypes } from "./backend-nodes/Nodes";
 import { ForeignKeyEdge } from "./backend-nodes/ForeignKeyEdge";
-import { HTTPConnectionEdge, MessagingEdge } from "./backend-nodes/CustomEdges";
+import { HTTPConnectionEdge, MessagingEdge, IdentityConnectionEdge } from "./backend-nodes/CustomEdges";
 import { isValidConnection } from "@workspace/canvas";
 import { BackendNode } from "@/types/canvas";
 import { SimulationTerminal } from "./SimulationTerminal";
 import { getOffsetPosition, useCanvasHandlers } from "./hooks/useCanvasHandlers";
 import { useAutoLayout } from "./hooks/useAutoLayout";
+import { Badge } from "@workspace/ui/components/badge";
 
 const edgeTypes = {
   "foreign-key": ForeignKeyEdge,
   "connection": HTTPConnectionEdge,
   "message": MessagingEdge,
+  "identity-connection": IdentityConnectionEdge,
 };
 
 interface GraphViewProps {
@@ -82,7 +84,7 @@ export function GraphView({ projectId }: GraphViewProps) {
     });
   };
 
-  const handleAddGraphNode = (type: "service" | "db_ref" | "queue" | "pubsub" | "eventstream" | "kafka" | "redis-streams" | "sqs" | "redis-pubsub" | "redis-cache" | "webClient" | "external" | "storage" | "worker" | "serverless" | "vector_db_ref" | "search_index" | "api_gateway" | "load_balancer" | "webhook" | "llm" | "mcp_server", label: string) => {
+  const handleAddGraphNode = (type: "service" | "db_ref" | "queue" | "pubsub" | "eventstream" | "kafka" | "redis-streams" | "sqs" | "redis-pubsub" | "redis-cache" | "webClient" | "external" | "storage" | "worker" | "serverless" | "vector_db_ref" | "search_index" | "api_gateway" | "load_balancer" | "webhook" | "llm" | "mcp_server" | "identity_provider", label: string) => {
     const center = getCenterPosition();
     const { x, y } = getOffsetPosition(center.x - 100, center.y - 100, nodes);
     addNode({
@@ -105,9 +107,9 @@ export function GraphView({ projectId }: GraphViewProps) {
         redisBroker: type === 'redis-streams' ? {} : undefined,
         sqsBroker: type === 'sqs' ? {} : undefined,
         tasks: type === 'worker' ? [] : undefined,
-        endpoints: type === 'serverless' ? [] : undefined,
+        endpoints: (type === 'serverless' || type === 'api_gateway') ? [] : undefined,
         searchSources: type === 'search_index' ? [] : undefined,
-        routes: type === 'api_gateway' ? [] : undefined,
+        authRules: type === 'api_gateway' ? [] : undefined,
         targetGroups: type === 'load_balancer' ? [] : undefined,
         prompts: (type === 'llm' || type === 'mcp_server') ? [] : undefined,
         tools: (type === 'llm' || type === 'mcp_server') ? [] : undefined,
@@ -284,6 +286,7 @@ export function GraphView({ projectId }: GraphViewProps) {
           <SimulationTerminal />
         </Panel>
         <Panel position="top-left" className="flex gap-1.5 flex-col bg-background/95 backdrop-blur border rounded-lg p-2.5 shadow-md max-w-[190px] max-h-[calc(100vh-120px)] overflow-y-auto overflow-x-hidden hide-scrollbar">
+         <Badge>BETA</Badge>
           {/* COMPUTING */}
           <div className="text-[9px] uppercase font-extrabold text-muted-foreground/60 px-1 pt-1 pb-1">Computing</div>
           <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0" onClick={() => handleAddGraphNode('webClient', 'Client')}>
@@ -354,6 +357,10 @@ export function GraphView({ projectId }: GraphViewProps) {
           <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0" onClick={() => handleAddGraphNode('load_balancer', 'Load Balancer')}>
             <Scale className="w-3.5 h-3.5 mr-2 text-slate-500" />
             Load Balancer
+          </Button>
+          <Button variant="outline" size="sm" className="bg-sidebar dark:bg-sidebar shadow-sm text-xs justify-start h-8 shrink-0" onClick={() => handleAddGraphNode('identity_provider', 'Identity Provider')}>
+            <Key className="w-3.5 h-3.5 mr-2 text-blue-500" />
+            Identity Provider
           </Button>
 
           {/* EXTERNAL */}

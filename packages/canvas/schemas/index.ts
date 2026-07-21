@@ -4,5 +4,6 @@ export * from "./events";
 export * from "./endpoints";
 export * from "./nodes";
 export * from "./edges";
+export * from "./identityProviders";
 export * from "./simulation";
 export * from "./utils";

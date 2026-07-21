@@ -1,7 +1,7 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { z } from "zod";
-import { backendNodeDataValidator, backendEdgeDataValidator, backendTestCaseDataValidator } from "./canvasValidators";
+import { backendNodeDataValidator, backendEdgeDataValidator, backendTestCaseDataValidator, backendEndpointDataValidator, backendEventDataValidator, backendIdentityProviderDataValidator } from "./canvasValidators";
 
 export const featureTables = {
   conversations: defineTable({
@@ -109,7 +109,7 @@ export const featureTables = {
     projectId: v.id("projects"),
     nodeId: v.string(),
     endpointId: v.string(),
-    data: v.any(), // Endpoint definition
+    data: backendEndpointDataValidator,
   })
     .index("by_project", ["projectId"])
     .index("by_project_node", ["projectId", "nodeId"])
@@ -121,11 +121,22 @@ export const featureTables = {
     nodeId: v.string(),
     eventId: v.string(),
     variant: v.union(v.literal("publish"), v.literal("consume")),
-    data: v.any(), // AnyMessagingResource definition
+    data: backendEventDataValidator,
   })
     .index("by_project", ["projectId"])
     .index("by_project_node", ["projectId", "nodeId"])
     .index("by_node_event", ["nodeId", "eventId"]),
+
+  // Identity Providers separated from Identity Provider Node
+  canvas_backend_identity_providers: defineTable({
+    projectId: v.id("projects"),
+    nodeId: v.string(),
+    providerId: v.string(),
+    data: backendIdentityProviderDataValidator,
+  })
+    .index("by_project", ["projectId"])
+    .index("by_project_node", ["projectId", "nodeId"])
+    .index("by_node_provider", ["nodeId", "providerId"]),
 
   // Global project test cases
   canvas_backend_test_cases: defineTable({

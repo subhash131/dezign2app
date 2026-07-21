@@ -90,6 +90,19 @@ export class BackendCanvasAdapter implements CanvasAdapter<BackendDesignDoc> {
       } else if (n.type === "webClient") {
         const evs = n.data.events?.map((ev) => `${ev.name} (id: ${ev.id})`).join(", ");
         if (evs) extra = `\n  Events: ${evs}`;
+      } else if (n.type === "api_gateway") {
+        const rules = n.data.authRules?.map((rule) => {
+          const details = rule.description ? ` — ${rule.description}` : "";
+          return `${rule.name || "Unnamed"} [${rule.type}]${details} (id: ${rule.id})`;
+        }).join(", ");
+        const routes = n.data.routes?.map((route) => {
+          const authRule = n.data.authRules?.find((rule) => rule.id === route.authRuleId)?.name || "No auth rule";
+          return `${route.method || "GET"} ${route.name}${route.service ? ` → ${route.service}` : ""} → ${authRule}`;
+        }).join(", ");
+        const details = [];
+        if (rules) details.push(`Auth rules: ${rules}`);
+        if (routes) details.push(`Endpoints: ${routes}`);
+        if (details.length > 0) extra = `\n  ${details.join("\n  ")}`;
       }
       output += `- [${n.type}] id: ${n.id}, label: "${n.data.label}"${extra}\n`;
     });

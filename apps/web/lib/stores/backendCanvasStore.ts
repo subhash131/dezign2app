@@ -8,7 +8,7 @@ import {
   addEdge,
   Connection,
 } from "@xyflow/react";
-import { Endpoint, AnyMessagingResource, MessagingResourceType } from "@workspace/canvas/types";
+import { Endpoint, AnyMessagingResource, MessagingResourceType, IdentityProvider } from "@workspace/canvas/types";
 import { generateKeyBetween } from "fractional-indexing";
 import { isValidConnection } from "@workspace/canvas";
 
@@ -157,8 +157,9 @@ interface BackendCanvasState {
 
   endpoints: (Endpoint & { nodeId: string })[];
   events: (AnyMessagingResource & { nodeId: string, variant: 'publish' | 'consume' })[];
-  activeConfigItem: { type: 'endpoint' | 'event' | 'task' | 'searchIndex', id: string, nodeId: string, sourceId?: string } | null;
-  setActiveConfigItem: (item: { type: 'endpoint' | 'event' | 'task' | 'searchIndex', id: string, nodeId: string, sourceId?: string } | null) => void;
+  identityProviders: (IdentityProvider & { nodeId: string })[];
+  activeConfigItem: { type: 'endpoint' | 'event' | 'task' | 'searchIndex' | 'authRule' | 'identityProvider', id: string, nodeId: string, sourceId?: string } | null;
+  setActiveConfigItem: (item: { type: 'endpoint' | 'event' | 'task' | 'searchIndex' | 'authRule' | 'identityProvider', id: string, nodeId: string, sourceId?: string } | null) => void;
 
   // Pending Convex sync ops
   pendingNodeUpserts: BackendNode[];
@@ -169,6 +170,8 @@ interface BackendCanvasState {
   pendingEndpointRemovals: { nodeId: string, endpointId: string }[];
   pendingEventUpserts: (AnyMessagingResource & { nodeId: string, variant: 'publish' | 'consume' })[];
   pendingEventRemovals: { nodeId: string, eventId: string }[];
+  pendingIdentityProviderUpserts: (IdentityProvider & { nodeId: string })[];
+  pendingIdentityProviderRemovals: { nodeId: string, providerId: string }[];
 
   // Deletion confirmation
   nodesPendingDeletion: BackendNode[];
@@ -196,12 +199,17 @@ interface BackendCanvasState {
   updateEvent: (id: string, changes: Partial<AnyMessagingResource>) => void;
   deleteEvent: (id: string) => void;
 
+  addIdentityProvider: (nodeId: string, provider: IdentityProvider) => void;
+  updateIdentityProvider: (id: string, changes: Partial<IdentityProvider>) => void;
+  deleteIdentityProvider: (id: string) => void;
+
   // Bulk load from Convex (no pending ops)
   setNodesAndEdges: (
     nodes: BackendNode[], 
     edges: BackendEdge[], 
     endpoints?: (Endpoint & { nodeId: string })[], 
-    events?: (AnyMessagingResource & { nodeId: string, variant: 'publish' | 'consume' })[]
+    events?: (AnyMessagingResource & { nodeId: string, variant: 'publish' | 'consume' })[],
+    identityProviders?: (IdentityProvider & { nodeId: string })[]
   ) => void;
   setView: (view: BackendCanvasView) => void;
 
@@ -214,7 +222,9 @@ interface BackendCanvasState {
     syncedEndpointUpserts?: (Endpoint & { nodeId: string })[],
     syncedEndpointRemovals?: { nodeId: string, endpointId: string }[],
     syncedEventUpserts?: (AnyMessagingResource & { nodeId: string, variant: 'publish' | 'consume' })[],
-    syncedEventRemovals?: { nodeId: string, eventId: string }[]
+    syncedEventRemovals?: { nodeId: string, eventId: string }[],
+    syncedIdentityProviderUpserts?: (IdentityProvider & { nodeId: string })[],
+    syncedIdentityProviderRemovals?: { nodeId: string, providerId: string }[]
   ) => void;
   reset: () => void;
 }
@@ -224,6 +234,7 @@ export const useBackendCanvasStore = create<BackendCanvasState>((set, get) => ({
   edges: [],
   endpoints: [],
   events: [],
+  identityProviders: [],
   canvasView: "graph",
   activeConfigItem: null,
   setActiveConfigItem: (item) => set({ activeConfigItem: item }),
@@ -235,6 +246,8 @@ export const useBackendCanvasStore = create<BackendCanvasState>((set, get) => ({
   pendingEndpointRemovals: [],
   pendingEventUpserts: [],
   pendingEventRemovals: [],
+  pendingIdentityProviderUpserts: [],
+  pendingIdentityProviderRemovals: [],
   nodesPendingDeletion: [],
   setNodesPendingDeletion: (nodes) => set({ nodesPendingDeletion: nodes }),
 
@@ -635,12 +648,42 @@ export const useBackendCanvasStore = create<BackendCanvasState>((set, get) => ({
     });
   },
 
-  setNodesAndEdges: (nodes, edges, endpoints = [], events = []) =>
+  addIdentityProvider: (nodeId, provider) => {
+    const newProvider = { ...provider, nodeId };
+    set({
+      identityProviders: [...get().identityProviders, newProvider],
+      pendingIdentityProviderUpserts: [...get().pendingIdentityProviderUpserts, newProvider]
+    });
+  },
+
+  updateIdentityProvider: (id, changes) => {
+    const next = get().identityProviders.map(p => p.id === id ? { ...p, ...changes } : p);
+    const updated = next.find(p => p.id === id);
+    if (updated) {
+      set({
+        identityProviders: next,
+        pendingIdentityProviderUpserts: [...get().pendingIdentityProviderUpserts, updated],
+      });
+    }
+  },
+
+  deleteIdentityProvider: (id) => {
+    const provider = get().identityProviders.find(p => p.id === id);
+    if (provider) {
+      set({
+        identityProviders: get().identityProviders.filter(p => p.id !== id),
+        pendingIdentityProviderRemovals: [...get().pendingIdentityProviderRemovals, { nodeId: provider.nodeId, providerId: id }]
+      });
+    }
+  },
+
+  setNodesAndEdges: (nodes, edges, endpoints = [], events = [], identityProviders = []) =>
     set({
       nodes,
       edges,
       endpoints,
       events,
+      identityProviders,
       pendingNodeUpserts: [],
       pendingNodeRemovals: [],
       pendingEdgeUpserts: [],
@@ -649,11 +692,13 @@ export const useBackendCanvasStore = create<BackendCanvasState>((set, get) => ({
       pendingEndpointRemovals: [],
       pendingEventUpserts: [],
       pendingEventRemovals: [],
+      pendingIdentityProviderUpserts: [],
+      pendingIdentityProviderRemovals: [],
     }),
 
   setView: (view) => set({ canvasView: view }),
 
-  clearPending: (syncedNodes, syncedNodeRemovals, syncedEdges, syncedEdgeRemovals, syncedEndpointUpserts = [], syncedEndpointRemovals = [], syncedEventUpserts = [], syncedEventRemovals = []) =>
+  clearPending: (syncedNodes, syncedNodeRemovals, syncedEdges, syncedEdgeRemovals, syncedEndpointUpserts = [], syncedEndpointRemovals = [], syncedEventUpserts = [], syncedEventRemovals = [], syncedIdentityProviderUpserts = [], syncedIdentityProviderRemovals = []) =>
     set((state) => ({
       pendingNodeUpserts: state.pendingNodeUpserts.filter(n => !syncedNodes.includes(n)),
       pendingNodeRemovals: state.pendingNodeRemovals.filter(id => !syncedNodeRemovals.includes(id)),
@@ -663,6 +708,8 @@ export const useBackendCanvasStore = create<BackendCanvasState>((set, get) => ({
       pendingEndpointRemovals: state.pendingEndpointRemovals.filter(r => !syncedEndpointRemovals.some(sr => sr.endpointId === r.endpointId)),
       pendingEventUpserts: state.pendingEventUpserts.filter(e => !syncedEventUpserts.includes(e)),
       pendingEventRemovals: state.pendingEventRemovals.filter(r => !syncedEventRemovals.some(sr => sr.eventId === r.eventId)),
+      pendingIdentityProviderUpserts: state.pendingIdentityProviderUpserts.filter(p => !syncedIdentityProviderUpserts.includes(p)),
+      pendingIdentityProviderRemovals: state.pendingIdentityProviderRemovals.filter(r => !syncedIdentityProviderRemovals.some(sr => sr.providerId === r.providerId)),
     })),
 
   reset: () =>
@@ -671,6 +718,7 @@ export const useBackendCanvasStore = create<BackendCanvasState>((set, get) => ({
       edges: [],
       endpoints: [],
       events: [],
+      identityProviders: [],
       pendingNodeUpserts: [],
       pendingNodeRemovals: [],
       pendingEdgeUpserts: [],
@@ -679,6 +727,8 @@ export const useBackendCanvasStore = create<BackendCanvasState>((set, get) => ({
       pendingEndpointRemovals: [],
       pendingEventUpserts: [],
       pendingEventRemovals: [],
+      pendingIdentityProviderUpserts: [],
+      pendingIdentityProviderRemovals: [],
       activeConfigItem: null,
     }),
 }));
