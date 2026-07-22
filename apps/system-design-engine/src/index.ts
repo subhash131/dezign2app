@@ -11,6 +11,8 @@ import { SupermemorySync } from './knowledge/sync';
 import { extractAuthToken, resolveAuth } from './mcp/auth';
 import { createSession, cleanupOldSessions, Session } from './mcp/session';
 
+import { TestCaseItem, BackendNodeItem } from '@workspace/canvas';
+
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
@@ -130,8 +132,9 @@ app.post('/sync-supermemory', async (req, res) => {
     const existingPlan = await client.query(api.requirements.getPlan, { projectId });
     const architectureContent = existingPlan?.content || "";
 
-    const rawNodes = elements.nodes || [];
-    const rawEdges = elements.edges || [];
+    const rawNodes: BackendNodeItem[] = (elements.nodes as BackendNodeItem[]) || [];
+    const rawEdges: Array<{ source: string; target: string }> = elements.edges || [];
+    const rawTestCases: TestCaseItem[] = (elements.testCases as TestCaseItem[]) || [];
 
     const nodeNameMap = new Map<string, string>();
     for (const n of rawNodes) {
@@ -149,11 +152,11 @@ app.post('/sync-supermemory', async (req, res) => {
        edgeDepsBy.get(e.target)!.push(e.source);
     }
 
-    const nodes = rawNodes.map((n: any) => {
+    const nodes = rawNodes.map((n) => {
       const facts: string[] = [];
       const responsibilities: string[] = [];
       
-      if (n.data?.description) responsibilities.push(n.data.description as string);
+      if (n.data?.description) responsibilities.push(n.data.description);
       
       if (n.type === "entity" && Array.isArray(n.data?.columns)) {
         facts.push(`Columns:\n` + n.data.columns.map((c: { name: string }) => `- ${c.name}`).join("\n"));
@@ -162,10 +165,68 @@ app.post('/sync-supermemory', async (req, res) => {
         facts.push(`Endpoints:\n` + n.data.endpoints.map((ep: { type: string; name: string }) => `- ${ep.type} ${ep.name}`).join("\n"));
       }
       if (n.type === "webClient" && Array.isArray(n.data?.events)) {
-        facts.push(`Events:\n` + n.data.events.map((ev: { name: string }) => `- ${ev.name}`).join("\n"));
+        facts.push(`Events:\n` + n.data.events.map((ev: { name?: string }) => `- ${ev.name || ''}`).join("\n"));
       }
       if (n.type === "kafka" && Array.isArray(n.data?.topics)) {
         facts.push(`Topics:\n` + n.data.topics.map((t: { name: string }) => `- ${t.name}`).join("\n"));
+      }
+
+      // Collect test cases associated with this node
+      const nodeTestCases: TestCaseItem[] = [];
+      const seenTcIds = new Set<string>();
+
+      const addTc = (tc: TestCaseItem) => {
+        const id = tc.id || tc.testCaseId || `${tc.name || ''}-${tc.targetEventId || ''}`;
+        if (!seenTcIds.has(id)) {
+          seenTcIds.add(id);
+          nodeTestCases.push(tc);
+        }
+      };
+
+      for (const tc of rawTestCases) {
+        if (tc.targetNodeId === n.nodeId || tc.nodeId === n.nodeId) {
+          addTc(tc);
+        } else if (tc.targetEventId && Array.isArray(n.data?.events)) {
+          if (n.data.events.some((ev) => ev.id === tc.targetEventId)) {
+            addTc(tc);
+          }
+        }
+      }
+
+      if (Array.isArray(n.data?.testCases)) {
+        for (const tc of n.data.testCases) addTc(tc);
+      }
+
+      if (Array.isArray(n.data?.events)) {
+        for (const ev of n.data.events) {
+          if (Array.isArray(ev.testCases)) {
+            for (const tc of ev.testCases) addTc(tc);
+          }
+        }
+      }
+
+      if (nodeTestCases.length > 0) {
+        const tcLines = nodeTestCases.map((tc) => {
+          let line = `- ${tc.name || 'Unnamed Test Case'}`;
+          const details: string[] = [];
+          if (tc.expectedStatus !== undefined) details.push(`Expected Status: ${tc.expectedStatus}`);
+          if (tc.request?.body !== undefined && tc.request?.body !== null) {
+            const bodyStr = typeof tc.request.body === 'string' ? tc.request.body : JSON.stringify(tc.request.body);
+            details.push(`Request Body: ${bodyStr}`);
+          }
+          if (tc.request?.params && Object.keys(tc.request.params).length > 0) {
+            details.push(`Params: ${JSON.stringify(tc.request.params)}`);
+          }
+          if (tc.expectedBody !== undefined && tc.expectedBody !== null) {
+            const expStr = typeof tc.expectedBody === 'string' ? tc.expectedBody : JSON.stringify(tc.expectedBody);
+            details.push(`Expected Body: ${expStr}`);
+          }
+          if (details.length > 0) {
+            line += ` (${details.join(' | ')})`;
+          }
+          return line;
+        });
+        facts.push(`Test Cases:\n` + tcLines.join('\n'));
       }
 
       const dependencies = (edgeDeps.get(n.nodeId) || []).map((id: string) => nodeNameMap.get(id) || id);

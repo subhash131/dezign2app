@@ -622,6 +622,7 @@ export type UIEventItem = {
   name: string;
   event?: string;
   schema?: string;
+  testCases?: SimulationTestCase[];
 };
 
 export type JSONPrimitive = string | number | boolean | null;
@@ -743,5 +744,38 @@ export interface EndpointInputType {
   databaseNodeIds?: string[];
   databaseNodeId?: string;
   publishedEvents?: PublishedEventInputType[];
+}
+
+export interface TestCaseItem {
+  id?: string;
+  testCaseId?: string;
+  name?: string;
+  targetNodeId?: string;
+  nodeId?: string;
+  targetEventId?: string;
+  request?: {
+    headers?: Record<string, string>;
+    params?: Record<string, string>;
+    body?: unknown;
+  };
+  expectedStatus?: number;
+  expectedBody?: unknown;
+}
+
+export interface BackendNodeData {
+  label?: string;
+  description?: string;
+  columns?: Array<{ name: string }>;
+  endpoints?: Array<{ type: string; name: string }>;
+  events?: UIEventItem[];
+  topics?: Array<{ name: string }>;
+  testCases?: TestCaseItem[];
+  [key: string]: unknown;
+}
+
+export interface BackendNodeItem {
+  nodeId: string;
+  type?: string;
+  data?: BackendNodeData;
 }
 
