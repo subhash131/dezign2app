@@ -54,11 +54,11 @@ export const Footer = () => {
               </div>
 
               {/* Links Columns */}
-              <div className="flex flex-wrap gap-12 md:gap-20">
+              <div className="flex flex-wrap gap-12 md:gap-16">
                 <div className="flex flex-col gap-5">
                   <h4 className="text-[12px] font-bold text-black">Product</h4>
                   <div className="flex flex-col gap-3">
-                     <Link href="/workflows" className="text-[11px] text-gray-500 hover:text-black transition-colors">Features</Link>
+                     <Link href="/#features" className="text-[11px] text-gray-500 hover:text-black transition-colors">Features</Link>
                      <Link href="/#pricing" className="text-[11px] text-gray-500 hover:text-black transition-colors">Pricing</Link>
                      <Link href="/workflows" className="text-[11px] text-gray-500 hover:text-black transition-colors">Integrations</Link>
                      <Link href="/changelog" className="text-[11px] text-gray-500 hover:text-black transition-colors">Changelog</Link>
@@ -82,6 +82,13 @@ export const Footer = () => {
                      <Link href="/partners" className="text-[11px] text-gray-500 hover:text-black transition-colors">Partners</Link>
                   </div>
                 </div>
+                <div className="flex flex-col gap-5">
+                  <h4 className="text-[12px] font-bold text-black">Legal</h4>
+                  <div className="flex flex-col gap-3">
+                     <Link href="/privacy" className="text-[11px] text-gray-500 hover:text-black transition-colors">Privacy Policy</Link>
+                     <Link href="/terms" className="text-[11px] text-gray-500 hover:text-black transition-colors">Terms & Conditions</Link>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -92,7 +99,7 @@ export const Footer = () => {
               </p>
               <div className="flex flex-wrap justify-center items-center gap-4 md:gap-6">
                 <Link href="/privacy" className="text-[10px] text-gray-500 hover:text-black underline decoration-gray-300 underline-offset-2 transition-colors">Privacy Policy</Link>
-                <Link href="/terms" className="text-[10px] text-gray-500 hover:text-black underline decoration-gray-300 underline-offset-2 transition-colors">Terms of Service</Link>
+                <Link href="/terms" className="text-[10px] text-gray-500 hover:text-black underline decoration-gray-300 underline-offset-2 transition-colors">Terms & Conditions</Link>
                 <button className="text-[10px] text-gray-500 hover:text-black underline decoration-gray-300 underline-offset-2 transition-colors">Cookies Settings</button>
               </div>
             </div>
