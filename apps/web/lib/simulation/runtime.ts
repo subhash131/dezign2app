@@ -157,6 +157,19 @@ export async function simulateEndpoint(args: {
         input: clone(context.data),
       });
     }
+
+    // Resolve mock early — if a mock is defined for this endpoint, it IS the output.
+    const endpointMock = mocks?.[endpoint.id];
+
+    if (endpointMock) {
+      // Short-circuit: the user has explicitly defined what this endpoint returns.
+      const body = clone(endpointMock.returnData);
+      const status = endpointMock.status || 200;
+      trace.push({ id: endpoint.id, kind: "endpoint", label: `${endpoint.type} ${endpoint.name}`, status: "completed", nodeId: service.id, edgeId: ingressEdge?.id, input: clone(context.data), output: body });
+      trace.push({ id: `${endpoint.id}-response`, kind: "response", label: `[MOCKED] ${status} ${status === 201 ? "Created" : "OK"}`, status: "completed", nodeId: service.id, output: clone(body) });
+      return { status, statusText: status === 201 ? "Created" : "OK", headers: { "content-type": "application/json", "x-simulated": "true" }, body, trace };
+    }
+
     trace.push({ id: endpoint.id, kind: "endpoint", label: `${endpoint.type} ${endpoint.name}`, status: "completed", nodeId: service.id, edgeId: ingressEdge?.id, input: clone(context.data) });
 
     for (const step of steps) {
@@ -221,6 +234,7 @@ export async function simulateEndpoint(args: {
         const assignTo = config.assignTo ? String(config.assignTo) : undefined;
         if (assignTo) context.variables[assignTo] = clone(result);
         trace.push({ id: `${step.id}-db`, kind: "database", label: `${mock ? "[MOCKED] " : ""}${operation} ${database.ref.data.label ?? database.tableId}`, status: "completed", nodeId: database.ref.id, edgeId: database.edge?.id, input: where, output: clone(result) });
+        continue;
       } else if (operation === "return") {
         context.response = { status: Number(config.status ?? 200), body: resolveObject(config.body ?? context.data, context) };
       }
@@ -228,13 +242,13 @@ export async function simulateEndpoint(args: {
       trace.push({ id: step.id, kind: "step", label: step.text || operation, status: "completed", nodeId: service.id, input, output: clone(context.data) });
     }
 
-    const endpointMock = mocks?.[endpoint.id];
-    const body = endpointMock ? clone(endpointMock.returnData) : (context.response?.body ?? endpoint.simulationOutput ?? context.data);
-    const status = endpointMock ? (endpointMock.status || 200) : (context.response?.status ?? (endpoint.type === "POST" ? 201 : 200));
+    const body = context.response?.body ?? endpoint.simulationOutput ?? null;
+    const status = context.response?.status ?? (endpoint.type === "POST" ? 201 : 200);
     const schemaErrors = validateSchema(body, endpoint.responseBody);
     if (schemaErrors.length) throw new Error(schemaErrors.join(" "));
-    trace.push({ id: `${endpoint.id}-response`, kind: "response", label: `${endpointMock ? "[MOCKED] " : ""}${status} ${status === 201 ? "Created" : "OK"}`, status: "completed", nodeId: service.id, output: clone(body) });
-    return { status, statusText: status === 201 ? "Created" : "OK", headers: { "content-type": "application/json", "x-simulated": "true" }, body, trace };
+    const statusText = status === 201 ? "Created" : status === 204 ? "No Content" : "OK";
+    trace.push({ id: `${endpoint.id}-response`, kind: "response", label: `${status} ${statusText}`, status: "completed", nodeId: service.id, output: clone(body) });
+    return { status, statusText, headers: { "content-type": "application/json", "x-simulated": "true" }, body, trace };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     trace.push({ id: `${endpoint.id}-error`, kind: "response", label: "Simulation failed", status: "failed", nodeId: service.id, detail: message, output: clone(context.data) });
@@ -286,9 +300,26 @@ export async function simulateTestCase(args: {
   let result: SimulationResult | undefined;
   const visited = new Set<string>();
 
+  // Build the effective mocks map: merge test case mocks with the expectedBody/expectedStatus
+  // for the initial (target) endpoint so the simulation uses the configured output directly.
+  const buildMocks = (endpointId: string): Record<string, { returnData: JSONValue; status: number }> | undefined => {
+    const base = args.testCase.mocks ?? {};
+    if (args.testCase.expectedBody !== undefined && !(endpointId in base)) {
+      return {
+        ...base,
+        [endpointId]: {
+          returnData: args.testCase.expectedBody as JSONValue,
+          status: args.testCase.expectedStatus ?? 200,
+        },
+      };
+    }
+    return Object.keys(base).length > 0 ? base : undefined;
+  };
+
   while (current && !visited.has(`${current.service.id}:${current.endpoint.id}`)) {
     const step: { service: BackendNode; endpoint: Endpoint } = current;
     visited.add(`${step.service.id}:${step.endpoint.id}`);
+    const isFirst = visited.size === 1;
     result = await simulateEndpoint({
       service: step.service,
       endpoint: step.endpoint,
@@ -301,7 +332,7 @@ export async function simulateTestCase(args: {
         params: args.testCase.request?.params ?? {},
         body,
       },
-      mocks: args.testCase.mocks,
+      mocks: isFirst ? buildMocks(step.endpoint.id) : args.testCase.mocks,
     });
     trace.push(...result.trace);
     body = clone(result.body);

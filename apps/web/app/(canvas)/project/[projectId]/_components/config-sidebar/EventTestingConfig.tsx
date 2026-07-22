@@ -58,6 +58,7 @@ export const EventTestingConfig = ({ id, nodeId, targetNodeId, endpointId, initi
   const [activeTab, setActiveTab] = useState<string>(initialTab);
   const [newTcOpen, setNewTcOpen] = useState(false);
   const [newTcName, setNewTcName] = useState("");
+  const didAutoSelect = React.useRef(false);
 
   const [headers, setHeaders] = useState<Parameter[]>([]);
   const [params, setParams] = useState<Parameter[]>([]);
@@ -68,6 +69,19 @@ export const EventTestingConfig = ({ id, nodeId, targetNodeId, endpointId, initi
   useEffect(() => {
     setActiveTab(initialTab);
   }, [initialTab]);
+
+  // Auto-select the first test case when the panel opens (or when the list loads)
+  useEffect(() => {
+    // Reset flag whenever we switch to a different event
+    didAutoSelect.current = false;
+  }, [id]);
+
+  useEffect(() => {
+    if (!didAutoSelect.current && triggerTestCases.length > 0 && triggerTestCases[0]) {
+      didAutoSelect.current = true;
+      selectTestCase(triggerTestCases[0].id);
+    }
+  }, [triggerTestCases.length, id]);
 
   useEffect(() => {
     if (!endpoint) return;
@@ -100,7 +114,14 @@ export const EventTestingConfig = ({ id, nodeId, targetNodeId, endpointId, initi
 
   const handleSend = async () => {
     if (!endpoint || !event || !targetNode) return;
-    const parsedBody = body;
+    let parsedBody = body;
+    try {
+      if (typeof body === 'string' && body.trim().startsWith('{')) {
+        parsedBody = JSON.parse(body);
+      }
+    } catch (e) {
+      console.warn("Failed to parse body as JSON", e);
+    }
     setLoading(true);
     setResponse(null);
 
@@ -111,16 +132,19 @@ export const EventTestingConfig = ({ id, nodeId, targetNodeId, endpointId, initi
 
     const client = nodes.find((node) => node.id === nodeId);
     try {
+      const selectedCase = selectedGlobalCaseId !== "none" ? testCases.find(t => t.id === selectedGlobalCaseId) : undefined;
       const result = client
         ? await simulateTestCase({
           client,
           event,
           testCase: {
             id: selectedGlobalCaseId !== "none" ? selectedGlobalCaseId : "scratchpad",
-            name: selectedGlobalCaseId !== "none" ? testCases.find(t => t.id === selectedGlobalCaseId)?.name || "Test case" : "Test case",
+            name: selectedCase?.name || "Test case",
             targetNodeId: client.id,
             request: { headers: reqHeaders, params: queryParams, body: parsedBody },
-            mocks: selectedGlobalCaseId !== "none" ? testCases.find(t => t.id === selectedGlobalCaseId)?.mocks : undefined,
+            mocks: selectedCase?.mocks,
+            expectedBody: selectedCase?.expectedBody,
+            expectedStatus: selectedCase?.expectedStatus,
           },
           nodes,
           edges,
@@ -285,8 +309,13 @@ export const EventTestingConfig = ({ id, nodeId, targetNodeId, endpointId, initi
       targetNodeId: nodeId,
       targetEventId: event.id,
       request: { headers: {}, params: {}, body: getInitialBody(endpoint) },
-      expectedStatus: undefined,
-      expectedBody: undefined,
+      // Pre-populate expected output from the endpoint's configured simulation output on the graph node
+      expectedStatus: (endpoint.simulationOutput as any)?.status ?? 200,
+      expectedBody: endpoint.simulationOutput !== undefined
+        ? (endpoint.simulationOutput as JSONValue)
+        : endpoint.responseBody?.rawJson
+          ? (() => { try { return JSON.parse(endpoint.responseBody.rawJson) as JSONValue; } catch { return undefined; } })()
+          : undefined,
       mocks: {}
     };
     
@@ -555,7 +584,7 @@ export const EventTestingConfig = ({ id, nodeId, targetNodeId, endpointId, initi
             </div>
 
             {triggerTestCases.length > 0 ? (
-              <Accordion type="multiple" className="w-full flex flex-col gap-3">
+              <Accordion type="multiple" className="w-full flex flex-col gap-3 border-none">
                 {triggerTestCases.map(tc => (
                   <AccordionItem key={tc.id} value={tc.id} className="bg-card/50 border rounded-xl overflow-hidden shadow-sm backdrop-blur-sm">
                     <AccordionTrigger className="text-sm font-semibold px-4 py-3 hover:bg-secondary/20 hover:no-underline">
