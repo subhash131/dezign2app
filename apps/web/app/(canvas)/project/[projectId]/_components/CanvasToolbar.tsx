@@ -6,10 +6,11 @@ import { ArrowLeft, Network, Workflow, Sparkles, Database, RefreshCw, Trash2 } f
 import { BackendCanvasView } from "@/types/canvas";
 import { Button } from "@workspace/ui/components/button";
 import { Tabs, TabsList, TabsTrigger } from "@workspace/ui/components/tabs";
-import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { toast } from "sonner";
 import { useAuth } from "@clerk/nextjs";
 import { Label } from "@workspace/ui/components/label";
+import { useSimulationStore } from "@/lib/stores/simulationStore";
+import { FlaskConical } from "lucide-react";
 
 interface CanvasToolbarProps {
   projectName: string;
@@ -131,7 +132,16 @@ export function CanvasToolbar({
           </div>
         </div>
         <Button
-          variant={aiPanelOpen ? "secondary" : "ghost"}
+          variant={"secondary"}
+          size="sm"
+          className="py-3.5"
+          onClick={() => useSimulationStore.getState().toggleTestExplorer()}
+        >
+          <FlaskConical className="w-4 h-4 mr-2 text-primary" />
+          Test Explorer
+        </Button>
+        <Button
+          variant={"secondary"}
           size="sm"
           className="py-3.5"
           onClick={() => setAiPanelOpen(!aiPanelOpen)}

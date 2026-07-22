@@ -51,7 +51,7 @@ function serializeBackendCanvasForAI(
         ];
         const uniqueDbIds = [...new Set(dbIds)];
         const db = uniqueDbIds.length > 0 ? ` databaseNodeIds=[${uniqueDbIds.join(", ")}]` : "";
-        return `    - ${endpoint.type} ${endpoint.name} id=${endpoint.id} sourceHandle="endpoints-out-${endpoint.id}" targetHandle="endpoints-in-${endpoint.id}"${db}`;
+        return `    - ${endpoint.type} ${endpoint.name} id=${endpoint.id} sourceHandle="endpoint-out-${endpoint.id}" targetHandle="endpoint-in-${endpoint.id}"${db}`;
       }).join("\n");
     }
 

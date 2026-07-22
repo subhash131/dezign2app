@@ -22,8 +22,8 @@ function useSimulationEdgeState(edgeId: string, sourceId?: string, targetId?: st
         const edge = useBackendCanvasStore.getState().edges.find(e => e.id === edgeId);
         const sourceHandle = edge?.sourceHandle;
         
-        if (sourceHandle?.startsWith("endpoints-out-")) {
-          const endpointId = sourceHandle.replace("endpoints-out-", "");
+        if (sourceHandle?.startsWith("endpoint-out-")) {
+          const endpointId = sourceHandle.replace("endpoint-out-", "");
           const activeEndpointIds = trace.slice(0, activeIndex + 1).filter(t => t.kind === "endpoint").map(t => t.id);
           if (activeEndpointIds.includes(endpointId)) {
             isVisited = true;

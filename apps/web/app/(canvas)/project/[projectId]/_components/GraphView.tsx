@@ -132,8 +132,8 @@ export function GraphView({ projectId }: GraphViewProps) {
 
       const connectedToActive = edges.some((edge) => {
         if (edge.target === node.id && simulation.activeNodeIds.includes(edge.source)) {
-          if (edge.sourceHandle?.startsWith("endpoints-out-")) {
-            const endpointId = edge.sourceHandle.replace("endpoints-out-", "");
+        if (edge.sourceHandle?.startsWith("endpoint-out-")) {
+          const endpointId = edge.sourceHandle.replace("endpoint-out-", "");
             return activeEndpointIds.includes(endpointId);
           }
           return true;
@@ -151,8 +151,8 @@ export function GraphView({ projectId }: GraphViewProps) {
 
       const connectedToCurrent = edges.some((edge) => {
         if (edge.target === node.id && simulation.currentNodeId === edge.source) {
-          if (edge.sourceHandle?.startsWith("endpoints-out-")) {
-            const endpointId = edge.sourceHandle.replace("endpoints-out-", "");
+        if (edge.sourceHandle?.startsWith("endpoint-out-")) {
+          const endpointId = edge.sourceHandle.replace("endpoint-out-", "");
             return currentEndpointIds.includes(endpointId);
           }
           return true;
@@ -245,7 +245,6 @@ export function GraphView({ projectId }: GraphViewProps) {
                     const count = testCases.length;
                     setCaseNameDialog({ mode: "create", value: `Test Case ${count + 1}` });
                   }}
-                  disabled={!selectedCaseEntry}
                 >
                   <Plus className="h-3.5 w-3.5" />
                 </Button>

@@ -23,8 +23,8 @@ export const DatabaseTableRefNode = ({ id, data, selected }: NodeProps<BackendNo
     if (!srcNode) return null;
 
     let detail = "";
-    if (edge.sourceHandle?.startsWith("endpoints-out-")) {
-      const epId = edge.sourceHandle.replace("endpoints-out-", "");
+    if (edge.sourceHandle?.startsWith("endpoint-out-")) {
+      const epId = edge.sourceHandle.replace("endpoint-out-", "");
       let ep = srcNode.data.endpoints?.find((e) => e.id === epId);
       if (!ep && srcNode.data.routeGroups) {
         for (const group of srcNode.data.routeGroups) {

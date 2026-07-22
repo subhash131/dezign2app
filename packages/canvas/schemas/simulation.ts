@@ -13,4 +13,8 @@ export const simulationTestCaseSchema = z.object({
   expectedStatus: z.number().optional(),
   expectedBody: z.unknown().optional(),
   enabled: z.boolean().optional(),
+  mocks: z.record(z.object({
+    status: z.number().optional(),
+    returnData: z.unknown().optional()
+  })).optional(),
 });

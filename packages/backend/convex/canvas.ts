@@ -410,6 +410,8 @@ export const upsertBackendEndpoint = mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError("Not authenticated");
 
+    console.log("upsertBackendEndpoint called with:", args.endpointId, "businessLogic:", (args.data as any).businessLogic);
+
     const existing = await ctx.db
       .query("canvas_backend_endpoints")
       .withIndex("by_node_endpoint", (q) =>

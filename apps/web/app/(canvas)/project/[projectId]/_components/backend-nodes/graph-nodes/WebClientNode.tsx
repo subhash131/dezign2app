@@ -1,13 +1,14 @@
 import React, { useState } from "react";
 import { NodeProps, Position, Handle } from "@xyflow/react";
 import { Globe, Plus, X, Play, Send, Loader2 } from "lucide-react";
-import { BackendNode, Endpoint, Parameter, UIEventItem } from "@/types/canvas";
+import { BackendNode, Endpoint, Parameter, UIEventItem, JSONValue } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { NodeHeader, generateId } from "./shared";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@workspace/ui/components/select";
+import { toast } from "sonner";
 import {
   Dialog,
   DialogClose,
@@ -22,6 +23,10 @@ import { Textarea } from "@workspace/ui/components/textarea";
 import { simulateEndpoint, simulateTestCase, SimulationTraceEntry } from "@/lib/simulation/runtime";
 import { useSimulationStore } from "@/lib/stores/simulationStore";
 import { WEB_CLIENT_EVENTS } from "@workspace/canvas";
+import { useMutation } from "convex/react";
+import { api } from "@workspace/backend/_generated/api";
+import { Id } from "@workspace/backend/_generated/dataModel";
+import { useParams } from "next/navigation";
 
 const EVENT_OPTIONS = [...WEB_CLIENT_EVENTS];
 
@@ -53,6 +58,10 @@ interface TriggerDialogProps {
 }
 
 const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint, sourceNodeId, initialCaseId }: TriggerDialogProps) => {
+  const paramsHook = useParams();
+  const projectId = paramsHook.projectId as Id<"projects">;
+  const upsertBackendTestCase = useMutation(api.canvas.upsertBackendTestCase);
+
   const [headers, setHeaders] = useState<Parameter[]>(() => {
     return endpoint.headers?.map((h) => ({ ...h, key: h.key ?? h.name, value: h.value ?? h.defaultValue ?? "" })) || [];
   });
@@ -72,19 +81,33 @@ const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint, sourceNod
   const startSimulation = useSimulationStore((state) => state.start);
 
   React.useEffect(() => {
+    if (!isOpen) return;
+
+    if (selectedGlobalCaseId !== "none") {
+      const testCase = testCases.find(tc => tc.id === selectedGlobalCaseId);
+      if (testCase) {
+        setHeaders(endpoint.headers?.map((h) => ({ ...h, key: h.key ?? h.name, value: testCase.request?.headers?.[h.name] ?? h.defaultValue ?? "" })) || []);
+        setParams(endpointInputParams(endpoint).map((param) => ({ ...param, value: testCase.request?.params?.[param.key || param.name] ?? param.value ?? "" })));
+        setBody(testCase.request?.body === undefined ? endpointBodyTemplate(endpoint) : JSON.stringify(testCase.request.body, null, 2));
+        setResponse(null);
+        return;
+      }
+    }
+
     setHeaders(endpoint.headers?.map((h) => ({ ...h, key: h.key ?? h.name, value: h.value ?? h.defaultValue ?? "" })) || []);
     setParams(endpointInputParams(endpoint));
     setBody(endpointBodyTemplate(endpoint));
     setResponse(null);
-  }, [endpoint, event]);
+  }, [endpoint, event, isOpen]);
 
 
 
   const testCases = useSimulationStore((state) => state.testCases);
-  const [selectedGlobalCaseId, setSelectedGlobalCaseId] = useState<string>("none");
+  const selectedGlobalCaseId = useSimulationStore((state) => state.selectedCaseId) || "none";
+  const selectTestCase = useSimulationStore((state) => state.selectTestCase);
 
   const loadCase = (caseId: string) => {
-    setSelectedGlobalCaseId(caseId);
+    selectTestCase(caseId === "none" ? undefined : caseId);
     const testCase = testCases.find((item) => item.id === caseId);
     if (!testCase) return;
     setHeaders(endpoint.headers?.map((h) => ({ ...h, key: h.key ?? h.name, value: testCase.request?.headers?.[h.name] ?? h.defaultValue ?? "" })) || []);
@@ -93,7 +116,7 @@ const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint, sourceNod
   };
 
   const handleSend = async () => {
-    let parsedBody: unknown = null;
+    let parsedBody: JSONValue | undefined = undefined;
     if (body.trim()) {
       try {
         parsedBody = JSON.parse(body);
@@ -152,6 +175,64 @@ const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint, sourceNod
     startSimulation(result.trace);
   };
 
+  const addTestCase = useSimulationStore((state) => state.addTestCase);
+  const updateTestCase = useSimulationStore((state) => state.updateTestCase);
+  
+  const handleSaveTestCase = () => {
+    let parsedBody: JSONValue | undefined = undefined;
+    if (body.trim()) {
+      try {
+        parsedBody = JSON.parse(body);
+      } catch (err) {
+        toast.error("Invalid JSON in body");
+        return;
+      }
+    }
+    const queryParams: Record<string, string> = {};
+    params.forEach(p => { if (p.key) queryParams[p.key] = p.value || `[${p.type || "string"}]`; });
+    const reqHeaders: Record<string, string> = {};
+    headers.forEach(h => { if (h.key) reqHeaders[h.key.toLowerCase()] = h.value || ""; });
+    
+    if (selectedGlobalCaseId !== "none") {
+      const existingTestCase = testCases.find(tc => tc.id === selectedGlobalCaseId);
+      if (existingTestCase) {
+        const updatedCase = {
+          ...existingTestCase,
+          request: {
+            headers: reqHeaders,
+            params: queryParams,
+            body: parsedBody
+          }
+        };
+        updateTestCase(updatedCase.id, { request: updatedCase.request });
+        if (projectId) {
+          upsertBackendTestCase({ projectId, testCaseId: updatedCase.id, data: updatedCase });
+        }
+        toast.success("Test case updated!");
+        return;
+      }
+    }
+
+    const newCase = {
+      id: generateId(),
+      name: `Test for ${event.name}`,
+      targetNodeId: sourceNodeId,
+      targetEventId: event.id,
+      request: {
+        headers: reqHeaders,
+        params: queryParams,
+        body: parsedBody
+      }
+    };
+    
+    addTestCase(newCase);
+    if (projectId) {
+      upsertBackendTestCase({ projectId, testCaseId: newCase.id, data: newCase });
+    }
+    selectTestCase(newCase.id);
+    toast.success("Test case saved!");
+  };
+
   const url = endpoint?.name || "/";
 
   return (
@@ -183,7 +264,7 @@ const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint, sourceNod
             <Select value={selectedGlobalCaseId} onValueChange={(value) => value !== "none" && loadCase(value)}>
               <SelectTrigger className="h-7 flex-1 text-xs"><SelectValue placeholder="Load a global test case" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">-- Load from test cases --</SelectItem>
+                <SelectItem value={"none"}>Load from test cases</SelectItem>
                 {testCases.map((testCase) => <SelectItem key={testCase.id} value={testCase.id}>{testCase.name}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -252,8 +333,7 @@ const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint, sourceNod
                   return (
                     <div key={field.id || field.name} className="grid grid-cols-3 items-center gap-2">
                       <Label className="text-xs font-mono text-muted-foreground">
-                        {field.name}{field.required ? " *" : ""}
-                        <span className="block text-[9px] opacity-60">{field.type}</span>
+                        {field.name}{field.required ? "*" : ""}
                       </Label>
                       <Input
                         className="col-span-2 h-7 text-xs font-mono bg-background"
@@ -279,6 +359,9 @@ const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint, sourceNod
 
           {/* Dialog Footer Actions */}
           <DialogFooter className="mt-2 flex sm:flex-row sm:justify-end gap-2">
+            <Button size="sm" variant="secondary" onClick={handleSaveTestCase}>
+              {selectedGlobalCaseId !== "none" ? "Update Test Case" : "Save as Test Case"}
+            </Button>
             <DialogClose asChild>
               <Button type="button" variant="outline" size="sm" className="text-xs">
                 Cancel

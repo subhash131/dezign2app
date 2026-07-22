@@ -620,6 +620,11 @@ export type UIEventItem = {
   event?: string;
 };
 
+export type JSONPrimitive = string | number | boolean | null;
+export type JSONValue = JSONPrimitive | JSONObject | JSONArray;
+export interface JSONObject { [key: string]: JSONValue }
+export interface JSONArray extends Array<JSONValue> {}
+
 /** A global simulation scenario. */
 export type SimulationTestCase = {
   id: string;
@@ -629,11 +634,13 @@ export type SimulationTestCase = {
   request?: {
     headers?: Record<string, string>;
     params?: Record<string, string>;
-    body?: unknown;
+    body?: JSONValue;
   };
   expectedStatus?: number;
-  expectedBody?: unknown;
+  expectedBody?: JSONValue;
   enabled?: boolean;
+  mocks?: Record<string, { returnData: JSONValue; status: number }>;
+  expectedPath?: string[];
 };
 
 export type AnyMessagingResource = {

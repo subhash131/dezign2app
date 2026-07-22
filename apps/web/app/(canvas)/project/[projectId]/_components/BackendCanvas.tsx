@@ -21,6 +21,7 @@ import { GraphView } from "./GraphView";
 import { SequenceView } from "./SequenceView";
 import { useChatStore } from "@/app/(protected)/_components/chat/chat-store";
 import { useSimulationStore } from "@/lib/stores/simulationStore";
+import { TestExplorerPanel } from "./TestExplorerPanel";
 
 interface BackendCanvasProps {
   projectId: string;
@@ -30,6 +31,28 @@ interface BackendCanvasProps {
 function Flow({ projectId, view }: BackendCanvasProps) {
   // Syncs the local zustand store with the remote Convex database
   useBackendSync(projectId, view);
+
+  // Syncs the active test case for this project from localStorage
+  const testCases = useSimulationStore(s => s.testCases);
+  const selectedCaseId = useSimulationStore(s => s.selectedCaseId);
+  const selectTestCase = useSimulationStore(s => s.selectTestCase);
+  
+  React.useEffect(() => {
+    if (testCases.length > 0 && !selectedCaseId) {
+      const savedId = localStorage.getItem(`active-test-case-${projectId}`);
+      if (savedId && testCases.some(tc => tc.id === savedId)) {
+        selectTestCase(savedId);
+      }
+    }
+  }, [testCases.length, projectId]);
+
+  React.useEffect(() => {
+    if (selectedCaseId) {
+      localStorage.setItem(`active-test-case-${projectId}`, selectedCaseId);
+    } else {
+      localStorage.removeItem(`active-test-case-${projectId}`);
+    }
+  }, [selectedCaseId, projectId]);
 
   if (view === "sequence") {
     return <SequenceView />;
@@ -77,6 +100,7 @@ export function BackendCanvas(props: BackendCanvasProps) {
         </AlertDialogContent>
       </AlertDialog>
       <ConfigSidebar />
+      <TestExplorerPanel />
       <ChatContainer />
     </>
   );

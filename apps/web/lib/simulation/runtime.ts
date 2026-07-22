@@ -1,4 +1,4 @@
-import type { BackendEdge, BackendNode, Endpoint, Schema, SimulationTestCase, UIEventItem } from "@/types/canvas";
+import type { BackendEdge, BackendNode, Endpoint, Schema, SimulationTestCase, UIEventItem, JSONValue } from "@/types/canvas";
 import { getSimulationTable, saveSimulationTable } from "./database";
 
 export type SimulationRequest = {
@@ -128,8 +128,9 @@ export async function simulateEndpoint(args: {
   request: SimulationRequest;
   sourceNodeId?: string;
   sourceEventId?: string;
+  mocks?: Record<string, { returnData: JSONValue; status: number }>;
 }): Promise<SimulationResult> {
-  const { service, endpoint, nodes, edges, request } = args;
+  const { service, endpoint, nodes, edges, request, mocks } = args;
   const trace: SimulationTraceEntry[] = [];
   const context: RuntimeContext = { request, data: clone(request.body), variables: {} };
   const entitySeeds: Record<string, Array<Record<string, unknown>>> = {};
@@ -155,7 +156,7 @@ export async function simulateEndpoint(args: {
     const edge = edges.find((candidate) =>
       candidate.source === service.id &&
       candidate.target === ref.id &&
-      candidate.sourceHandle === `endpoints-out-${endpoint.id}` &&
+      candidate.sourceHandle === `endpoint-out-${endpoint.id}` &&
       candidate.targetHandle === "database-target"
     );
     return { ref, rows, tableId, edge };
@@ -216,20 +217,28 @@ export async function simulateEndpoint(args: {
       } else if (operation.startsWith("db_")) {
         const database = await databaseFor(config);
         const where = resolveObject(config.where ?? {}, context) as Record<string, unknown>;
-        const matches = (row: Record<string, unknown>) => Object.entries(where).every(([key, value]) => row[key] === value);
+        
         let result: unknown;
-        if (operation === "db_get") result = database.rows.find(matches) ?? null;
-        if (operation === "db_get_many") result = database.rows.filter(matches);
-        if (operation === "db_insert") { const row = resolveObject(config.value ?? context.data, context) as Record<string, unknown>; database.rows.push(clone(row)); result = row; }
-        if (operation === "db_update") { const row = database.rows.find(matches); if (!row) throw new Error("No matching database row found."); Object.assign(row, resolveObject(config.value ?? context.data, context)); result = row; }
-        if (operation === "db_delete") { const index = database.rows.findIndex(matches); result = index >= 0 ? database.rows.splice(index, 1)[0] : null; }
-        if (operation === "db_insert" || operation === "db_update" || operation === "db_delete") {
-          await saveSimulationTable(database.tableId, database.rows);
+        const mock = mocks?.[database.ref.id];
+        
+        if (mock) {
+          result = clone(mock.returnData);
+        } else {
+          const matches = (row: Record<string, unknown>) => Object.entries(where).every(([key, value]) => row[key] === value);
+          if (operation === "db_get") result = database.rows.find(matches) ?? null;
+          if (operation === "db_get_many") result = database.rows.filter(matches);
+          if (operation === "db_insert") { const row = resolveObject(config.value ?? context.data, context) as Record<string, unknown>; database.rows.push(clone(row)); result = row; }
+          if (operation === "db_update") { const row = database.rows.find(matches); if (!row) throw new Error("No matching database row found."); Object.assign(row, resolveObject(config.value ?? context.data, context)); result = row; }
+          if (operation === "db_delete") { const index = database.rows.findIndex(matches); result = index >= 0 ? database.rows.splice(index, 1)[0] : null; }
+          if (operation === "db_insert" || operation === "db_update" || operation === "db_delete") {
+            await saveSimulationTable(database.tableId, database.rows);
+          }
         }
+        
         context.data = clone(result);
         const assignTo = config.assignTo ? String(config.assignTo) : undefined;
         if (assignTo) context.variables[assignTo] = clone(result);
-        trace.push({ id: `${step.id}-db`, kind: "database", label: `${operation} ${database.ref.data.label ?? database.tableId}`, status: "completed", nodeId: database.ref.id, edgeId: database.edge?.id, input: where, output: clone(result) });
+        trace.push({ id: `${step.id}-db`, kind: "database", label: `${mock ? "[MOCKED] " : ""}${operation} ${database.ref.data.label ?? database.tableId}`, status: "completed", nodeId: database.ref.id, edgeId: database.edge?.id, input: where, output: clone(result) });
       } else if (operation === "return") {
         context.response = { status: Number(config.status ?? 200), body: resolveObject(config.body ?? context.data, context) };
       }
@@ -309,6 +318,7 @@ export async function simulateTestCase(args: {
         params: args.testCase.request?.params ?? {},
         body,
       },
+      mocks: args.testCase.mocks,
     });
     trace.push(...result.trace);
     body = clone(result.body);
@@ -326,6 +336,9 @@ export async function simulateTestCase(args: {
   if (!result) {
     throw new Error("Simulation did not execute an endpoint.");
   }
+  const uniqueActualPath = trace.map(t => t.nodeId).filter((id, i, arr) => id && id !== arr[i - 1]) as string[];
+  const pathPassed = args.testCase.expectedPath === undefined || JSON.stringify(args.testCase.expectedPath) === JSON.stringify(uniqueActualPath);
+
   const assertions = [{
     name: "expected status",
     passed: args.testCase.expectedStatus === undefined || args.testCase.expectedStatus === result.status,
@@ -334,6 +347,10 @@ export async function simulateTestCase(args: {
     name: "expected body",
     passed: args.testCase.expectedBody === undefined || JSON.stringify(args.testCase.expectedBody) === JSON.stringify(result.body),
     detail: args.testCase.expectedBody === undefined ? undefined : "Response body differs from expected body",
+  }, {
+    name: "expected path",
+    passed: pathPassed,
+    detail: args.testCase.expectedPath === undefined ? undefined : `Expected path ${JSON.stringify(args.testCase.expectedPath)}, but executed ${JSON.stringify(uniqueActualPath)}`,
   }];
   const passed = assertions.every((assertion) => assertion.passed);
   return { ...result, trace, testCaseId: args.testCase.id, testCaseName: args.testCase.name, assertions, status: passed ? result.status : 422, statusText: passed ? result.statusText : "Assertion Failed" };

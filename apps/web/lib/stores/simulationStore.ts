@@ -12,11 +12,13 @@ type SimulationState = {
   activeEdgeIds: string[];
   currentNodeId?: string;
   currentEdgeId?: string;
+  testExplorerOpen: boolean;
+  toggleTestExplorer: () => void;
   terminalOpen: boolean;
   selectedCaseId?: string;
   testCases: SimulationTestCase[];
   setTestCases: (testCases: SimulationTestCase[]) => void;
-  selectTestCase: (caseId: string) => void;
+  selectTestCase: (caseId: string | undefined) => void;
   clearSelectedTestCase: () => void;
   addTestCase: (testCase: SimulationTestCase) => void;
   updateTestCase: (id: string, updates: Partial<SimulationTestCase>) => void;
@@ -36,6 +38,8 @@ export const useSimulationStore = create<SimulationState>((set) => ({
       activeEdgeIds: [],
       currentNodeId: undefined,
       currentEdgeId: undefined,
+      testExplorerOpen: false,
+      toggleTestExplorer: () => set((state) => ({ testExplorerOpen: !state.testExplorerOpen })),
       terminalOpen: true,
       selectedCaseId: undefined,
       testCases: [],
