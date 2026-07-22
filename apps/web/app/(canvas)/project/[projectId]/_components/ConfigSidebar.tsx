@@ -9,6 +9,7 @@ import { TaskConfig } from "./config-sidebar/TaskConfig";
 import { SearchIndexConfig } from "./config-sidebar/SearchIndexConfig";
 import { AuthRuleConfig } from "./config-sidebar/AuthRuleConfig";
 import { IdentityProviderConfig } from "./config-sidebar/IdentityProviderConfig";
+import { EventTestingConfig } from "./config-sidebar/EventTestingConfig";
 
 export const ConfigSidebar = () => {
   const activeConfigItem = useBackendCanvasStore(s => s.activeConfigItem);
@@ -117,6 +118,7 @@ export const ConfigSidebar = () => {
          type === 'authRule' ? <AuthRuleConfig id={id} nodeId={nodeId} /> :
          type === 'identityProvider' ? <IdentityProviderConfig id={id} nodeId={nodeId} /> :
          type === 'clientEvent' ? <ClientEventConfig id={id} nodeId={nodeId} /> :
+         type === 'eventTesting' ? <EventTestingConfig id={id} nodeId={nodeId} targetNodeId={activeConfigItem.targetNodeId!} endpointId={activeConfigItem.endpointId!} initialTab={activeConfigItem.initialTab} /> :
          <EventConfig id={id} nodeId={nodeId} />}
       </SheetContent>
     </Sheet>

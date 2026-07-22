@@ -158,8 +158,8 @@ interface BackendCanvasState {
   endpoints: (Endpoint & { nodeId: string })[];
   events: (AnyMessagingResource & { nodeId: string, variant: 'publish' | 'consume' })[];
   identityProviders: (IdentityProvider & { nodeId: string })[];
-  activeConfigItem: { type: 'endpoint' | 'event' | 'task' | 'searchIndex' | 'authRule' | 'identityProvider' | 'clientEvent', id: string, nodeId: string, sourceId?: string } | null;
-  setActiveConfigItem: (item: { type: 'endpoint' | 'event' | 'task' | 'searchIndex' | 'authRule' | 'identityProvider' | 'clientEvent', id: string, nodeId: string, sourceId?: string } | null) => void;
+  activeConfigItem: { type: 'endpoint' | 'event' | 'task' | 'searchIndex' | 'authRule' | 'identityProvider' | 'clientEvent' | 'eventTesting', id: string, nodeId: string, sourceId?: string, targetNodeId?: string, endpointId?: string, initialTab?: 'trigger' | 'test-cases' } | null;
+  setActiveConfigItem: (item: { type: 'endpoint' | 'event' | 'task' | 'searchIndex' | 'authRule' | 'identityProvider' | 'clientEvent' | 'eventTesting', id: string, nodeId: string, sourceId?: string, targetNodeId?: string, endpointId?: string, initialTab?: 'trigger' | 'test-cases' } | null) => void;
 
   // Pending Convex sync ops
   pendingNodeUpserts: BackendNode[];
