@@ -69,6 +69,9 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
     const store = useBackendCanvasStore.getState();
     const pendingNodeIds = new Set(store.pendingNodeUpserts.map((n) => n.id));
     const pendingEdgeIds = new Set(store.pendingEdgeUpserts.map((e) => e.id));
+    const pendingEventIds = new Set(store.pendingEventUpserts.map((ev) => ev.id));
+    const pendingEndpointIds = new Set(store.pendingEndpointUpserts.map((ep) => ep.id));
+    const pendingProviderIds = new Set(store.pendingIdentityProviderUpserts.map((p) => p.id));
 
     // Ensure parent nodes appear before child nodes for React Flow
     const nodesToSet: BackendNode[] = [];
@@ -123,16 +126,43 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
     const fullEndpointSchema = endpointSchema.extend({ nodeId: z.string() });
     const fullEventSchema = z.union([
       publishedEventSchema.extend({ nodeId: z.string(), variant: z.literal("publish") }),
-      consumedEventSchema.extend({ nodeId: z.string(), variant: z.literal("consume"), name: z.string().default("") })
+      consumedEventSchema.extend({ nodeId: z.string(), variant: z.literal("consume") })
     ]);
     const fullIdentityProviderSchema = identityProviderSchema.extend({ nodeId: z.string() });
+
+    const rawEndpoints = z.array(fullEndpointSchema).parse(initialElements.endpoints || []);
+    const endpointsToSet = rawEndpoints.map((ep) => {
+      if (!isFirstHydration && pendingEndpointIds.has(ep.id)) {
+        const local = store.endpoints.find((e) => e.id === ep.id);
+        if (local) return local;
+      }
+      return ep;
+    });
+
+    const rawEvents = z.array(fullEventSchema).parse(initialElements.events || []);
+    const eventsToSet = rawEvents.map((ev) => {
+      if (!isFirstHydration && pendingEventIds.has(ev.id)) {
+        const local = store.events.find((e) => e.id === ev.id);
+        if (local) return local;
+      }
+      return ev;
+    });
+
+    const rawProviders = z.array(fullIdentityProviderSchema).parse(initialElements.identityProviders || []);
+    const providersToSet = rawProviders.map((p) => {
+      if (!isFirstHydration && pendingProviderIds.has(p.id)) {
+        const local = store.identityProviders.find((ip) => ip.id === p.id);
+        if (local) return local;
+      }
+      return p;
+    });
 
     setNodesAndEdges(
       nodesToSet,
       edgesToSet,
-      z.array(fullEndpointSchema).parse(initialElements.endpoints || []),
-      z.array(fullEventSchema).parse(initialElements.events || []),
-      z.array(fullIdentityProviderSchema).parse(initialElements.identityProviders || [])
+      endpointsToSet,
+      eventsToSet,
+      providersToSet
     );
     useSimulationStore.getState().setTestCases((initialElements.testCases || []) as any);
   }, [initialElements, setNodesAndEdges, view]);

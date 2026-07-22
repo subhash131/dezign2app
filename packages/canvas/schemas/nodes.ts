@@ -13,7 +13,7 @@ export const baseNodeDataSchema = z.object({
 });
 
 export const resourceItemSchema = z.object({
-  id: z.string().optional(),
+  id: z.string().default(""),
   name: z.string(),
   payloadSchema: schemaModelSchema.optional(),
   kind: z.string().optional(),
@@ -36,6 +36,19 @@ export const resourceItemSchema = z.object({
   maxObjectSize: z.string().optional(),
   persistence: z.string().optional(),
   replication: z.string().optional(),
+  publishedWhen: z.string().optional(),
+  handlerLogic: z.string().optional(),
+  retryPolicy: z.string().optional(),
+  maxRetries: z.number().optional(),
+  deadLetterQueue: z.string().optional(),
+  isIdempotent: z.boolean().optional(),
+  version: z.string().optional(),
+  category: z.string().optional(),
+  delivery: z.string().optional(),
+  brokerNodeId: z.string().optional(),
+  messagingResourceId: z.string().optional(),
+  schema: z.string().optional(),
+  _legacyName: z.string().optional(),
 });
 
 export const simpleDataSchema = baseNodeDataSchema.extend({
@@ -97,9 +110,8 @@ export const entityDataInputSchema = baseNodeDataSchema.extend({
   columns: z.array(entityColumnInputSchema),
 });
 
-export const kafkaTopicSchema = z.object({
-  id: z.string(),
-  kind: z.literal("topic").optional(),
+export const kafkaTopicSchema = resourceItemSchema.extend({
+  kind: z.string().optional(),
   name: z.string(),
   description: z.string().optional(),
   schema: z.string().optional(),
@@ -108,9 +120,7 @@ export const kafkaTopicSchema = z.object({
 });
 export type KafkaTopic = z.infer<typeof kafkaTopicSchema>;
 
-export const kafkaTopicInputSchema = kafkaTopicSchema.extend({
-  id: z.string().optional(),
-});
+export const kafkaTopicInputSchema = kafkaTopicSchema;
 
 export const kafkaBrokerSchema = z.object({
   partitions: z.number().optional(),

@@ -39,6 +39,11 @@ export const publishedEventInputSchema: z.ZodType<PublishedEventInputType> = z.o
 
 export const consumedEventSchema = z.object({
   id: z.string(),
+  name: z.string().default(""),
+  kind: z.string().optional(),
+  description: z.string().optional(),
+  handlerLogic: z.string().optional(),
+  payloadSchema: schemaModelSchema.default({ id: "dummy" }).optional(),
   eventId: z.string().default(""),
   brokerNodeId: z.string().default(""),
   messagingResourceId: z.string().default(""),
