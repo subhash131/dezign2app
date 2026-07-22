@@ -1,8 +1,9 @@
 import React from "react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
-import { ParameterEditor, SchemaEditor } from "../backend-nodes/graph-nodes/Editors";
+import { ParameterEditor, SchemaEditor, JsonPayloadEditor } from "../backend-nodes/graph-nodes/Editors";
 import { MessagingResourceList, LocalTextarea, LocalInput } from "../backend-nodes/graph-nodes/shared";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@workspace/ui/components/select";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@workspace/ui/components/tabs";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import { useSimulationStore } from "@/lib/stores/simulationStore";
@@ -43,41 +44,15 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
 
   const selectedCase = testCases.find(tc => tc.id === selectedCaseId);
   const currentResponseMock = selectedCase?.mocks?.[id]?.returnData;
-  
-  let responseMockObj: JSONObject = {};
-  if (typeof currentResponseMock === "object" && currentResponseMock !== null && !Array.isArray(currentResponseMock)) {
-    responseMockObj = currentResponseMock;
-  }
 
-  const updateResponseMockField = (fieldName: string, value: string) => {
+  const updateEventMock = (eventId: string, value: any) => {
     if (!selectedCase) return;
-    const newObj: JSONObject = { ...responseMockObj, [fieldName]: value };
-    const newMocks = { ...selectedCase.mocks, [id]: { returnData: newObj, status: 200 } };
+    const newMocks = { ...selectedCase.mocks, [eventId]: { returnData: value, status: 200 } };
     const updatedCase = { ...selectedCase, mocks: newMocks };
     updateTestCase(updatedCase.id, { mocks: newMocks });
     if (projectId) {
       upsertBackendTestCase({ projectId, testCaseId: updatedCase.id, data: updatedCase });
     }
-  };
-
-  const updateEventMock = (eventId: string, value: string) => {
-    if (!selectedCase) return;
-    let parsed: JSONValue = value;
-    try { parsed = JSON.parse(value); } catch {}
-    const newMocks = { ...selectedCase.mocks, [eventId]: { returnData: parsed, status: 200 } };
-    const updatedCase = { ...selectedCase, mocks: newMocks };
-    updateTestCase(updatedCase.id, { mocks: newMocks });
-    if (projectId) {
-      upsertBackendTestCase({ projectId, testCaseId: updatedCase.id, data: updatedCase });
-    }
-  };
-
-  const getFieldValue = (name: string): string => {
-    const v = responseMockObj[name];
-    if (typeof v === "string") return v;
-    if (v === null || v === undefined) return "";
-    if (typeof v === "object") return JSON.stringify(v);
-    return String(v);
   };
 
   return (
@@ -158,11 +133,11 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
         <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Business Logic (Pseudo-code)
         </span>
-        <Textarea 
+        <LocalTextarea 
           key={`businessLogic-${item.id}`}
           className="min-h-[120px] text-sm resize-none bg-background/50 focus-visible:ring-1 font-mono"
           placeholder="e.g. 1. Validate user input&#10;2. Check if user exists&#10;3. Save to database"
-          defaultValue={item.businessLogic || ""}
+          value={item.businessLogic || ""}
           onBlur={e => updateEndpoint(item.id, { businessLogic: e.target.value })}
         />
       </div>
@@ -209,28 +184,22 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
           <div className="flex flex-col gap-4 mt-2">
             
             {/* Response Mock */}
-            <div className="flex flex-col gap-2 border p-3 rounded-lg bg-secondary/5">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Response Payload</span>
-              {(!item.responseBody?.fields || item.responseBody.fields.length === 0) ? (
-                <span className="text-xs text-muted-foreground italic">No fields defined in response schema.</span>
-              ) : (
-                <div className="grid gap-2">
-                  {item.responseBody.fields.map(field => (
-                    <div key={field.id || field.name} className="grid grid-cols-3 items-center gap-2">
-                      <Label className="text-xs font-mono text-muted-foreground">
-                        {field.name}{field.required ? "*" : ""}
-                      </Label>
-                      <LocalInput
-                        className="col-span-2 h-7 text-xs font-mono bg-background"
-                        placeholder={`<${field.type}>`}
-                        value={getFieldValue(field.name)}
-                        onBlur={(e) => updateResponseMockField(field.name, e.target.value)}
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <JsonPayloadEditor
+              key={`mock-${selectedCaseId}-${id}`}
+              title="Response Payload"
+              schema={item.responseBody}
+              value={currentResponseMock}
+              onChange={(newMock) => {
+                if (selectedCase) {
+                  const newMocks = { ...selectedCase.mocks, [id]: { returnData: newMock, status: 200 } };
+                  const updatedCase = { ...selectedCase, mocks: newMocks };
+                  updateTestCase(updatedCase.id, { mocks: newMocks });
+                  if (projectId) {
+                    upsertBackendTestCase({ projectId, testCaseId: updatedCase.id, data: updatedCase });
+                  }
+                }
+              }}
+            />
 
             {/* Published Events Mock */}
             {item.publishedEvents && item.publishedEvents.length > 0 && (
@@ -239,16 +208,15 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
                 <div className="grid gap-3">
                   {item.publishedEvents.map(event => {
                     const eventMock = selectedCase?.mocks?.[event.id!]?.returnData;
-                    const eventMockText = eventMock === undefined ? "" : (typeof eventMock === "string" ? eventMock : JSON.stringify(eventMock, null, 2));
                     return (
-                      <div key={event.id} className="flex flex-col gap-1.5">
-                        <Label className="text-xs font-mono font-semibold">{event.name}</Label>
-                        <Textarea
-                          key={`eventMock-${event.id}`}
-                          className="min-h-[60px] text-xs resize-y bg-background font-mono"
-                          placeholder={'{"key": "value"}'}
-                          defaultValue={eventMockText}
-                          onBlur={(e) => updateEventMock(event.id!, e.target.value)}
+                      <div key={event.id} className="pb-2">
+                        <JsonPayloadEditor
+                          key={`eventMock-${event.id}-${selectedCaseId}`}
+                          title={`${event.name} Payload`}
+                          schema={event.payloadSchema}
+                          value={eventMock}
+                          onChange={(val) => updateEventMock(event.id!, val)}
+                          emptyText="No schema defined for this event. Use Raw JSON."
                         />
                       </div>
                     );

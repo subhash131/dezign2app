@@ -59,6 +59,7 @@ export const endpointInputSchema: z.ZodType<EndpointInputType> = z.object({
       id: z.string().optional(), name: z.string(), type: z.string(), required: z.boolean(),
       description: z.string().optional(),
     }).passthrough()),
+    rawJson: z.string().optional(),
   }).passthrough().describe("Request body schema. Use fields: [] only for endpoints with no body."),
   responseBody: z.object({
     id: z.string().optional(),
@@ -66,6 +67,7 @@ export const endpointInputSchema: z.ZodType<EndpointInputType> = z.object({
       id: z.string().optional(), name: z.string(), type: z.string(), required: z.boolean(),
       description: z.string().optional(),
     }).passthrough()),
+    rawJson: z.string().optional(),
   }).passthrough().describe("Response body schema; define the actual returned fields."),
   simulationOutput: z.unknown().optional().describe("Fixture returned by this endpoint during simulation; passed unchanged to the next connected endpoint."),
   processingSteps: z.array(z.object({

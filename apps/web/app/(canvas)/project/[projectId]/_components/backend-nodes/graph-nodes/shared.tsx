@@ -23,12 +23,38 @@ export const LocalInput = ({ value, onChange, ...props }: React.ComponentProps<t
   }} />;
 };
 
-export const LocalTextarea = ({ value, onChange, ...props }: React.ComponentProps<typeof Textarea>) => {
+export const LocalTextarea = ({ value, onChange, onKeyDown, ...props }: React.ComponentProps<typeof Textarea>) => {
   const [localValue, setLocalValue] = useState(value);
   React.useEffect(() => {
     if (value !== localValue) setLocalValue(value);
   }, [value]);
-  return <Textarea {...props} value={localValue as string | undefined} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const target = e.target as HTMLTextAreaElement;
+      const start = target.selectionStart;
+      const end = target.selectionEnd;
+      const currentVal = (localValue as string) || "";
+      const newValue = currentVal.substring(0, start) + "  " + currentVal.substring(end);
+      
+      setLocalValue(newValue);
+      
+      if (onChange) {
+        const syntheticEvent = {
+          target: { value: newValue }
+        } as React.ChangeEvent<HTMLTextAreaElement>;
+        onChange(syntheticEvent);
+      }
+      
+      setTimeout(() => {
+        target.selectionStart = target.selectionEnd = start + 2;
+      }, 0);
+    }
+    if (onKeyDown) onKeyDown(e);
+  };
+
+  return <Textarea {...props} value={localValue as string | undefined} onKeyDown={handleKeyDown} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setLocalValue(e.target.value);
     if (onChange) onChange(e);
   }} />;

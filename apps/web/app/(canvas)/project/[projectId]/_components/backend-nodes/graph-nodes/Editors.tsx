@@ -2,8 +2,10 @@ import React from "react";
 import { Plus, X, Text } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@workspace/ui/components/select";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@workspace/ui/components/tabs";
+import { Label } from "@workspace/ui/components/label";
 import { Combobox, ComboboxInput, ComboboxContent, ComboboxList, ComboboxItem, ComboboxEmpty } from "@workspace/ui/components/combobox";
-import { Parameter, Schema, ProcessingStep } from "@/types/canvas";
+import { Parameter, Schema, ProcessingStep, JSONValue, JSONObject } from "@/types/canvas";
 import { generateId, LocalInput, LocalTextarea } from "./shared";
 
 // --- Processing Steps Editor ---
@@ -192,6 +194,89 @@ export const ParameterEditor = ({
   );
 };
 
+const TabbedJsonEditorLayout = ({
+  title,
+  defaultTab,
+  rawJsonValue, 
+  onRawJsonChange,
+  onParsedJsonChange,
+  formContent,
+}: {
+  title: string;
+  defaultTab: "form" | "raw";
+  rawJsonValue: string;
+  onRawJsonChange?: (val: string) => void;
+  onParsedJsonChange?: (parsed: JSONValue) => void;
+  formContent: React.ReactNode;
+}) => {
+  const [activeTab, setActiveTab] = React.useState<"form" | "raw">(defaultTab);
+  const [rawInput, setRawInput] = React.useState<string | undefined>(undefined);
+  const [jsonError, setJsonError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    setActiveTab(defaultTab);
+  }, [defaultTab]);
+
+  const handleRawChange = (val: string) => {
+    setRawInput(val);
+    if (!val.trim()) {
+      setJsonError(null);
+      return;
+    }
+    try {
+      JSON.parse(val);
+      setJsonError(null);
+    } catch (err) {
+      setJsonError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  const handleRawBlur = () => {
+    if (jsonError || rawInput === undefined) return;
+    const finalVal = rawInput.trim();
+    if (onRawJsonChange) onRawJsonChange(finalVal);
+    if (onParsedJsonChange) {
+      try {
+        const parsed = finalVal ? JSON.parse(finalVal) : {};
+        onParsedJsonChange(parsed as JSONValue);
+      } catch {}
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-2 border p-3 rounded-lg bg-secondary/5">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "form" | "raw")} className="w-full flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{title}</span>
+          <TabsList className="h-7 bg-background">
+            <TabsTrigger value="form" className="text-[10px] px-2">Form</TabsTrigger>
+            <TabsTrigger value="raw" className="text-[10px] px-2">Raw JSON</TabsTrigger>
+          </TabsList>
+        </div>
+        
+        <TabsContent value="form" className="mt-0">
+          {formContent}
+        </TabsContent>
+        
+        <TabsContent value="raw" className="mt-0 flex flex-col gap-2">
+          <LocalTextarea
+            className={`min-h-[120px] text-xs font-mono resize-y bg-background focus-visible:ring-1 ${jsonError ? 'border-destructive focus-visible:ring-destructive' : ''}`}
+            placeholder={'{\n  "key": "value"\n}'}
+            value={rawInput !== undefined ? rawInput : rawJsonValue}
+            onChange={(e) => handleRawChange(e.target.value)}
+            onBlur={handleRawBlur}
+          />
+          {jsonError && (
+            <span className="text-[10px] text-destructive font-mono bg-destructive/10 px-2 py-1 rounded">
+              Invalid JSON: {jsonError}
+            </span>
+          )}
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+};
+
 export const SchemaEditor = ({
   title,
   schema,
@@ -204,12 +289,144 @@ export const SchemaEditor = ({
   fieldOptions?: string[];
 }) => {
   const safeSchema = schema || { id: generateId(), fields: [] };
+  const isRawValue = !!safeSchema.rawJson && safeSchema.fields.length === 0;
+
   return (
-    <ParameterEditor 
-      title={title} 
-      parameters={safeSchema.fields} 
-      onChange={(fields) => onChange({ ...safeSchema, fields })}
-      fieldOptions={fieldOptions}
+    <TabbedJsonEditorLayout
+      title={title}
+      defaultTab={isRawValue ? "raw" : "form"}
+      rawJsonValue={safeSchema.rawJson || ""}
+      onRawJsonChange={(rawStr) => onChange({ ...safeSchema, rawJson: rawStr })}
+      formContent={
+        <ParameterEditor 
+          title="Fields" 
+          parameters={safeSchema.fields} 
+          onChange={(fields) => onChange({ ...safeSchema, fields })}
+          fieldOptions={fieldOptions}
+        />
+      }
+    />
+  );
+};
+
+export const JsonPayloadEditor = ({
+  title = "Payload Editor",
+  schema,
+  value,
+  onChange,
+  emptyText = "No fields defined in schema. Use Raw JSON to mock an array or arbitrary object.",
+}: {
+  title?: string;
+  schema?: Schema;
+  value: JSONValue | undefined;
+  onChange: (value: JSONValue) => void;
+  emptyText?: string;
+}) => {
+  const getFieldValue = (name: string): string => {
+    if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+      const v = (value as JSONObject)[name];
+      if (typeof v === "string") return v;
+      if (v === null || v === undefined) return "";
+      if (typeof v === "object") return JSON.stringify(v);
+      return String(v);
+    }
+    return "";
+  };
+
+  const updateField = (fieldName: string, fieldValue: string, fieldType?: string) => {
+    let finalValue: JSONValue = fieldValue;
+    if (fieldType === "object" || fieldType === "array" || fieldType === "number" || fieldType === "boolean") {
+      try { finalValue = JSON.parse(fieldValue) as JSONValue; } catch {}
+    }
+    const baseObj = (typeof value === "object" && value !== null && !Array.isArray(value)) ? (value as JSONObject) : {};
+    onChange({ ...baseObj, [fieldName]: finalValue });
+  };
+
+  const isRawValue = React.useMemo(() => {
+    if (value === undefined || value === null) {
+      if (schema?.rawJson && (!schema.fields || schema.fields.length === 0)) return true;
+      return false;
+    }
+    if (typeof value !== "object") return true;
+    if (Array.isArray(value)) return true;
+    
+    // Check if any property is a nested object/array. If so, it's too complex for the flat form.
+    const valObj = value as Record<string, any>;
+    for (const key in valObj) {
+      if (valObj[key] !== null && typeof valObj[key] === "object") {
+        return true;
+      }
+    }
+
+    const schemaKeys = new Set(schema?.fields?.map(f => f.name) || []);
+    const valKeys = Object.keys(value);
+    for (const k of valKeys) {
+      if (!schemaKeys.has(k)) return true;
+    }
+    return false;
+  }, [value, schema]);
+
+  const generateMockFromSchema = () => {
+    if (schema?.rawJson) {
+      try {
+        const parsed = JSON.parse(schema.rawJson);
+        onChange(parsed);
+        return;
+      } catch {}
+    }
+    
+    if (schema?.fields) {
+      const mock: Record<string, any> = {};
+      schema.fields.forEach(f => {
+        if (f.type === "string") mock[f.name] = "string";
+        else if (f.type === "number") mock[f.name] = 0;
+        else if (f.type === "boolean") mock[f.name] = false;
+        else if (f.type === "array") mock[f.name] = [];
+        else mock[f.name] = {};
+      });
+      onChange(mock);
+    }
+  };
+
+  const formContent = (!schema?.fields || schema.fields.length === 0) ? (
+    <div className="flex flex-col gap-2">
+      <span className="text-xs text-muted-foreground italic">{emptyText}</span>
+      {schema?.rawJson && value === undefined && (
+        <Button size="sm" variant="outline" className="h-7 text-xs w-fit" onClick={generateMockFromSchema}>
+          Infer Mock from Schema
+        </Button>
+      )}
+    </div>
+  ) : (
+    <div className="grid gap-2">
+      {schema.fields.map(field => (
+        <div key={field.id || field.name} className="grid grid-cols-3 items-center gap-2">
+          <Label className="text-xs font-mono text-muted-foreground">
+            {field.name}{field.required ? "*" : ""}
+          </Label>
+          <LocalInput
+            className="col-span-2 h-7 text-xs font-mono bg-background"
+            placeholder={`<${field.type}>`}
+            value={getFieldValue(field.name)}
+            onBlur={(e) => updateField(field.name, e.target.value, field.type)}
+          />
+        </div>
+      ))}
+      {value === undefined && (
+        <Button size="sm" variant="outline" className="h-7 text-xs w-fit mt-1" onClick={generateMockFromSchema}>
+          Infer Mock from Schema
+        </Button>
+      )}
+    </div>
+  );
+
+  return (
+    <TabbedJsonEditorLayout
+      title={title}
+      defaultTab={isRawValue ? "raw" : "form"}
+      rawJsonValue={value !== undefined ? JSON.stringify(value, null, 2) : (schema?.rawJson || "")}
+      onParsedJsonChange={onChange}
+      formContent={formContent}
     />
   );
 };

@@ -19,6 +19,7 @@ export const parameterInputSchema = parameterSchema.extend({
 export const schemaModelSchema = z.object({
   id: z.string(),
   fields: z.array(parameterSchema),
+  rawJson: z.string().optional(),
 });
 
 export const schemaModelInputSchema = z.object({

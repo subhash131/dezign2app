@@ -5,6 +5,7 @@ import { BackendNode, Endpoint, Parameter, UIEventItem, JSONValue } from "@/type
 import { cn } from "@workspace/ui/lib/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { NodeHeader, generateId } from "./shared";
+import { JsonPayloadEditor } from "./Editors";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@workspace/ui/components/select";
@@ -41,10 +42,17 @@ function endpointInputParams(endpoint: Endpoint): Parameter[] {
 
 function endpointBodyTemplate(endpoint: Endpoint): string {
   if (endpoint.body) return endpoint.body;
+  if (endpoint.requestBody?.rawJson) return endpoint.requestBody.rawJson;
   const fields = endpoint.requestBody?.fields ?? [];
   if (fields.length === 0) return "";
   const valueFor = (type: string) => type === "number" ? 0 : type === "boolean" ? false : type === "array" ? [] : type === "object" ? {} : "";
   return JSON.stringify(Object.fromEntries(fields.map((field) => [field.name, valueFor(field.type)])), null, 2);
+}
+
+function getInitialBody(endpoint: Endpoint): JSONValue | undefined {
+  const template = endpointBodyTemplate(endpoint);
+  if (!template) return undefined;
+  try { return JSON.parse(template) as JSONValue; } catch { return undefined; }
 }
 
 interface TriggerDialogProps {
@@ -68,9 +76,7 @@ const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint, sourceNod
   const [params, setParams] = useState<Parameter[]>(() => {
     return endpointInputParams(endpoint);
   });
-  const [body, setBody] = useState<string>(() => {
-    return endpointBodyTemplate(endpoint);
-  });
+  const [body, setBody] = useState<JSONValue | undefined>(() => getInitialBody(endpoint));
   const bodyFields = endpoint.requestBody?.fields ?? [];
 
   const [loading, setLoading] = useState(false);
@@ -88,7 +94,7 @@ const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint, sourceNod
       if (testCase) {
         setHeaders(endpoint.headers?.map((h) => ({ ...h, key: h.key ?? h.name, value: testCase.request?.headers?.[h.name] ?? h.defaultValue ?? "" })) || []);
         setParams(endpointInputParams(endpoint).map((param) => ({ ...param, value: testCase.request?.params?.[param.key || param.name] ?? param.value ?? "" })));
-        setBody(testCase.request?.body === undefined ? endpointBodyTemplate(endpoint) : JSON.stringify(testCase.request.body, null, 2));
+        setBody(testCase.request?.body === undefined ? getInitialBody(endpoint) : testCase.request.body);
         setResponse(null);
         return;
       }
@@ -96,7 +102,7 @@ const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint, sourceNod
 
     setHeaders(endpoint.headers?.map((h) => ({ ...h, key: h.key ?? h.name, value: h.value ?? h.defaultValue ?? "" })) || []);
     setParams(endpointInputParams(endpoint));
-    setBody(endpointBodyTemplate(endpoint));
+    setBody(getInitialBody(endpoint));
     setResponse(null);
   }, [endpoint, event, isOpen]);
 
@@ -112,30 +118,11 @@ const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint, sourceNod
     if (!testCase) return;
     setHeaders(endpoint.headers?.map((h) => ({ ...h, key: h.key ?? h.name, value: testCase.request?.headers?.[h.name] ?? h.defaultValue ?? "" })) || []);
     setParams(endpointInputParams(endpoint).map((param) => ({ ...param, value: testCase.request?.params?.[param.key || param.name] ?? param.value ?? "" })));
-    setBody(testCase.request?.body === undefined ? endpointBodyTemplate(endpoint) : JSON.stringify(testCase.request.body, null, 2));
+    setBody(testCase.request?.body === undefined ? getInitialBody(endpoint) : testCase.request.body);
   };
 
   const handleSend = async () => {
-    let parsedBody: JSONValue | undefined = undefined;
-    if (body.trim()) {
-      try {
-        parsedBody = JSON.parse(body);
-      } catch (err) {
-        setResponse({
-          status: 400,
-          statusText: "Bad Request",
-          headers: {
-            "content-type": "application/json",
-            "x-simulated": "true",
-          },
-          body: {
-            error: "Invalid JSON in request body",
-            message: err instanceof Error ? err.message : String(err),
-          }
-        });
-        return;
-      }
-    }
+    const parsedBody = body;
 
     setLoading(true);
     setResponse(null);
@@ -179,15 +166,7 @@ const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint, sourceNod
   const updateTestCase = useSimulationStore((state) => state.updateTestCase);
   
   const handleSaveTestCase = () => {
-    let parsedBody: JSONValue | undefined = undefined;
-    if (body.trim()) {
-      try {
-        parsedBody = JSON.parse(body);
-      } catch (err) {
-        toast.error("Invalid JSON in body");
-        return;
-      }
-    }
+    const parsedBody = body;
     const queryParams: Record<string, string> = {};
     params.forEach(p => { if (p.key) queryParams[p.key] = p.value || `[${p.type || "string"}]`; });
     const reqHeaders: Record<string, string> = {};
@@ -319,43 +298,16 @@ const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint, sourceNod
           </div>}
 
           {/* Request Body Section */}
-          {bodyFields.length > 0 && (
-            <div className="flex flex-col gap-2">
-              <h4 className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Defined Request Body</h4>
-              <div className="grid gap-2 border p-2.5 rounded-lg bg-secondary/10">
-                {bodyFields.map((field) => {
-                  let parsed: Record<string, unknown> = {};
-                  try {
-                    const value = body ? JSON.parse(body) : {};
-                    parsed = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-                  } catch { /* reset below */ }
-                  const currentValue = parsed[field.name];
-                  return (
-                    <div key={field.id || field.name} className="grid grid-cols-3 items-center gap-2">
-                      <Label className="text-xs font-mono text-muted-foreground">
-                        {field.name}{field.required ? "*" : ""}
-                      </Label>
-                      <Input
-                        className="col-span-2 h-7 text-xs font-mono bg-background"
-                        placeholder={field.description || field.type}
-                        value={typeof currentValue === "object" ? JSON.stringify(currentValue) : String(currentValue ?? "")}
-                        onChange={(e) => {
-                          let next: Record<string, unknown> = {};
-                          try {
-                            const value = body ? JSON.parse(body) : {};
-                            next = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-                          } catch { next = {}; }
-                          const raw = e.target.value;
-                          next[field.name] = field.type === "number" ? (raw === "" ? "" : Number(raw)) : field.type === "boolean" ? raw === "true" : (field.type === "object" || field.type === "array" ? (() => { try { return JSON.parse(raw); } catch { return raw; } })() : raw);
-                          setBody(JSON.stringify(next));
-                        }}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+          <div className="pb-2">
+            <JsonPayloadEditor
+              key={`mock-body-${selectedGlobalCaseId}-${endpoint.id}`}
+              title="Request Body (JSON)"
+              schema={endpoint.requestBody}
+              value={body}
+              onChange={(val) => setBody(val)}
+              emptyText="No fields defined in request body schema. Use Raw JSON to mock the payload."
+            />
+          </div>
 
           {/* Dialog Footer Actions */}
           <DialogFooter className="mt-2 flex sm:flex-row sm:justify-end gap-2">
