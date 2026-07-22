@@ -81,6 +81,11 @@ export const ConfigSidebar = () => {
     <Sheet modal={false} open={open} onOpenChange={(isOpen) => !isOpen && setActiveConfigItem(null)}>
       <SheetContent 
         hideOverlay 
+        onInteractOutside={(e) => {
+          if (type === 'eventTesting') {
+            e.preventDefault();
+          }
+        }}
         className="overflow-y-auto bg-background/80 backdrop-blur-xl border-l border-border/50 shadow-2xl p-6 sm:p-8 transition-none"
         style={{ maxWidth: '100vw', width: width }}
       >

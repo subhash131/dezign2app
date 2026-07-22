@@ -31,8 +31,6 @@ import { nodeTypes } from "./backend-nodes/Nodes";
 import { ForeignKeyEdge } from "./backend-nodes/ForeignKeyEdge";
 import { HTTPConnectionEdge, MessagingEdge, IdentityConnectionEdge } from "./backend-nodes/CustomEdges";
 import { isValidConnection } from "@workspace/canvas";
-import { BackendNode } from "@/types/canvas";
-import { SimulationTerminal } from "./SimulationTerminal";
 import { getOffsetPosition, useCanvasHandlers } from "./hooks/useCanvasHandlers";
 import { useAutoLayout } from "./hooks/useAutoLayout";
 import { Badge } from "@workspace/ui/components/badge";
@@ -217,9 +215,6 @@ export function GraphView({ projectId }: GraphViewProps) {
               Reset
             </Button>
           )}
-        </Panel>
-        <Panel position="bottom-center">
-          <SimulationTerminal />
         </Panel>
         <Panel position="top-left" className="flex gap-1.5 flex-col bg-background/95 backdrop-blur border rounded-lg p-2.5 shadow-md max-w-[190px] max-h-[calc(100vh-120px)] overflow-y-auto overflow-x-hidden hide-scrollbar">
          <Badge>BETA</Badge>
