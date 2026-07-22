@@ -22,7 +22,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@workspace/ui/components/alert-dialog";
-import { Globe, Server, Waves, GitBranch, Radio, Database, LayoutGrid, ChevronRight, TerminalSquare, Plus, PenLine, Trash, UploadCloud, Layers, HardDrive, Cog, Zap, Search, Network, Scale, Webhook, Brain, Boxes, EllipsisVertical, LayoutTemplate, Key } from "lucide-react";
+import { Globe, Server, Waves, GitBranch, Radio, Database, LayoutGrid, ChevronRight, TerminalSquare, Plus, PenLine, Trash, UploadCloud, Layers, HardDrive, Cog, Zap, Search, Network, Scale, Webhook, Brain, Boxes, EllipsisVertical, LayoutTemplate, Key, RotateCcw } from "lucide-react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useSimulationStore } from "@/lib/stores/simulationStore";
 import { useMutation } from "convex/react";
@@ -280,6 +280,12 @@ export function GraphView({ projectId }: GraphViewProps) {
             <LayoutTemplate className="w-3.5 h-3.5 mr-2" />
             Auto-layout
           </Button>
+          {simulation.status !== "idle" && (
+            <Button variant="destructive" size="sm" className="shadow-sm text-xs" onClick={simulation.clear}>
+              <RotateCcw className="w-3.5 h-3.5 mr-2" />
+              Reset
+            </Button>
+          )}
         </Panel>
         <Panel position="bottom-center">
           <SimulationTerminal />

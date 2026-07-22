@@ -246,11 +246,12 @@ export async function simulateEndpoint(args: {
       trace.push({ id: step.id, kind: "step", label: step.text || operation, status: "completed", nodeId: service.id, input, output: clone(context.data) });
     }
 
-    const body = context.response?.body ?? endpoint.simulationOutput ?? context.data;
-    const status = context.response?.status ?? (endpoint.type === "POST" ? 201 : 200);
+    const endpointMock = mocks?.[endpoint.id];
+    const body = endpointMock ? clone(endpointMock.returnData) : (context.response?.body ?? endpoint.simulationOutput ?? context.data);
+    const status = endpointMock ? (endpointMock.status || 200) : (context.response?.status ?? (endpoint.type === "POST" ? 201 : 200));
     const schemaErrors = validateSchema(body, endpoint.responseBody);
     if (schemaErrors.length) throw new Error(schemaErrors.join(" "));
-    trace.push({ id: `${endpoint.id}-response`, kind: "response", label: `${status} ${status === 201 ? "Created" : "OK"}`, status: "completed", nodeId: service.id, output: clone(body) });
+    trace.push({ id: `${endpoint.id}-response`, kind: "response", label: `${endpointMock ? "[MOCKED] " : ""}${status} ${status === 201 ? "Created" : "OK"}`, status: "completed", nodeId: service.id, output: clone(body) });
     return { status, statusText: status === 201 ? "Created" : "OK", headers: { "content-type": "application/json", "x-simulated": "true" }, body, trace };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
