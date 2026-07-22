@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   ReactFlow,
   Background,
@@ -70,8 +70,20 @@ export function GraphView({ projectId }: GraphViewProps) {
   const [deleteCaseOpen, setDeleteCaseOpen] = useState(false);
 
   const { handleNodesChange, handleMoveEnd } = useCanvasHandlers(projectId, "graph");
-  const { screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition, fitView } = useReactFlow();
   const { handleLayout } = useAutoLayout();
+
+  const graphNodes = nodes.filter((n) => n.type !== "group" && n.type !== "entity");
+
+  const hasFitted = useRef(false);
+  useEffect(() => {
+    if (graphNodes.length > 0 && !hasFitted.current) {
+      hasFitted.current = true;
+      window.requestAnimationFrame(() => {
+        fitView({ duration: 600, padding: 0.15 });
+      });
+    }
+  }, [graphNodes.length]);
 
   const getCenterPosition = () => {
     if (typeof window === "undefined") return { x: 100, y: 100 };
@@ -115,7 +127,6 @@ export function GraphView({ projectId }: GraphViewProps) {
     });
   };
 
-  const graphNodes = nodes.filter((n) => n.type !== "group" && n.type !== "entity");
   const visualGraphNodes = graphNodes.map((node) => {
     const hasRun = simulation.status !== "idle";
     let isVisited = simulation.activeNodeIds.includes(node.id);

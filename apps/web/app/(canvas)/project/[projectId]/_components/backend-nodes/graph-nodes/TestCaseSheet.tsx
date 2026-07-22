@@ -36,6 +36,7 @@ export const TestCaseSheet = ({ isOpen, onClose, event, nodeId, targetNode, endp
   const updateTestCase = useSimulationStore((s) => s.updateTestCase);
   const deleteTestCase = useSimulationStore((s) => s.deleteTestCase);
   const upsertBackendTestCase = useMutation(api.canvas.upsertBackendTestCase);
+  const removeBackendTestCase = useMutation(api.canvas.removeBackendTestCase);
 
   const nodes = useBackendCanvasStore((s) => s.nodes);
   const edges = useBackendCanvasStore((s) => s.edges);
@@ -161,6 +162,9 @@ export const TestCaseSheet = ({ isOpen, onClose, event, nodeId, targetNode, endp
 
   const handleDeleteTc = (tcId: string) => {
     deleteTestCase(tcId);
+    if (projectId) {
+      removeBackendTestCase({ projectId, testCaseId: tcId });
+    }
     toast.success("Test case deleted");
   };
 

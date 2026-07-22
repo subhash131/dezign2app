@@ -213,15 +213,7 @@ const WebClientEventList = ({ nodeId, items = [], updateNode, data, onTriggerEve
                        </button>
                      )}
                      <div className="flex items-center gap-1 opacity-0 group-hover/row:opacity-100 transition-all">
-                       {link && (
-                         <div 
-                           className="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground cursor-pointer" 
-                           onClick={(e) => { e.stopPropagation(); onManageTestCases({ event: item, targetNode: link.targetNode, endpoint: link.endpoint }); }}
-                           title="Manage Test Cases"
-                         >
-                           <FlaskConical size={12} />
-                         </div>
-                       )}
+                      
                        <div className="p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground cursor-pointer" onClick={(e) => { e.stopPropagation(); setActiveConfigItem({ type: 'clientEvent', id: item.id, nodeId }); }}>
                           <Settings size={12} />
                        </div>
