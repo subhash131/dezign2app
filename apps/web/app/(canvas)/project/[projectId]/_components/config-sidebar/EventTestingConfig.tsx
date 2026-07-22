@@ -39,10 +39,12 @@ export const EventTestingConfig = ({ id, nodeId, targetNodeId, endpointId, initi
   const deleteTestCase = useSimulationStore((s) => s.deleteTestCase);
   const selectTestCase = useSimulationStore((s) => s.selectTestCase);
   const startSimulation = useSimulationStore((state) => state.start);
+  const clearSimulation = useSimulationStore((state) => state.clear);
   const selectedGlobalCaseId = useSimulationStore((state) => state.selectedCaseId) || "none";
   const activeIndex = useSimulationStore((state) => state.activeIndex);
 
   const upsertBackendTestCase = useMutation(api.canvas.upsertBackendTestCase);
+  const removeBackendTestCase = useMutation(api.canvas.removeBackendTestCase);
 
   const nodes = useBackendCanvasStore((s) => s.nodes);
   const edges = useBackendCanvasStore((s) => s.edges);
@@ -334,6 +336,9 @@ export const EventTestingConfig = ({ id, nodeId, targetNodeId, endpointId, initi
 
   const handleDeleteTc = (tcId: string) => {
     deleteTestCase(tcId);
+    if (projectId) {
+      removeBackendTestCase({ projectId, testCaseId: tcId });
+    }
     toast.success("Test case deleted");
   };
 
@@ -480,7 +485,7 @@ export const EventTestingConfig = ({ id, nodeId, targetNodeId, endpointId, initi
                     <span className="px-2 py-1 rounded text-[11px] font-bold font-mono border bg-muted text-muted-foreground shadow-sm">
                       {response.status} {response.statusText}
                     </span>
-                    <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive transition-colors" onClick={() => setResponse(null)} title="Clear Response">
+                    <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive transition-colors" onClick={() => { setResponse(null); clearSimulation(); }} title="Clear Response">
                       <Trash className="w-3.5 h-3.5" />
                     </Button>
                   </div>

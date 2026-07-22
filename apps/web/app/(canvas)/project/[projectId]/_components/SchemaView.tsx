@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import {
   ReactFlow,
   Background,
@@ -39,8 +39,31 @@ export function SchemaView({ projectId }: SchemaViewProps) {
   } = useBackendCanvasStore();
   
   const { handleNodesChange, handleMoveEnd } = useCanvasHandlers(projectId, "schema");
-  const { screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition, fitView } = useReactFlow();
   const { handleLayout } = useAutoLayout();
+
+  const schemaNodes = nodes
+    .filter((n) => n.type === "entity" || n.type === "group")
+    .map((n) => {
+      if (n.type === "group") {
+        return {
+          ...n,
+          style: { ...n.style, minWidth: 450, minHeight: 300 },
+        };
+      }
+      return n;
+    });
+  const schemaEdges = edges.filter((e) => e.type === "foreign-key");
+
+  const hasFitted = useRef(false);
+  useEffect(() => {
+    if (schemaNodes.length > 0 && !hasFitted.current) {
+      hasFitted.current = true;
+      window.requestAnimationFrame(() => {
+        fitView({ duration: 600, padding: 0.15 });
+      });
+    }
+  }, [schemaNodes.length]);
 
   const getCenterPosition = () => {
     if (typeof window === "undefined") return { x: 100, y: 100 };
@@ -72,19 +95,6 @@ export function SchemaView({ projectId }: SchemaViewProps) {
       }
     });
   };
-
-  const schemaNodes = nodes
-    .filter((n) => n.type === "entity" || n.type === "group")
-    .map((n) => {
-      if (n.type === "group") {
-        return {
-          ...n,
-          style: { ...n.style, minWidth: 450, minHeight: 300 },
-        };
-      }
-      return n;
-    });
-  const schemaEdges = edges.filter((e) => e.type === "foreign-key");
 
   return (
     <div className="w-full h-full bg-muted/20">
