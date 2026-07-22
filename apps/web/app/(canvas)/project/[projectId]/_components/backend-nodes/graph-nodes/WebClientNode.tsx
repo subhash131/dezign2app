@@ -145,6 +145,7 @@ const TriggerDialog = ({ isOpen, onClose, event, targetNode, endpoint, sourceNod
           name: selectedGlobalCaseId !== "none" ? testCases.find(t => t.id === selectedGlobalCaseId)?.name || "Test case" : "Test case",
           targetNodeId: client.id,
           request: { headers: reqHeaders, params: queryParams, body: parsedBody },
+          mocks: selectedGlobalCaseId !== "none" ? testCases.find(t => t.id === selectedGlobalCaseId)?.mocks : undefined,
         },
         nodes,
         edges,
