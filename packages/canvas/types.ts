@@ -14,6 +14,7 @@ export type HandleKind =
 
   // --- WebClient events ---
   | "event-source"
+  | "pageload-in"
 
   // --- Service messaging ---
   | "published-event-out"

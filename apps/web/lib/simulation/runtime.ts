@@ -281,9 +281,33 @@ export async function simulateTestCase(args: {
   edges: BackendEdge[];
   endpoints?: Array<Endpoint & { nodeId: string }>;
 }): Promise<SimulationTestCaseResult> {
-  const firstEdge = args.edges.find((edge) => edge.source === args.client.id && edge.sourceHandle === `events-${args.event.id}`);
-  const firstEndpointId = firstEdge?.targetHandle?.split("-in-").pop();
-  const first = firstEdge && firstEndpointId ? findEndpoint(args.nodes, firstEdge.target, firstEndpointId, args.endpoints) : undefined;
+  // Follow pageload-in chains: when the event connects to a pageload-in handle
+  // on another WebClient, walk the chain until we reach an actual endpoint.
+  const chainEdges: BackendEdge[] = [];
+  const chainNodes: BackendNode[] = [args.client];
+
+  let currentEdge = args.edges.find((edge) => edge.source === args.client.id && edge.sourceHandle === `events-${args.event.id}`);
+  let depth = 0;
+
+  while (currentEdge && currentEdge.targetHandle?.startsWith("pageload-in-") && depth < 10) {
+    chainEdges.push(currentEdge);
+    const targetNode = args.nodes.find((n) => n.id === currentEdge!.target);
+    if (targetNode) chainNodes.push(targetNode);
+
+    const pageloadEventId = currentEdge.targetHandle.replace("pageload-in-", "");
+    const nextEdge = args.edges.find((edge) => edge.source === currentEdge!.target && edge.sourceHandle === `events-${pageloadEventId}`);
+    if (!nextEdge) break;
+    currentEdge = nextEdge;
+    depth++;
+  }
+
+  if (currentEdge) {
+    chainEdges.push(currentEdge);
+  }
+
+  const finalEdge = currentEdge;
+  const firstEndpointId = finalEdge?.targetHandle?.split("-in-").pop();
+  const first = finalEdge && firstEndpointId ? findEndpoint(args.nodes, finalEdge.target, firstEndpointId, args.endpoints) : undefined;
   if (!first) {
     return {
       testCaseId: args.testCase.id,
@@ -297,11 +321,32 @@ export async function simulateTestCase(args: {
     };
   }
 
-  const connectedEdge = firstEdge!;
+  const connectedEdge = finalEdge!;
+
+  // Build trace steps for client navigation chain
   const trace: SimulationTraceEntry[] = [{
-    id: `${args.testCase.id}-client`, kind: "client", label: `Test case: ${args.testCase.name}`,
-    status: "completed", nodeId: args.client.id, edgeId: connectedEdge.id, input: clone(args.testCase.request?.body),
+    id: `${args.testCase.id}-client`,
+    kind: "client",
+    label: `Test case: ${args.testCase.name}`,
+    status: "completed",
+    nodeId: args.client.id,
+    edgeId: chainEdges[0]?.id,
+    input: clone(args.testCase.request?.body),
   }];
+
+  // Add intermediate page load steps in the trace
+  for (let i = 0; i < chainEdges.length - 1; i++) {
+    const navNode = chainNodes[i + 1];
+    const nextEdge = chainEdges[i + 1];
+    trace.push({
+      id: `${args.testCase.id}-nav-${i}`,
+      kind: "client",
+      label: `Page Load: ${navNode?.data?.label || "Web Client"}`,
+      status: "completed",
+      nodeId: navNode?.id,
+      edgeId: nextEdge?.id,
+    });
+  }
   let current: { service: BackendNode; endpoint: Endpoint } | undefined = first;
   let body: unknown = clone(args.testCase.request?.body ?? null);
   let result: SimulationResult | undefined;

@@ -38,12 +38,21 @@ const WebClientEventList = ({ nodeId, items = [], updateNode, data, onTriggerEve
   const endpoints = useBackendCanvasStore((s) => s.endpoints);
   const setActiveConfigItem = useBackendCanvasStore((s) => s.setActiveConfigItem);
 
-  const getLinkedEndpoint = (eventId: string) => {
-    const edge = edges.find((e) => e.source === nodeId && e.sourceHandle === `events-${eventId}`);
+  const getLinkedEndpoint = (eventId: string, fromNodeId: string = nodeId, depth: number = 0): { targetNode: BackendNode; endpoint: Endpoint } | null => {
+    if (depth > 5) return null; // guard against cycles
+
+    const edge = edges.find((e) => e.source === fromNodeId && e.sourceHandle === `events-${eventId}`);
     if (!edge || !edge.targetHandle) return null;
 
     const targetNode = nodes.find((n) => n.id === edge.target);
     if (!targetNode) return null;
+
+    // If the target handle is a pageload-in handle on another WebClient,
+    // follow the chain: find that event's outgoing connection to an endpoint.
+    if (edge.targetHandle.startsWith("pageload-in-")) {
+      const pageloadEventId = edge.targetHandle.replace("pageload-in-", "");
+      return getLinkedEndpoint(pageloadEventId, edge.target, depth + 1);
+    }
 
     const parts = edge.targetHandle.split("-in-");
     const endpointId = parts[parts.length - 1];
@@ -131,6 +140,15 @@ const WebClientEventList = ({ nodeId, items = [], updateNode, data, onTriggerEve
                 className="w-2 h-2 -right-1" 
                 style={{ top: '50%' }} 
               />
+              {(item.event as string) === "pageLoad" && (
+                <Handle
+                  type="target"
+                  position={Position.Left}
+                  id={`pageload-in-${item.id}`}
+                  className="w-2 h-2 -left-1"
+                  style={{ top: '50%' }}
+                />
+              )}
               {isEditing ? (
                  <div className="flex flex-col gap-1.5 w-full" onBlur={(e) => {
                     const related = e.relatedTarget as HTMLElement | null;
