@@ -11,7 +11,25 @@ import { SupermemorySync } from './knowledge/sync';
 import { extractAuthToken, resolveAuth } from './mcp/auth';
 import { createSession, cleanupOldSessions, Session } from './mcp/session';
 
-import { TestCaseItem, BackendNodeItem } from '@workspace/canvas';
+import { TestCaseItem, BackendNodeItem, JSONValue, JSONObject } from '@workspace/canvas';
+
+const STRIPPED_KEYS = new Set<string>([
+  "id", "nodeId", "targetNodeId", "brokerNodeId", "messagingResourceId",
+  "sourceResourceId", "targetResourceId", "parentId", "tableRef",
+  "position", "graphPosition", "fractionalIndex",
+]);
+
+function stripIds(value: JSONValue): JSONValue {
+  if (Array.isArray(value)) return value.map(stripIds);
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as JSONObject)
+        .filter(([k]) => !STRIPPED_KEYS.has(k))
+        .map(([k, v]) => [k, stripIds(v)])
+    );
+  }
+  return value;
+}
 
 const app = express();
 app.use(cors());
@@ -38,7 +56,9 @@ app.post('/canvas-ai', async (req, res) => {
     }
 
     const client = new ConvexHttpClient(convexUrl);
-    if (token) client.setAuth(token);
+    if (token && typeof token === "string" && token.includes(".") && !token.startsWith("sk_")) {
+      client.setAuth(token);
+    }
 
     const messages = await client.query(api.project_chat.getMessages, { chatId });
 
@@ -118,7 +138,9 @@ app.post('/sync-supermemory', async (req, res) => {
     if (!convexUrl) { res.status(500).send("Missing CONVEX_URL environment variable"); return; }
 
     const client = new ConvexHttpClient(convexUrl);
-    client.setAuth(token);
+    if (token && typeof token === "string" && token.includes(".") && !token.startsWith("sk_")) {
+      client.setAuth(token);
+    }
 
     let elements;
     try {
@@ -133,7 +155,7 @@ app.post('/sync-supermemory', async (req, res) => {
     const architectureContent = existingPlan?.content || "";
 
     const rawNodes: BackendNodeItem[] = (elements.nodes as BackendNodeItem[]) || [];
-    const rawEdges: Array<{ source: string; target: string }> = elements.edges || [];
+    const rawEdges: Array<{ source: string; target: string; type?: string; data?: { label?: string } }> = elements.edges || [];
     const rawTestCases: TestCaseItem[] = (elements.testCases as TestCaseItem[]) || [];
 
     const nodeNameMap = new Map<string, string>();
@@ -141,15 +163,30 @@ app.post('/sync-supermemory', async (req, res) => {
       nodeNameMap.set(n.nodeId, n.data?.label || n.nodeId);
     }
 
+    // Build edge dependency maps (source → [targets], target → [sources])
     const edgeDeps = new Map<string, string[]>();
     const edgeDepsBy = new Map<string, string[]>();
-    
+    // Build rich connection map: nodeId → list of readable connection strings
+    const edgeConnections = new Map<string, string[]>();
+
     for (const e of rawEdges) {
-       if (!edgeDeps.has(e.source)) edgeDeps.set(e.source, []);
-       edgeDeps.get(e.source)!.push(e.target);
-       
-       if (!edgeDepsBy.has(e.target)) edgeDepsBy.set(e.target, []);
-       edgeDepsBy.get(e.target)!.push(e.source);
+      if (!edgeDeps.has(e.source)) edgeDeps.set(e.source, []);
+      edgeDeps.get(e.source)!.push(e.target);
+
+      if (!edgeDepsBy.has(e.target)) edgeDepsBy.set(e.target, []);
+      edgeDepsBy.get(e.target)!.push(e.source);
+
+      // Build a human-readable connection string using names, not IDs
+      const srcName = nodeNameMap.get(e.source) || e.source;
+      const tgtName = nodeNameMap.get(e.target) || e.target;
+      const edgeType = e.type || "connection";
+      const edgeLabel = e.data?.label ? ` "${e.data.label}"` : "";
+      const connStr = `${srcName} --[${edgeType}${edgeLabel}]--> ${tgtName}`;
+
+      if (!edgeConnections.has(e.source)) edgeConnections.set(e.source, []);
+      edgeConnections.get(e.source)!.push(connStr);
+      if (!edgeConnections.has(e.target)) edgeConnections.set(e.target, []);
+      edgeConnections.get(e.target)!.push(connStr);
     }
 
     const nodes = rawNodes.map((n) => {
@@ -160,50 +197,19 @@ app.post('/sync-supermemory', async (req, res) => {
 
       const label = n.data?.label || n.nodeId;
 
-      // Entity → DDL-style: "database schema: Slides(_id uuid PK, presentation_id uuid FK refs Presentations._id, ...)"
-      if (n.type === "entity" && Array.isArray(n.data?.columns)) {
-        type EntityColumn = {
-          name: string;
-          type?: string;
-          isPrimaryKey?: boolean;
-          isForeignKey?: boolean;
-          isNotNull?: boolean;
-          isUnique?: boolean;
-          references?: { table: string; column: string };
-        };
-        const colDefs = n.data.columns.map((c: EntityColumn) => {
-          let def = c.name;
-          if (c.type) def += ` ${c.type.toLowerCase()}`;
-          if (c.isPrimaryKey) def += " PRIMARY KEY";
-          if (c.isForeignKey) def += " FOREIGN KEY";
-          if (c.isNotNull) def += " NOT NULL";
-          if (c.isUnique) def += " UNIQUE";
-          if (c.references) def += ` REFERENCES ${c.references.table}(${c.references.column})`;
-          return def;
-        });
-        facts.push(`database schema: ${label}(${colDefs.join(", ")})`);
+      // Stringify node data — strip all UUID-like id fields (they are meaningless to a coding agent)
+      // and position fields (not useful for search)
+      if (n.data && Object.keys(n.data).length > 0) {
+        // Round-trip through JSON to get a clean JSONObject (drops undefined values, class instances, etc.)
+        const rawJson = JSON.parse(JSON.stringify(n.data)) as JSONObject;
+        const cleanData = stripIds(rawJson);
+        facts.push(`${n.type}: ${label}\n${JSON.stringify(cleanData, null, 2)}`);
       }
 
-      // Service → REST definition: "service: Slides Service\n  POST /slides\n  GET /slides/:id"
-      if (n.type === "service" && Array.isArray(n.data?.endpoints)) {
-        const epLines = n.data.endpoints
-          .map((ep: { type: string; name: string }) => `  ${ep.type} ${ep.name}`)
-          .join("\n");
-        facts.push(`service: ${label}\n${epLines}`);
-      }
-
-      // WebClient → page/event definition: "web client: Presentation Editor\n  event: edit slide\n  event: delete slide"
-      if (n.type === "webClient" && Array.isArray(n.data?.events)) {
-        const evLines = n.data.events
-          .map((ev: { name?: string }) => `  event: ${ev.name || '(unnamed)'}`)
-          .join("\n");
-        facts.push(`web client: ${label}\n${evLines}`);
-      }
-
-      // Kafka → topic definition: "kafka topics for Notifications: user-signed-up, order-placed"
-      if (n.type === "kafka" && Array.isArray(n.data?.topics)) {
-        const topicNames = n.data.topics.map((t: { name: string }) => t.name).join(", ");
-        facts.push(`kafka topics for ${label}: ${topicNames}`);
+      // Add connections fact — human-readable edge list with names not IDs
+      const conns = edgeConnections.get(n.nodeId);
+      if (conns && conns.length > 0) {
+        facts.push(`connections:\n${conns.map(c => `  ${c}`).join("\n")}`);
       }
 
       // Collect test cases associated with this node
@@ -303,7 +309,9 @@ app.post('/clear-supermemory', async (req, res) => {
     if (!convexUrl) { res.status(500).send("Missing CONVEX_URL environment variable"); return; }
 
     const client = new ConvexHttpClient(convexUrl);
-    client.setAuth(token);
+    if (token && typeof token === "string" && token.includes(".") && !token.startsWith("sk_")) {
+      client.setAuth(token);
+    }
 
     try {
       await client.query(api.canvas.getBackendElements, { projectId });

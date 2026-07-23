@@ -152,7 +152,8 @@ export class SupermemorySync {
       const results = response.results as SearchResult[];
       const allMatches: ChunkMatch[] = results
         .map((result) => ({
-          content: result.memory || result.chunk || "",
+          // Prefer raw chunk (our exact DDL string) over memory (Supermemory's AI paraphrase)
+          content: result.chunk || result.memory || "",
           similarity: result.similarity ?? 0,
           metadata: result.metadata,
         }))

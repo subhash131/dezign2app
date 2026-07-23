@@ -79,9 +79,6 @@ export const syncFrontendRecords = mutation({
 export const getBackendElements = query({
   args: { projectId: v.id("projects") },
   async handler(ctx, args) {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("Not authenticated");
-
     const nodes = await ctx.db
       .query("canvas_backend_nodes")
       .withIndex("by_project", (q) => q.eq("projectId", args.projectId))

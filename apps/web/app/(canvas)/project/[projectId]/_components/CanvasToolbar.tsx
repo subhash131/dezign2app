@@ -135,9 +135,9 @@ export function CanvasToolbar({
           variant={"secondary"}
           size="sm"
           className="py-3.5"
-          onClick={() => setAiPanelOpen(!aiPanelOpen)}
+          disabled  
         >
-          <Hammer className="w-4 h-4 mr-2 text-primary" />
+          <Hammer className="w-4 h-4 mr-1 text-primary" />
           Build
         </Button>
         <Button
