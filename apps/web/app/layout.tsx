@@ -1,4 +1,6 @@
 import { Geist, Geist_Mono, Ubuntu } from "next/font/google";
+import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 import "@workspace/ui/globals.css";
 import "@xyflow/react/dist/style.css";
@@ -41,6 +43,8 @@ export default function RootLayout({
             {children}
           </PaywallModal>
         </Providers>
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
