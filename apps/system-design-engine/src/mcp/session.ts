@@ -80,9 +80,9 @@ export async function createSession(
           isError: true,
         };
       }
-      console.log(`[TOOL] search_system_design_memories called — project=${boundProjectId}, query="${query}", minSimilarity=${minSimilarity ?? 0.5}`);
+      console.log(`[TOOL] search_system_design_memories called — project=${boundProjectId}, query="${query}", minSimilarity=${minSimilarity ?? 0.15}`);
       try {
-        const threshold = minSimilarity ?? 0.5;
+        const threshold = minSimilarity ?? 0.15;
         const results = await syncEngine.searchMemories(boundProjectId, query);
         console.log(`[TOOL] Raw results from supermemory: ${results.length}`);
 

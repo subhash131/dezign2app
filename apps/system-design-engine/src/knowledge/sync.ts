@@ -70,28 +70,33 @@ export class SupermemorySync {
 
   async upsertNode(syncId: string, node: NodeMemory): Promise<void> {
     console.log(`Syncing Node ${node.name} to Supermemory...`);
-    
-    let content = `${node.name}\n\n`;
+
+    // Primary fact first — this keeps the node name + its definition (DDL, endpoints, etc.)
+    // in the same leading chunk so vector search on "schema Slides" or "POST /slides" works.
+    let content = "";
+
+    if (node.facts.length > 0) {
+      // Each fact is already a self-contained definition line (e.g. "database schema: Slides(...)")
+      content += node.facts.join("\n") + "\n\n";
+    } else {
+      // Fallback: just the name
+      content += `${node.name}\n\n`;
+    }
+
+    if (node.responsibilities.length > 0) {
+      content += `Description: ${node.responsibilities.join(" ")}\n\n`;
+    }
     if (node.dependencies.length > 0) {
-      content += `Dependencies:\n${node.dependencies.map(d => `- ${d}`).join('\n')}\n\n`;
+      content += `Depends on: ${node.dependencies.join(", ")}\n\n`;
     }
     if (node.dependents.length > 0) {
-      content += `Used by:\n${node.dependents.map(d => `- ${d}`).join('\n')}\n\n`;
-    }
-    if (node.responsibilities.length > 0) {
-      content += `Responsibilities:\n${node.responsibilities.map(r => `- ${r}`).join('\n')}\n\n`;
-    }
-    if (node.facts.length > 0) {
-      content += `Facts:\n${node.facts.join('\n')}\n\n`;
+      content += `Used by: ${node.dependents.join(", ")}\n\n`;
     }
 
     await this.client.documents.add({
       content: content.trim(),
       containerTag: node.projectId,
       dreaming: "instant",
-      include:{
-        relatedMemories: true,
-      },
       metadata: {
         projectId: node.projectId,
         nodeId: node.nodeId,
@@ -103,50 +108,12 @@ export class SupermemorySync {
 
 
 
+
   async clearProject(projectId: string): Promise<void> {
     console.log(`Clearing all documents for project ${projectId} in Supermemory...`);
     try {
-      let hasMore = true;
-      let loopCount = 0;
-      let totalDeleted = 0;
-
-      while (hasMore && loopCount < 20) {
-        loopCount++;
-        const response = await this.client.search.memories({
-          q: "*", 
-          containerTag: projectId,
-          filters: {
-            AND: [
-              {
-                key: "projectId",
-                value: projectId,
-                filterType: "metadata"
-              }
-            ]
-          }
-        });
-
-        if (!response || !response.results || response.results.length === 0) {
-          hasMore = false;
-          break;
-        }
-
-        const results = response.results as SearchResult[];
-        console.log(`Deleting ${results.length} documents for project ${projectId} (Page ${loopCount})...`);
-
-        for (const doc of results) {
-          if (doc.id) {
-            try {
-              await (this.client.documents as unknown as { delete: (id: string) => Promise<void> }).delete(doc.id); 
-              totalDeleted++;
-            } catch(e) {
-              console.error(`Failed to delete document ${doc.id}`, e);
-            }
-          }
-        }
-      }
-      
-      console.log(`Successfully cleared ${totalDeleted} documents for project ${projectId} from Supermemory.`);
+      await this.client.documents.deleteBulk({ containerTags: [projectId] });
+      console.log(`Successfully cleared all documents for project ${projectId} from Supermemory.`);
     } catch (error) {
       console.error(`Error during clearProject:`, error);
       throw error;
@@ -160,7 +127,7 @@ export class SupermemorySync {
         q: query,
         containerTag: projectId,
         include: {
-          relatedMemories: true,
+          relatedMemories: false,
           documents: false,
           summaries: false,
         },
@@ -179,39 +146,21 @@ export class SupermemorySync {
         return { services: [], entities: [], clients: [], architecture: "", resources: [] };
       }
 
-      // 1. Flatten all results and related memories
+      // 1. Collect all primary results — no relatedMemories traversal
+      // (related chunks inherit the parent's similarity score which is misleading
+      // and causes duplicates; primary results are sufficient at the lower threshold)
       const results = response.results as SearchResult[];
-      const allMatches: ChunkMatch[] = [];
+      const allMatches: ChunkMatch[] = results
+        .map((result) => ({
+          content: result.memory || result.chunk || "",
+          similarity: result.similarity ?? 0,
+          metadata: result.metadata,
+        }))
+        .filter((c) => c.content !== "");
 
-      for (const result of results) {
-        const content = result.memory || result.chunk || "";
-        const similarity = result.similarity ?? 0;
-        
-        if (content) {
-          allMatches.push({
-            content,
-            similarity,
-            metadata: result.metadata
-          });
-        }
-
-        if (result.relatedMemories && Array.isArray(result.relatedMemories)) {
-          for (const related of result.relatedMemories) {
-            const relContent = related.memory || related.chunk || "";
-            const relSimilarity = related.similarity ?? similarity ?? 0;
-            if (relContent) {
-              allMatches.push({
-                content: relContent,
-                similarity: relSimilarity,
-                metadata: related.metadata
-              });
-            }
-          }
-        }
-      }
-
-      // 2. Filter by relevance similarity (e.g. > 0.5)
-      const strongMatches = allMatches.filter((c) => c.similarity > 0.5);
+      // 2. Filter by relevance — lowered from 0.5 to 0.15 so short entity documents
+      // (e.g. a table with just a name + columns) are not silently discarded
+      const strongMatches = allMatches.filter((c) => c.similarity >= 0.15);
 
       // 3. Dedupe by nodeId (keep highest similarity)
       const dedupedByNode = new Map<string, ChunkMatch>();

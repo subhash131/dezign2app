@@ -157,18 +157,53 @@ app.post('/sync-supermemory', async (req, res) => {
       const responsibilities: string[] = [];
       
       if (n.data?.description) responsibilities.push(n.data.description);
-      
+
+      const label = n.data?.label || n.nodeId;
+
+      // Entity → DDL-style: "database schema: Slides(_id uuid PK, presentation_id uuid FK refs Presentations._id, ...)"
       if (n.type === "entity" && Array.isArray(n.data?.columns)) {
-        facts.push(`Columns:\n` + n.data.columns.map((c: { name: string }) => `- ${c.name}`).join("\n"));
+        type EntityColumn = {
+          name: string;
+          type?: string;
+          isPrimaryKey?: boolean;
+          isForeignKey?: boolean;
+          isNotNull?: boolean;
+          isUnique?: boolean;
+          references?: { table: string; column: string };
+        };
+        const colDefs = n.data.columns.map((c: EntityColumn) => {
+          let def = c.name;
+          if (c.type) def += ` ${c.type.toLowerCase()}`;
+          if (c.isPrimaryKey) def += " PRIMARY KEY";
+          if (c.isForeignKey) def += " FOREIGN KEY";
+          if (c.isNotNull) def += " NOT NULL";
+          if (c.isUnique) def += " UNIQUE";
+          if (c.references) def += ` REFERENCES ${c.references.table}(${c.references.column})`;
+          return def;
+        });
+        facts.push(`database schema: ${label}(${colDefs.join(", ")})`);
       }
+
+      // Service → REST definition: "service: Slides Service\n  POST /slides\n  GET /slides/:id"
       if (n.type === "service" && Array.isArray(n.data?.endpoints)) {
-        facts.push(`Endpoints:\n` + n.data.endpoints.map((ep: { type: string; name: string }) => `- ${ep.type} ${ep.name}`).join("\n"));
+        const epLines = n.data.endpoints
+          .map((ep: { type: string; name: string }) => `  ${ep.type} ${ep.name}`)
+          .join("\n");
+        facts.push(`service: ${label}\n${epLines}`);
       }
+
+      // WebClient → page/event definition: "web client: Presentation Editor\n  event: edit slide\n  event: delete slide"
       if (n.type === "webClient" && Array.isArray(n.data?.events)) {
-        facts.push(`Events:\n` + n.data.events.map((ev: { name?: string }) => `- ${ev.name || ''}`).join("\n"));
+        const evLines = n.data.events
+          .map((ev: { name?: string }) => `  event: ${ev.name || '(unnamed)'}`)
+          .join("\n");
+        facts.push(`web client: ${label}\n${evLines}`);
       }
+
+      // Kafka → topic definition: "kafka topics for Notifications: user-signed-up, order-placed"
       if (n.type === "kafka" && Array.isArray(n.data?.topics)) {
-        facts.push(`Topics:\n` + n.data.topics.map((t: { name: string }) => `- ${t.name}`).join("\n"));
+        const topicNames = n.data.topics.map((t: { name: string }) => t.name).join(", ");
+        facts.push(`kafka topics for ${label}: ${topicNames}`);
       }
 
       // Collect test cases associated with this node
