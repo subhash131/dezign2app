@@ -214,6 +214,7 @@ export type BackendNode = {
       targetNodeId?: string;
     }[];
     tableRef?: string; // Reference to an entity node ID
+    seedRows?: Record<string, string | number | boolean | null>[];
     graphPosition?: { x: number; y: number };
     techStack?: string;
     baseUrl?: string;

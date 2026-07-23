@@ -90,7 +90,17 @@ export function SimulationTerminal() {
             >
               <div className="py-0.5">
                 <span className="mr-2 text-muted-foreground">{String(index + 1).padStart(2, "0")}</span>
-                <span>{entry.status === "failed" ? "✕" : "›"} {entry.label}</span>
+                <span className={
+                  entry.kind === "messaging" ? "text-emerald-400" :
+                  entry.kind === "push" ? "text-sky-400" :
+                  entry.status === "failed" ? "text-destructive" : ""
+                }>
+                  {entry.status === "failed" ? "✕" :
+                   entry.kind === "messaging" ? "⇢" :
+                   entry.kind === "push" ? "⊳" :
+                   "›"}{" "}
+                  {entry.label}
+                </span>
                 {entry.detail && <span> — {entry.detail}</span>}
                 {entry.input !== undefined && (
                   <pre className="mt-1 ml-6 text-muted-foreground whitespace-pre-wrap break-all bg-foreground/5 p-1.5 rounded border border-border/50">in = {formatPayload(entry.input)}</pre>
