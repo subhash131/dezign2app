@@ -1,176 +1,459 @@
 "use client";
-import React from "react";
+import React, { useState } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
+import { Space_Grotesk, IBM_Plex_Mono } from "next/font/google";
+import {
+  ArrowRight,
+  FileText,
+  LayoutGrid,
+  Database,
+  Terminal,
+  Activity,
+  Server,
+  Cpu,
+} from "lucide-react";
 
-const Intro = () => {
+// Two typefaces doing distinct jobs: a geometric display face for the
+// headline, and a mono face for anything that reads like the tool's own
+// output (status tags, file labels, the badge). This is deliberate — the
+// product compiles specs into code, so its UI should occasionally *look*
+// like the artifacts it produces.
+const display = Space_Grotesk({
+  subsets: ["latin"],
+  weight: ["500", "700"],
+  variable: "--font-display",
+});
+const mono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-mono",
+});
+
+// Palette (named, not decorative): ink for text, violet for "input/spec",
+// then a semantic three-color pipeline — blue (compiling), amber
+// (verifying), emerald (live) — so color encodes pipeline stage rather
+// than just alternating for visual interest.
+const COLOR = {
+  violet: "#5B4FE0",
+  violetDeep: "#3F35B8",
+  blue: "#2563EB",
+  amber: "#B45309",
+  emerald: "#0F9D5C",
+  ink: "#0B0E14",
+};
+
+// ── Diagram geometry ──────────────────────────────────────────────
+// viewBox is 1000 x 460. Every node lives at one of these y-values, and
+// every card is absolutely positioned at that *same* y-value (as a % of
+// the container height) — one source of truth, so the paths and the
+// cards can never drift apart the way flex-distributed columns do.
+const DIAGRAM_H = 460;
+const DIAGRAM_W = 1000;
+const NODE_Y = [90, 230, 370] as const;
+const LEFT_X = 260; // where left paths terminate / left cards begin
+const RIGHT_X = 740; // where right paths terminate / right cards begin
+const HUB = { x: 500, y: 230 };
+
+const leftNodes = [
+  {
+    id: "prd",
+    title: "PRD & Specs",
+    tag: "spec.prd",
+    icon: FileText,
+    y: NODE_Y[0],
+  },
+  {
+    id: "topology",
+    title: "System Topology",
+    tag: "graph.topo",
+    icon: LayoutGrid,
+    y: NODE_Y[1],
+  },
+  {
+    id: "schema",
+    title: "Data Schemas",
+    tag: "schema.sql",
+    icon: Database,
+    y: NODE_Y[2],
+  },
+];
+
+const rightNodes = [
+  {
+    id: "code",
+    title: "Full-Stack Code",
+    status: "BUILD",
+    note: "Agents write the app, APIs & tests",
+    icon: Terminal,
+    color: COLOR.blue,
+    y: NODE_Y[0],
+  },
+  {
+    id: "test",
+    title: "Load & Stress Tests",
+    status: "VERIFY",
+    note: "Simulated traffic before it ships",
+    icon: Activity,
+    color: COLOR.amber,
+    y: NODE_Y[1],
+  },
+  {
+    id: "deploy",
+    title: "K8s & Cloud",
+    status: "LIVE",
+    note: "Zero-touch hosting on your cluster",
+    icon: Server,
+    color: COLOR.emerald,
+    y: NODE_Y[2],
+  },
+];
+
+// Mirrored bezier families — left and right are now the same curve
+// shape reflected around the hub, instead of two unrelated path sets.
+const leftPath = (y: number) =>
+  `M ${LEFT_X} ${y} C 380 ${y}, 420 ${HUB.y}, ${HUB.x} ${HUB.y}`;
+const rightPath = (y: number) =>
+  `M ${HUB.x} ${HUB.y} C 620 ${HUB.y}, 660 ${y}, ${RIGHT_X} ${y}`;
+
+const pct = (v: number, total: number) => `${(v / total) * 100}%`;
+
+export const Intro = () => {
+  const [hoveredNode, setHoveredNode] = useState<string | null>(null);
+  const reduceMotion = useReducedMotion();
+
+  const flowCircle = (path: string, color: string, delay: number) =>
+    !reduceMotion && (
+      <motion.circle
+        r="3.5"
+        fill={color}
+        animate={{ offsetDistance: ["0%", "100%"] }}
+        transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut", delay }}
+        style={{ offsetPath: `path('${path}')` }}
+      />
+    );
+
   return (
-    <div className="w-full flex flex-col items-center">
-      {/* ── Hero ───────────────────────────────────────── */}
-      <section className="w-full flex flex-col items-center text-center px-6 pt-24 pb-20 relative overflow-hidden">
-        {/* Soft gradient background matching mockup */}
+    <div
+      className={`${display.variable} ${mono.variable} w-full flex flex-col items-center bg-[#F6F7F9] text-[#0B0E14] overflow-x-hidden pb-24`}
+    >
+      <section className="w-full flex flex-col items-center text-center px-4 max-w-6xl relative pt-12">
+        {/* Ambient glow — quiet, single source, no competing gradients */}
         <div
           className="absolute inset-0 z-0 pointer-events-none"
           style={{
-            background: "radial-gradient(circle at 50% 0%, #fff7e6 0%, #e6f7ff 50%, white 100%)",
-            opacity: 0.8
+            background:
+              "radial-gradient(circle at 50% 15%, rgba(91,79,224,0.10) 0%, rgba(246,247,249,1) 70%)",
           }}
         />
 
-        <div className="relative z-10 flex flex-col items-center gap-6 max-w-4xl w-full">
-          {/* Headline */}
-          <h1 className="text-3xl lg:text-5xl font-semibold leading-[1.1] tracking-tight text-gray-900">
-            From Requirements to Production.<br />
-            Fully Autonomous.
-          </h1>
+        {/* Status badge — reads like a build tag, not a marketing sticker */}
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="relative z-10 inline-flex items-center gap-2 px-3.5 py-1.5 rounded-md bg-white border border-[#E4E7EC] shadow-sm mb-7"
+          style={{ fontFamily: "var(--font-mono)" }}
+        >
+          <span
+            className="w-1.5 h-1.5 rounded-full"
+            style={{ backgroundColor: COLOR.emerald }}
+          />
+          <span className="text-[11px] font-medium tracking-tight text-[#0B0E14]">
+            dezign2app
+          </span>
+          <span className="text-[11px] text-[#9AA1AC]">/</span>
+          <span className="text-[11px] text-[#5B6472]">autonomous_sdlc.run()</span>
+        </motion.div>
 
-          {/* Subtitle */}
-          <p className="text-xs text-gray-600 leading-relaxed max-w-xl font-medium">
-            The ultimate abstraction layer for full-stack app development. Define requirements, simulate architecture, write code, and deploy to Kubernetes — automatically.
-          </p>
+        {/* Headline — benefit-first, plain language */}
+        <motion.h1
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.1 }}
+          style={{ fontFamily: "var(--font-display)" }}
+          className="relative z-10 text-4xl sm:text-5xl lg:text-[3.4rem] font-medium tracking-tight leading-[1.08] text-[#0B0E14] max-w-3xl"
+        >
+          Describe the system.
+          <br />
+          Ship the product.
+        </motion.h1>
 
-          {/* CTA */}
+        <motion.p
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.2 }}
+          className="relative z-10 text-sm text-[#5B6472] leading-relaxed max-w-lg font-normal mt-5"
+        >
+          Write requirements in plain English. Autonomous agents compile
+          production code, load-test it under simulated traffic, and deploy
+          it to Kubernetes — no engineer in the loop.
+        </motion.p>
+
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.3 }}
+          className="relative z-10 mt-7 mb-8"
+        >
           <Link
             href="/sign-up"
-            className="bg-black text-white text-sm font-semibold px-8 py-3.5 rounded-full hover:bg-gray-800 transition-colors shadow-lg"
+            className="bg-[#0B0E14] hover:bg-[#1A1F2B] text-white text-sm font-medium px-6 py-3 rounded-lg transition-all shadow-sm hover:shadow-md flex items-center gap-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5B4FE0]"
           >
-            Get started
+            Get started <ArrowRight className="w-4 h-4" />
           </Link>
+        </motion.div>
 
-          {/* Dashboard Mockup */}
-          <div className="mt-1 w-full max-w-5xl rounded-3xl p-3 bg-white/40 backdrop-blur-2xl border border-white shadow-2xl relative">
-            <div className="w-full bg-[#fcfcfc] rounded-2xl border border-gray-100 overflow-hidden shadow-sm flex h-[450px]">
-              {/* Sidebar */}
-              <div className="w-16 border-r border-gray-100 flex flex-col items-center py-6 gap-6 bg-white shrink-0">
-                <div className="w-8 h-8 rounded-full bg-black/5 flex items-center justify-center text-lg">🤖</div>
-                <div className="flex flex-col gap-4 text-gray-300 w-full px-4">
-                  <div className="w-full h-1 bg-gray-200 rounded-full" />
-                  <div className="w-full h-1 bg-gray-200 rounded-full" />
-                  <div className="w-full h-1 bg-gray-200 rounded-full" />
-                </div>
-              </div>
-              {/* Main Content */}
-              <div className="flex-1 p-8 bg-gray-50/50 flex flex-col gap-6">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-full bg-blue-100 border border-blue-200 flex items-center justify-center text-2xl">
-                    ✨
-                  </div>
-                  <div className="text-left">
-                    <h3 className="text-xl font-semibold text-gray-800">Hello, Architect!</h3>
-                    <p className="text-sm text-gray-500">What system are we building today?</p>
-                  </div>
-                </div>
+        {/* ── PIPELINE DIAGRAM ─────────────────────────────────────── */}
+        <div className="w-full max-w-5xl h-[460px] relative mt-4">
+          {/* Dot-grid — quieter than a line grid, reads as "graph paper"
+              without competing with the path lines drawn over it. */}
+          <div
+            className="absolute inset-0 pointer-events-none rounded-3xl"
+            style={{
+              backgroundImage:
+                "radial-gradient(rgba(91,79,224,0.16) 1px, transparent 1px)",
+              backgroundSize: "24px 24px",
+              maskImage:
+                "radial-gradient(ellipse at center, black 40%, transparent 82%)",
+            }}
+          />
 
-                <div className="grid grid-cols-2 gap-4 flex-1">
-                  <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-3 text-left hover:border-gray-200 transition-colors">
-                    <span className="text-sm font-semibold text-gray-800">1. System Design</span>
-                    <p className="text-xs text-gray-500">Draw topologies and establish dependencies.</p>
-                    <div className="mt-auto h-20 bg-blue-50/50 rounded-lg border border-blue-100/50 p-2 flex gap-2 items-center justify-center">
-                       <motion.div animate={{ scale: [1, 1.1, 1] }} transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }} className="w-10 h-10 bg-white rounded-lg shadow-sm border border-blue-200 flex items-center justify-center">
-                         <div className="w-4 h-4 bg-blue-100 rounded-sm"></div>
-                       </motion.div>
-                       <div className="flex-1 h-0.5 bg-blue-200/50 overflow-hidden relative rounded-full">
-                         <motion.div animate={{ x: ["-100%", "100%"] }} transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }} className="absolute inset-0 bg-blue-400"></motion.div>
-                       </div>
-                       <motion.div animate={{ scale: [1, 1.1, 1] }} transition={{ repeat: Infinity, duration: 2, ease: "easeInOut", delay: 1 }} className="w-10 h-10 bg-white rounded-lg shadow-sm border border-blue-200 flex items-center justify-center">
-                         <div className="w-4 h-4 bg-blue-100 rounded-sm"></div>
-                       </motion.div>
-                    </div>
-                  </div>
-                  <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-3 text-left hover:border-gray-200 transition-colors">
-                    <span className="text-sm font-semibold text-gray-800">2. Simulation</span>
-                    <p className="text-xs text-gray-500">Run load tests and validate data flow.</p>
-                    <div className="mt-auto h-20 bg-gradient-to-br from-emerald-50/80 to-teal-50/80 rounded-xl border border-emerald-100/50 p-2.5 flex items-center justify-between relative overflow-hidden shadow-inner">
-                      {/* Subtle Grid Background */}
-                      <div className="absolute inset-0 opacity-[0.04]" style={{ backgroundImage: 'linear-gradient(#000 1px, transparent 1px), linear-gradient(90deg, #000 1px, transparent 1px)', backgroundSize: '6px 6px' }}></div>
-                      
-                      {/* Client */}
-                      <div className="z-10 flex flex-col items-center gap-1.5 shrink-0">
-                        <motion.div animate={{ y: [0, -2, 0] }} transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }} className="w-7 h-7 rounded-[8px] bg-white flex items-center justify-center border border-emerald-200 shadow-[0_2px_8px_rgba(16,185,129,0.15)] text-emerald-600">
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
-                        </motion.div>
-                        <span className="text-[9px] font-bold text-emerald-700/80 uppercase tracking-wider">Client</span>
-                      </div>
-
-                      {/* Data Flow 1 */}
-                      <div className="flex-1 h-[2px] bg-emerald-200/50 relative overflow-hidden mx-1.5 rounded-full">
-                         <motion.div animate={{ x: ["-100%", "300%"] }} transition={{ repeat: Infinity, duration: 1.2, ease: "linear" }} className="absolute top-0 bottom-0 w-8 bg-gradient-to-r from-transparent via-emerald-500 to-transparent"></motion.div>
-                      </div>
-
-                      {/* API Gateway */}
-                      <div className="z-10 flex flex-col items-center gap-1.5 shrink-0">
-                        <motion.div animate={{ y: [0, -2, 0] }} transition={{ repeat: Infinity, duration: 3, delay: 0.5, ease: "easeInOut" }} className="w-7 h-7 rounded-full bg-emerald-500 flex items-center justify-center shadow-[0_4px_12px_rgba(16,185,129,0.3)] text-white border border-emerald-400">
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                        </motion.div>
-                        <span className="text-[9px] font-bold text-emerald-700/80 uppercase tracking-wider">API</span>
-                      </div>
-
-                      {/* Data Flow 2 */}
-                      <div className="flex-1 h-[2px] bg-emerald-200/50 relative overflow-hidden mx-1.5 rounded-full">
-                         <motion.div animate={{ x: ["-100%", "300%"] }} transition={{ repeat: Infinity, duration: 1.2, delay: 0.6, ease: "linear" }} className="absolute top-0 bottom-0 w-8 bg-gradient-to-r from-transparent via-emerald-500 to-transparent"></motion.div>
-                      </div>
-
-                      {/* Stream (Kafka) */}
-                      <div className="z-10 flex flex-col items-center gap-1.5 shrink-0">
-                        <motion.div animate={{ y: [0, -2, 0] }} transition={{ repeat: Infinity, duration: 3, delay: 1, ease: "easeInOut" }} className="w-7 h-7 rounded-[8px] bg-gray-900 flex items-center justify-center shadow-[0_4px_10px_rgba(0,0,0,0.2)] text-white border border-gray-700">
-                           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
-                        </motion.div>
-                        <span className="text-[9px] font-bold text-emerald-700/80 uppercase tracking-wider">Stream</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-3 text-left hover:border-gray-200 transition-colors">
-                    <span className="text-sm font-semibold text-gray-800">3. Autonomous Coding</span>
-                    <p className="text-xs text-gray-500">Agents write full-stack code adhering to specs.</p>
-                    <div className="mt-auto h-20 bg-purple-50/50 rounded-lg border border-purple-100/50 p-4 flex flex-col gap-2">
-                      <motion.div animate={{ width: ["10%", "66%"], opacity: [0.3, 1] }} transition={{ repeat: Infinity, duration: 2, repeatType: "reverse", ease: "easeInOut" }} className="h-1.5 bg-purple-400 rounded-full"></motion.div>
-                      <motion.div animate={{ width: ["10%", "50%"], opacity: [0.3, 1] }} transition={{ repeat: Infinity, duration: 2, delay: 0.3, repeatType: "reverse", ease: "easeInOut" }} className="h-1.5 bg-purple-400 rounded-full"></motion.div>
-                      <motion.div animate={{ width: ["10%", "80%"], opacity: [0.3, 1] }} transition={{ repeat: Infinity, duration: 2, delay: 0.6, repeatType: "reverse", ease: "easeInOut" }} className="h-1.5 bg-purple-400 rounded-full"></motion.div>
-                    </div>
-                  </div>
-                  <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm flex flex-col gap-3 text-left hover:border-gray-200 transition-colors">
-                    <span className="text-sm font-semibold text-gray-800">4. CI/CD & Deploy</span>
-                    <p className="text-xs text-gray-500">Auto-generated Terraform & K8s manifests.</p>
-                    <div className="mt-auto h-20 bg-orange-50/50 rounded-lg border border-orange-100/50 p-2 flex gap-3 items-center justify-center">
-                       <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 6, ease: "linear" }} className="text-xl bg-white w-10 h-10 rounded-lg shadow-sm border border-orange-200 flex items-center justify-center">☸️</motion.div>
-                       <motion.div animate={{ x: [0, 5, 0] }} transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }} className="text-orange-400 text-lg">→</motion.div>
-                       <motion.div animate={{ y: [0, -4, 0] }} transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }} className="text-xl bg-white w-10 h-10 rounded-lg shadow-sm border border-orange-200 flex items-center justify-center">☁️</motion.div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-2 w-full bg-white rounded-full border border-gray-200 p-2.5 shadow-sm flex items-center justify-between pl-4">
-                   <span className="text-xs text-gray-400">Describe your application requirements...</span>
-                   <div className="w-7 h-7 rounded-full bg-black flex items-center justify-center text-white text-sm font-bold shadow-md cursor-pointer hover:bg-gray-800 transition-colors">↑</div>
-                </div>
-              </div>
-            </div>
+          {/* Section labels sit independently of the node columns below —
+              they no longer share a flex column with the cards, so they
+              can't push card positions off the paths. */}
+          <div
+            className="absolute left-[4%] top-1 text-[10px] font-medium text-[#5B6472] uppercase tracking-widest z-20"
+            style={{ fontFamily: "var(--font-mono)" }}
+          >
+            01 — system design
+          </div>
+          <div
+            className="absolute right-[4%] top-1 text-[10px] font-medium text-[#5B6472] uppercase tracking-widest z-20"
+            style={{ fontFamily: "var(--font-mono)" }}
+          >
+            02 — 03 · pipeline
           </div>
 
-          {/* Three Horizontal Features */}
-          <div className="mt-12 w-full max-w-4xl grid grid-cols-1 md:grid-cols-3 gap-8 pt-8 border-t border-gray-100 text-left">
-            <div className="flex gap-4 items-start">
-              <div className="w-10 h-10 rounded-xl bg-[#fff7e6] text-orange-600 flex items-center justify-center shrink-0 border border-orange-100 shadow-sm">📝</div>
-              <div>
-                <h4 className="text-sm font-bold text-gray-900">Requirements First</h4>
-                <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">Start with plain English. Our engine translates needs into technical specs instantly.</p>
+          <svg
+            className="w-full h-full absolute inset-0 pointer-events-none z-10"
+            viewBox={`0 0 ${DIAGRAM_W} ${DIAGRAM_H}`}
+            preserveAspectRatio="none"
+          >
+            {leftNodes.map((node, index) => {
+              const d = leftPath(node.y);
+              const isHovered = hoveredNode === node.id;
+              return (
+                <g key={`left-${node.id}`}>
+                  <path
+                    d={d}
+                    fill="none"
+                    stroke={isHovered ? COLOR.violet : "#DCD9F7"}
+                    strokeWidth={isHovered ? 2 : 1.25}
+                    className="transition-all duration-300"
+                  />
+                  {/* connector dot marks exactly where the card meets the line */}
+                  <circle cx={LEFT_X} cy={node.y} r={3} fill="#fff" stroke={COLOR.violet} strokeWidth={1.5} />
+                  {flowCircle(d, COLOR.violet, index * 0.4)}
+                </g>
+              );
+            })}
+
+            {rightNodes.map((node, index) => {
+              const d = rightPath(node.y);
+              const isHovered = hoveredNode === node.id;
+              return (
+                <g key={`right-${node.id}`}>
+                  <path
+                    d={d}
+                    fill="none"
+                    stroke={isHovered ? node.color : `${node.color}33`}
+                    strokeWidth={isHovered ? 2 : 1.25}
+                    className="transition-all duration-300"
+                  />
+                  <circle cx={RIGHT_X} cy={node.y} r={3} fill="#fff" stroke={node.color} strokeWidth={1.5} />
+                  {flowCircle(d, node.color, 1.2 + index * 0.4)}
+                </g>
+              );
+            })}
+
+            {/* hub anchor point, so the paths visibly resolve into the chip */}
+            <circle cx={HUB.x} cy={HUB.y} r={4} fill={COLOR.violet} />
+          </svg>
+
+          {/* Compiler core — a chip, not a mascot */}
+          <div
+            className="absolute z-20 flex flex-col items-center"
+            style={{ left: pct(HUB.x, DIAGRAM_W), top: pct(HUB.y, DIAGRAM_H), transform: "translate(-50%, -50%)" }}
+          >
+            <div className="relative flex items-center justify-center">
+              {!reduceMotion && (
+                <motion.div
+                  animate={{ scale: [1, 1.12, 1], opacity: [0.15, 0.35, 0.15] }}
+                  transition={{ repeat: Infinity, duration: 3.5, ease: "easeInOut" }}
+                  className="absolute w-28 h-28 rounded-full"
+                  style={{ backgroundColor: COLOR.violet, filter: "blur(20px)" }}
+                />
+              )}
+              <div
+                className="w-[86px] h-[86px] rounded-2xl flex items-center justify-center relative cursor-pointer hover:scale-105 transition-transform"
+                style={{
+                  background: `linear-gradient(145deg, ${COLOR.violet}, ${COLOR.violetDeep})`,
+                }}
+              >
+                <div className="w-[76px] h-[76px] rounded-xl bg-[#0B0E14] flex flex-col items-center justify-center border border-white/10 text-white">
+                  <Cpu className="w-5 h-5 text-[#B9B3F5]" />
+                  <span
+                    className="text-[8px] font-medium tracking-widest text-[#B9B3F5] mt-1"
+                    style={{ fontFamily: "var(--font-mono)" }}
+                  >
+                    COMPILER
+                  </span>
+                </div>
               </div>
             </div>
-            <div className="flex gap-4 items-start">
-              <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100 shadow-sm">🔍</div>
-              <div>
-                <h4 className="text-sm font-bold text-gray-900">Simulate & Validate</h4>
-                <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">Catch bottlenecks early by running live data flow simulations on generated topologies.</p>
-              </div>
-            </div>
-            <div className="flex gap-4 items-start">
-              <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100 shadow-sm">🚀</div>
-              <div>
-                <h4 className="text-sm font-bold text-gray-900">Zero-Touch Infra</h4>
-                <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">Agents configure LoadBalancers, Kubernetes, and CI/CD pipelines out of the box.</p>
-              </div>
-            </div>
+            <span
+              className="mt-2.5 text-[10px] text-[#5B6472] px-2.5 py-0.5 whitespace-nowrap"
+              style={{ fontFamily: "var(--font-mono)" }}
+            >
+              core.compile(spec)
+            </span>
           </div>
+
+          {/* Left column — each card's vertical center is pinned to the
+              exact same y used by its connecting path via `top: pct(node.y)`.
+              No flex distribution, no drift. */}
+          <div className="absolute z-20" style={{ left: "4%", width: "22%", top: 0, bottom: 0 }}>
+            {leftNodes.map((node) => {
+              const Icon = node.icon;
+              const isHovered = hoveredNode === node.id;
+              return (
+                <div
+                  key={node.id}
+                  onMouseEnter={() => setHoveredNode(node.id)}
+                  onMouseLeave={() => setHoveredNode(null)}
+                  className="absolute left-0 w-full p-3 rounded-xl bg-white border shadow-sm flex items-center gap-3 cursor-pointer transition-all duration-200"
+                  style={{
+                    top: pct(node.y, DIAGRAM_H),
+                    transform: `translateY(-50%) translateX(${isHovered ? "3px" : "0"})`,
+                    borderColor: isHovered ? "#C9C2F5" : "#E4E7EC",
+                    borderLeft: `2.5px solid ${COLOR.violet}`,
+                    boxShadow: isHovered
+                      ? "0 8px 20px -8px rgba(91,79,224,0.25)"
+                      : "0 1px 2px rgba(11,14,20,0.04)",
+                  }}
+                >
+                  <div className="w-9 h-9 rounded-lg bg-[#F1EFFC] flex items-center justify-center text-[#5B4FE0] shrink-0">
+                    <Icon className="w-4 h-4" />
+                  </div>
+                  <div className="text-left overflow-hidden">
+                    <div className="text-xs font-medium text-[#0B0E14] truncate">
+                      {node.title}
+                    </div>
+                    <div
+                      className="text-[10px] text-[#9AA1AC] truncate"
+                      style={{ fontFamily: "var(--font-mono)" }}
+                    >
+                      {node.tag}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Right column — same pinning strategy, mirrored. */}
+          <div className="absolute z-20" style={{ right: "4%", width: "24%", top: 0, bottom: 0 }}>
+            {rightNodes.map((node) => {
+              const Icon = node.icon;
+              const isHovered = hoveredNode === node.id;
+              return (
+                <div
+                  key={node.id}
+                  onMouseEnter={() => setHoveredNode(node.id)}
+                  onMouseLeave={() => setHoveredNode(null)}
+                  className="absolute left-0 w-full p-3 rounded-xl bg-white border shadow-sm flex items-center justify-between gap-3 cursor-pointer transition-all duration-200"
+                  style={{
+                    top: pct(node.y, DIAGRAM_H),
+                    transform: `translateY(-50%) translateX(${isHovered ? "-3px" : "0"})`,
+                    borderColor: "#E4E7EC",
+                    borderRight: `2.5px solid ${node.color}`,
+                    boxShadow: isHovered
+                      ? `0 8px 20px -8px ${node.color}40`
+                      : "0 1px 2px rgba(11,14,20,0.04)",
+                  }}
+                >
+                  <div className="flex items-center gap-3 overflow-hidden">
+                    <div
+                      className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
+                      style={{ backgroundColor: `${node.color}18`, color: node.color }}
+                    >
+                      <Icon className="w-4 h-4" />
+                    </div>
+                    <div className="text-left overflow-hidden">
+                      <div className="text-xs font-medium text-[#0B0E14] truncate">
+                        {node.title}
+                      </div>
+                      <div className="text-[10px] text-[#9AA1AC] truncate">
+                        {node.note}
+                      </div>
+                    </div>
+                  </div>
+                  <span
+                    className="text-[9px] font-medium tracking-wide px-1.5 py-0.5 rounded shrink-0"
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      color: node.color,
+                      backgroundColor: `${node.color}14`,
+                    }}
+                  >
+                    {node.status}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ── THREE-STAGE SUMMARY ──────────────────────────────────── */}
+        <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-3 gap-6 mt-10 text-left relative z-20">
+          {[
+            {
+              n: "01",
+              title: "System design",
+              copy: "Describe requirements and topology in plain English or a diagram — no boilerplate to write.",
+            },
+            {
+              n: "02",
+              title: "Autonomous compile",
+              copy: "Agents translate the spec into production code, API contracts, and test suites.",
+            },
+            {
+              n: "03",
+              title: "Test & deploy",
+              copy: "Load-tested against simulated traffic, then shipped to Kubernetes with zero manual ops.",
+            },
+          ].map((stage) => (
+            <div
+              key={stage.n}
+              className="flex flex-col gap-2 p-5 rounded-xl bg-white border border-[#E4E7EC]"
+            >
+              <div className="flex items-center gap-2">
+                <span
+                  className="text-[11px] text-[#9AA1AC]"
+                  style={{ fontFamily: "var(--font-mono)" }}
+                >
+                  {stage.n}
+                </span>
+                <span className="text-xs font-medium text-[#0B0E14]">
+                  {stage.title}
+                </span>
+              </div>
+              <p className="text-[12px] text-[#5B6472] leading-relaxed">
+                {stage.copy}
+              </p>
+            </div>
+          ))}
         </div>
       </section>
     </div>
