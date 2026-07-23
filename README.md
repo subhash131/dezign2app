@@ -1,6 +1,8 @@
-# Advanced System Design Automation Monorepo
+# Dezign2App — System Design Automation Monorepo
 
-Welcome to the **System Design Automation Template**—a state-of-the-art, high-performance, and enterprise-grade monorepo designed to build and manage system design diagrams and architectures. This template combines modern UI canvas editors with stateful AI runtimes, real-time streaming, secure multi-tenant authentication, and event-driven architecture.
+Welcome to **Dezign2App** (Blueprint)—a state-of-the-art, high-performance, enterprise-grade monorepo designed to build, edit, and analyze system design architectures and cloud infrastructure diagrams.
+
+This platform combines visual canvas editors, stateful AI graph execution, Model Context Protocol (MCP) tooling, real-time streaming, secure multi-tenant authentication, and subscription billing into a unified TypeScript workspace.
 
 [![Next.js](https://img.shields.io/badge/Next.js-16.0.10-black?style=flat-square&logo=next.js)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19.0.0-blue?style=flat-square&logo=react)](https://react.dev/)
@@ -8,73 +10,106 @@ Welcome to the **System Design Automation Template**—a state-of-the-art, high-
 [![Tailwind CSS v4](https://img.shields.io/badge/Tailwind_CSS-v4.0-38B2AC?style=flat-square&logo=tailwind-css)](https://tailwindcss.com/)
 [![pnpm Workspace](https://img.shields.io/badge/pnpm-Workspace-F69220?style=flat-square&logo=pnpm)](https://pnpm.io/)
 [![Clerk](https://img.shields.io/badge/Auth-Clerk-6C47FF?style=flat-square&logo=clerk)](https://clerk.com/)
+[![Fumadocs](https://img.shields.io/badge/Docs-Fumadocs-blueviolet?style=flat-square)](https://fumadocs.vercel.app)
 
 ---
 
-## 🏗️ Architecture & Component Overview
+## 🏗️ Monorepo Architecture
 
-This repository is powered by a high-performance **pnpm Workspace** monorepo structure, optimizing dependency sharing, code caching, and build tasks across multiple independent applications and packages.
+This repository is powered by a high-performance **pnpm Workspace** and **Turborepo**, optimizing dependency sharing, task caching, and parallel execution across specialized applications and shared packages.
 
 ```mermaid
 graph TD
-    %% Clients
-    Web["💻 Next.js Frontend (apps/web)"]
-    Canvas["🎨 React Flow System Design Canvas"]
-    Chat["💬 Real-Time AI Chat Window"]
-    Kanban["📋 Interactive Kanban Board"]
+    %% Frontend & Docs
+    subgraph Frontend["Client & Docs Layer"]
+        Web["💻 Next.js Web App (apps/web)<br/><i>Port 3000</i>"]
+        Docs["📚 Fumadocs Documentation (apps/docs)<br/><i>Port 3500</i>"]
+    end
 
-    %% Connections from client
+    %% Canvas & UI Components
+    subgraph WebComponents["Web App Features"]
+        Canvas["🎨 React Flow & Tldraw System Design Canvas"]
+        Chat["💬 Real-Time AI Chat Window"]
+    end
+
     Web --> Canvas
     Web --> Chat
-    Web --> Kanban
 
-    %% Backend Layers
-    Convex["🔥 Convex Database & Backend (packages/backend)"]
-    Engine["🚀 Express AI System Design Engine (apps/system-design-engine)"]
-    MCP["🔌 MCP Inspector (apps/mcp-inspector-dev)"]
+    %% Backend Services
+    subgraph ServiceLayer["Execution & Backend Services"]
+        DesignEng["🚀 Express AI System Design Engine (apps/system-design-engine)"]
+        WorkflowEng["⚡ Express Workflow Engine (apps/workflow-engine)<br/><i>Port 3001</i>"]
+        MCPDev["🔌 MCP Inspector (apps/mcp-inspector-dev)"]
+    end
 
-    %% Communications
-    Web <-->|Mutations / Queries| Convex
-    Web <-->|REST API| Engine
-    Engine <-->|Designs & Run History| Convex
-    Engine <-->|Tool Protocols| MCP
+    %% Shared Packages & Database
+    subgraph SharedPackages["Shared Packages & Database"]
+        ConvexDB["🔥 Convex Database & Backend (packages/backend)"]
+        CanvasDomain["📐 Canvas Domain Models (packages/canvas)"]
+        SharedUI["🎨 Shared UI Design System (packages/ui)"]
+    end
+
+    %% System Connections
+    Web <-->|Mutations / Queries| ConvexDB
+    Web <-->|REST / SSE API| DesignEng
+    Web <-->|REST API| WorkflowEng
+
+    DesignEng <-->|Designs & History| ConvexDB
+    DesignEng <-->|Tool Protocols| MCPDev
+    WorkflowEng <-->|Mutations / Queries| ConvexDB
+
+    Web -.->|Uses| SharedUI
+    Web -.->|Uses| CanvasDomain
+    DesignEng -.->|Uses| CanvasDomain
+    ConvexDB -.->|Uses| CanvasDomain
 ```
 
-### 📱 Applications (`/apps`)
+---
 
-| App Directory                                                                                 | Core Technologies                                                                   | Description                                                                                                                                                                                                                                                            |
-| :-------------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [**`apps/web`**](file:///d:/ai/yt/pro/blueprint/apps/web)                             | Next.js 16, React 19, Tailwind v4, `@xyflow/react`, Clerk, Framer Motion            | **Interactive Frontend Canvas & App Portal**: Multi-tenant protected user portal with workspace folders, interactive drag-and-drop system design builder using React Flow, embedded agent chat panel with thinking states, Kanban task manager, and API Key administration. |
-| [**`apps/system-design-engine`**](file:///d:/ai/yt/pro/blueprint/apps/system-design-engine)     | Express.js, `@langchain/langgraph`, LangChain Core, MCP SDK | **High-Performance AI Execution Server**: Computes system design analysis using LangGraph state machines, coordinates node operations (LLMs, API webhooks, MCP tools), runs custom API limiters.                          |
-| [**`apps/mcp-inspector-dev`**](file:///d:/ai/yt/pro/blueprint/apps/mcp-inspector-dev) | `@modelcontextprotocol/inspector`                                                   | **MCP Dev & Verification Console**: Interactive tool interface enabling swift validation and testing of Model Context Protocol configurations.                                                                                                                         |
+## 📱 Applications (`/apps`)
 
-### 📦 Packages (`/packages`)
+| App Directory | Core Stack | Port | Description |
+| :--- | :--- | :--- | :--- |
+| [**`apps/web`**](./apps/web) | Next.js 16 (Turbopack), React 19, Tailwind v4, `@xyflow/react`, Tldraw, Clerk, Creem, Framer Motion | `3000` | **Interactive Frontend Canvas & App Portal**: Multi-tenant protected user portal with workspace folders, drag-and-drop system design canvas using React Flow & Tldraw, embedded AI chat panel, and API Key/billing administration. |
+| [**`apps/system-design-engine`**](./apps/system-design-engine) | Express.js, `@langchain/langgraph`, LangChain Core, MCP SDK, Groq SDK, Convex Client | Custom | **High-Performance AI System Design Engine**: Computes system design analysis using LangGraph state machines, coordinates architecture node generation, MCP tools, and custom API limiters. |
+| [**`apps/workflow-engine`**](./apps/workflow-engine) | Express.js, `@langchain/langgraph`, LangChain Core, Inngest SDK, Upstash Redis & Realtime, Convex Client | `3001` | **Secondary Background Orchestration Service**: Handles background job execution, event queues, and Redis state streaming. |
+| [**`apps/docs`**](./apps/docs) | Next.js 16, React 19, Fumadocs UI / Core / MDX, Tailwind v4 | `3500` | **Technical Documentation Portal**: Integrated developer documentation site covering system design architecture, setup guides, and monorepo scripts. |
+| [**`apps/inngest-dev`**](./apps/inngest-dev) | `inngest-cli` | CLI | **Inngest Task Dev Server**: CLI runner for background queue testing (`http://localhost:3001/inngest`). |
+| [**`apps/mcp-inspector-dev`**](./apps/mcp-inspector-dev) | `@modelcontextprotocol/inspector` | CLI / UI | **MCP Dev Console**: Interactive tool interface enabling validation and testing of Model Context Protocol configurations. |
 
-| Package Directory                                                                                     | Description                                                                                                                                                                            |
-| :---------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [**`packages/backend`**](file:///d:/ai/yt/pro/blueprint/packages/backend)                     | **Core Database & Mutation Layer**: Holds the complete Convex backend schemas, database indexes, Clerk auth webhook integrations, API Key validators, and Creem subscription managers. |
-| [**`packages/ui`**](file:///d:/ai/yt/pro/blueprint/packages/ui)                               | **Shared Design System**: Reusable React component package built using Tailwind CSS v4 and shadcn/ui primitives.                                                                       |
-| [**`packages/eslint-config`**](file:///d:/ai/yt/pro/blueprint/packages/eslint-config)         | Monorepo-wide code style configurations.                                                                                                                                               |
-| [**`packages/typescript-config`**](file:///d:/ai/yt/pro/blueprint/packages/typescript-config) | Monorepo-wide strict TypeScript compiler settings.                                                                                                                                     |
+---
+
+## 📦 Packages (`/packages`)
+
+| Package Directory | Core Technologies | Description |
+| :--- | :--- | :--- |
+| [**`packages/backend`**](./packages/backend) | Convex, TypeScript, Svix, Zod, Cron Parser | **Core Database & Backend Layer**: Type-safe Convex schemas, database indexes, Clerk auth webhooks, API key validators, and Creem subscription billing managers. |
+| [**`packages/canvas`**](./packages/canvas) | Zod, TypeScript | **Shared Pure Domain Models**: Pure domain models and Zod schemas for canvas nodes, edges, state transitions, and system design structures. |
+| [**`packages/ui`**](./packages/ui) | React 19, Tailwind CSS v4, Radix Primitives, Lucide Icons | **Shared Design System**: Reusable React component package built using Tailwind CSS v4 and shadcn/ui primitives. |
+| [**`packages/eslint-config`**](./packages/eslint-config) | ESLint 9 | Monorepo-wide code style configurations. |
+| [**`packages/typescript-config`**](./packages/typescript-config) | TypeScript 5 | Monorepo-wide strict TypeScript compiler settings. |
 
 ---
 
 ## 🌟 Key Features
 
 1. **Visual Drag-and-Drop System Design Canvas**
-   - Built on top of **React Flow (`@xyflow/react`)** for beautiful, fluid layouts.
+   - Built on top of **React Flow (`@xyflow/react`)** and **Tldraw** for fluid diagramming layouts.
    - Design custom node configurations for cloud infrastructure, databases, and microservices.
-   - Draw logical custom edge bindings for data flow and networking.
+   - Draw custom edge bindings for data flow, networking, and API connections.
 
-2. **Durable LangGraph AI Agent Execution**
-   - Stateful multi-step graph nodes running inside the `system-design-engine`.
+2. **Durable LangGraph AI Execution Engine**
+   - Stateful multi-step graph nodes running inside `system-design-engine`.
    - Native integration with LLM providers (Google Gemini, Groq, etc.).
-   - Support for **Model Context Protocol (MCP)** standard tools, letting your agent inspect databases, query systems, or execute scripts securely.
+   - Support for **Model Context Protocol (MCP)** standard tools to inspect databases, query systems, or execute commands.
 
 3. **Robust Database & Billing System**
-   - Built using **Convex**, providing rapid real-time reactive queries and guaranteed atomic database mutations.
+   - Built using **Convex**, providing real-time reactive queries and guaranteed atomic database mutations.
    - Secure and scalable **Clerk** multi-tenant authentication integration.
-   - Fully loaded subscription tier manager leveraging **Creem billing** integration.
+   - Subscription tier manager leveraging **Creem billing** integration.
+
+4. **Integrated Documentation Portal**
+   - Full technical documentation site powered by **Fumadocs** hosted in `apps/docs`.
 
 ---
 
@@ -82,27 +117,25 @@ graph TD
 
 ### 1. Prerequisites
 
-Ensure you have the following installed on your developer workspace:
+Ensure you have the following installed on your machine:
 
 - **Node.js** >= 20.0
 - **pnpm** >= 10.4.1
 
 ### 2. Configure Environment Variables
 
-You'll need to configure variables for each layer. Create copies of the provided examples:
+Create copies of environment files for each layer:
 
-#### For `packages/backend/.env.local`:
-
-```bash
+#### `packages/backend/.env.local`
+```env
 CONVEX_DEPLOYMENT=your-convex-deployment-url
 CLERK_SECRET_KEY=your-clerk-secret
 CLERK_JWT_ISSUER_DOMAIN=your-clerk-domain
 CREEM_API_KEY=your-creem-key
 ```
 
-#### For `apps/system-design-engine/.env`:
-
-```bash
+#### `apps/system-design-engine/.env`
+```env
 PORT=3001
 CORS_ORIGIN=http://localhost:3000
 CONVEX_URL=your-convex-deployment-url
@@ -111,71 +144,93 @@ GEMINI_API_KEY=your-gemini-api-key
 GROQ_API_KEY=your-groq-api-key
 ```
 
+#### `apps/web/.env.local`
+```env
+NEXT_PUBLIC_CONVEX_URL=your-convex-deployment-url
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your-clerk-publishable-key
+CLERK_SECRET_KEY=your-clerk-secret-key
+```
+
 ### 3. Install Dependencies
 
-Run the following at the root of the workspace:
+Run at the root of the workspace:
 
 ```bash
 pnpm install
 ```
 
-### 4. Running the Development Ecosystem
+### 4. Run Development Ecosystem
 
-This template uses **Turborepo** to orchestrate all services simultaneously:
+Start services using **Turborepo**:
 
 ```bash
 pnpm dev
 ```
 
-This single command spins up:
-
-- Next.js web application (`http://localhost:3000`)
-- AI Express Server / System Design Engine (`http://localhost:3001`)
-- MCP Inspector UI Console
+This command spins up:
+- Next.js Web Portal (`http://localhost:3000`)
+- AI System Design Engine (`http://localhost:3001`)
+- Technical Documentation Portal (`http://localhost:3500`)
+- MCP Inspector UI Console & Convex backend
 
 ---
 
-## 🛠️ Developer Commands
+## 🛠️ Monorepo Commands
 
-Here are the primary scripts defined in the root `package.json`:
+### Global Scripts
 
-- **Start Dev Services**: `pnpm dev`
-- **Production Build**: `pnpm build`
-- **Lint Files**: `pnpm lint`
-- **Format Project**: `pnpm format`
-- **Run Unit/Integration Tests**: `pnpm test`
-- **E2E Browser Testing**: `pnpm test:e2e`
+| Command | Action |
+| :--- | :--- |
+| `pnpm dev` | Starts development services. |
+| `pnpm build` | Production build across all workspace targets. |
+| `pnpm lint` | Runs ESLint across all apps and packages. |
+| `pnpm format` | Formats all files with Prettier. |
+| `pnpm test` | Runs unit and integration tests. |
+| `pnpm test:e2e` | Runs Playwright E2E browser tests. |
+
+### Workspace Filtering
+
+Target specific applications with `--filter`:
+
+```bash
+# Run web app only
+pnpm --filter web dev
+
+# Run system design engine only
+pnpm --filter system-design-engine dev
+
+# Run documentation site only
+pnpm --filter docs dev
+
+# Start Convex dev backend
+pnpm --filter backend dev
+```
 
 ---
 
 ## 🧪 Testing Guidelines
 
-This template supports multi-tier testing workflows built into the CI/CD structure:
+- **Unit & Integration Testing**: Powered by **Vitest** for instant feedback loops (`.test.ts` or `.spec.ts`).
+- **End-to-End Visual Testing**: Built using **Playwright** inside `apps/web/e2e/` to test UI states, auth flows, and React Flow canvases.
 
-- **Unit & Integration Testing**: Powered by **Vitest** for instant feedback loops. Add files ending in `.test.ts` or `.spec.ts`.
-- **End-to-End Visual Testing**: Built using **Playwright** inside `apps/web/e2e/` to test complex UI states, auth flows, and React Flow canvases.
-
-To run tests within the Next.js app:
+To run tests:
 
 ```bash
-# From apps/web
 pnpm test
-pnpm test:e2e
+pnpm --filter web test:e2e
 ```
 
 ---
 
-## 🎨 Managing shadcn/ui Components
+## 🎨 Managing Shared UI Components
 
-The shared component library resides inside `packages/ui`. To add new components to the shared package, run the shadcn CLI relative to your workspace target:
+The shared component library resides inside `packages/ui`. To add new components:
 
 ```bash
 pnpm dlx shadcn@latest add button -c apps/web
 ```
 
-This places the component into the common directory `packages/ui/src/components/ui/` ready to be imported across pages!
-
-Import in your Next.js application like so:
+Import in your Next.js application:
 
 ```tsx
 import { Button } from "@workspace/ui/components/button";
@@ -185,4 +240,7 @@ import { Button } from "@workspace/ui/components/button";
 
 ## 📜 License
 
-This project is private and proprietary. All rights reserved. Created by Subhash Nayak.
+This project is licensed under an **Open Source Non-Compete License**. You are free to inspect, fork, learn from, and build non-competing personal or educational projects with this codebase. However, hosting, deploying, or distributing this software as a direct commercial competitor to **Dezign2App** is strictly prohibited.
+
+For complete terms, please read the [LICENSE.md](./LICENSE.md). Created by **Subhash Nayak**.
+
