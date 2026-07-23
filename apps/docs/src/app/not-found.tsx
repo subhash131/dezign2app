@@ -10,10 +10,10 @@ export default function NotFound() {
         This docs page does not exist.
       </h1>
       <Link
-        href="/docs"
+        href="/projects"
         className="inline-flex rounded-lg border border-fd-border px-4 py-2 text-sm font-medium transition-colors hover:bg-fd-accent"
       >
-        Back to docs
+        Back to projects
       </Link>
     </main>
   );

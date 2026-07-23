@@ -48,8 +48,6 @@ const ROUTE_CONFIG: Record<
   "/sign-up": "free",
   "/document": "premium-limited",
   "/projects": "premium-limited",
-  "/workflows": "premium-limited",
-  "/dashboard": "premium-limited",
   "/project": "premium-only",
   "/api-keys": "premium-only",
 };

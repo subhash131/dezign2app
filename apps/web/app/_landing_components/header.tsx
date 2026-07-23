@@ -6,8 +6,8 @@ import Link from "next/link";
 const navLinks = [
   { name: "Features", href: "/#features" },
   { name: "Pricing", href: "/#pricing" },
-  { name: "Templates", href: "/workflows" },
-  { name: "Docs", href: "/docs" },
+  // { name: "Templates", href: "/workflows" },
+  // { name: "Docs", href: "/docs" },
   { name: "About", href: "/about" },
 ];
 
@@ -29,7 +29,7 @@ export const Header = () => {
             <Link
               key={link.name}
               href={link.href}
-              className="text-xs  transition-colors font-medium"
+              className="text-xs text-gray-600 hover:text-black transition-colors font-medium"
             >
               {link.name}
             </Link>

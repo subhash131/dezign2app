@@ -45,7 +45,7 @@ const Pricing = ({ hideHeader = false, hideToggle = false, externalBilling }: Pr
 
   return (
     <section
-      className="w-full bg-transparent text-black relative overflow-hidden py-12"
+      className="w-full bg-transparent text-black relative overflow-hidden py-12 scroll-mt-14"
       id="pricing"
     >
       {/* Subtle radial bg */}

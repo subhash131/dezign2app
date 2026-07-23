@@ -48,11 +48,6 @@ const projectsNavItems: SidebarItem[] = [
 ];
 const helpNavItems: SidebarItem[] = [
   {
-    title: "Documentation",
-    url: "/docs",
-    icon: BookOpenText,
-  },
-  {
     title: "Support",
     url: "/support",
     icon: Info,

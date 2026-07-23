@@ -35,7 +35,7 @@ const FeatureSwitcher = () => {
   const [activeFeature, setActiveFeature] = useState(features[1]?.id);
 
   return (
-    <section className="w-full py-24 bg-white" id="features">
+    <section className="w-full py-24 bg-white scroll-mt-14" id="features">
       <div className="max-w-6xl mx-auto px-6 flex flex-col items-center">
         {/* Header */}
         <div className="flex flex-col items-center text-center gap-4 mb-16">
