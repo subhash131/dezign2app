@@ -528,15 +528,34 @@ export async function simulateTestCase(args: {
         }
 
         // Find the consumer endpoint (the handler for this consumed event).
-        // Check the hydrated endpoints store first (same as findEndpoint() does),
-        // then fall back to in-node data for older snapshots.
         const consumerEndpoint: Endpoint | undefined =
           (args.endpoints ?? []).find((ep) => ep.nodeId === consumerService.id && ep.id === consumedEventId) ??
           consumerService.data.endpoints?.find((ep) => ep.id === consumedEventId) ??
           consumerService.data.routeGroups?.flatMap((g) => g.endpoints).find((ep) => ep.id === consumedEventId);
 
-        if (!consumerEndpoint) {
-          // Still show the consumer service receiving the message even without a matched endpoint
+        let consumerBody = clone(body);
+
+        if (consumerEndpoint) {
+          // Simulate the consumer endpoint if it has an endpoint handler
+          const consumerResult = await simulateEndpoint({
+            service: consumerService,
+            endpoint: consumerEndpoint,
+            nodes: args.nodes,
+            edges: args.edges,
+            request: {
+              method: consumerEndpoint.type || "EVENT",
+              path: consumerEndpoint.name || eventLabel,
+              headers: {},
+              params: {},
+              body,
+            },
+            resolvedIngressEdge: consumeEdge,
+            mocks: args.testCase.mocks,
+          });
+          trace.push(...consumerResult.trace);
+          consumerBody = clone(consumerResult.body);
+        } else {
+          // Still show the consumer service receiving the message
           trace.push({
             id: `msg-consume-${consumeEdge.id}`,
             kind: "messaging",
@@ -546,35 +565,28 @@ export async function simulateTestCase(args: {
             edgeId: consumeEdge.id,
             output: clone(body),
           });
-          continue;
         }
 
-        // Simulate the consumer endpoint
-        const consumerResult = await simulateEndpoint({
-          service: consumerService,
-          endpoint: consumerEndpoint,
-          nodes: args.nodes,
-          edges: args.edges,
-          request: {
-            method: consumerEndpoint.type || "EVENT",
-            path: consumerEndpoint.name || eventLabel,
-            headers: {},
-            params: {},
-            body,
-          },
-          resolvedIngressEdge: consumeEdge,
-          mocks: args.testCase.mocks,
-        });
-        trace.push(...consumerResult.trace);
-        const consumerBody = clone(consumerResult.body);
-
         // ── SSE / WebSocket / WebRTC push back to clients ─────────────────
-        // Any edge from the consumer service that targets a webClient node is
-        // a real-time push. The targetHandle tells us the push mechanism.
-        const pushEdges = args.edges.filter((edge) =>
-          edge.source === consumerService.id &&
-          args.nodes.some((n) => n.id === edge.target && n.type === "webClient"),
-        );
+        // Only follow push edges originating from the specific consumed event / endpoint handle
+        const pushEdges = args.edges.filter((edge) => {
+          if (edge.source !== consumerService.id) return false;
+          const isWebClientTarget = args.nodes.some((n) => n.id === edge.target && n.type === "webClient");
+          if (!isWebClientTarget) return false;
+
+          // If sourceHandle is specified (e.g. consumedEvents-out-{id}, endpoint-out-{id}),
+          // it must match the active consumedEventId or consumerEndpoint.id!
+          if (edge.sourceHandle) {
+            const sh = edge.sourceHandle;
+            const matchesConsumed = Boolean(consumedEventId && sh.includes(consumedEventId));
+            const matchesEndpoint = Boolean(consumerEndpoint && sh.includes(consumerEndpoint.id));
+            if (!matchesConsumed && !matchesEndpoint) {
+              return false;
+            }
+          }
+
+          return true;
+        });
 
         for (const pushEdge of pushEdges) {
           const clientNode = args.nodes.find(
@@ -588,10 +600,16 @@ export async function simulateTestCase(args: {
           if (th.startsWith("websocket-in-") || th.startsWith("ws-in-")) pushKind = "WebSocket";
           else if (th.startsWith("webrtc-in-")) pushKind = "WebRTC";
 
+          // Find target event name on webClient if available
+          const targetEventId = th.replace(/^(sse|websocket|ws|webrtc|events)-in-/, "");
+          const clientEvents = clientNode.data.events ?? [];
+          const clientEvent = clientEvents.find((ev) => ev.id === targetEventId);
+          const eventSuffix = clientEvent?.name ? ` (${clientEvent.name})` : "";
+
           trace.push({
             id: `push-${pushEdge.id}`,
             kind: "push",
-            label: `${pushKind} → ${clientNode.data.label ?? "Client"}`,
+            label: `${pushKind} → ${clientNode.data.label ?? "Client"}${eventSuffix}`,
             status: "completed",
             nodeId: clientNode.id,
             edgeId: pushEdge.id,

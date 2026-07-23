@@ -452,9 +452,9 @@ export const EventTestingConfig = ({ id, nodeId, targetNodeId, endpointId, initi
 
               <div className="mt-4 flex flex-col gap-2 pt-4 border-t">
                 <div className="flex items-center justify-between">
-                  <Button size="sm" variant="secondary" onClick={handleSaveTestCase} className="text-xs h-8 px-4">
+                  {/* <Button size="sm" variant="secondary" onClick={handleSaveTestCase} className="text-xs h-8 px-4">
                     {selectedGlobalCaseId !== "none" ? "Update Test Case" : "Save as Test Case"}
-                  </Button>
+                  </Button> */}
                   <Button 
                     size="sm" 
                     className="text-xs font-medium h-8 px-5" 
