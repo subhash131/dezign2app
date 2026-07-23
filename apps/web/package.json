@@ -26,6 +26,8 @@
     "@types/dagre": "^0.7.54",
     "@upstash/realtime": "latest",
     "@upstash/redis": "^1.36.3",
+    "@vercel/analytics": "^2.0.1",
+    "@vercel/speed-insights": "^2.0.0",
     "@workspace/canvas": "workspace:*",
     "@workspace/ui": "workspace:*",
     "@xyflow/react": "^12.10.2",
