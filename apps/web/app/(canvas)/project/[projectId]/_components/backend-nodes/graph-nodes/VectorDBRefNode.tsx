@@ -13,6 +13,7 @@ export const VectorDBRefNode = ({ id, data, selected }: NodeProps<BackendNode>) 
   const deleteNode = useBackendCanvasStore((s) => s.deleteNode);
   const edges = useBackendCanvasStore((s) => s.edges);
   const nodes = useBackendCanvasStore((s) => s.nodes);
+  const storeEndpoints = useBackendCanvasStore((s) => s.endpoints);
   
   const vectorCollections = useBackendCanvasStore(useShallow((s) => s.nodes.filter(n => n.type === "entity" && n.data.dbType === "vector")));
 
@@ -22,26 +23,62 @@ export const VectorDBRefNode = ({ id, data, selected }: NodeProps<BackendNode>) 
     const srcNode = nodes.find(n => n.id === edge.source);
     if (!srcNode) return null;
 
-    let detail = "";
-    if (edge.sourceHandle?.startsWith("endpoint-out-")) {
-      const epId = edge.sourceHandle.replace("endpoint-out-", "");
-      let ep = srcNode.data.endpoints?.find((e) => e.id === epId);
+    const serviceName = srcNode.data.label || "Untitled Service";
+    let routeName = "";
+    let method = "";
+
+    const sourceHandle = edge.sourceHandle || "";
+
+    let epId = "";
+    if (sourceHandle.startsWith("endpoint-out-")) {
+      epId = sourceHandle.replace("endpoint-out-", "");
+    } else if (sourceHandle.startsWith("publishedEvents-out-")) {
+      epId = sourceHandle.replace("publishedEvents-out-", "");
+    } else if (sourceHandle.startsWith("consumedEvents-in-")) {
+      epId = sourceHandle.replace("consumedEvents-in-", "");
+    } else {
+      epId = sourceHandle;
+    }
+
+    let ep: { name?: string; type?: string; path?: string } | undefined;
+
+    if (epId) {
+      ep = storeEndpoints.find((e) => e.id === epId);
+      if (!ep && srcNode.data.endpoints) {
+        ep = srcNode.data.endpoints.find((e) => e.id === epId);
+      }
       if (!ep && srcNode.data.routeGroups) {
         for (const group of srcNode.data.routeGroups) {
           ep = group.endpoints?.find((e) => e.id === epId);
           if (ep) break;
         }
       }
-      if (ep) {
-        detail = ` (${ep.type || "GET"} ${ep.name})`;
+    }
+
+    // Fallback: search storeEndpoints for endpoints attached to srcNode
+    if (!ep) {
+      const srcEndpoints = storeEndpoints.filter((e) => e.nodeId === srcNode.id);
+      if (srcEndpoints.length > 0) {
+        ep = srcEndpoints[0];
+      } else if (srcNode.data.endpoints && srcNode.data.endpoints.length > 0) {
+        ep = srcNode.data.endpoints[0];
       }
+    }
+
+    if (ep) {
+      method = ep.type || "GET";
+      routeName = (ep.name && ep.name.trim()) ? ep.name.trim() : (ep.path || `${method} Route`);
+    } else {
+      routeName = "Route";
     }
 
     return {
       id: edge.id,
-      label: `${srcNode.data.label || "Untitled"}${detail}`
+      serviceName,
+      routeName,
+      method,
     };
-  }).filter((x): x is { id: string; label: string } => x !== null);
+  }).filter((x): x is { id: string; serviceName: string; routeName: string; method: string } => x !== null);
 
   return (
     <div className={cn("shadow-md rounded-xl bg-card border-2 min-w-[200px] max-w-[300px] flex flex-col", selected ? "border-primary" : "border-border")}>
@@ -105,11 +142,25 @@ export const VectorDBRefNode = ({ id, data, selected }: NodeProps<BackendNode>) 
       {/* Accessed By */}
       <div className="flex flex-col border-t bg-secondary/20 nodrag">
         <div className="px-3 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Accessed By</div>
-        <div className="px-3 pb-2 flex flex-col gap-1">
+        <div className="px-3 pb-2 flex flex-col gap-1.5">
           {accessors.length === 0
             ? <span className="text-[10px] text-muted-foreground italic px-1">No connections</span>
             : accessors.map(acc => (
-                <div key={acc.id} className="text-xs font-medium truncate px-1 border-l-2 border-violet-500/50 ml-1">{acc.label}</div>
+                <div key={acc.id} className="flex flex-col px-2 py-1 border-l-2 border-violet-500/60 bg-background/50 rounded-r gap-0.5">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    {acc.method && (
+                      <span className="px-1 py-0.5 rounded text-[8px] font-bold shrink-0 bg-violet-500/15 text-violet-700 dark:text-violet-400 uppercase leading-none">
+                        {acc.method}
+                      </span>
+                    )}
+                    <span className="font-semibold text-xs text-foreground truncate">
+                      {acc.routeName}
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-medium text-muted-foreground truncate leading-tight">
+                    {acc.serviceName}
+                  </span>
+                </div>
               ))
           }
         </div>
