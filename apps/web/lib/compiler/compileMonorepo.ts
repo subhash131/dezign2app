@@ -15,7 +15,6 @@ import {
 } from "./generators/rootFilesGenerator";
 import { generateRootReadme } from "./generators/readmeGenerator";
 import { compileGrpcPackages } from "./grpc";
-import { compileAuth } from "./compileAuth";
 
 /**
  * Compiles the entire system architecture canvas into a production-ready
@@ -208,31 +207,6 @@ export function compileMonorepo(
         content: f.content,
       });
     });
-  });
-
-  // 5.7. Generate Apps: apps/<sanitizedName> for Auth Nodes (only if connected via an edge)
-  const authNodes = nodes.filter((n) => n.type === "auth");
-  authNodes.forEach((authNode) => {
-    const isConnected = edges.some(
-      (e) => e.source === authNode.id || e.target === authNode.id
-    );
-    if (isConnected) {
-      const authResult = compileAuth(authNode, endpoints, events, nodes, edges, testCases);
-      const rawName = authNode.data?.label || "Auth Server";
-      const folderName = getUniqueServiceFolder(rawName, "auth-server");
-      servicesInfo.push({
-        id: authNode.id,
-        name: rawName,
-        folderName,
-      });
-      authResult.files.forEach((f) => {
-        files.push({
-          filename: `apps/${folderName}/${f.filename}`,
-          language: f.language,
-          content: f.content,
-        });
-      });
-    }
   });
 
   // 6. Generate Web Apps: apps/<appSlug> for WebApp nodes & connected WebClient pages
