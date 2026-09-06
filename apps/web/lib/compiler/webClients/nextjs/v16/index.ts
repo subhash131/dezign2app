@@ -73,9 +73,9 @@ export function compileNextjsV16WebClient(
 
   // 3. Project Configuration Files
   const sectionAndActionLibs = webClientNodes.flatMap((p) =>
-    (p.data?.sections || []).flatMap((s: any) => [
+    (p.data?.sections || []).flatMap((s) => [
       ...(s.libraries || []),
-      ...(s.actions || []).flatMap((a: any) => a.libraries || []),
+      ...(s.actions || []).flatMap((a) => a.libraries || []),
     ])
   );
   const extraDepsFromSectionsAndActions = sectionAndActionLibs.map((libName: string) => ({

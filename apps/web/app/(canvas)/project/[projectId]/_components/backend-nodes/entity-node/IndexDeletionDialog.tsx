@@ -93,14 +93,13 @@ export const IndexDeletionDialog: React.FC<IndexDeletionDialogProps> = ({
 
       let matchReason = "";
 
-      const steps = (ep as any).pipelineSteps || [];
+      const steps = ep.pipelineSteps || [];
       for (const step of steps) {
         if (step.tableNodeId === nodeId || step.databaseId === nodeId) {
           const isCallingAffectedOp = affectedDbOps.some(
             (op) =>
               op.id === step.operationId ||
-              op.name === step.functionRef?.name ||
-              op.name === step.selectedFunction,
+              op.name === step.functionRef?.name,
           );
           if (isCallingAffectedOp) {
             matchReason = `Calls index operation "${step.functionRef?.name || step.name || "step"}"`;

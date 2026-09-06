@@ -152,53 +152,44 @@ export const ColumnDeletionDialog: React.FC<ColumnDeletionDialogProps> = ({
       let matchReason = "";
 
       // Check pipeline steps
-      const steps = (ep as any).pipelineSteps || [];
+      const steps = ep.pipelineSteps || [];
       for (const step of steps) {
         if (step.tableNodeId === nodeId || step.databaseId === nodeId) {
           // Check if calling an affected DB operation
           const isCallingAffectedOp = affectedDbOps.some(
             (op) =>
               op.id === step.operationId ||
-              op.name === step.functionRef?.name ||
-              op.name === step.selectedFunction,
+              op.name === step.functionRef?.name,
           );
           if (isCallingAffectedOp) {
             matchReason = `Executes affected DB function (${step.functionRef?.name || step.name || "step"})`;
             break;
           }
 
-          // Check where conditions
-          if (
-            step.whereConditions?.some(
-              (w: any) =>
-                (w.field && w.field.toLowerCase() === colLower) ||
-                (w.column && w.column.toLowerCase() === colLower),
-            )
-          ) {
-            matchReason = `Filters by column "${colName}" in WHERE condition`;
+          // Check argument bindings and source fields referencing this column
+          const hasMatchingBinding = step.inputBindings?.some((b) => {
+            const isArgMatch = b.argName.toLowerCase() === colLower;
+            const isSourceFieldMatch =
+              b.source.kind !== "inline" &&
+              "field" in b.source &&
+              typeof b.source.field === "string" &&
+              b.source.field.toLowerCase() === colLower;
+            return isArgMatch || isSourceFieldMatch;
+          });
+
+          if (hasMatchingBinding) {
+            matchReason = `Binds column "${colName}" in pipeline step argument`;
             break;
           }
 
-          // Check field mappings
-          if (
-            step.fieldMappings?.some(
-              (m: any) =>
-                (m.field && m.field.toLowerCase() === colLower) ||
-                (m.targetField && m.targetField.toLowerCase() === colLower),
-            )
-          ) {
-            matchReason = `Maps field "${colName}" in pipeline mutation`;
-            break;
-          }
-
-          if (step.type === "db_operation" || step.type === "db") {
+          if (step.type === "db_operation") {
             matchReason = `Targets table "${tableLabel}" in pipeline`;
           }
         }
       }
 
       // Check crud operations dictionary
-      if (!matchReason && (ep as any).crudOperations?.[nodeId]) {
+      if (!matchReason && ep.crudOperations?.[nodeId]) {
         matchReason = `Configured for direct CRUD on table "${tableLabel}"`;
       }
 

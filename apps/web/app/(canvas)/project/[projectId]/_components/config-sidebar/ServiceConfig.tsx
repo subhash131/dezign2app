@@ -214,7 +214,11 @@ export const ServiceConfig: React.FC<ServiceConfigProps> = ({ id, nodeId }) => {
             <Label className="text-xs">Inter-Service Protocol</Label>
             <Select
               value={interServiceProtocol}
-              onValueChange={(val: any) => updateData({ interServiceProtocol: val })}
+              onValueChange={(val) => {
+                if (val === INTER_SERVICE_PROTOCOL_HTTP || val === INTER_SERVICE_PROTOCOL_GRPC) {
+                  updateData({ interServiceProtocol: val });
+                }
+              }}
             >
               <SelectTrigger className="text-xs">
                 <SelectValue />

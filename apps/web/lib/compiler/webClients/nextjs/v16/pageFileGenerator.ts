@@ -1,5 +1,5 @@
 import { BackendNode, BackendEdge } from "@/types/canvas";
-import { Endpoint, UIEventItem, PageSection, CompiledFile } from "@workspace/canvas/types";
+import { Endpoint, UIEventItem, PageSection, CompiledFile, JSONValue } from "@workspace/canvas/types";
 import { PageInfo } from "./types";
 import { resolveLinkedEndpoint, resolvePageRefLink } from "./endpointResolver";
 import { labelToSlug, slugToComponentName } from "./slugUtils";
@@ -12,6 +12,7 @@ import {
   SectionMeta,
 } from "./componentTemplates";
 import { isAuthPage } from "../../../compileAuth";
+import { typeStrToTsAndZod } from "../../../generators/schemaToTypeScript";
 
 export interface GeneratePageAndComponentFilesParams {
   webClientNodes: BackendNode[];
@@ -71,17 +72,17 @@ export function generatePageAndComponentFiles({
       }
     });
 
-    let nodeRequestBody: unknown = undefined;
+    let nodeRequestBody: JSONValue | undefined = undefined;
     if (node.data?.requestBody?.rawJson) {
       try {
-        nodeRequestBody = JSON.parse(node.data.requestBody.rawJson);
+        nodeRequestBody = JSON.parse(node.data.requestBody.rawJson) as JSONValue;
       } catch {}
     } else if (node.data?.requestBody?.fields && node.data.requestBody.fields.length > 0) {
-      const bodyObj: Record<string, unknown> = {};
+      const bodyObj: Record<string, JSONValue> = {};
       node.data.requestBody.fields.forEach((f) => {
         const fKey = f.name || f.key;
         if (fKey) {
-          bodyObj[fKey] = f.value ?? f.defaultValue ?? (f.type === "number" ? 0 : f.type === "boolean" ? true : "");
+          bodyObj[fKey] = (f.value ?? f.defaultValue ?? (f.type === "number" ? 0 : f.type === "boolean" ? true : "")) as JSONValue;
         }
       });
       nodeRequestBody = bodyObj;
@@ -105,7 +106,7 @@ export function generatePageAndComponentFiles({
 
     const allActions: UIEventItem[] = normalizedSections.flatMap((s) => s.actions || []);
     const pageLoadEvents = allActions.filter(
-      (e) => (e.event as string) === "pageLoad" || e.name === "pageLoad",
+      (e) => e.event === "pageLoad" || e.name === "pageLoad",
     );
 
     let pageLoadFetchStatements = "";
@@ -190,7 +191,7 @@ export function generatePageAndComponentFiles({
       pageLoadFetchStatements = `setPageLoadLoading(true);
       setPageLoadError(null);
       try {
-        const results: Record<string, any> = {};
+        const results: Record<string, JSONValue> = {};
         ${statements.join("\n")}
         setPageLoadData(${pageLoadEvents.length === 1} ? results["${pageLoadEvents[0]?.name || "pageLoad"}"] : results);
       } catch (err) {
@@ -199,6 +200,66 @@ export function generatePageAndComponentFiles({
       } finally {
         setPageLoadLoading(false);
       }`;
+    }
+
+    // Derive a typed PageLoadData interface from the first pageLoad endpoint's responseBody
+    let pageLoadDataType = "JSONValue";
+    let pageLoadDataTypeDecl = "";
+    if (pageLoadEvents.length > 0) {
+      const firstPageLoadLink = resolveLinkedEndpoint(
+        node.id,
+        pageLoadEvents[0]!.id,
+        allNodes,
+        allEdges,
+        endpoints,
+      );
+      const responseBody = firstPageLoadLink?.endpoint?.responseBody;
+      const fields = responseBody?.fields?.filter((f) => f.name && f.name.trim());
+
+      if (fields && fields.length > 0) {
+        // Build a typed interface from the configured response fields
+        const fieldLines = fields
+          .map((f) => {
+            const key = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(f.name.trim())
+              ? f.name.trim()
+              : JSON.stringify(f.name.trim());
+            const enumValues = f.enumValues;
+            const { ts } = typeStrToTsAndZod(f.type || "string", enumValues);
+            const opt = f.required ? "" : "?";
+            return `  ${key}${opt}: ${ts};`;
+          })
+          .join("\n");
+        const typeName =
+          pageLoadEvents.length === 1
+            ? "PageLoadData"
+            : `${pageLoadEvents[0]!.name || "PageLoad"}Data`;
+        pageLoadDataType = `${typeName} | null`;
+        pageLoadDataTypeDecl = `interface ${typeName} {\n${fieldLines}\n}`;
+      } else if (responseBody?.rawJson) {
+        // Attempt to infer types from raw JSON example
+        try {
+          const parsed = JSON.parse(responseBody.rawJson) as Record<string, unknown>;
+          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+            const fieldLines = Object.entries(parsed)
+              .map(([k, v]) => {
+                const key = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(k) ? k : JSON.stringify(k);
+                const ts =
+                  v === null ? "null" :
+                  typeof v === "number" ? "number" :
+                  typeof v === "boolean" ? "boolean" :
+                  Array.isArray(v) ? "JSONValue[]" :
+                  typeof v === "object" ? "Record<string, JSONValue>" :
+                  "string";
+                return `  ${key}?: ${ts};`;
+              })
+              .join("\n");
+            pageLoadDataType = "PageLoadData | null";
+            pageLoadDataTypeDecl = `interface PageLoadData {\n${fieldLines}\n}`;
+          }
+        } catch {
+          // rawJson not parseable — keep JSONValue fallback
+        }
+      }
     }
 
     const groupFolder = pageMeta.routeGroup ? `(${pageMeta.routeGroup})` : "(public)";
@@ -217,7 +278,7 @@ export function generatePageAndComponentFiles({
 
       const secActionMetas: EventComponentMeta[] = [];
       const nonPageLoadActions = (sec.actions || []).filter(
-        (e) => (e.event as string) !== "pageLoad" && e.name !== "pageLoad",
+        (e) => e.event !== "pageLoad" && e.name !== "pageLoad",
       );
 
       nonPageLoadActions.forEach((evt, evtIdx) => {
@@ -341,6 +402,8 @@ export function generatePageAndComponentFiles({
       pageLoadFetchStatements,
       sectionsMeta,
       effectiveAuthNode?.data,
+      pageLoadDataType,
+      pageLoadDataTypeDecl,
     );
 
     const targetFilePath = pageMeta.isRoot
@@ -352,7 +415,7 @@ export function generatePageAndComponentFiles({
     // the page visual editor. The AI-edited content is stored in Convex
     // and syncs to all collaborators automatically.
     const finalPageContent = node.data?.pageSourceCode
-      ? (node.data.pageSourceCode as string)
+      ? String(node.data.pageSourceCode)
       : pageCode;
 
     pageFiles.push({

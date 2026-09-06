@@ -16,12 +16,13 @@ import {
   LayoutGrid,
   FormInput,
   MessageSquare,
+  type LucideIcon,
 } from "lucide-react";
 
 export { SERVER_NODE_TYPES, collectEndpoints };
 export const EVENT_OPTIONS = [...WEB_PAGE_EVENTS];
 
-const ICON_MAP: Record<string, any> = {
+const ICON_MAP: Record<string, LucideIcon> = {
   "sparkles": Sparkles,
   "table": Table,
   "box": Box,
@@ -33,11 +34,11 @@ const ICON_MAP: Record<string, any> = {
 };
 
 export interface CategorizedLibrary extends CanvasCategorizedLibrary {
-  icon: any;
+  icon: LucideIcon;
 }
 
 export interface SectionPreset extends CanvasSectionPreset {
-  icon: any;
+  icon: LucideIcon;
 }
 
 export const CATEGORIZED_LIBRARIES: CategorizedLibrary[] = RAW_CATEGORIZED_LIBRARIES.map((c) => ({

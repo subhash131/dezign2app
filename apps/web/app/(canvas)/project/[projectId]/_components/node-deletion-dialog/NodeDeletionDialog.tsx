@@ -13,6 +13,7 @@ import { isElectron } from "@/lib/electron";
 import { toast } from "sonner";
 import { cn } from "@workspace/ui/lib/utils";
 
+import { BackendNode, SimulationTestCase } from "@/types/canvas";
 import { NodeDeletionDialogProps, AffectedItem } from "./types";
 import { buildAffectedFileTree, getAllFolderPaths, getNodeLabel } from "./utils";
 import { NodeDeletionHeader } from "./NodeDeletionHeader";
@@ -24,7 +25,8 @@ import { NodeDeletionResizeHandle } from "./NodeDeletionResizeHandle";
 import { NodeDeletionCodePreview } from "./NodeDeletionCodePreview";
 import { computeSubItemDeletion } from "./computeSubItemDeletionDiff";
 
-const EMPTY_ARRAY: any[] = [];
+const EMPTY_NODES: BackendNode[] = [];
+const EMPTY_TEST_CASES: SimulationTestCase[] = [];
 const EMPTY_ARCHITECTURE_IMPACT = {
   targetNodes: [],
   severedConnections: [],
@@ -49,7 +51,7 @@ const EMPTY_COMPUTATION_RESULT = {
 function NodeDeletionDialogInner({
   open,
   onOpenChange,
-  nodesPendingDeletion = EMPTY_ARRAY,
+  nodesPendingDeletion = EMPTY_NODES,
   deletionTarget,
   projectId = "",
   projectName = "Blueprint",
@@ -60,7 +62,7 @@ function NodeDeletionDialogInner({
   const edges = useBackendCanvasStore((s) => s.edges);
   const deleteNodes = useBackendCanvasStore((s) => s.deleteNodes);
   const deleteNode = useBackendCanvasStore((s) => s.deleteNode);
-  const testCases = useSimulationStore((s) => s.testCases) ?? EMPTY_ARRAY;
+  const testCases = useSimulationStore((s) => s.testCases) ?? EMPTY_TEST_CASES;
 
   const effectiveTarget = useMemo(() => {
     if (deletionTarget) return deletionTarget;
@@ -409,7 +411,7 @@ function NodeDeletionDialogInner({
 
   const targetNodeList = useMemo(() => {
     if (effectiveTarget?.type === "nodes") return effectiveTarget.nodes;
-    return EMPTY_ARRAY;
+    return EMPTY_NODES;
   }, [effectiveTarget]);
 
   return (

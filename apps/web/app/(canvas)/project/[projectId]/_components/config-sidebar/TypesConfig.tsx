@@ -48,18 +48,6 @@ export interface TypesConfigProps {
   selectedTypeId?: string;
 }
 
-const PRIMITIVE_TYPES = [
-  "string",
-  "number",
-  "boolean",
-  "Date",
-  "object",
-  "Record<string, string>",
-  "any",
-  "unknown",
-  "enum",
-];
-
 // --- Memoized Property Row with Buffered Inputs for instant 0ms typing ---
 interface TypePropertyRowProps {
   field: CustomTypeField;

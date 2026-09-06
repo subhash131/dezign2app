@@ -10,6 +10,9 @@ export const parameterSchema = z.object({
   defaultValue: z.string().optional(),
   key: z.string().optional(),
   value: z.string().optional(),
+  enabled: z.boolean().optional(),
+  enumValues: z.array(z.string()).optional(),
+  isArray: z.boolean().optional(),
 });
 
 export const parameterInputSchema = parameterSchema.extend({

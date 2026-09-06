@@ -10,6 +10,29 @@ interface UseLocalDirectoryFilesOptions {
   onPickDirectory?: () => void;
 }
 
+declare global {
+  interface FileSystemWritableFileStream extends WritableStream {
+    write(data: string | BufferSource | Blob): Promise<void>;
+    close(): Promise<void>;
+  }
+
+  interface FileSystemFileHandle {
+    createWritable(options?: { keepExistingData?: boolean }): Promise<FileSystemWritableFileStream>;
+  }
+
+  interface FileSystemDirectoryHandle {
+    values(): AsyncIterableIterator<FileSystemDirectoryHandle | FileSystemFileHandle>;
+  }
+
+  interface Window {
+    showDirectoryPicker?(options?: {
+      id?: string;
+      mode?: "read" | "readwrite";
+      startIn?: FileSystemHandle | "desktop" | "documents" | "downloads" | "music" | "pictures" | "videos";
+    }): Promise<FileSystemDirectoryHandle>;
+  }
+}
+
 const NEVER_SHOW_DIRS = new Set([
   ".git",
   ".DS_Store",
@@ -46,7 +69,7 @@ export function useLocalDirectoryFiles({
         subPath === ".pnpm-store" ||
         subPath.includes(".pnpm-store/");
 
-      for await (const entry of (dirHandle as any).values()) {
+      for await (const entry of dirHandle.values()) {
         if (NEVER_SHOW_DIRS.has(entry.name)) {
           continue;
         }
@@ -57,7 +80,7 @@ export function useLocalDirectoryFiles({
           const sub =
             !isHeavy || depth < 1
               ? await scanBrowserDirectory(
-                  entry as FileSystemDirectoryHandle,
+                  entry,
                   relPath,
                   depth + 1
                 )
@@ -225,7 +248,7 @@ export function useLocalDirectoryFiles({
             const fileHandle = await currentHandle.getFileHandle(fileName, {
               create: true,
             });
-            const writable = await (fileHandle as any).createWritable();
+            const writable = await fileHandle.createWritable();
             await writable.write(content);
             await writable.close();
             return true;
@@ -243,13 +266,13 @@ export function useLocalDirectoryFiles({
 
   // Pick folder in Browser mode if not using Electron
   const pickBrowserFolder = useCallback(async () => {
-    if (typeof window === "undefined" || !("showDirectoryPicker" in window)) {
+    if (typeof window === "undefined" || !("showDirectoryPicker" in window) || !window.showDirectoryPicker) {
       if (onPickDirectory) onPickDirectory();
       return;
     }
 
     try {
-      const handle = await (window as any).showDirectoryPicker();
+      const handle = await window.showDirectoryPicker();
       if (handle) {
         browserDirHandleRef.current = handle;
         const { nodes, count } = await scanBrowserDirectory(handle);
@@ -257,8 +280,8 @@ export function useLocalDirectoryFiles({
         setTotalFiles(count);
         toast.success(`Connected to local folder: ${handle.name}`);
       }
-    } catch (err: any) {
-      if (err?.name !== "AbortError") {
+    } catch (err) {
+      if (err instanceof Error && err.name !== "AbortError") {
         console.warn("[useLocalDirectoryFiles] Failed to pick browser folder:", err);
       }
     }
