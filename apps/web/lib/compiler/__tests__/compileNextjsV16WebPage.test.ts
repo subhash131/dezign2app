@@ -255,6 +255,8 @@ describe("compileNextjsV16WebClient with Bearer token & headers", () => {
     expect(pageWithLoad).toBeDefined();
     expect(pageWithLoad?.content).toContain("Page Load Data");
     expect(pageWithLoad?.content).toContain("setPageLoadData");
+    expect(pageWithLoad?.content).toContain("useState<any>(null)");
+    expect(pageWithLoad?.content).toContain("const results: Record<string, any> = {};");
     expect(pageWithLoad?.content).toContain("useEffect");
 
     const resultWithoutLoad = compileNextjsV16WebClient(

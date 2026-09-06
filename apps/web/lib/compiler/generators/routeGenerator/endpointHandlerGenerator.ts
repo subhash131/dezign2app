@@ -245,10 +245,11 @@ export type ${pascalName}Request =
     };
 
 export type ${pascalName}ResponseContext =
-  | Response<${pascalName}Response | ${pascalName}ErrorResponse>
+  | Response
   | {
-      status: (code: number) => { json: (data: ${pascalName}Response | ${pascalName}ErrorResponse) => void };
-      json: (data: ${pascalName}Response | ${pascalName}ErrorResponse) => void;
+      status: (code: number) => { json: (data?: any) => any; [key: string]: any };
+      json: (data?: any) => any;
+      [key: string]: any;
     };
 
 /**

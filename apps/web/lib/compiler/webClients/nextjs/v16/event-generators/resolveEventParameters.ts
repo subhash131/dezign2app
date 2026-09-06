@@ -28,18 +28,20 @@ export function resolveEventParameters({
     "bg-secondary/40 text-secondary-foreground border-border";
 
   // Path Parameters (from pathname only, never ports)
-  const configuredPathParams: Parameter[] =
+  const configuredPathParams: Parameter[] = (
     eventItem?.pathParams?.length
       ? eventItem.pathParams
-      : endpoint?.pathParams || [];
+      : endpoint?.pathParams || []
+  ).filter((p) => Boolean(p && typeof p.name === "string" && p.name.trim().length > 0));
 
   const pathPlaceholders = extractPathPlaceholders(url);
   const mergedPathParams: Parameter[] = [...configuredPathParams];
   pathPlaceholders.forEach((ph) => {
-    if (!mergedPathParams.some((p) => p.name === ph)) {
+    const cleanPh = ph.trim();
+    if (cleanPh && !mergedPathParams.some((p) => p.name === cleanPh)) {
       mergedPathParams.push({
-        id: ph,
-        name: ph,
+        id: cleanPh,
+        name: cleanPh,
         type: "string",
         required: true,
         defaultValue: "",
@@ -48,18 +50,20 @@ export function resolveEventParameters({
   });
 
   // Query Parameters
-  const configuredQueryParams: Parameter[] =
+  const configuredQueryParams: Parameter[] = (
     eventItem?.queryParams?.length
       ? eventItem.queryParams
-      : endpoint?.queryParams || endpoint?.params || [];
+      : endpoint?.queryParams || endpoint?.params || []
+  ).filter((q) => Boolean(q && typeof q.name === "string" && q.name.trim().length > 0));
 
   const mergedQueryParams: Parameter[] = [...configuredQueryParams];
   if (customQueryParams) {
     Object.entries(customQueryParams).forEach(([k, v]) => {
-      if (!mergedQueryParams.some((p) => p.name === k)) {
+      const cleanKey = k.trim();
+      if (cleanKey && !mergedQueryParams.some((p) => p.name === cleanKey)) {
         mergedQueryParams.push({
-          id: k,
-          name: k,
+          id: cleanKey,
+          name: cleanKey,
           type: "string",
           required: false,
           defaultValue: v,
@@ -69,8 +73,9 @@ export function resolveEventParameters({
   }
 
   // Headers (include Authorization if requireAuth !== false)
-  const configuredHeaders: Parameter[] =
-    eventItem?.headers?.length ? eventItem.headers : endpoint?.headers || [];
+  const configuredHeaders: Parameter[] = (
+    eventItem?.headers?.length ? eventItem.headers : endpoint?.headers || []
+  ).filter((h) => Boolean(h && typeof h.name === "string" && h.name.trim().length > 0));
 
   const mergedHeaders: Parameter[] = configuredHeaders.filter(
     (h) => h.name.toLowerCase() !== "content-type",
@@ -92,13 +97,15 @@ export function resolveEventParameters({
 
   if (customHeaders) {
     Object.entries(customHeaders).forEach(([k, v]) => {
+      const cleanKey = k.trim();
       if (
-        k.toLowerCase() !== "content-type" &&
-        !mergedHeaders.some((h) => h.name.toLowerCase() === k.toLowerCase())
+        cleanKey &&
+        cleanKey.toLowerCase() !== "content-type" &&
+        !mergedHeaders.some((h) => h.name.toLowerCase() === cleanKey.toLowerCase())
       ) {
         mergedHeaders.push({
-          id: k,
-          name: k,
+          id: cleanKey,
+          name: cleanKey,
           type: "string",
           required: false,
           defaultValue: v,
@@ -118,10 +125,14 @@ export function resolveEventParameters({
     endpoint?.requestBodyMode ??
     (rawRequestBodySchema?.rawJson ? "raw_json" : "field_builder");
 
-  const bodyFields: Parameter[] =
+  const rawBodyFields: Parameter[] =
     isBodyAllowedMethod && requestBodyMode === "field_builder"
       ? rawRequestBodySchema?.fields || []
       : [];
+
+  const bodyFields: Parameter[] = rawBodyFields.filter(
+    (f) => Boolean(f && typeof f.name === "string" && f.name.trim().length > 0),
+  );
 
   let rawJsonTemplate = "";
   let inferredJsonFields: [string, string][] = [];

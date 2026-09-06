@@ -147,11 +147,8 @@ function cleanPropertyType(typeString: string): string {
   if (!trimmed || trimmed === "any" || trimmed === "unknown") {
     return "string";
   }
-  // Shorten overly complex inline union types
-  if (trimmed.length > 80) {
-    return trimmed.slice(0, 77) + "...";
-  }
-  return trimmed;
+  // Normalize multi-line formatting without truncating types
+  return trimmed.replace(/\s+/g, " ");
 }
 
 function extractJsDocComment(node: ts.Node, sourceFile: ts.SourceFile): string | undefined {
