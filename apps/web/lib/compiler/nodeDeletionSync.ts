@@ -67,7 +67,7 @@ export async function handleNodeDeletionSync(
 
         // Rewrite modified files to disk
         if (api.fs.writeProject) {
-          await api.fs.writeProject(outputDir, diff.filesAfter as any, {
+          await api.fs.writeProject(outputDir, diff.filesAfter, {
             cleanStale: true,
             deletedFiles: diff.deletedFiles,
           });

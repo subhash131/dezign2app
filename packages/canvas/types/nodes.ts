@@ -164,19 +164,27 @@ export interface ExternalHeader extends Parameter {
   enabled?: boolean;
 }
 
+export type ExternalDataPayload =
+  | Record<string, unknown>
+  | unknown[]
+  | string
+  | number
+  | boolean
+  | null;
+
 export interface ExternalTestResult {
   status?: number;
   statusText?: string;
   timeMs?: number;
   headers?: Record<string, string>;
-  data?: any;
+  data?: ExternalDataPayload;
   error?: string;
   testedAt?: string;
   requestDetails?: {
     method?: string;
     url?: string;
     headers?: Record<string, string>;
-    body?: any;
+    body?: ExternalDataPayload;
   };
 }
 
@@ -191,8 +199,8 @@ export interface CanvasExternalNodeData extends Partial<BaseNodeData> {
   headers?: ExternalHeader[];
   bodyType?: "json" | "text" | "raw" | "none";
   bodyContent?: string;
-  responseSchema?: any;
-  errorResponseSchema?: any;
+  responseSchema?: Record<string, unknown>;
+  errorResponseSchema?: Record<string, unknown>;
   lastTestResult?: ExternalTestResult;
   authType?: "none" | "bearer" | "apiKey" | "basic" | "custom";
   authHeader?: string;

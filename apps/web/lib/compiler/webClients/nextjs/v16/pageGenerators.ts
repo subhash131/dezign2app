@@ -9,6 +9,10 @@ export function generatePageCode(
   pageLoadFetchStatements: string,
   sectionsMeta: SectionMeta[],
   authNodeData?: BackendNodeData,
+  /** TypeScript type name to use for pageLoadData state (e.g. "PageLoadData" or "JSONValue") */
+  pageLoadDataType: string = "JSONValue",
+  /** Optional interface declaration to emit for the above type (empty string if using JSONValue) */
+  pageLoadDataTypeDecl: string = "",
 ): string {
   const isAuth = isAuthPage(pageMeta, authNodeData);
 
@@ -79,7 +83,7 @@ ${sectionsJsx ? `${sectionsJsx}` : `          <Link
     : `import React from "react";`;
 
   const pageLoadStateJsx = hasPageLoad
-    ? `  const [pageLoadData, setPageLoadData] = useState<any>(null);
+    ? `  const [pageLoadData, setPageLoadData] = useState<${pageLoadDataType}>(null);
   const [pageLoadLoading, setPageLoadLoading] = useState<boolean>(false);
   const [pageLoadError, setPageLoadError] = useState<string | null>(null);
 
@@ -135,8 +139,8 @@ ${sectionsJsx ? `${sectionsJsx}` : `          <Link
     url: string;
     method: string;
     status?: number;
-    payload?: unknown;
-    data: any;
+    payload?: JSONValue;
+    data: JSONValue;
     error?: string;
   }>>([]);
 
@@ -152,7 +156,7 @@ ${sectionsJsx ? `${sectionsJsx}` : `          <Link
     requireAuth?: boolean,
     customHeaders?: Record<string, string>,
     queryParams?: Record<string, string>,
-    requestBody?: unknown,
+    requestBody?: JSONValue,
   ) => {
     const timestamp = new Date().toLocaleTimeString();
     const logId = Math.random().toString(36).substring(2, 9);
@@ -200,7 +204,7 @@ ${sectionsJsx ? `${sectionsJsx}` : `          <Link
         }
       }
 
-      let resData: any = null;
+      let resData: JSONValue = null;
       let status: number | undefined = undefined;
 
       if (targetUrl && targetUrl !== "#") {
@@ -317,10 +321,22 @@ ${sectionsJsx ? `${sectionsJsx}` : `          <Link
     uiImports.push(`import { getAuthBearerToken } from "@/lib/auth-token";`);
   }
 
+  const needsJsonValue = hasPageLoad || hasApiActions;
+  const jsonValueTypeDecl = needsJsonValue
+    ? `type JSONPrimitive = string | number | boolean | null;
+type JSONObject = { [key: string]: JSONValue };
+type JSONArray = JSONValue[];
+type JSONValue = JSONPrimitive | JSONObject | JSONArray;
+
+`
+    : "";
+  // Named response type declaration (e.g. interface PageLoadData {...})
+  const namedTypeDecl = pageLoadDataTypeDecl ? `${pageLoadDataTypeDecl}\n\n` : "";
+
   return `"use client";
 
 ${reactImport}
-${uiImports.join("\n")}${uiImports.length > 0 ? "\n" : ""}${allImports ? `${allImports}\n` : ""}export default function ${pageMeta.componentName}() {
+${uiImports.join("\n")}${uiImports.length > 0 ? "\n" : ""}${allImports ? `${allImports}\n` : ""}${jsonValueTypeDecl}${namedTypeDecl}export default function ${pageMeta.componentName}() {
 ${pageLoadStateJsx}${triggerLogsStateJsx}${pageLoadEffectJsx}${triggerHandlerJsx}  return (
     <main className="min-h-screen bg-background text-foreground p-6 md:p-10 font-sans">
       <div className="max-w-5xl mx-auto space-y-8">
@@ -329,4 +345,5 @@ ${pageLoadSectionJsx}${sectionsJsx ? `        {/* Page Sections */}\n${sectionsJ
   );
 }
 `;
+
 }

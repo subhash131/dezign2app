@@ -12,6 +12,7 @@ import {
   ExternalQueryParam,
   ExternalHeader,
   ExternalTestResult,
+  ExternalDataPayload,
 } from "@workspace/canvas/types";
 import { ExternalEnvVarsDrawer } from "../backend-nodes/graph-nodes/nodes/ai-security/ExternalEnvVarsDrawer";
 import { toVarName } from "@/lib/compiler/utils";
@@ -412,7 +413,7 @@ export const ExternalConfig: React.FC<ExternalConfigProps> = ({ id: _id, nodeId 
         responseHeaders[key] = val;
       });
 
-      let responseData: unknown = null;
+      let responseData: ExternalDataPayload = null;
       const contentType = response.headers.get("content-type") || "";
       if (contentType.includes("application/json")) {
         try {
@@ -530,7 +531,11 @@ export const ExternalConfig: React.FC<ExternalConfigProps> = ({ id: _id, nodeId 
   const handleInferOutputSchema = () => {
     if (!testResult?.data) return;
     try {
-      const sample = testResult.data;
+      const raw = testResult.data;
+      const sample =
+        typeof raw === "object" && raw !== null && !Array.isArray(raw)
+          ? raw
+          : { data: raw };
       updateData({ responseSchema: sample });
       setInferredSchemaSaved(true);
       setTimeout(() => setInferredSchemaSaved(false), 2000);
@@ -543,9 +548,13 @@ export const ExternalConfig: React.FC<ExternalConfigProps> = ({ id: _id, nodeId 
 
   // Infer Error JSON schema from test response data or error details
   const handleInferErrorSchema = () => {
+    const raw = testResult?.data;
     const errorSample =
-      testResult?.data ??
-      (testResult?.error ? { error: testResult.error, status: testResult.status || 500 } : null);
+      typeof raw === "object" && raw !== null && !Array.isArray(raw)
+        ? raw
+        : testResult?.error
+          ? { error: testResult.error, status: testResult.status || 500 }
+          : null;
     if (!errorSample) return;
     try {
       updateData({ errorResponseSchema: errorSample });

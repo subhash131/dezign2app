@@ -180,11 +180,19 @@ export const ExternalLiveTestSection = React.memo<ExternalLiveTestSectionProps>(
     const authDiagnostic = useMemo(() => {
       if (!testResult) return null;
       const status = testResult.status;
+      const isInvalidApiKey =
+        typeof testResult.data === "object" &&
+        testResult.data !== null &&
+        "error" in testResult.data &&
+        typeof testResult.data.error === "object" &&
+        testResult.data.error !== null &&
+        "code" in testResult.data.error &&
+        testResult.data.error.code === "invalid_api_key";
+
       const isAuthError =
         status === 401 ||
         status === 403 ||
-        (typeof testResult.data === "object" &&
-          testResult.data?.error?.code === "invalid_api_key");
+        isInvalidApiKey;
 
       if (!isAuthError) return null;
 
