@@ -190,7 +190,7 @@ export function generatePageAndComponentFiles({
       pageLoadFetchStatements = `setPageLoadLoading(true);
       setPageLoadError(null);
       try {
-        const results: Record<string, unknown> = {};
+        const results: Record<string, any> = {};
         ${statements.join("\n")}
         setPageLoadData(${pageLoadEvents.length === 1} ? results["${pageLoadEvents[0]?.name || "pageLoad"}"] : results);
       } catch (err) {

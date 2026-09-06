@@ -12,6 +12,11 @@ function resolveActionLibImports(libraries?: string[]): string {
   return lines.length > 0 ? `${lines.join("\n")}\n` : "";
 }
 
+function escapeJsxAttr(val: unknown): string {
+  if (val === null || val === undefined) return "";
+  return String(val).replace(/"/g, "&quot;");
+}
+
 export function generateInteractiveFormEventTemplate({
   componentName,
   eventName,
@@ -160,13 +165,13 @@ ${hasPathParams ? `          {/* Path Parameters */}
               Path Parameters
             </span>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-${mergedPathParams.map((p) => `              <div key="${p.name}" className="space-y-1">
+${mergedPathParams.filter((p) => Boolean(p && p.name && p.name.trim())).map((p) => `              <div key="${p.name}" className="space-y-1">
                 <Label className="text-[11px] font-mono text-muted-foreground">
                   :${p.name}${p.required ? ` <span className="text-destructive font-sans">*</span>` : ""}
                 </Label>
                 <Input
                   className="h-8 text-xs bg-background font-mono"
-                  placeholder="${p.description || p.defaultValue || p.name}"
+                  placeholder="${escapeJsxAttr(p.description || p.defaultValue || p.name)}"
                   value={pathParams["${p.name}"] ?? ""}
                   required={${Boolean(p.required)}}
                   onChange={(e) =>
@@ -182,14 +187,14 @@ ${mergedPathParams.map((p) => `              <div key="${p.name}" className="spa
               Query Parameters
             </span>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-${mergedQueryParams.map((q) => `              <div key="${q.name}" className="space-y-1">
+${mergedQueryParams.filter((q) => Boolean(q && q.name && q.name.trim())).map((q) => `              <div key="${q.name}" className="space-y-1">
                 <Label className="text-[11px] font-mono text-muted-foreground">
                   ${q.name}${q.required ? ` <span className="text-destructive font-sans">*</span>` : ""}
                 </Label>
                 <Input
                   type="${q.type === "number" ? "number" : "text"}"
                   className="h-8 text-xs bg-background font-mono"
-                  placeholder="${q.description || q.defaultValue || q.name}"
+                  placeholder="${escapeJsxAttr(q.description || q.defaultValue || q.name)}"
                   value={queryParams["${q.name}"] ?? ""}
                   required={${Boolean(q.required)}}
                   onChange={(e) =>
@@ -205,7 +210,7 @@ ${mergedQueryParams.map((q) => `              <div key="${q.name}" className="sp
               Headers
             </span>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-${mergedHeaders.map((h) => {
+${mergedHeaders.filter((h) => Boolean(h && h.name && h.name.trim())).map((h) => {
   if (h.name.toLowerCase() === "authorization" && requireAuth) {
     return `              <div key="${h.name}" className="space-y-1 sm:col-span-2">
                 <div className="flex items-center justify-between">
@@ -244,7 +249,7 @@ ${mergedHeaders.map((h) => {
                 </Label>
                 <Input
                   className="h-8 text-xs bg-background font-mono"
-                  placeholder="${h.description || h.defaultValue || h.name}"
+                  placeholder="${escapeJsxAttr(h.description || h.defaultValue || h.name)}"
                   value={customHeaders["${h.name}"] ?? ""}
                   onChange={(e) =>
                     setCustomHeaders((prev) => ({ ...prev, "${h.name}": e.target.value }))
@@ -260,7 +265,7 @@ ${mergedHeaders.map((h) => {
               Request Body
             </span>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-${bodyFields.map((f) => {
+${bodyFields.filter((f) => Boolean(f && f.name && f.name.trim())).map((f) => {
   if (f.type === "boolean") {
     return `              <div key="${f.name}" className="space-y-1">
                 <Label className="text-[11px] font-mono text-muted-foreground">
@@ -279,13 +284,17 @@ ${bodyFields.map((f) => {
               </div>`;
   }
   if (f.type === "object" || f.type === "array") {
+    const defaultPlaceholder = f.type === "array" ? '["item1", "item2"]' : '{"key": "val"}';
+    const placeholderAttr = f.description
+      ? `placeholder={${JSON.stringify(f.description)}}`
+      : `placeholder='${defaultPlaceholder}'`;
     return `              <div key="${f.name}" className="space-y-1 sm:col-span-2">
                 <Label className="text-[11px] font-mono text-muted-foreground">
                   ${f.name} (${f.type})${f.required ? ` <span className="text-destructive font-sans">*</span>` : ""}
                 </Label>
                 <Textarea
                   className="min-h-[60px] text-xs font-mono bg-background"
-                  placeholder="${f.type === "array" ? "[\"item1\", \"item2\"]" : "{\"key\": \"val\"}"}"
+                  ${placeholderAttr}
                   value={typeof bodyFields["${f.name}"] === "object" ? JSON.stringify(bodyFields["${f.name}"]) : bodyFields["${f.name}"] ?? ""}
                   onChange={(e) => {
                     const text = e.target.value;
@@ -306,7 +315,7 @@ ${bodyFields.map((f) => {
                 <Input
                   type="${f.type === "number" ? "number" : "text"}"
                   className="h-8 text-xs bg-background font-mono"
-                  placeholder="${f.description || f.defaultValue || f.name}"
+                  placeholder="${escapeJsxAttr(f.description || f.defaultValue || f.name)}"
                   value={bodyFields["${f.name}"] ?? ""}
                   required={${Boolean(f.required)}}
                   onChange={(e) =>

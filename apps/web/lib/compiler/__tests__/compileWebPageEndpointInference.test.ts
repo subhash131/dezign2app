@@ -213,4 +213,215 @@ describe("compileNextjsV16WebClient - Request Types & Inferred Form UI", () => {
     expect(content).toContain("Request Body (JSON)");
     expect(content).toContain("jsonError");
   });
+
+  it("should generate valid JSX placeholder for object/array fields in Interactive Canvas onSaveCanvas action", () => {
+    const webPageNode: BackendNode = {
+      id: "node-canvas-page",
+      type: "webPage",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "Canvas Page",
+        appSlug: "web-app",
+        sections: [
+          {
+            id: "sec-canvas",
+            name: "Interactive Canvas",
+            renderMode: "client",
+            loadStrategy: "dynamic-no-ssr",
+            actions: [
+              {
+                id: "act-save-canvas",
+                name: "onSaveCanvas",
+                event: "click",
+                requestBodyMode: "field_builder",
+                requestBody: {
+                  id: "rb-canvas-save",
+                  mode: "field_builder",
+                  fields: [
+                    {
+                      id: "f-cv-snapshot",
+                      name: "canvasData",
+                      type: "object",
+                      required: true,
+                    },
+                    {
+                      id: "f-cv-meta",
+                      name: "extraMeta",
+                      type: "object",
+                      required: false,
+                      description: "Custom metadata description",
+                    },
+                    {
+                      id: "f-cv-tags",
+                      name: "tags",
+                      type: "array",
+                      required: false,
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = compileNextjsV16WebClient(
+      [webPageNode],
+      [],
+      [],
+      [webPageNode],
+      [],
+      "Monorepo App",
+    );
+
+    const actionFile = result.files.find((f: CompiledFile) =>
+      f.filename.endsWith("OnsavecanvasAction.tsx"),
+    );
+    expect(actionFile).toBeDefined();
+    const content = actionFile?.content || "";
+
+    // Must NOT contain invalid unescaped quotes in JSX attribute
+    expect(content).not.toContain('placeholder="{"key": "val"}"');
+    expect(content).not.toContain('placeholder="["item1", "item2"]"');
+
+    // Must contain safe placeholders
+    expect(content).toContain("placeholder='{\"key\": \"val\"}'");
+    expect(content).toContain("placeholder='[\"item1\", \"item2\"]'");
+    expect(content).toContain('placeholder={"Custom metadata description"}');
+
+    // Must define proper RequestBody interface
+    expect(content).toContain("export interface OnsavecanvasActionRequestBody");
+    expect(content).toContain("canvasData: Record<string, unknown>;");
+    expect(content).toContain("tags?: unknown[];");
+  });
+
+  it("should gracefully ignore empty field names without generating syntax errors like ': string;'", () => {
+    const webPageNode: BackendNode = {
+      id: "node-table-page",
+      type: "webPage",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "Conversations",
+        appSlug: "web-app",
+        sections: [
+          {
+            id: "sec-datatable",
+            name: "Data Table / Grid",
+            renderMode: "client",
+            loadStrategy: "dynamic",
+            actions: [
+              {
+                id: "act-row-select",
+                name: "onRowSelect",
+                event: "click",
+                requestBodyMode: "field_builder",
+                requestBody: {
+                  id: "rb-dt-row-select",
+                  mode: "field_builder",
+                  fields: [
+                    // Empty/whitespace field simulating clicking Add Field without name
+                    {
+                      id: "f-empty-1",
+                      name: "",
+                      type: "string",
+                      required: true,
+                    },
+                    {
+                      id: "f-empty-2",
+                      name: "   ",
+                      type: "string",
+                      required: false,
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = compileNextjsV16WebClient(
+      [webPageNode],
+      [],
+      [],
+      [webPageNode],
+      [],
+      "Monorepo App",
+    );
+
+    const actionFile = result.files.find((f: CompiledFile) =>
+      f.filename.endsWith("OnrowselectAction.tsx"),
+    );
+    expect(actionFile).toBeDefined();
+    const content = actionFile?.content || "";
+
+    // Must NOT contain invalid empty property syntax
+    expect(content).not.toContain("  : string;");
+    expect(content).not.toContain("  ?: string;");
+    expect(content).not.toMatch(/^\s*: string;/m);
+
+    // When all fields are empty and no rawJson, RequestBody is fallback Record<string, unknown> or omitted
+    expect(content).not.toContain("export interface OnrowselectActionRequestBody {\n  : string;\n}");
+  });
+
+  it("should quote special parameter and header identifiers in TypeScript interfaces", () => {
+    const webPageNode: BackendNode = {
+      id: "node-headers-page",
+      type: "webPage",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "Settings",
+        appSlug: "web-app",
+        events: [
+          {
+            id: "evt-save-settings",
+            name: "saveSettings",
+            event: "click",
+            headers: [
+              { id: "h1", name: "X-Custom-Header", type: "string", required: true },
+            ],
+            pathParams: [
+              { id: "p1", name: "org-id", type: "string", required: true },
+            ],
+            queryParams: [
+              { id: "q1", name: "filter-active", type: "boolean", required: false },
+            ],
+            requestBodyMode: "field_builder",
+            requestBody: {
+              id: "rb-settings",
+              fields: [
+                { id: "f1", name: "max-retries", type: "number", required: true },
+              ],
+            },
+          },
+        ],
+      },
+    };
+
+    const result = compileNextjsV16WebClient(
+      [webPageNode],
+      [],
+      [],
+      [webPageNode],
+      [],
+      "Monorepo App",
+    );
+
+    const actionFile = result.files.find((f: CompiledFile) =>
+      f.filename.endsWith("SavesettingsAction.tsx"),
+    );
+    expect(actionFile).toBeDefined();
+    const content = actionFile?.content || "";
+
+    // Quoted TS identifiers with hyphens
+    expect(content).toContain('"org-id": string;');
+    expect(content).toContain('"filter-active"?: boolean;');
+    expect(content).toContain('"X-Custom-Header": string;');
+    expect(content).toContain('"max-retries": number;');
+  });
 });

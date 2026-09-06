@@ -493,5 +493,70 @@ describe("compileMonorepo Build Fixes & Consistency", () => {
     expect(productsTypeFile?.content).toContain("export interface ProductsGetProductsResponse");
     expect(productsTypeFile?.content).not.toContain("Zaz4xx1");
   });
+
+  it("should generate flexible ResponseContext and response interface that permits returning arbitrary step outputs such as body without TS2345", () => {
+    const serviceNode: BackendNode = {
+      id: "node-conversations",
+      type: "service",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "Conversations",
+        port: "8082",
+      },
+    };
+
+    const sendMessageEndpoint: Endpoint & { nodeId: string } = {
+      id: "ep-send-message",
+      nodeId: "node-conversations",
+      name: "/sendMessage",
+      type: "POST",
+      summary: "Send a message",
+      requestBody: {
+        id: "req-send-msg",
+        rawJson: JSON.stringify({ demo: "hello" }),
+      },
+      pipelineSteps: [
+        {
+          id: "step-return",
+          type: "return_response",
+          name: "Return Body",
+          enabled: true,
+          statusCode: 201,
+          inputBindings: [
+            {
+              argName: "data",
+              source: { kind: "req_body" },
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = compileMonorepo(
+      [serviceNode],
+      [sendMessageEndpoint],
+      [],
+      [],
+      [],
+      "TestConversationsMonorepo",
+    );
+
+    const routeFile = result.files.find(
+      (f) => f.filename === "apps/conversations/src/routes/postSendMessage.ts",
+    );
+    expect(routeFile).toBeDefined();
+    expect(routeFile?.content).toContain("return res.status(201).json(body);");
+    expect(routeFile?.content).toContain("ConversationsPostSendMessageResponseContext =");
+    expect(routeFile?.content).toContain("| Response");
+    expect(routeFile?.content).toContain("json: (data?: any) => any;");
+
+    const typesFile = result.files.find(
+      (f) => f.filename === "packages/types/src/conversations/postSendMessage.ts",
+    );
+    expect(typesFile).toBeDefined();
+    expect(typesFile?.content).toContain("export interface ConversationsPostSendMessageResponse");
+    expect(typesFile?.content).toContain("[key: string]: any;");
+  });
 });
 

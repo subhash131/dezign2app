@@ -34,15 +34,17 @@ export function inferTypesFromJson(jsonStr: string): [string, string][] {
   try {
     const obj = JSON.parse(jsonStr);
     if (obj && typeof obj === "object" && !Array.isArray(obj)) {
-      return Object.entries(obj).map(([key, val]) => {
-        let tsType = "string";
-        if (typeof val === "number") tsType = "number";
-        else if (typeof val === "boolean") tsType = "boolean";
-        else if (Array.isArray(val)) tsType = "unknown[]";
-        else if (val !== null && typeof val === "object")
-          tsType = "Record<string, unknown>";
-        return [key, tsType];
-      });
+      return Object.entries(obj)
+        .filter(([key]) => Boolean(key && key.trim()))
+        .map(([key, val]) => {
+          let tsType = "string";
+          if (typeof val === "number") tsType = "number";
+          else if (typeof val === "boolean") tsType = "boolean";
+          else if (Array.isArray(val)) tsType = "unknown[]";
+          else if (val !== null && typeof val === "object")
+            tsType = "Record<string, unknown>";
+          return [key.trim(), tsType];
+        });
     }
   } catch {}
   return [];

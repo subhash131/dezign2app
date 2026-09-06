@@ -79,7 +79,7 @@ ${sectionsJsx ? `${sectionsJsx}` : `          <Link
     : `import React from "react";`;
 
   const pageLoadStateJsx = hasPageLoad
-    ? `  const [pageLoadData, setPageLoadData] = useState<Record<string, Record<string, string | number | boolean | null>> | null>(null);
+    ? `  const [pageLoadData, setPageLoadData] = useState<any>(null);
   const [pageLoadLoading, setPageLoadLoading] = useState<boolean>(false);
   const [pageLoadError, setPageLoadError] = useState<string | null>(null);
 
@@ -136,7 +136,7 @@ ${sectionsJsx ? `${sectionsJsx}` : `          <Link
     method: string;
     status?: number;
     payload?: unknown;
-    data: Record<string, string | number | boolean | null> | null;
+    data: any;
     error?: string;
   }>>([]);
 
@@ -200,7 +200,7 @@ ${sectionsJsx ? `${sectionsJsx}` : `          <Link
         }
       }
 
-      let resData: Record<string, string | number | boolean | null> | null = null;
+      let resData: any = null;
       let status: number | undefined = undefined;
 
       if (targetUrl && targetUrl !== "#") {

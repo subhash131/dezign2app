@@ -79,4 +79,52 @@ describe("compileCustomTypesNode - generateTypesPackage", () => {
     expect(customFile?.content).toContain("export interface CartItem");
     expect(customFile?.content).toContain("quantity: number;");
   });
+
+  it("safely sanitizes truncated types ending with ellipsis without breaking syntax", () => {
+    const typesNode: BackendNode = {
+      id: "types-node-truncated",
+      type: "types",
+      position: { x: 300, y: 300 },
+      fractionalIndex: "a2",
+      data: {
+        label: "Extracted Types",
+        definitionMode: "visual",
+        types: [
+          {
+            id: "t-truncated-1",
+            name: "ReactFlowProps",
+            kind: "interface",
+            fields: [
+              {
+                id: "f1",
+                name: "onReconnectEnd",
+                type: "(event: MouseEvent | TouchEvent, edge: EdgeType, handleType: HandleType, conn...",
+                required: false,
+              },
+              {
+                id: "f2",
+                name: "complexUnion",
+                type: "string | number | boolean | ...",
+                required: true,
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const files = generateTypesPackage([typesNode], [], [], []);
+    const customFile = files.find((f) => f.filename === "src/custom.ts");
+    expect(customFile).toBeDefined();
+    // Must NOT contain trailing ellipsis syntax
+    expect(customFile?.content).not.toContain("conn...;");
+    expect(customFile?.content).not.toContain("boolean | ...;");
+    // Must sanitize function signature to a valid type
+    expect(customFile?.content).toContain("onReconnectEnd?: (...args: any[]) => any;");
+    expect(customFile?.content).toContain("complexUnion: any;");
+    // Must include @ts-nocheck and ambient helpers
+    expect(customFile?.content).toContain("// @ts-nocheck");
+    expect(customFile?.content).toContain("type ReactMouseEvent<T = any> = any;");
+  });
 });
+
