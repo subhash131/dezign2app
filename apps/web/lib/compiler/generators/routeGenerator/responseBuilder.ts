@@ -43,7 +43,7 @@ export function buildResponsePayloadCode(
         }
       }
 
-      return `{ status: ${statusCode}, message: "Successfully executed ${ep.type || "GET"} ${path}", data: ${primaryVar} }`;
+      return `{ message: "Successfully executed ${ep.type || "GET"} ${path}", data: ${primaryVar} }`;
     }
     return responseData;
   }
@@ -56,8 +56,16 @@ export function buildResponsePayloadCode(
       const fieldName = f.name || "field";
       if (!fieldName) continue;
 
-      if (fieldName === "status" || fieldName === "statusCode") {
+      if (fieldName === "statusCode") {
         fieldEntries.push(`      ${fieldName}: ${statusCode}`);
+        continue;
+      }
+      if (fieldName === "status") {
+        if (f.type === "number") {
+          fieldEntries.push(`      ${fieldName}: ${statusCode}`);
+        } else {
+          fieldEntries.push(`      ${fieldName}: "ok"`);
+        }
         continue;
       }
       if (fieldName === "message") {
@@ -209,7 +217,7 @@ export function buildResponsePayloadCode(
         : lastOp
           ? `${lastOp.fn.name}Result`
           : "result";
-    return `{ status: ${statusCode}, message: "Successfully executed ${ep.type || "GET"} ${path}", data: ${primaryVar} }`;
+    return `{ message: "Successfully executed ${ep.type || "GET"} ${path}", data: ${primaryVar} }`;
   }
   return responseData;
 }

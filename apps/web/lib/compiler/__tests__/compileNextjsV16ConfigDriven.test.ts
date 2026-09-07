@@ -312,7 +312,19 @@ describe("compileNextjsV16WebClient - Configuration-Driven Output", () => {
     // Page should include trigger handler and Output Log since there is an active API endpoint
     const pageFile = result.files.find((f: CompiledFile) => f.filename.endsWith("page.tsx"));
     expect(pageFile?.content).toContain("handleTriggerAction");
+    expect(pageFile?.content).toContain("requestBody?: unknown");
+    expect(pageFile?.content).not.toContain("requestBody?: JSONValue");
     expect(pageFile?.content).toContain("Output Log");
+    expect(pageFile?.content).toContain('import { executeApiAction } from "@/lib/api-client";');
+
+    // Action component should reuse canonical types from @workspace/types
+    expect(actionContent).toContain('from "@workspace/types";');
+    expect(actionContent).toContain("SyncServicePostApiSyncResponse");
+
+    // Client utility file lib/api-client.ts should be generated
+    const apiClientFile = result.files.find((f: CompiledFile) => f.filename === "lib/api-client.ts");
+    expect(apiClientFile).toBeDefined();
+    expect(apiClientFile?.content).toContain("export async function executeApiAction");
   });
 
   it("should not generate Output Log when page only has navigation actions", () => {
@@ -606,6 +618,73 @@ describe("compileNextjsV16WebClient - Configuration-Driven Output", () => {
     expect(pageFile?.content).toContain("const res_UserServiceGetData");
     expect(pageFile?.content).toContain("const headers_AnalyticsServiceGetData");
     expect(pageFile?.content).toContain("const res_AnalyticsServiceGetData");
+  });
+
+  it("should reuse canonical Response type from @workspace/types for connected pageLoad event", () => {
+    const pageNode: BackendNode = {
+      id: "node-page-load",
+      type: "webPage",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "Dashboard",
+        appSlug: "dashboard-app",
+        events: [
+          {
+            id: "evt-load",
+            name: "pageLoad",
+            event: "pageLoad",
+          },
+        ],
+      },
+    };
+
+    const serviceNode: BackendNode = {
+      id: "node-service-load",
+      type: "service",
+      position: { x: 400, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "AnalyticsService",
+        port: "8000",
+        endpoints: [],
+      },
+    };
+
+    const endpoints: (Endpoint & { nodeId: string })[] = [
+      {
+        id: "ep-metrics",
+        nodeId: "node-service-load",
+        name: "/api/metrics",
+        type: "GET",
+      },
+    ];
+
+    const edges: BackendEdge[] = [
+      {
+        id: "edge-load",
+        source: "node-page-load",
+        target: "node-service-load",
+        sourceHandle: "events-evt-load",
+        targetHandle: "endpoint-in-ep-metrics",
+        type: "connection",
+        fractionalIndex: "a0",
+      },
+    ];
+
+    const result = compileNextjsV16WebClient(
+      [pageNode],
+      endpoints,
+      [],
+      [pageNode, serviceNode],
+      edges,
+      "DashboardApp",
+    );
+
+    const pageFile = result.files.find((f: CompiledFile) => f.filename.endsWith("page.tsx"));
+    expect(pageFile).toBeDefined();
+    expect(pageFile?.content).toContain('import type { AnalyticsServiceGetApiMetricsResponse } from "@workspace/types";');
+    expect(pageFile?.content).toContain("useState<AnalyticsServiceGetApiMetricsResponse | null>(null)");
   });
 });
 

@@ -548,15 +548,138 @@ describe("compileMonorepo Build Fixes & Consistency", () => {
     expect(routeFile).toBeDefined();
     expect(routeFile?.content).toContain("return res.status(201).json(body);");
     expect(routeFile?.content).toContain("ConversationsPostSendMessageResponseContext =");
-    expect(routeFile?.content).toContain("| Response");
-    expect(routeFile?.content).toContain("json: (data?: any) => any;");
+    expect(routeFile?.content).toContain("| Response<");
+    // Typed union — must NOT contain any
+    expect(routeFile?.content).not.toContain("json: (data?: any) => any;");
+    expect(routeFile?.content).not.toContain(": any");
 
     const typesFile = result.files.find(
       (f) => f.filename === "packages/types/src/conversations/postSendMessage.ts",
     );
     expect(typesFile).toBeDefined();
-    expect(typesFile?.content).toContain("export interface ConversationsPostSendMessageResponse");
-    expect(typesFile?.content).toContain("[key: string]: any;");
+    expect(typesFile?.content).toMatch(/export (type|interface) ConversationsPostSendMessageResponse/);
+    // Typed interface/alias — must NOT contain index signature with any
+    expect(typesFile?.content).not.toContain("[key: string]: any;");
+  });
+
+  it("should generate ConversationsGetHealthCheck types and barrel exports in @workspace/types and infer return types from EndpointConfig or ServiceNode", () => {
+    const serviceNode: BackendNode = {
+      id: "node-conversations",
+      type: "service",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "Conversations",
+        port: "8082",
+      },
+    };
+
+    // Default endpoint initialized by ServiceNode.tsx
+    const healthEndpoint: Endpoint & { nodeId: string } = {
+      id: "ep-health",
+      nodeId: "node-conversations",
+      name: "/",
+      type: "GET",
+      summary: "Health check",
+      businessLogic: "Test the health of the server",
+    };
+
+    const result = compileMonorepo(
+      [serviceNode],
+      [healthEndpoint],
+      [],
+      [],
+      [],
+      "HealthCheckMonorepo",
+    );
+
+    // 1. Verify packages/types generates conversations/getHealthCheck.ts
+    const typesFile = result.files.find(
+      (f) => f.filename === "packages/types/src/conversations/getHealthCheck.ts",
+    );
+    expect(typesFile).toBeDefined();
+    expect(typesFile?.content).toContain("export type ConversationsGetHealthCheckParams = Record<string, string>;");
+    expect(typesFile?.content).toContain("export type ConversationsGetHealthCheckQuery = Record<string, string>;");
+    expect(typesFile?.content).toContain("export type ConversationsGetHealthCheckBody = never;");
+    expect(typesFile?.content).toContain("export interface ConversationsGetHealthCheckResponse");
+    expect(typesFile?.content).toContain("message: string;");
+    expect(typesFile?.content).not.toContain("status: number;");
+
+    // 2. Verify packages/types/src/conversations/index.ts exports getHealthCheck
+    const serviceBarrel = result.files.find(
+      (f) => f.filename === "packages/types/src/conversations/index.ts",
+    );
+    expect(serviceBarrel).toBeDefined();
+    expect(serviceBarrel?.content).toContain('export * from "./getHealthCheck";');
+
+    // 3. Verify packages/types/src/index.ts exports conversations
+    const mainBarrel = result.files.find(
+      (f) => f.filename === "packages/types/src/index.ts",
+    );
+    expect(mainBarrel).toBeDefined();
+    expect(mainBarrel?.content).toContain('export * from "./conversations";');
+
+    // 4. Verify apps/conversations has getHealthCheck.ts route importing from @workspace/types
+    const routeFile = result.files.find(
+      (f) => f.filename === "apps/conversations/src/routes/getHealthCheck.ts",
+    );
+    expect(routeFile).toBeDefined();
+    expect(routeFile?.content).toContain("ConversationsGetHealthCheckParams");
+    expect(routeFile?.content).toContain("ConversationsGetHealthCheckQuery");
+    expect(routeFile?.content).toContain("ConversationsGetHealthCheckBody");
+    expect(routeFile?.content).toContain("ConversationsGetHealthCheckResponse");
+    expect(routeFile?.content).not.toContain("status: 200,");
+    expect(routeFile?.content).toContain('message: "Successfully executed GET /"');
+  });
+
+  it("should infer custom return types from EndpointConfig responseBody or pipelineSteps instead of hardcoding health types", () => {
+    const serviceNode: BackendNode = {
+      id: "node-conversations",
+      type: "service",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "Conversations",
+        port: "8082",
+      },
+    };
+
+    // Endpoint at / with custom schema configured via EndpointConfig
+    const customEndpoint: Endpoint & { nodeId: string } = {
+      id: "ep-root",
+      nodeId: "node-conversations",
+      name: "/",
+      type: "GET",
+      summary: "Get Service Overview",
+      responseBody: {
+        id: "res-overview",
+        fields: [
+          { id: "f-1", name: "version", type: "string", required: true, key: "version", value: "" },
+          { id: "f-2", name: "activeConnections", type: "number", required: true, key: "activeConnections", value: "" },
+          { id: "f-3", name: "healthy", type: "boolean", required: true, key: "healthy", value: "" },
+        ],
+      },
+    };
+
+    const result = compileMonorepo(
+      [serviceNode],
+      [customEndpoint],
+      [],
+      [],
+      [],
+      "CustomOverviewMonorepo",
+    );
+
+    const typesFile = result.files.find(
+      (f) => f.filename === "packages/types/src/conversations/getServiceOverview.ts" ||
+             f.filename === "packages/types/src/conversations/getRoot.ts",
+    );
+    expect(typesFile).toBeDefined();
+    // Must infer custom fields from EndpointConfig, NOT hardcoded status/service/timestamp
+    expect(typesFile?.content).toContain("version: string;");
+    expect(typesFile?.content).toContain("activeConnections: number;");
+    expect(typesFile?.content).toContain("healthy: boolean;");
   });
 });
+
 

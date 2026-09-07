@@ -21,6 +21,7 @@ import { pickDbFunctionsForEndpoint } from "./dbResolver";
 import { pickKafkaPublishFunction, toKafkaTopicKey } from "./kafkaResolver";
 import { buildResponsePayloadCode } from "./responseBuilder";
 import { renderPipeline, collectPipelineImports } from "./pipelineRenderer";
+import { classifyEndpointShape } from "./endpointTypeClassifier";
 
 export interface GenerateEndpointHandlerParams {
   ep: Endpoint & { nodeId: string };
@@ -89,6 +90,7 @@ export function generateEndpointRouteHandler(
   const path = rawPath.replace(/\s+/g, "-");
   const summary = ep.summary || `Handler for ${ep.type || "GET"} ${path}`;
 
+  const endpointShape = classifyEndpointShape(ep, allNodes);
   const parsedResSchema = parseSchemaJson(ep.responseBody?.rawJson);
   let responseData: string;
   if (parsedResSchema) {
@@ -96,8 +98,19 @@ export function generateEndpointRouteHandler(
       /\n/g,
       "\n    ",
     );
+  } else if (Array.isArray(ep.responseBody?.fields) && ep.responseBody.fields.length > 0) {
+    const obj: Record<string, unknown> = {};
+    for (const f of ep.responseBody.fields) {
+      if (!f.name) continue;
+      if (f.type === "number") obj[f.name] = 0;
+      else if (f.type === "boolean") obj[f.name] = true;
+      else if (f.type === "array") obj[f.name] = [];
+      else if (f.type === "object") obj[f.name] = {};
+      else obj[f.name] = "success";
+    }
+    responseData = JSON.stringify(obj, null, 6).replace(/\n/g, "\n    ");
   } else {
-    responseData = `{\n      status: 200,\n      message: "Successfully executed ${ep.type || "GET"} ${path}"\n    }`;
+    responseData = `{\n      message: "Successfully executed ${ep.type || "GET"} ${path}"\n    }`;
   }
 
   const queryTypeRes = parametersToTsInterface(
@@ -245,11 +258,12 @@ export type ${pascalName}Request =
     };
 
 export type ${pascalName}ResponseContext =
-  | Response
+  | Response<${pascalName}Response | ${pascalName}ErrorResponse | Record<string, unknown>>
   | {
-      status: (code: number) => { json: (data?: any) => any; [key: string]: any };
-      json: (data?: any) => any;
-      [key: string]: any;
+      status: (code: number) => {
+        json: (data: ${pascalName}Response | ${pascalName}ErrorResponse | Record<string, unknown> | { error: string; details?: string }) => void | Response;
+      };
+      json: (data: ${pascalName}Response | ${pascalName}ErrorResponse | Record<string, unknown> | { error: string; details?: string }) => void | Response;
     };
 
 /**
@@ -262,7 +276,9 @@ export async function ${handlerName}(
 ) {
   try {
     logger.info("Handling ${ep.type || "GET"} ${path}");
-    logger.debug("Request details", { params: req.params, query: req.query, body: req.body });\n\n`;
+    logger.debug("Request details", { params: req.params, query: req.query, body: req.body });
+
+`;
 
   // Compute per-endpoint auth requirements — surfaced on the return value so the
   // router builder can inject requireAuth() at the registration site, not inline.
@@ -490,7 +506,7 @@ export async function ${handlerName}(
       const statusCode = ep.type === "POST" ? 201 : 200;
 
       routeHandlerCode += `\n    logger.debug("Successfully generated response for ${path}");\n`;
-      routeHandlerCode += `    return res.status(${statusCode}).json({ status: ${statusCode}, data: ${lastOutputVar} });\n`;
+      routeHandlerCode += `    return res.status(${statusCode}).json({ data: ${lastOutputVar} });\n`;
     }
     routeHandlerCode += `  } catch (err) {\n`;
     routeHandlerCode += `    const message = err instanceof Error ? err.message : String(err);\n`;
@@ -547,7 +563,7 @@ export async function ${handlerName}(
         routeHandlerCode += `    const ${cachedVar} = ${callExpr};\n`;
         routeHandlerCode += `    if (${cachedVar} !== undefined && ${cachedVar} !== null) {\n`;
         routeHandlerCode += `      logger.debug("Returning cached ${rawTableName} data");\n`;
-        routeHandlerCode += `      return res.status(200).json({ status: 200, message: "Successfully executed ${ep.type || "GET"} ${path}", data: ${cachedVar} });\n`;
+        routeHandlerCode += `      return res.status(200).json({ message: "Successfully executed ${ep.type || "GET"} ${path}", data: ${cachedVar} });\n`;
         routeHandlerCode += `    }\n\n`;
       });
     }

@@ -94,18 +94,13 @@ describe("compileNextjsV16WebClient - Request Types & Inferred Form UI", () => {
     expect(actionFile).toBeDefined();
     const content = actionFile?.content || "";
 
-    // 1. Verify TypeScript interfaces
-    expect(content).toContain("export interface CreateUserActionPathParams");
-    expect(content).toContain("orgId: string;");
-    expect(content).toContain("export interface CreateUserActionQueryParams");
-    expect(content).toContain("notifyAdmin?: boolean;");
-    expect(content).toContain("export interface CreateUserActionHeaders");
-    expect(content).toContain('"X-Tenant-Id": string;');
-    expect(content).toContain("export interface CreateUserActionRequestBody");
-    expect(content).toContain("fullName: string;");
-    expect(content).toContain("userAge?: number;");
-    expect(content).toContain("isAdmin: boolean;");
-    expect(content).toContain("metadata?: Record<string, unknown>;");
+    // 1. Verify canonical TypeScript types from @workspace/types are reused
+    expect(content).toContain('from "@workspace/types";');
+    expect(content).toContain("export type CreateUserActionPathParams = UserServicePostApiOrgsByOrgIdUsersParams;");
+    expect(content).toContain("export type CreateUserActionQueryParams = UserServicePostApiOrgsByOrgIdUsersQuery;");
+    expect(content).toContain("export type CreateUserActionHeaders = Record<string, string>;");
+    expect(content).toContain("export type CreateUserActionRequestBody = UserServicePostApiOrgsByOrgIdUsersBody;");
+    expect(content).toContain("export type CreateUserActionResponse = UserServicePostApiOrgsByOrgIdUsersResponse;");
     expect(content).toContain("export interface CreateUserActionRequestPayload");
 
     // 2. Verify form inputs
@@ -201,12 +196,10 @@ describe("compileNextjsV16WebClient - Request Types & Inferred Form UI", () => {
     expect(actionFile).toBeDefined();
     const content = actionFile?.content || "";
 
-    // Inferred types from JSON
-    expect(content).toContain("export interface SubmitCheckoutActionRequestBody");
-    expect(content).toContain("cartId?: string;");
-    expect(content).toContain("discountCode?: string;");
-    expect(content).toContain("itemsCount?: number;");
-    expect(content).toContain("isExpress?: boolean;");
+    // Canonical types reused from @workspace/types
+    expect(content).toContain('from "@workspace/types";');
+    expect(content).toContain("export type SubmitCheckoutActionRequestBody = PaymentServicePostApiCheckoutBody;");
+    expect(content).toContain("export type SubmitCheckoutActionResponse = PaymentServicePostApiCheckoutResponse;");
 
     // Raw JSON Textarea
     expect(content).toContain("rawJsonBody");

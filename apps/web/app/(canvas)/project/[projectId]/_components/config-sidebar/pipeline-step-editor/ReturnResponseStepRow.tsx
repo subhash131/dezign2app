@@ -137,7 +137,7 @@ export const ReturnResponseStepRow = ({
   const previewCode = useMemo(() => {
     const bindings = step.inputBindings || [];
     if (bindings.length === 0) {
-      return `res.status(${statusCode}).json({ status: ${statusCode}, message: "Success" });`;
+      return `res.status(${statusCode}).json({ message: "Success" });`;
     }
 
     const getExprForBinding = (b: StepBinding): string => {

@@ -1,5 +1,7 @@
 import { ResolvedEventParameters } from "./types";
 import { typeStrToTsAndZod } from "@/lib/compiler/generators/schemaToTypeScript";
+import { Endpoint } from "@workspace/canvas/types";
+import { deriveRouteFileName, toPascalCase } from "@/lib/compiler/utils";
 
 function toValidTsIdentifier(name: string): string {
   const clean = name.trim();
@@ -12,7 +14,25 @@ function toValidTsIdentifier(name: string): string {
 export function generateTypeDefinitions(
   componentName: string,
   params: ResolvedEventParameters,
+  endpointLink?: {
+    serviceName?: string;
+    endpoint?: Endpoint;
+  },
 ): string[] {
+  const effectiveServiceName = endpointLink?.serviceName || (endpointLink as { targetNodeName?: string })?.targetNodeName;
+  // If action is connected to a backend endpoint, reuse canonical types from @workspace/types (do NOT generate new duplicate types)
+  if (endpointLink?.endpoint && effectiveServiceName) {
+    const routeFileName = deriveRouteFileName(endpointLink.endpoint, 0, effectiveServiceName);
+    const pascalName = `${toPascalCase(effectiveServiceName)}${toPascalCase(routeFileName)}`;
+
+    return [
+      `import type {\n  ${pascalName}Params,\n  ${pascalName}Query,\n  ${pascalName}Body,\n  ${pascalName}Response,\n} from "@workspace/types";`,
+      `export type ${componentName}PathParams = ${pascalName}Params;\nexport type ${componentName}QueryParams = ${pascalName}Query;\nexport type ${componentName}Headers = Record<string, string>;\nexport type ${componentName}RequestBody = ${pascalName}Body;\nexport type ${componentName}Response = ${pascalName}Response;`,
+      `export interface ${componentName}RequestPayload {\n  pathParams?: ${pascalName}Params;\n  queryParams?: ${pascalName}Query;\n  headers?: Record<string, string>;\n  body?: ${pascalName}Body;\n}`,
+      `export interface ${componentName}Props {\n  onTrigger?: (\n    eventName: string,\n    eventType: string,\n    url: string,\n    method: string,\n    requireAuth?: boolean,\n    customHeaders?: Record<string, string>,\n    queryParams?: Record<string, string>,\n    requestBody?: unknown,\n  ) => void;\n  onRequestChange?: (payload: ${componentName}RequestPayload) => void;\n  className?: string;\n}`,
+    ];
+  }
+
   const {
     mergedPathParams,
     mergedQueryParams,

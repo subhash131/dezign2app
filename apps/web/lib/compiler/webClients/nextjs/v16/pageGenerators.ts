@@ -139,8 +139,8 @@ ${sectionsJsx ? `${sectionsJsx}` : `          <Link
     url: string;
     method: string;
     status?: number;
-    payload?: JSONValue;
-    data: JSONValue;
+    payload?: unknown;
+    data: unknown;
     error?: string;
   }>>([]);
 
@@ -156,68 +156,21 @@ ${sectionsJsx ? `${sectionsJsx}` : `          <Link
     requireAuth?: boolean,
     customHeaders?: Record<string, string>,
     queryParams?: Record<string, string>,
-    requestBody?: JSONValue,
+    requestBody?: unknown,
   ) => {
     const timestamp = new Date().toLocaleTimeString();
     const logId = Math.random().toString(36).substring(2, 9);
     try {
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-        ...(customHeaders || {}),
-      };
-
-      if (customHeaders?.["Authorization"] && customHeaders["Authorization"].trim() && customHeaders["Authorization"] !== "Bearer <token>") {
-        headers["Authorization"] = customHeaders["Authorization"].trim();
-      }${hasAuth ? ` else if (requireAuth !== false) {
-        try {
-          const token = await getAuthBearerToken();
-          if (token) {
-            headers["Authorization"] = token;
-          }
-        } catch (_tokenErr) {}
-      }` : ""}
-
-      let targetUrl = url;
-      if (queryParams && Object.keys(queryParams).length > 0 && targetUrl && targetUrl !== "#") {
-        try {
-          const urlObj = new URL(targetUrl, typeof window !== "undefined" ? window.location.origin : "http://localhost:3000");
-          Object.entries(queryParams).forEach(([k, v]) => {
-            if (v !== undefined && v !== null) urlObj.searchParams.set(k, String(v));
-          });
-          targetUrl = urlObj.toString();
-        } catch (_urlErr) {}
-      }
-
-      const options: RequestInit = {
-        method: method || "POST",
-        headers,
-        credentials: "include",
-      };
-      if (
-        method === "POST" ||
-        method === "PUT" ||
-        method === "PATCH" ||
-        (method === "DELETE" && requestBody !== undefined)
-      ) {
-        if (requestBody !== undefined) {
-          options.body = typeof requestBody === "string" ? requestBody : JSON.stringify(requestBody);
-        }
-      }
-
-      let resData: JSONValue = null;
-      let status: number | undefined = undefined;
-
-      if (targetUrl && targetUrl !== "#") {
-        const res = await fetch(targetUrl, options);
-        status = res.status;
-        resData = await res.json().catch(() => ({ statusText: res.statusText }));
-      } else {
-        resData = {
-          success: true,
-          message: "Action '" + eventName + "' (" + eventType + ") triggered successfully",
-          timestamp: new Date().toISOString(),
-        };
-      }
+      const result = await executeApiAction({
+        eventName,
+        eventType,
+        url,
+        method,
+        requireAuth,
+        customHeaders,
+        queryParams,
+        requestBody,
+      });
 
       setTriggerLogs((prev) => [
         {
@@ -225,11 +178,12 @@ ${sectionsJsx ? `${sectionsJsx}` : `          <Link
           eventName,
           eventType,
           timestamp,
-          url: targetUrl || "N/A",
+          url: result.url || result.targetUrl || "N/A",
           method: method || "TRIGGER",
-          status,
+          status: result.status,
           payload: requestBody,
-          data: resData,
+          data: result.data,
+          error: result.error,
         },
         ...prev,
       ]);
@@ -310,6 +264,7 @@ ${sectionsJsx ? `${sectionsJsx}` : `          <Link
   const uiImports: string[] = [];
   if (hasApiActions) {
     uiImports.push(`import { Button } from "@workspace/ui/components/button";`);
+    uiImports.push(`import { executeApiAction } from "@/lib/api-client";`);
   }
   if (cardComponentsNeeded) {
     uiImports.push(`import { Card, CardHeader, CardTitle, CardContent } from "@workspace/ui/components/card";`);
@@ -317,11 +272,11 @@ ${sectionsJsx ? `${sectionsJsx}` : `          <Link
   if (hasPageLoad) {
     uiImports.push(`import { Badge } from "@workspace/ui/components/badge";`);
   }
-  if (hasAuth && (hasPageLoad || hasApiActions)) {
+  if (hasAuth && hasPageLoad) {
     uiImports.push(`import { getAuthBearerToken } from "@/lib/auth-token";`);
   }
 
-  const needsJsonValue = hasPageLoad || hasApiActions;
+  const needsJsonValue = hasPageLoad;
   const jsonValueTypeDecl = needsJsonValue
     ? `type JSONPrimitive = string | number | boolean | null;
 type JSONObject = { [key: string]: JSONValue };

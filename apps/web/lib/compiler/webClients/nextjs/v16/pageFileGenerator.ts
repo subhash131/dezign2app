@@ -13,6 +13,8 @@ import {
 } from "./componentTemplates";
 import { isAuthPage } from "../../../compileAuth";
 import { typeStrToTsAndZod } from "../../../generators/schemaToTypeScript";
+import { generateApiClientFile } from "./apiClientTemplate";
+import { deriveRouteFileName, toPascalCase } from "../../../utils";
 
 export interface GeneratePageAndComponentFilesParams {
   webClientNodes: BackendNode[];
@@ -41,6 +43,14 @@ export function generatePageAndComponentFiles({
 }: GeneratePageAndComponentFilesParams): PageAndComponentFilesResult {
   const pageFiles: CompiledFile[] = [];
   let hasExplicitRoot = false;
+
+  const hasGlobalAuth = Boolean(
+    authNode ||
+      webClientNodes.some(
+        (n) => n.data?.authNodeId && allNodes.some((an) => an.id === n.data.authNodeId && an.type === "auth"),
+      ),
+  );
+  pageFiles.push(generateApiClientFile(hasGlobalAuth));
 
   webClientNodes.forEach((node, idx) => {
     const pageMeta = pagesInfo[idx]!;
@@ -193,7 +203,7 @@ export function generatePageAndComponentFiles({
       try {
         const results: Record<string, JSONValue> = {};
         ${statements.join("\n")}
-        setPageLoadData(${pageLoadEvents.length === 1} ? results["${pageLoadEvents[0]?.name || "pageLoad"}"] : results);
+        setPageLoadData((${pageLoadEvents.length === 1} ? results["${pageLoadEvents[0]?.name || "pageLoad"}"] : results) as any);
       } catch (err) {
         const message = err instanceof Error ? err.message : "Failed to load page data";
         setPageLoadError(message);
@@ -202,7 +212,7 @@ export function generatePageAndComponentFiles({
       }`;
     }
 
-    // Derive a typed PageLoadData interface from the first pageLoad endpoint's responseBody
+    // Derive a typed PageLoadData interface from the first pageLoad endpoint
     let pageLoadDataType = "JSONValue";
     let pageLoadDataTypeDecl = "";
     if (pageLoadEvents.length > 0) {
@@ -213,51 +223,64 @@ export function generatePageAndComponentFiles({
         allEdges,
         endpoints,
       );
-      const responseBody = firstPageLoadLink?.endpoint?.responseBody;
-      const fields = responseBody?.fields?.filter((f) => f.name && f.name.trim());
+      const effectiveServiceName =
+        firstPageLoadLink?.serviceName || firstPageLoadLink?.targetNodeName;
+      if (firstPageLoadLink?.endpoint && effectiveServiceName) {
+        const routeFileName = deriveRouteFileName(
+          firstPageLoadLink.endpoint,
+          0,
+          effectiveServiceName,
+        );
+        const pascalName = `${toPascalCase(effectiveServiceName)}${toPascalCase(routeFileName)}`;
+        pageLoadDataType = `${pascalName}Response | null`;
+        pageLoadDataTypeDecl = `import type { ${pascalName}Response } from "@workspace/types";`;
+      } else {
+        const responseBody = firstPageLoadLink?.endpoint?.responseBody;
+        const fields = responseBody?.fields?.filter((f) => f.name && f.name.trim());
 
-      if (fields && fields.length > 0) {
-        // Build a typed interface from the configured response fields
-        const fieldLines = fields
-          .map((f) => {
-            const key = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(f.name.trim())
-              ? f.name.trim()
-              : JSON.stringify(f.name.trim());
-            const enumValues = f.enumValues;
-            const { ts } = typeStrToTsAndZod(f.type || "string", enumValues);
-            const opt = f.required ? "" : "?";
-            return `  ${key}${opt}: ${ts};`;
-          })
-          .join("\n");
-        const typeName =
-          pageLoadEvents.length === 1
-            ? "PageLoadData"
-            : `${pageLoadEvents[0]!.name || "PageLoad"}Data`;
-        pageLoadDataType = `${typeName} | null`;
-        pageLoadDataTypeDecl = `interface ${typeName} {\n${fieldLines}\n}`;
-      } else if (responseBody?.rawJson) {
-        // Attempt to infer types from raw JSON example
-        try {
-          const parsed = JSON.parse(responseBody.rawJson) as Record<string, unknown>;
-          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-            const fieldLines = Object.entries(parsed)
-              .map(([k, v]) => {
-                const key = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(k) ? k : JSON.stringify(k);
-                const ts =
-                  v === null ? "null" :
-                  typeof v === "number" ? "number" :
-                  typeof v === "boolean" ? "boolean" :
-                  Array.isArray(v) ? "JSONValue[]" :
-                  typeof v === "object" ? "Record<string, JSONValue>" :
-                  "string";
-                return `  ${key}?: ${ts};`;
-              })
-              .join("\n");
-            pageLoadDataType = "PageLoadData | null";
-            pageLoadDataTypeDecl = `interface PageLoadData {\n${fieldLines}\n}`;
+        if (fields && fields.length > 0) {
+          // Build a typed interface from the configured response fields
+          const fieldLines = fields
+            .map((f) => {
+              const key = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(f.name.trim())
+                ? f.name.trim()
+                : JSON.stringify(f.name.trim());
+              const enumValues = f.enumValues;
+              const { ts } = typeStrToTsAndZod(f.type || "string", enumValues);
+              const opt = f.required ? "" : "?";
+              return `  ${key}${opt}: ${ts};`;
+            })
+            .join("\n");
+          const typeName =
+            pageLoadEvents.length === 1
+              ? "PageLoadData"
+              : `${pageLoadEvents[0]!.name || "PageLoad"}Data`;
+          pageLoadDataType = `${typeName} | null`;
+          pageLoadDataTypeDecl = `interface ${typeName} {\n${fieldLines}\n}`;
+        } else if (responseBody?.rawJson) {
+          // Attempt to infer types from raw JSON example
+          try {
+            const parsed = JSON.parse(responseBody.rawJson) as Record<string, unknown>;
+            if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+              const fieldLines = Object.entries(parsed)
+                .map(([k, v]) => {
+                  const key = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(k) ? k : JSON.stringify(k);
+                  const ts =
+                    v === null ? "null" :
+                    typeof v === "number" ? "number" :
+                    typeof v === "boolean" ? "boolean" :
+                    Array.isArray(v) ? "JSONValue[]" :
+                    typeof v === "object" ? "Record<string, JSONValue>" :
+                    "string";
+                  return `  ${key}?: ${ts};`;
+                })
+                .join("\n");
+              pageLoadDataType = "PageLoadData | null";
+              pageLoadDataTypeDecl = `interface PageLoadData {\n${fieldLines}\n}`;
+            }
+          } catch {
+            // rawJson not parseable — keep JSONValue fallback
           }
-        } catch {
-          // rawJson not parseable — keep JSONValue fallback
         }
       }
     }
@@ -353,6 +376,7 @@ export function generatePageAndComponentFiles({
             nodeRequestBody,
             evt,
             link?.endpoint,
+            link?.serviceName || link?.targetNodeName,
           ),
         });
       });

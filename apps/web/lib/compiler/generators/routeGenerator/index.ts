@@ -1,15 +1,17 @@
 import { Endpoint, AnyMessagingResource, CompiledFile, ReusableFunction } from "@workspace/canvas/types";
 import { BackendNode, BackendEdge } from "@/types/canvas";
-import { toVarName, toPascalCase } from "../../utils";
+import { toVarName, toPascalCase, deriveRouteFileName } from "../../utils";
 import { generateDefaultRoute } from "./defaultRouteGenerator";
 import { generateEndpointRouteHandler } from "./endpointHandlerGenerator";
 import { generateRequireAuthMiddleware } from "../auth-providers/better-auth/v1.6/generateRequireAuthMiddleware";
+import { classifyEndpointShape } from "./endpointTypeClassifier";
 
 export * from "./dbResolver";
 export * from "./kafkaResolver";
 export * from "./responseBuilder";
 export * from "./defaultRouteGenerator";
 export * from "./endpointHandlerGenerator";
+export * from "./endpointTypeClassifier";
 
 export function generateRoutes(
   serviceName: string,
