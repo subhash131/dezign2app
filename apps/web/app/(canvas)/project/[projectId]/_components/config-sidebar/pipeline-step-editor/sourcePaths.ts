@@ -284,6 +284,28 @@ export function getAvailableSources(
       }
     }
 
+    // Ensure database operation results expose id, message, and success
+    if (s.type === "db_operation") {
+      if (!stepPaths.some((p) => p.path === "id")) {
+        stepPaths.unshift({ path: "id", type: "string" });
+      }
+      if (!stepPaths.some((p) => p.path === "message")) {
+        stepPaths.push({ path: "message", type: "string" });
+      }
+      if (!stepPaths.some((p) => p.path === "success")) {
+        stepPaths.push({ path: "success", type: "boolean" });
+      }
+    }
+
+    // Ensure 'id' column appears at the front of the list if present
+    const idIdx = stepPaths.findIndex((p) => p.path === "id");
+    if (idIdx > 0) {
+      const [idItem] = stepPaths.splice(idIdx, 1);
+      if (idItem) {
+        stepPaths.unshift(idItem);
+      }
+    }
+
     // If step is an external_call or service_call, extract response fields & nested paths
     if (s.type === "external_call" || s.type === "service_call") {
       const allStoreEndpoints = useBackendCanvasStore.getState().endpoints;

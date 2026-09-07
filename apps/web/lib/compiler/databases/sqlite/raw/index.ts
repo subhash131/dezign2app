@@ -23,9 +23,16 @@ function toPascal(str: string): string {
     .join("");
 }
 
-function getColumns(
-  tableNode: BackendNode,
-): { name: string; type: string; isPrimaryKey?: boolean; isUnique?: boolean; isForeignKey?: boolean; isNotNull?: boolean }[] {
+type SqliteColumn = {
+  name: string;
+  type: string;
+  isPrimaryKey?: boolean;
+  isUnique?: boolean;
+  isForeignKey?: boolean;
+  isNotNull?: boolean;
+};
+
+function getColumns(tableNode: BackendNode): SqliteColumn[] {
   const cols = tableNode.data?.columns;
   if (cols && Array.isArray(cols) && cols.length > 0) {
     return cols.map((c) => ({
@@ -61,15 +68,22 @@ function generateTableHelpers(
   const pascalSingular = toSingular(Pascal);
   const pascalPlural = toPlural(Pascal);
   const cols = getColumns(tableNode);
-  const pkCol = cols.find((c) => c.isPrimaryKey) || cols[0];
-  const pkColName = pkCol?.name || "id";
+  const pkCol: SqliteColumn =
+    cols.find((c) => c.isPrimaryKey) ||
+    cols[0] || {
+      name: "id",
+      type: "string",
+      isPrimaryKey: true,
+    };
+  const pkColName = pkCol.name || "id";
   const pkVarName = toVarName(pkColName);
-  const pkTs = toTsType(pkCol?.type || "string");
+  const pkTs = toTsType(pkCol.type || "string");
 
   const writableCols = cols.filter((c) => !c.isPrimaryKey);
-  const writableColNames = writableCols.map((c) => c.name);
-  const insertCols = writableColNames.join(", ");
-  const insertPlaceholders = writableColNames.map(() => "?").join(", ");
+  const isStringPk = pkTs === "string";
+  const insertColList: SqliteColumn[] = isStringPk ? [pkCol, ...writableCols] : writableCols;
+  const insertCols = insertColList.map((c) => c.name).join(", ");
+  const insertPlaceholders = insertColList.map(() => "?").join(", ");
 
   const recordFields = writableCols
     .map((c) => {
@@ -83,8 +97,9 @@ function generateTableHelpers(
       return `  ${toVarName(c.name)}${isOptional ? "?" : ""}: ${toTsType(c.type)};`;
     })
     .join("\n");
+  const createPkField = isStringPk ? `  ${pkVarName}?: ${pkTs};\n` : "";
   const dataType =
-    writableCols.length > 0 ? `{\n${recordFields}\n}` : `Record<string, never>`;
+    insertColList.length > 0 ? `{\n${createPkField}${recordFields}\n}` : `Record<string, never>`;
 
   const importPath = `@workspace/db/helpers/${varName}`;
 
@@ -96,7 +111,11 @@ function generateTableHelpers(
   code += ` * Never concatenate user-supplied values into query strings.\n`;
   code += ` */\n`;
   code += `import { db } from "../connection";\n`;
-  code += `import { createLogger } from "@workspace/logger";\n\n`;
+  code += `import { createLogger } from "@workspace/logger";\n`;
+  if (isStringPk) {
+    code += `import { randomUUID } from "node:crypto";\n`;
+  }
+  code += `\n`;
   code += `const logger = createLogger("db:${tableName}");\n\n`;
 
   // Types
@@ -105,6 +124,8 @@ function generateTableHelpers(
   cols.forEach((c) => {
     code += `  ${toVarName(c.name)}: ${toTsType(c.type)};\n`;
   });
+  code += `  message?: string;\n`;
+  code += `  success?: boolean;\n`;
   code += `};\n\n`;
   code += `export type Create${Pascal}Data = ${dataType};\n\n`;
   code += `export type Update${Pascal}Data = Partial<Create${Pascal}Data>;\n\n`;
@@ -164,7 +185,24 @@ function generateTableHelpers(
   });
   code += `\n`;
 
-  const insertBindTypes = writableCols
+  const insertBindTypes = insertColList
+    .map((c) => {
+      const varName = toVarName(c.name);
+      if (c.isPrimaryKey) {
+        return `${varName}: ${toTsType(c.type)}`;
+      }
+      const nameLower = c.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const isTimestampCol =
+        nameLower === "createdat" ||
+        nameLower === "updatedat" ||
+        nameLower === "created_at" ||
+        nameLower === "updated_at";
+      const isOptional = !c.isNotNull || isTimestampCol;
+      return `${varName}: ${toTsType(c.type)}${isOptional ? " | null | undefined" : ""}`;
+    })
+    .join(", ");
+
+  const updateBindTypes = writableCols
     .map((c) => {
       const varName = toVarName(c.name);
       const nameLower = c.name.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -187,11 +225,13 @@ function generateTableHelpers(
   code += `  "SELECT * FROM ${tableName} WHERE ${pkColName} = ?"\n`;
   code += `);\n\n`;
 
-  if (writableCols.length > 0) {
+  if (insertColList.length > 0) {
     code += `const stmtInsert = db.prepare<[${insertBindTypes}]>(\n`;
     code += `  "INSERT INTO ${tableName} (${insertCols}) VALUES (${insertPlaceholders})"\n`;
     code += `);\n\n`;
-    code += `const stmtUpdate = db.prepare<[${insertBindTypes}, ${pkVarName}: ${pkTs}]>(\n`;
+  }
+  if (writableCols.length > 0) {
+    code += `const stmtUpdate = db.prepare<[${updateBindTypes}, ${pkVarName}: ${pkTs}]>(\n`;
     code += `  "UPDATE ${tableName} SET ${writableCols.map((c) => `${c.name} = ?`).join(", ")} WHERE ${pkColName} = ?"\n`;
     code += `);\n\n`;
   }
@@ -240,6 +280,18 @@ function generateTableHelpers(
         opCode.includes(`as ${pascalSingular}`) ||
         opCode.includes(`as ${pascalPlural}`));
 
+    const isLegacyMissingStringPk =
+      isStringPk &&
+      op.kind === "create" &&
+      Boolean(op.code) &&
+      !opCode.includes(`_rowId = data.${pkVarName}`) &&
+      !opCode.includes(`randomUUID`);
+
+    const isLegacyMissingMessage =
+      (op.kind === "create" || op.kind === "update" || op.kind === "delete") &&
+      Boolean(op.code) &&
+      !opCode.includes("message:");
+
     const isLegacyVulnerableCode =
       Boolean(op.code) &&
       (opCode.includes("Object.keys(") ||
@@ -247,6 +299,8 @@ function generateTableHelpers(
         (opCode.includes("WHERE ") && !opCode.includes("=")) ||
         (pkTs === "number" && (opCode.includes("info.lastInsertRowid.toString()") || opCode.includes("String(info.lastInsertRowid)"))) ||
         hasUnsafeCast ||
+        isLegacyMissingStringPk ||
+        isLegacyMissingMessage ||
         // Cardinality: a fetchByIndex on a FK column must use .all(), never .get()
         (op.kind === "fetchByIndex" &&
           opCode.includes(".get(") &&
@@ -340,31 +394,40 @@ function generateTableHelpers(
       code += `  logger.debug("findById result", { found: Boolean(row) });\n`;
       code += `  return row;\n`;
       code += `}\n\n`;
-    } else if (op.kind === "create" && writableCols.length > 0) {
+    } else if (op.kind === "create" && insertColList.length > 0) {
       code += `/** ${op.description || `Create a new record in ${tableName}`} */\n`;
       code += `export function ${effectiveName}(data: Create${Pascal}Data): ${Pascal}Row {\n`;
       code += `  logger.info("Inserting record into ${tableName}...", { data });\n`;
       code += `  const now = new Date().toISOString();\n`;
-      code += `  const info = stmtInsert.run(${writableCols.map((c) => {
-        const varName = toVarName(c.name);
-        const nameLower = c.name.toLowerCase().replace(/[^a-z0-9]/g, "");
-        if (
-          nameLower === "createdat" ||
-          nameLower === "updatedat" ||
-          nameLower === "created_at" ||
-          nameLower === "updated_at"
-        ) {
-          return `data.${varName} ?? now`;
-        }
-        return `data.${varName} ?? null`;
-      }).join(", ")});\n`;
-      const rowIdExpr =
-        pkTs === "number"
-          ? `typeof info.lastInsertRowid === "bigint" ? Number(info.lastInsertRowid) : info.lastInsertRowid`
-          : `typeof info.lastInsertRowid === "bigint" ? info.lastInsertRowid.toString() : String(info.lastInsertRowid)`;
-      code += `  const _rowId = ${rowIdExpr};\n`;
+      if (isStringPk) {
+        code += `  const _rowId = data.${pkVarName} || randomUUID();\n`;
+      }
+      const insertRunArgs = insertColList
+        .map((c) => {
+          if (c.isPrimaryKey) return `_rowId`;
+          const varName = toVarName(c.name);
+          const nameLower = c.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+          if (
+            nameLower === "createdat" ||
+            nameLower === "updatedat" ||
+            nameLower === "created_at" ||
+            nameLower === "updated_at"
+          ) {
+            return `data.${varName} ?? now`;
+          }
+          return `data.${varName} ?? null`;
+        })
+        .join(", ");
+      code += `  const info = stmtInsert.run(${insertRunArgs});\n`;
+      if (!isStringPk) {
+        const rowIdExpr =
+          pkTs === "number"
+            ? `typeof info.lastInsertRowid === "bigint" ? Number(info.lastInsertRowid) : info.lastInsertRowid`
+            : `typeof info.lastInsertRowid === "bigint" ? info.lastInsertRowid.toString() : String(info.lastInsertRowid)`;
+        code += `  const _rowId = ${rowIdExpr};\n`;
+      }
       code += `  logger.info("✓ Record created in ${tableName}", { ${pkColName}: _rowId });\n`;
-      code += `  return { ${pkColName}: _rowId, ...data, ${writableCols.filter((c) => {
+      code += `  return { ${pkColName}: _rowId, message: "${pascalSingular} created successfully", ...data, ${writableCols.filter((c) => {
         const nameLower = c.name.toLowerCase().replace(/[^a-z0-9]/g, "");
         return nameLower === "createdat" || nameLower === "updatedat" || nameLower === "created_at" || nameLower === "updated_at";
       }).map((c) => {
@@ -383,7 +446,7 @@ function generateTableHelpers(
           : `typeof info.lastInsertRowid === "bigint" ? info.lastInsertRowid.toString() : String(info.lastInsertRowid)`;
       code += `  const _rowId = ${rowIdExpr};\n`;
       code += `  logger.info("✓ Record created in ${tableName}", { ${pkColName}: _rowId });\n`;
-      code += `  return { ${pkColName}: _rowId } as unknown as ${Pascal}Row;\n`;
+      code += `  return { ${pkColName}: _rowId, message: "${pascalSingular} created successfully" } as unknown as ${Pascal}Row;\n`;
       code += `}\n\n`;
     } else if (op.kind === "update" && writableCols.length > 0) {
       code += `/** ${op.description || `Update a ${tableName} row by primary key`} */\n`;
@@ -397,14 +460,16 @@ function generateTableHelpers(
       code += `  const updated = { ...current, ...data };\n`;
       code += `  stmtUpdate.run(${writableCols.map((c) => `updated.${toVarName(c.name)}`).join(", ")}, ${pkVarName});\n`;
       code += `  logger.info("✓ Record updated in ${tableName}", { ${pkVarName} });\n`;
-      code += `  return find${toPascal(tableName)}ById(${pkVarName});\n`;
+      code += `  const fresh = find${toPascal(tableName)}ById(${pkVarName});\n`;
+      code += `  return fresh ? ({ ...fresh, message: "${pascalSingular} updated successfully" } as unknown as ${Pascal}Row) : undefined;\n`;
       code += `}\n\n`;
     } else if (op.kind === "delete") {
       code += `/** ${op.description || `Delete a ${tableName} row by primary key`} */\n`;
-      code += `export function ${effectiveName}(${pkVarName}: ${pkTs}): void {\n`;
+      code += `export function ${effectiveName}(${pkVarName}: ${pkTs}): { success: boolean; message: string } {\n`;
       code += `  logger.info("Deleting record from ${tableName}...", { ${pkVarName} });\n`;
       code += `  stmtDelete.run(${pkVarName});\n`;
       code += `  logger.info("✓ Record deleted from ${tableName}", { ${pkVarName} });\n`;
+      code += `  return { success: true, message: "${pascalSingular} deleted successfully" };\n`;
       code += `}\n\n`;
     }
   });
@@ -472,7 +537,9 @@ export function compileRawSqliteDatabase(
         colType = "INTEGER";
       }
       let constraints = "";
-      if (c.isPrimaryKey) constraints += " PRIMARY KEY";
+      if (c.isPrimaryKey) {
+        constraints += colType === "INTEGER" ? " PRIMARY KEY AUTOINCREMENT" : " PRIMARY KEY NOT NULL";
+      }
       if (c.isUnique) constraints += " UNIQUE";
       return `    "${c.name}" ${colType}${constraints}`;
     });
