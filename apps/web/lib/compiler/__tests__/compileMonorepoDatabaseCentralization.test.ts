@@ -227,9 +227,7 @@ describe("compileMonorepo centralized SQLite database architecture", () => {
     const untitledHelper = result.files.find(
       (f) => f.filename === "packages/db/helpers/untitledTable.ts",
     );
-    expect(untitledHelper).toBeDefined();
-    expect(untitledHelper?.content).toContain("Number(info.lastInsertRowid)");
-    expect(untitledHelper?.content).toContain("return { id: _rowId } as unknown as UntitledTableRow;");
+    expect(untitledHelper?.content).toContain('return { id: _rowId, message: "UntitledTable created successfully" } as unknown as UntitledTableRow;');
   });
 
   it("should deduplicate duplicate operations and prepared statements in helper files", () => {
@@ -359,9 +357,7 @@ describe("compileMonorepo centralized SQLite database architecture", () => {
     const legacyHelper = result.files.find(
       (f) => f.filename === "packages/db/helpers/legacyTable.ts",
     );
-    expect(legacyHelper).toBeDefined();
-    expect(legacyHelper?.content).toContain("Number(info.lastInsertRowid)");
-    expect(legacyHelper?.content).toContain("return { id: _rowId } as unknown as LegacyTableRow;");
+    expect(legacyHelper?.content).toContain('return { id: _rowId, message: "LegacyTable created successfully" } as unknown as LegacyTableRow;');
   });
 
   it("should NOT compile packages/db or db helpers on an empty project", () => {

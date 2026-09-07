@@ -258,12 +258,12 @@ export type ${pascalName}Request =
     };
 
 export type ${pascalName}ResponseContext =
-  | Response<${pascalName}Response | ${pascalName}ErrorResponse | Record<string, unknown>>
+  | Response<${pascalName}Response | ${pascalName}ErrorResponse | Record<string, unknown> | string | number | boolean | null | undefined | unknown>
   | {
       status: (code: number) => {
-        json: (data: ${pascalName}Response | ${pascalName}ErrorResponse | Record<string, unknown> | { error: string; details?: string }) => void | Response;
+        json: (data?: ${pascalName}Response | ${pascalName}ErrorResponse | Record<string, unknown> | string | number | boolean | null | unknown) => void | Response;
       };
-      json: (data: ${pascalName}Response | ${pascalName}ErrorResponse | Record<string, unknown> | { error: string; details?: string }) => void | Response;
+      json: (data?: ${pascalName}Response | ${pascalName}ErrorResponse | Record<string, unknown> | string | number | boolean | null | unknown) => void | Response;
     };
 
 /**

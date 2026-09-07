@@ -562,6 +562,92 @@ describe("compileMonorepo Build Fixes & Consistency", () => {
     expect(typesFile?.content).not.toContain("[key: string]: any;");
   });
 
+  it("should permit returning step output field like createConversationResult.message without TS2345 error", () => {
+    const serviceNode: BackendNode = {
+      id: "node-conversations",
+      type: "service",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "Conversations",
+        port: "8082",
+      },
+    };
+
+    const entityNode: BackendNode = {
+      id: "node-conversation",
+      type: "entity",
+      position: { x: 100, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "Conversation",
+        columns: [
+          { name: "id", type: "string", isPrimaryKey: true },
+          { name: "title", type: "string", isNotNull: true },
+        ],
+      },
+    };
+
+    const sendMessageEndpoint: Endpoint & { nodeId: string } = {
+      id: "ep-send-message",
+      nodeId: "node-conversations",
+      name: "/sendMessage",
+      type: "POST",
+      summary: "Send a message",
+      pipelineSteps: [
+        {
+          id: "step-create",
+          type: "db_operation",
+          name: "Create Conversation",
+          enabled: true,
+          outputVariable: "createConversationResult",
+          tableNodeId: "node-conversation",
+          functionRef: {
+            name: "createConversation",
+            importPath: "@workspace/db",
+          },
+        },
+        {
+          id: "step-return",
+          type: "return_response",
+          name: "Return Message",
+          enabled: true,
+          statusCode: 201,
+          inputBindings: [
+            {
+              argName: "data",
+              source: { kind: "step_output", stepId: "step-create", field: "message" },
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = compileMonorepo(
+      [serviceNode, entityNode],
+      [sendMessageEndpoint],
+      [],
+      [],
+      [],
+      "TestConversationsStepOutputMonorepo",
+    );
+
+    const routeFile = result.files.find(
+      (f) => f.filename === "apps/conversations/src/routes/postSendMessage.ts",
+    );
+    expect(routeFile).toBeDefined();
+    expect(routeFile?.content).toContain("return res.status(201).json(createConversationResult.message);");
+    expect(routeFile?.content).toContain("ConversationsPostSendMessageResponseContext =");
+    expect(routeFile?.content).toContain("| Response<");
+    expect(routeFile?.content).not.toContain(": any");
+
+    const typesFile = result.files.find(
+      (f) => f.filename === "packages/types/src/conversations/postSendMessage.ts",
+    );
+    expect(typesFile).toBeDefined();
+    expect(typesFile?.content).toContain("export type ConversationsPostSendMessageResponse = string | undefined;");
+  });
+
   it("should generate ConversationsGetHealthCheck types and barrel exports in @workspace/types and infer return types from EndpointConfig or ServiceNode", () => {
     const serviceNode: BackendNode = {
       id: "node-conversations",

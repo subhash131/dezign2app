@@ -31,7 +31,7 @@ import {
 } from "@workspace/ui/components/card";
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
-import { Sparkles, ExternalLink, Lock, Trash, RefreshCw } from "lucide-react";
+import { Sparkles, ExternalLink, Lock, X } from "lucide-react";
 
 /**
  * Access levels defined below:
@@ -229,7 +229,7 @@ export const PaywallModal = ({ children }: { children: React.ReactNode }) => {
                 className="absolute top-4 right-4 text-muted-foreground hover:text-foreground transition-colors p-1 rounded-md"
                 aria-label="Close"
               >
-                <Trash className="h-4 w-4" />
+                <X className="h-4 w-4" />
               </button>
             )}
 
