@@ -766,6 +766,135 @@ describe("compileMonorepo Build Fixes & Consistency", () => {
     expect(typesFile?.content).toContain("activeConnections: number;");
     expect(typesFile?.content).toContain("healthy: boolean;");
   });
+
+  it("ensures EventEventPayload and consumer imports are generated consistently in @workspace/types and consumer", () => {
+    const notifNode: BackendNode = {
+      id: "node-notification",
+      type: "service",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "Notification",
+        port: "8083",
+        consumedEvents: [
+          {
+            id: "ce-1",
+            name: "",
+          },
+        ],
+      },
+    };
+
+    const convNode: BackendNode = {
+      id: "node-conversations",
+      type: "service",
+      position: { x: 200, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "Conversations",
+        port: "8082",
+      },
+    };
+
+    const result = compileMonorepo(
+      [notifNode, convNode],
+      [],
+      [],
+      [],
+      [],
+      "TestNotifMonorepo",
+    );
+
+    // 1. Consumer file in apps/notification imports EventEventPayload
+    const consumerFile = result.files.find(
+      (f) => f.filename === "apps/notification/src/consumer/event.ts",
+    );
+    expect(consumerFile).toBeDefined();
+    expect(consumerFile?.content).toContain("EventEventPayload");
+
+    // 2. packages/types/src/events/index.ts must export EventEventPayload and eventPayloadSchema
+    const eventsTypeFile = result.files.find(
+      (f) => f.filename === "packages/types/src/events/index.ts",
+    );
+    expect(eventsTypeFile).toBeDefined();
+    expect(eventsTypeFile?.content).toContain("EventEventPayload");
+    expect(eventsTypeFile?.content).toContain("eventPayloadSchema");
+
+    // 3. packages/types/src/index.ts re-exports ./events
+    const typesIndexFile = result.files.find(
+      (f) => f.filename === "packages/types/src/index.ts",
+    );
+    expect(typesIndexFile).toBeDefined();
+    expect(typesIndexFile?.content).toContain('export * from "./events";');
+  });
+
+  it("resolves broker resource topic name when consumer ev.name is empty", () => {
+    const kafkaNode: BackendNode = {
+      id: "node-kafka",
+      type: "kafka",
+      position: { x: 100, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "Kafka",
+        topics: [
+          {
+            id: "top-message-sent",
+            name: "Message Sent",
+            payloadSchema: {
+              id: "ps-message-sent",
+              rawJson: '{\n  "demo": "string"\n}',
+              fields: [{ id: "f-demo", name: "demo", type: "string", required: true }],
+            },
+          },
+        ],
+      },
+    };
+
+    const notifNode: BackendNode = {
+      id: "node-notification",
+      type: "service",
+      position: { x: 300, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "Notification",
+        port: "8083",
+        consumedEvents: [
+          {
+            id: "ce-1",
+            name: "", // Unnamed on canvas, bound to topic
+            brokerNodeId: "node-kafka",
+            messagingResourceId: "top-message-sent",
+          },
+        ],
+      },
+    };
+
+    const result = compileMonorepo(
+      [kafkaNode, notifNode],
+      [],
+      [],
+      [],
+      [],
+      "TestBrokerSyncMonorepo",
+    );
+
+    // 1. Consumer file in apps/notification is named after the resolved topic
+    const consumerFile = result.files.find(
+      (f) => f.filename === "apps/notification/src/consumer/messageSent.ts",
+    );
+    expect(consumerFile).toBeDefined();
+    expect(consumerFile?.content).toContain("handleMessageSent(payload: MessageSentEventPayload)");
+    expect(consumerFile?.content).toContain("messageSentPayloadSchema");
+
+    // 2. packages/types/src/events/index.ts exports MessageSentEventPayload and schema dynamically
+    const eventsTypeFile = result.files.find(
+      (f) => f.filename === "packages/types/src/events/index.ts",
+    );
+    expect(eventsTypeFile).toBeDefined();
+    expect(eventsTypeFile?.content).toContain("export interface MessageSentEventPayload");
+    expect(eventsTypeFile?.content).toContain("export const messageSentPayloadSchema");
+  });
 });
 
 
+

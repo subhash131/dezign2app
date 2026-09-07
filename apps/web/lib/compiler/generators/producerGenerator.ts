@@ -29,22 +29,39 @@ export function generateProducers(
     });
   } else {
     nodePublishedEvents.forEach((ev) => {
-      const producerFileName = toVarName(ev.name || "event") || "producer";
-      const eventPascalName = toPascalCase(ev.name || "event");
+      let eventName = ev.name;
+
+      if (ev.brokerNodeId && ev.messagingResourceId) {
+        const brokerNode = allNodes.find((n) => n.id === ev.brokerNodeId);
+        const brokerResources = [
+          ...(brokerNode?.data?.topics || []),
+          ...(brokerNode?.data?.streams || []),
+          ...(brokerNode?.data?.queues || []),
+          ...(brokerNode?.data?.channels || []),
+        ];
+        const brokerResource = brokerResources.find((r) => r.id === ev.messagingResourceId);
+        if (brokerResource && !eventName && brokerResource.name) {
+          eventName = brokerResource.name;
+        }
+      }
+
+      const effectiveEventName = eventName || "event";
+      const producerFileName = toVarName(effectiveEventName) || "producer";
+      const eventPascalName = toPascalCase(effectiveEventName);
       const funcName = `publish${eventPascalName}`;
       const payloadInterfaceName = `${eventPascalName}EventPayload`;
 
       const trace = serviceNode
-        ? resolveProducerTrace(serviceNode, ev, allNodes, allEdges)
+        ? resolveProducerTrace(serviceNode, { ...ev, name: effectiveEventName }, allNodes, allEdges)
         : { incoming: [], outgoing: [] };
 
       let producerCode = `import { createLogger } from "@workspace/logger";
 import { ${payloadInterfaceName} } from "@workspace/types";
 
-const logger = createLogger("${serviceName}:Producer:${ev.name}");
+const logger = createLogger("${serviceName}:Producer:${effectiveEventName}");
 
 /**
- * Event Producer for: "${ev.name}"
+ * Event Producer for: "${effectiveEventName}"
  */
 export async function ${funcName}(eventData: ${payloadInterfaceName}): Promise<void> {
   // =========================================================================
@@ -59,7 +76,7 @@ export async function ${funcName}(eventData: ${payloadInterfaceName}): Promise<v
         });
       }
       producerCode += `  // =========================================================================\n`;
-      producerCode += `  logger.info(\`Publishing event [${ev.name}]\`, eventData);\n`;
+      producerCode += `  logger.info(\`Publishing event [${effectiveEventName}]\`, eventData);\n`;
       producerCode += `  // TODO: Connect message broker (Kafka / NATS / RabbitMQ / Redis)\n`;
       producerCode += `}\n`;
 

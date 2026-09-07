@@ -163,9 +163,37 @@ export async function writeProject(
     }
   }
 
-  // Optional safe cleanup of stale app folders if services were renamed/deleted on canvas
+  // Optional safe cleanup of stale app folders and files if services/routes/consumers were renamed/deleted on canvas
   if (options?.cleanStale) {
     try {
+      const cleanStaleDir = (dir: string) => {
+        try {
+          if (!fs.existsSync(dir)) return;
+          const entries = fs.readdirSync(dir, { withFileTypes: true });
+          for (const entry of entries) {
+            const fullEntryPath = path.join(dir, entry.name);
+            if (entry.isDirectory()) {
+              if (["node_modules", ".next", ".git", "dist", "build", ".turbo"].includes(entry.name)) continue;
+              cleanStaleDir(fullEntryPath);
+              try {
+                if (fs.readdirSync(fullEntryPath).length === 0) {
+                  fs.rmdirSync(fullEntryPath);
+                }
+              } catch {}
+            } else if (entry.isFile()) {
+              const relPath = path.relative(outputDir, fullEntryPath).replace(/\\/g, "/");
+              if (!currentFileSet.has(relPath)) {
+                try {
+                  fs.unlinkSync(fullEntryPath);
+                } catch (e) {
+                  console.warn(`[fileWriter] Failed to delete stale file ${relPath}:`, e);
+                }
+              }
+            }
+          }
+        } catch {}
+      };
+
       const appsDir = path.join(outputDir, "apps");
       if (fs.existsSync(appsDir)) {
         const existingAppFolders = fs.readdirSync(appsDir, {
@@ -182,43 +210,17 @@ export async function writeProject(
               const staleFolderPath = path.join(appsDir, item.name);
               fs.rmSync(staleFolderPath, { recursive: true, force: true });
             } else {
-              // Clean up orphaned route/component files inside the app's app/ directory
-              const appRoutesDir = path.join(appsDir, item.name, "app");
-              if (fs.existsSync(appRoutesDir)) {
-                const cleanStaleDir = (dir: string) => {
-                  try {
-                    const entries = fs.readdirSync(dir, { withFileTypes: true });
-                    for (const entry of entries) {
-                      const fullEntryPath = path.join(dir, entry.name);
-                      if (entry.isDirectory()) {
-                        if (["node_modules", ".next", ".git"].includes(entry.name)) continue;
-                        cleanStaleDir(fullEntryPath);
-                        try {
-                          if (fs.readdirSync(fullEntryPath).length === 0) {
-                            fs.rmdirSync(fullEntryPath);
-                          }
-                        } catch {}
-                      } else if (entry.isFile()) {
-                        const relPath = path.relative(outputDir, fullEntryPath).replace(/\\/g, "/");
-                        if (!currentFileSet.has(relPath)) {
-                          try {
-                            fs.unlinkSync(fullEntryPath);
-                          } catch (e) {
-                            console.warn(`[fileWriter] Failed to delete stale file ${relPath}:`, e);
-                          }
-                        }
-                      }
-                    }
-                  } catch {}
-                };
-                cleanStaleDir(appRoutesDir);
+              // Clean up orphaned route/consumer/component files inside the app's app/, src/, and tests/ directories
+              for (const sub of ["app", "src", "tests"]) {
+                const subDir = path.join(appsDir, item.name, sub);
+                cleanStaleDir(subDir);
               }
             }
           }
         }
       }
 
-      // Also clean up stale packages if packages were deleted
+      // Also clean up stale packages if packages were deleted, and clean stale files inside package src/
       const packagesDir = path.join(outputDir, "packages");
       if (fs.existsSync(packagesDir)) {
         const existingPackageFolders = fs.readdirSync(packagesDir, {
@@ -227,16 +229,23 @@ export async function writeProject(
         for (const item of existingPackageFolders) {
           if (
             item.isDirectory() &&
-            !item.name.startsWith(".") &&
-            !["ui", "typescript-config", "logger", "types"].includes(item.name)
+            !item.name.startsWith(".")
           ) {
             const pkgPrefix = `packages/${item.name}/`;
             const hasMatchingFile = Array.from(currentFileSet).some((f) =>
               f.startsWith(pkgPrefix)
             );
-            if (!hasMatchingFile) {
+            if (
+              !hasMatchingFile &&
+              !["ui", "typescript-config", "logger", "types"].includes(item.name)
+            ) {
               const stalePkgPath = path.join(packagesDir, item.name);
               fs.rmSync(stalePkgPath, { recursive: true, force: true });
+            } else if (hasMatchingFile) {
+              for (const sub of ["src", "tests"]) {
+                const subDir = path.join(packagesDir, item.name, sub);
+                cleanStaleDir(subDir);
+              }
             }
           }
         }
