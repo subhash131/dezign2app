@@ -127,6 +127,7 @@ export interface AuthPageMetaInfo {
 export interface LinkedEndpointInfo {
   targetNodeId: string;
   targetNodeName: string;
+  serviceName?: string;
   targetNodePort: string;
   endpointId?: string;
   endpointName: string;

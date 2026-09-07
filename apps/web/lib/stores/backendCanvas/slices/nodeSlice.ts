@@ -358,10 +358,11 @@ export const createNodeSlice = (
         const defaultEp = {
           id: crypto.randomUUID(),
           nodeId: node.id,
-          name: isExt ? "/v1/resource" : "/",
+          name: isExt ? "/v1/resource" : "/health",
           type: isExt ? "POST" : "GET",
           summary: isExt ? "External API action" : "Health check",
           businessLogic: isExt ? "External API call" : "Test the health of the server",
+          responseFields: [],
         };
         nextEndpoints = [...nextEndpoints, defaultEp];
         pendingEndpoints = [...pendingEndpoints, defaultEp];

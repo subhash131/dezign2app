@@ -146,6 +146,7 @@ export function resolveLinkedEndpoint(
     return {
       targetNodeId: targetNode.id,
       targetNodeName: targetServiceName,
+      serviceName: targetServiceName,
       targetNodePort: targetPort,
       endpointId: ep?.id,
       endpointName: ep?.name || "Endpoint",

@@ -15,6 +15,7 @@ import {
   FolderSync,
   AlertTriangle,
   Zap,
+  X,
 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { TerminalPanelTab } from "@workspace/canvas/types";
@@ -291,7 +292,7 @@ export function TerminalPanelHeader({
           title="Close Panel"
           className="h-6 px-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800"
         >
-          <Trash className="w-3.5 h-3.5" />
+          <X className="w-3.5 h-3.5" />
         </Button>
       </div>
     </div>

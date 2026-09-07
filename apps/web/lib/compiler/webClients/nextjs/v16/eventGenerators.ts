@@ -32,6 +32,7 @@ export function generateEventComponent(
   customRequestBody?: unknown,
   eventItem?: UIEventItem,
   endpoint?: Endpoint,
+  serviceName?: string,
 ): string {
   // 1. Navigation Event (e.g. navigateToPage)
   if (eventType === "navigateToPage") {
@@ -50,8 +51,9 @@ export function generateEventComponent(
     endpoint,
   });
 
-  // 3. Generate TypeScript Interfaces
-  const typeDefs = generateTypeDefinitions(componentName, params);
+  // 3. Generate TypeScript Interfaces (reusing @workspace/types when connected to an endpoint)
+  const endpointLink = serviceName && endpoint ? { serviceName, endpoint } : undefined;
+  const typeDefs = generateTypeDefinitions(componentName, params, endpointLink);
 
   // 4A. If no form inputs configured, render a clean, direct action Button
   if (!params.hasFields) {

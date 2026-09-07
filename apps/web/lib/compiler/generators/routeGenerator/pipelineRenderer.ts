@@ -334,8 +334,8 @@ export function renderPipelineStep(
         bodyExpr || (nonBodyNonHeaderBindings.length > 0 ? buildArgList(nonBodyNonHeaderBindings, ctx) : null);
 
       rawLines.push(`// External API Call: ${step.name || "external_call"}`);
-      rawLines.push(`let ${outputVariable}: any = null;`);
-      rawLines.push(`let ${outputVariable}Error: any = null;`);
+      rawLines.push(`let ${outputVariable}: Record<string, string | number | boolean | null> | null = null;`);
+      rawLines.push(`let ${outputVariable}Error: Record<string, string | number | boolean | null> | null = null;`);
       rawLines.push(`try {`);
       rawLines.push(
         `  const ${outputVariable}Response = await fetch(\`\${process.env.EXTERNAL_API_BASE_URL || ""}${endpointPath.startsWith("/") ? endpointPath : `/${endpointPath}`}\`, {`,
@@ -360,8 +360,8 @@ export function renderPipelineStep(
       rawLines.push(`  } else {`);
       rawLines.push(`    ${outputVariable} = await ${outputVariable}Response.json();`);
       rawLines.push(`  }`);
-      rawLines.push(`} catch (fetchErr: any) {`);
-      rawLines.push(`  ${outputVariable}Error = { error: fetchErr?.message || String(fetchErr), statusCode: 500 };`);
+      rawLines.push(`} catch (fetchErr: unknown) {`);
+      rawLines.push(`  ${outputVariable}Error = { error: fetchErr instanceof Error ? fetchErr.message : String(fetchErr), statusCode: 500 };`);
       rawLines.push(`  logger.error("External call ${step.name || "external_call"} failed:", fetchErr);`);
       rawLines.push(`}`);
       break;
@@ -550,7 +550,7 @@ export function renderPipelineStep(
         rawLines.push(`return res.status(${statusCode}).json({\n${fields}\n});`);
       } else {
         rawLines.push(
-          `return res.status(${statusCode}).json({ status: ${statusCode}, message: "Early return" });`,
+          `return res.status(${statusCode}).json({ message: "Early return" });`,
         );
       }
       break;
@@ -578,7 +578,7 @@ export function renderPipelineStep(
         rawLines.push(`return res.status(${statusCode}).json({\n${fields}\n});`);
       } else {
         rawLines.push(
-          `return res.status(${statusCode}).json({ status: ${statusCode}, message: "Success" });`,
+          `return res.status(${statusCode}).json({ message: "Success" });`,
         );
       }
       break;
@@ -605,7 +605,7 @@ export function renderPipelineStep(
             : line,
         );
         rawLines = [
-          `let ${outVar}: any = null;`,
+          `let ${outVar}: Record<string, string | number | boolean | null> | null = null;`,
           `let attempts_${stepKey} = 0;`,
           `while (attempts_${stepKey} <= ${onError.retries}) {`,
           `  try {`,
@@ -640,11 +640,11 @@ export function renderPipelineStep(
       rawLines = [
         `try {`,
         ...rawLines.map((l) => `  ${l}`),
-        `} catch (stepErr: any) {`,
+        `} catch (stepErr: unknown) {`,
         `  logger.error("Step ${safeStepName} failed (early return):", stepErr);`,
         `  return res.status(${onError.statusCode || 502}).json({`,
         `    error: "${onError.errorMessage || `${safeStepName} execution failed`}",`,
-        `    details: stepErr?.message || String(stepErr),`,
+        `    details: stepErr instanceof Error ? stepErr.message : String(stepErr),`,
         `    statusCode: ${onError.statusCode || 502},`,
         `  });`,
         `}`,
@@ -658,10 +658,10 @@ export function renderPipelineStep(
             : line,
         );
         rawLines = [
-          `let ${outVar}: any = null;`,
+          `let ${outVar}: Record<string, string | number | boolean | null> | null = null;`,
           `try {`,
           ...transformedLines.map((l) => `  ${l}`),
-          `} catch (stepErr) {`,
+          `} catch (stepErr: unknown) {`,
           `  logger.warn("Step ${safeStepName} failed, using fallback value:", stepErr);`,
           `  ${outVar} = ${onError.fallbackValue || "null"};`,
           `}`,
@@ -684,10 +684,10 @@ export function renderPipelineStep(
             : line,
         );
         rawLines = [
-          `let ${outVar}: any = null;`,
+          `let ${outVar}: Record<string, string | number | boolean | null> | null = null;`,
           `try {`,
           ...transformedLines.map((l) => `  ${l}`),
-          `} catch (stepErr: any) {`,
+          `} catch (stepErr: unknown) {`,
           `  logger.error("Step ${safeStepName} failed, proceeding to next step:", stepErr);`,
           `}`,
         ];
@@ -695,7 +695,7 @@ export function renderPipelineStep(
         rawLines = [
           `try {`,
           ...rawLines.map((l) => `  ${l}`),
-          `} catch (stepErr: any) {`,
+          `} catch (stepErr: unknown) {`,
           `  logger.error("Step ${safeStepName} failed, proceeding to next step:", stepErr);`,
           `}`,
         ];
@@ -705,7 +705,7 @@ export function renderPipelineStep(
       rawLines = [
         `try {`,
         ...transformedLines.map((l) => `  ${l}`),
-        `} catch (stepErr: any) {`,
+        `} catch (stepErr: unknown) {`,
         `  logger.error("Step ${safeStepName} failed:", stepErr);`,
         `  throw stepErr;`,
         `}`,
