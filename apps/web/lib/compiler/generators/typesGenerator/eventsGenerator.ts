@@ -40,20 +40,14 @@ export function generateEventsModule(
 
   let eventsCode = `import { z } from "zod";\n\n`;
   if (allEvents.length === 0) {
-    eventsCode += `// No messaging events configured\nexport type GenericEventPayload = Record<string, string | number | boolean | null>;\n`;
+    eventsCode += `// No messaging events configured\nexport type GenericEventPayload = Record<string, unknown>;\n`;
   } else {
     const processedEventNames = new Set<string>();
 
     allEvents.forEach((ev) => {
-      const eventName = ev.name || "event";
-      const eventPascalName = toPascalCase(eventName);
-      if (processedEventNames.has(eventPascalName)) return;
-      processedEventNames.add(eventPascalName);
-
-      const payloadInterfaceName = `${eventPascalName}EventPayload`;
-      const schemaName = `${toVarName(eventName)}PayloadSchema`;
-
+      let eventName = ev.name;
       let payloadSchema = ev.payloadSchema;
+
       if (ev.brokerNodeId && ev.messagingResourceId) {
         const brokerNode = nodes.find((n) => n.id === ev.brokerNodeId);
         const brokerResources = [
@@ -63,10 +57,23 @@ export function generateEventsModule(
           ...(brokerNode?.data?.channels || []),
         ];
         const brokerResource = brokerResources.find((r) => r.id === ev.messagingResourceId);
-        if (brokerResource?.payloadSchema) {
-          payloadSchema = brokerResource.payloadSchema;
+        if (brokerResource) {
+          if (!eventName && brokerResource.name) {
+            eventName = brokerResource.name;
+          }
+          if (brokerResource.payloadSchema) {
+            payloadSchema = brokerResource.payloadSchema;
+          }
         }
       }
+
+      const resolvedName = eventName || "event";
+      const eventPascalName = toPascalCase(resolvedName);
+      if (processedEventNames.has(eventPascalName)) return;
+      processedEventNames.add(eventPascalName);
+
+      const payloadInterfaceName = `${eventPascalName}EventPayload`;
+      const schemaName = `${toVarName(resolvedName)}PayloadSchema`;
 
       const schemaObj = {
         rawJson: payloadSchema?.rawJson,
@@ -78,10 +85,12 @@ export function generateEventsModule(
       const interfaceRes = schemaToTsInterface(payloadInterfaceName, schemaObj);
       const zodRes = schemaToZodSchema(schemaName, schemaObj);
 
-      eventsCode += `// --- Event Contract: "${eventName}" ---\n`;
+      eventsCode += `// --- Event Contract: "${resolvedName}" ---\n`;
       eventsCode += interfaceRes.code + "\n";
       if (zodRes.hasContent) {
         eventsCode += zodRes.code + "\n";
+      } else {
+        eventsCode += `export const ${schemaName} = z.record(z.unknown());\n`;
       }
     });
   }

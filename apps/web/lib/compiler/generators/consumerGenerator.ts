@@ -41,12 +41,7 @@ export function initConsumers(): void {
     });
   } else {
     nodeConsumedEvents.forEach((ev) => {
-      const consumerFileName = toVarName(ev.name || "event") || "consumer";
-      const eventPascalName = toPascalCase(ev.name || "event");
-      const handlerName = `handle${eventPascalName}`;
-      const payloadInterfaceName = `${eventPascalName}EventPayload`;
-      const schemaName = `${consumerFileName}PayloadSchema`;
-
+      let eventName = ev.name;
       let payloadSchema = ev.payloadSchema;
       if (ev.brokerNodeId && ev.messagingResourceId) {
         const brokerNode = allNodes.find((n) => n.id === ev.brokerNodeId);
@@ -57,10 +52,22 @@ export function initConsumers(): void {
           ...(brokerNode?.data?.channels || []),
         ];
         const brokerResource = brokerResources.find((r) => r.id === ev.messagingResourceId);
-        if (brokerResource?.payloadSchema) {
-          payloadSchema = brokerResource.payloadSchema;
+        if (brokerResource) {
+          if (!eventName && brokerResource.name) {
+            eventName = brokerResource.name;
+          }
+          if (brokerResource.payloadSchema) {
+            payloadSchema = brokerResource.payloadSchema;
+          }
         }
       }
+
+      const effectiveEventName = eventName || "event";
+      const consumerFileName = toVarName(effectiveEventName) || "consumer";
+      const eventPascalName = toPascalCase(effectiveEventName);
+      const handlerName = `handle${eventPascalName}`;
+      const payloadInterfaceName = `${eventPascalName}EventPayload`;
+      const schemaName = `${consumerFileName}PayloadSchema`;
 
       const schemaObj = {
         rawJson: payloadSchema?.rawJson,
@@ -71,7 +78,7 @@ export function initConsumers(): void {
       const zodRes = schemaToZodSchema(schemaName, schemaObj);
 
       const trace = serviceNode
-        ? resolveConsumerTrace(serviceNode, ev, allNodes, allEdges)
+        ? resolveConsumerTrace(serviceNode, { ...ev, name: effectiveEventName }, allNodes, allEdges)
         : { incoming: [], outgoing: [] };
 
       const typeImportsList = [payloadInterfaceName];
@@ -97,21 +104,21 @@ import {
   ${typeImportsList.join(",\n  ")}
 } from "@workspace/types";
 ${importStatements.length > 0 ? importStatements.join("\n") + "\n" : ""}
-const logger = createLogger("${serviceName}:Consumer:${ev.name}");
+const logger = createLogger("${serviceName}:Consumer:${effectiveEventName}");
 
 /**
- * Event Consumer for: "${ev.name}"
+ * Event Consumer for: "${effectiveEventName}"
  * Description: ${ev.description || "Processes incoming event payload"}
  */
 export async function ${handlerName}(payload: ${payloadInterfaceName}): Promise<void> {
   try {
-    logger.info(\`Consuming event [${ev.name}]\`, payload);
+    logger.info(\`Consuming event [${effectiveEventName}]\`, payload);
 `;
 
       if (zodRes.hasContent) {
         consumerCode += `    const parsed = ${schemaName}.safeParse(payload);\n`;
         consumerCode += `    if (!parsed.success) {\n`;
-        consumerCode += `      logger.error(\`Invalid payload format for event [${ev.name}]:\`, parsed.error.flatten());\n`;
+        consumerCode += `      logger.error(\`Invalid payload format for event [${effectiveEventName}]:\`, parsed.error.flatten());\n`;
         consumerCode += `      return;\n`;
         consumerCode += `    }\n`;
         consumerCode += `    const validatedPayload = parsed.data;\n\n`;
@@ -179,7 +186,7 @@ export async function ${handlerName}(payload: ${payloadInterfaceName}): Promise<
       }
 
       consumerCode += `  } catch (error) {\n`;
-      consumerCode += `    logger.error(\`Error processing event [${ev.name}]:\`, error);\n`;
+      consumerCode += `    logger.error(\`Error processing event [${effectiveEventName}]:\`, error);\n`;
       consumerCode += `  }\n`;
       consumerCode += `}\n`;
 
@@ -193,7 +200,7 @@ export async function ${handlerName}(payload: ${payloadInterfaceName}): Promise<
         `import { ${handlerName} } from "./${consumerFileName}";`,
       );
       consumerInits.push(
-        `  logger.info("Registered listener for topic: ${ev.name}");`,
+        `  logger.info("Registered listener for topic: ${effectiveEventName}");`,
       );
     });
 
