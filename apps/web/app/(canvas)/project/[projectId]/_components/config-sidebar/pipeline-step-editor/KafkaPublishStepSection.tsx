@@ -37,6 +37,10 @@ export interface UnifiedBrokerResource {
   kind: "topic" | "queue" | "stream" | "channel" | "message";
   description?: string;
   schema?: string;
+  payloadSchema?: {
+    fields?: Array<{ name?: string; type?: string; required?: boolean; description?: string }>;
+    rawJson?: string;
+  };
 }
 
 export const KafkaPublishStepSection = ({
@@ -92,6 +96,7 @@ export const KafkaPublishStepSection = ({
           kind: "topic",
           description: t.description,
           schema: t.schema,
+          payloadSchema: t.payloadSchema,
         });
       });
     }
@@ -229,11 +234,17 @@ export const KafkaPublishStepSection = ({
     const topics: KafkaTopic[] = broker.data?.topics || [];
     const firstTopic = topics[0];
 
+    const firstTopicSchemaFields = firstTopic?.payloadSchema?.fields || [];
     const fnName = firstTopic ? `publish${toPascalCase(firstTopic.name)}` : "publishKafkaEvent";
     const varName = firstTopic ? `publish${toPascalCase(firstTopic.name)}Result` : "publishResult";
 
     const initialBindings: StepBinding[] =
-      fnName === "publishKafkaEvent"
+      firstTopicSchemaFields.length > 0
+        ? firstTopicSchemaFields.map((f: { name: string }) => ({
+            argName: f.name,
+            source: { kind: "req_body", field: f.name },
+          }))
+        : fnName === "publishKafkaEvent"
         ? [
             {
               argName: "topic",
@@ -297,15 +308,24 @@ export const KafkaPublishStepSection = ({
     const fnName = `publish${pascalName}`;
     const varName = `${toVarName(fnName)}Result`;
 
-    const initialBindings: StepBinding[] =
-      (step.inputBindings || []).length > 0
-        ? step.inputBindings!
+    const resSchemaFields = res.payloadSchema?.fields || [];
+    const fallbackBindings: StepBinding[] =
+      resSchemaFields.length > 0
+        ? resSchemaFields.map((f) => ({
+            argName: f.name || "payload",
+            source: { kind: "req_body", field: f.name || "" },
+          }))
         : [
             {
               argName: "payload",
               source: { kind: "req_body", field: "" },
             },
           ];
+
+    const initialBindings: StepBinding[] =
+      (step.inputBindings || []).length > 0
+        ? step.inputBindings!
+        : fallbackBindings;
 
     onChange({
       ...step,

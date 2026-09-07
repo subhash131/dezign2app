@@ -106,4 +106,5 @@ export interface ExpectedArg {
   name: string;
   type: string;
   required?: boolean;
+  description?: string;
 }

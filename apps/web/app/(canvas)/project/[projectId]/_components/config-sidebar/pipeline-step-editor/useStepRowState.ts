@@ -14,9 +14,109 @@ import {
   getAvailableTransformers,
   isPathMatch,
 } from "./utils";
-import { toVarName } from "@/lib/compiler/utils";
+import { toVarName, toPascalCase, parseSchemaJson } from "@/lib/compiler/utils";
 import { isStepInputUnconfigured } from "@/lib/utils/pipelineValidation";
 import { getEntityDbOperations } from "@/lib/utils/entityOperationsHelper";
+
+function extractKafkaTopicSchemaArgs(
+  step: PipelineStepDraft,
+  allNodes: BackendNode[],
+  endpoint?: Endpoint,
+): ExpectedArg[] {
+  const brokerNodes = allNodes.filter(
+    (n) =>
+      n.type === "kafka" ||
+      n.type === "eventstream" ||
+      n.type === "sqs" ||
+      n.type === "redis-streams" ||
+      n.type === "redis-pubsub" ||
+      n.type === "queue" ||
+      n.type === "pubsub",
+  );
+
+  const allResources: Array<{
+    id?: string;
+    name?: string;
+    payloadSchema?: {
+      fields?: Array<{ name?: string; type?: string; required?: boolean; description?: string }>;
+      rawJson?: string;
+    };
+    schema?: string;
+  }> = [];
+
+  brokerNodes.forEach((b) => {
+    const d = b.data || {};
+    [
+      ...(d.topics || []),
+      ...(d.streams || []),
+      ...(d.queues || []),
+      ...(d.channels || []),
+    ].forEach((r) => {
+      if (r) allResources.push(r);
+    });
+  });
+
+  if (endpoint?.publishedEvents) {
+    endpoint.publishedEvents.forEach((pe) => {
+      if (pe) allResources.push(pe as any);
+    });
+  }
+
+  const targetResource = allResources.find(
+    (r) =>
+      (step.messagingResourceId && (r.id === step.messagingResourceId || r.name === step.messagingResourceId)) ||
+      (step.operationId && (r.id === step.operationId || r.name === step.operationId || `publish-${r.name}` === step.operationId)) ||
+      (step.functionRef?.name && (
+        `publish${toPascalCase(r.name || "")}` === step.functionRef.name ||
+        `publish${toPascalCase(r.id || "")}` === step.functionRef.name
+      )),
+  );
+
+  const payloadSchema = targetResource?.payloadSchema;
+  const schemaArgs: ExpectedArg[] = [];
+
+  if (payloadSchema) {
+    if (Array.isArray(payloadSchema.fields) && payloadSchema.fields.length > 0) {
+      payloadSchema.fields.forEach((f) => {
+        if (f.name && f.name.trim()) {
+          schemaArgs.push({
+            name: f.name.trim(),
+            type: f.type || "string",
+            required: f.required !== false,
+          });
+        }
+      });
+    } else if (payloadSchema.rawJson) {
+      const parsed = parseSchemaJson(payloadSchema.rawJson);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        Object.entries(parsed).forEach(([k, v]) => {
+          const valType = typeof v === "object" && v !== null ? "object" : typeof v;
+          schemaArgs.push({
+            name: k,
+            type: valType === "undefined" ? "string" : valType,
+            required: true,
+          });
+        });
+      }
+    }
+  }
+
+  if (schemaArgs.length === 0 && targetResource?.schema) {
+    const parsed = parseSchemaJson(targetResource.schema);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      Object.entries(parsed).forEach(([k, v]) => {
+        const valType = typeof v === "object" && v !== null ? "object" : typeof v;
+        schemaArgs.push({
+          name: k,
+          type: valType === "undefined" ? "string" : valType,
+          required: true,
+        });
+      });
+    }
+  }
+
+  return schemaArgs;
+}
 
 export interface UseStepRowStateProps {
   step: PipelineStepDraft;
@@ -196,7 +296,21 @@ export function useStepRowState({
 
       if (step.type === "kafka_publish") {
         const fnName = step.functionRef?.name || "";
-        if (fnName === "publishKafkaEvent") {
+        const isGeneric = fnName === "publishKafkaEvent";
+        const schemaArgs = extractKafkaTopicSchemaArgs(step, allNodes, endpoint);
+
+        if (schemaArgs.length > 0) {
+          const args: ExpectedArg[] = [];
+          if (isGeneric) {
+            args.push({ name: "topic", type: "string", required: true });
+          }
+          args.push(...schemaArgs);
+          args.push({ name: "key", type: "string", required: false });
+          args.push({ name: "payload", type: "object", required: false });
+          return args;
+        }
+
+        if (isGeneric) {
           return [
             { name: "topic", type: "string", required: true },
             { name: "payload", type: "object", required: true },

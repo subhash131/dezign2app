@@ -143,7 +143,10 @@ export const ArgumentBindingsSection = ({
         const hasExpectedArgs = validExpectedArgs.length > 0;
         const isCustomMode = Boolean(customModeRows[bi]);
         const matchingExpectedArg = validExpectedArgs.find(
-          (a) => a.name.toLowerCase() === (binding.argName || "").trim().toLowerCase(),
+          (a) =>
+            a.name.toLowerCase() === (binding.argName || "").trim().toLowerCase() ||
+            (a.name.toLowerCase() === "payload" && (binding.argName || "").trim().toLowerCase() === "message") ||
+            (a.name.toLowerCase() === "message" && (binding.argName || "").trim().toLowerCase() === "payload"),
         );
         const isCustomValue = Boolean(binding.argName?.trim()) && !matchingExpectedArg;
 
