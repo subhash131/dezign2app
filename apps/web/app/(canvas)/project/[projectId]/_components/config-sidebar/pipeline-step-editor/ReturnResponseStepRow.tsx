@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useState, useMemo, useRef, useEffect } from "react";
+import React, { useState, useMemo, useRef, useCallback } from "react";
 import { Endpoint, BackendNode } from "@workspace/canvas/types";
+import { useBufferedInput } from "@/lib/hooks/useBufferedInput";
 
 import { Input } from "@workspace/ui/components/input";
-import { Textarea } from "@workspace/ui/components/textarea";
 import { Label } from "@workspace/ui/components/label";
 import {
   Select,
@@ -40,38 +40,25 @@ export const ReturnResponseStepRow = ({
 }: ReturnResponseStepRowProps) => {
   const [expanded, setExpanded] = useState(true);
   const [responseTab, setResponseTab] = useState<"success" | "error">("success");
-  const [isEditingDescription, setIsEditingDescription] = useState(false);
-  const [description, setDescription] = useState(
-    step.name && step.name !== "Return Response" ? step.name : (step.description ?? ""),
-  );
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => {
-    setDescription(
-      step.name && step.name !== "Return Response" ? step.name : (step.description ?? ""),
-    );
-  }, [step.name, step.description]);
+  const stepRef = useRef(step);
+  stepRef.current = step;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
 
-  useEffect(() => {
-    if (isEditingDescription && textareaRef.current) {
-      textareaRef.current.focus();
-      const len = textareaRef.current.value.length;
-      textareaRef.current.setSelectionRange(len, len);
-    }
-  }, [isEditingDescription]);
-
-  const handleBlur = () => {
-    const currentVal =
-      step.name && step.name !== "Return Response" ? step.name : (step.description ?? "");
-    if (description !== currentVal) {
-      onChange({
-        ...step,
-        name: description,
-        description,
+  const noteBuffer = useBufferedInput(
+    step.name && step.name !== "Return Response"
+      ? step.name
+      : (step.description ?? ""),
+    useCallback((val: string) => {
+      onChangeRef.current({
+        ...stepRef.current,
+        name: val.trim() || "Return Response",
+        description: val,
       });
-    }
-    setIsEditingDescription(false);
-  };
+    }, []),
+    150,
+  );
 
   // Available sources (request body, params, query, headers, prior steps)
   const availableSources = useMemo(
@@ -215,57 +202,19 @@ export const ReturnResponseStepRow = ({
           )}
         </div>
 
-        {/* Second Line: Description (div/span on blur, Textarea on click) */}
-        {isEditingDescription ? (
-          <div
-            className="flex items-start ml-7 mr-6 -mt-0.5 mb-0.5"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Textarea
-              ref={textareaRef}
-              rows={2}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              onBlur={handleBlur}
-              onKeyDown={(e) => {
-                e.stopPropagation();
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleBlur();
-                } else if (e.key === "Escape") {
-                  const currentVal =
-                    step.name && step.name !== "Return Response"
-                      ? step.name
-                      : (step.description ?? "");
-                  setDescription(currentVal);
-                  setIsEditingDescription(false);
-                }
-              }}
-              placeholder="Add response note (e.g. Return Created Product)..."
-              className="w-full bg-background/90 text-[11px] leading-relaxed text-foreground placeholder:text-muted-foreground/35 placeholder:italic px-2 py-1 rounded border border-emerald-500/50 focus:border-emerald-500 focus:outline-none transition-colors resize-none font-sans min-h-[44px]"
-              autoFocus
-            />
-          </div>
-        ) : (
-          <div
-            className="flex items-center ml-7 mr-6 -mt-0.5 mb-0.5 cursor-pointer group/desc min-h-[20px]"
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsEditingDescription(true);
-            }}
-            title="Click to edit response note"
-          >
-            {description.trim() ? (
-              <span className="text-[11px] font-sans leading-relaxed text-emerald-300/80 group-hover/desc:text-emerald-200 line-clamp-2 transition-colors">
-                {description}
+        {/* Second Line: Description (read-only, no events) */}
+        {(() => {
+          const displayDesc =
+            step.description?.trim() ||
+            (step.name && step.name !== "Return Response" ? step.name.trim() : "");
+          return displayDesc ? (
+            <div className="flex items-center ml-7 mr-6 -mt-0.5 mb-0.5 pointer-events-none min-h-[18px]">
+              <span className="text-[11px] font-sans leading-relaxed text-emerald-300/80 line-clamp-2">
+                {displayDesc}
               </span>
-            ) : (
-              <span className="text-[11px] font-sans italic text-muted-foreground/35 group-hover/desc:text-muted-foreground/60 transition-colors">
-                Add response note...
-              </span>
-            )}
-          </div>
-        )}
+            </div>
+          ) : null;
+        })()}
       </div>
 
       {/* Expanded body */}
@@ -348,8 +297,9 @@ export const ReturnResponseStepRow = ({
                   </Label>
                   <Input
                     className="h-7 text-xs bg-background/60 border-border/60"
-                    value={step.name || "Return Response"}
-                    onChange={(e) => onChange({ ...step, name: e.target.value })}
+                    value={noteBuffer.value}
+                    onChange={(e) => noteBuffer.onChange(e.target.value)}
+                    onBlur={noteBuffer.flush}
                     placeholder="e.g. Return Created Product"
                   />
                 </div>

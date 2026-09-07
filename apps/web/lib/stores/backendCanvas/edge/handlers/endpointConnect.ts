@@ -108,6 +108,45 @@ export function handleEndpointConnect({
           s.messagingResourceId === messagingResourceId),
     );
 
+    const targetTopic = topicNode.topics?.find(
+      (t: any) => t.id === messagingResourceId || t.name === messagingResourceId,
+    );
+    const targetTopicSchema = (targetTopic as any)?.payloadSchema;
+    const schemaFields: Array<{ name?: string }> = targetTopicSchema?.fields || [];
+
+    const defaultBindings: Array<{ argName: string; source: { kind: any; field?: string; value?: string } }> = [];
+    if (!topicName) {
+      defaultBindings.push({
+        argName: "topic",
+        source: {
+          kind: "inline" as const,
+          value: "default-topic",
+        },
+      });
+    }
+
+    if (schemaFields.length > 0) {
+      schemaFields.forEach((f) => {
+        if (f.name) {
+          const reqBodyMatch = endpoint.requestBody?.fields?.find(
+            (rbf) => rbf.name?.toLowerCase() === f.name?.toLowerCase(),
+          );
+          defaultBindings.push({
+            argName: f.name,
+            source: {
+              kind: "req_body" as const,
+              field: reqBodyMatch?.name ? reqBodyMatch.name : f.name,
+            },
+          });
+        }
+      });
+    } else {
+      defaultBindings.push({
+        argName: "payload",
+        source: { kind: "req_body" as const, field: "" },
+      });
+    }
+
     let nextPipelineSteps = existingSteps;
     if (!hasMatchingStep) {
       const outputVar = `kafkaPublishResult`;
@@ -121,23 +160,7 @@ export function handleEndpointConnect({
           name: fnName,
           importPath: `@workspace/${packageFolder}/publishers`,
         },
-        inputBindings: [
-          ...(topicName
-            ? []
-            : [
-                {
-                  argName: "topic",
-                  source: {
-                    kind: "inline" as const,
-                    value: topicName || "default-topic",
-                  },
-                },
-              ]),
-          {
-            argName: topicName ? "message" : "payload",
-            source: { kind: "req_body" as const, field: "" },
-          },
-        ],
+        inputBindings: defaultBindings,
         brokerNodeId: targetNode.id,
         messagingResourceId,
       };

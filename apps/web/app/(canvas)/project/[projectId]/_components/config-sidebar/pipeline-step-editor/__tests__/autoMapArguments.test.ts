@@ -193,4 +193,90 @@ describe("pipeline-step-editor: useStepRowState handleAutoMapArguments", () => {
     expect(mappedArgNames).not.toContain("imageUrl");
     expect(mappedArgNames).not.toContain("inStock");
   });
+
+  it("unpacks kafka topic schema fields into expectedArgs and auto-maps them from request body", () => {
+    const kafkaBrokerNode: BackendNode = {
+      id: "node-kafka",
+      type: "kafka",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "b0",
+      data: {
+        label: "kafka",
+        topics: [
+          {
+            id: "topic-message-sent",
+            name: "Message Sent",
+            payloadSchema: {
+              id: "ps-1",
+              fields: [
+                { id: "f-1", name: "title", type: "string", required: true },
+                { id: "f-2", name: "price", type: "number", required: true },
+                { id: "f-3", name: "author", type: "string", required: false },
+              ],
+            },
+          },
+        ],
+      },
+    };
+
+    const kafkaStep: PipelineStepDraft = {
+      id: "step-kafka-1",
+      name: "publishMessageSentResult",
+      type: "kafka_publish",
+      enabled: true,
+      brokerNodeId: "node-kafka",
+      messagingResourceId: "topic-message-sent",
+      functionRef: {
+        name: "publishMessageSent",
+        importPath: "@workspace/kafka/publishers",
+      },
+      inputBindings: [],
+    };
+
+    let updatedStep: PipelineStepDraft = kafkaStep;
+    const onChange = vi.fn((updated) => {
+      updatedStep = updated;
+    });
+
+    const { result } = renderHook(() =>
+      useStepRowState({
+        step: kafkaStep,
+        index: 0,
+        priorSteps: [],
+        endpoint: mockEndpoint,
+        allNodes: [kafkaBrokerNode],
+        allEdges: [],
+        onChange,
+      }),
+    );
+
+    // 1. Verify expectedArgs unpacked topic schema fields
+    const argNames = result.current.expectedArgs.map((a) => a.name);
+    expect(argNames).toContain("title");
+    expect(argNames).toContain("price");
+    expect(argNames).toContain("author");
+    expect(argNames).toContain("key");
+    expect(argNames).toContain("payload");
+
+    // 2. Run handleAutoMapArguments
+    act(() => {
+      result.current.handleAutoMapArguments();
+    });
+
+    expect(onChange).toHaveBeenCalled();
+    const mappedArgNames = (updatedStep.inputBindings || []).map((b) => b.argName);
+
+    // title and price exist in mockEndpoint.requestBody
+    expect(mappedArgNames).toContain("title");
+    expect(mappedArgNames).toContain("price");
+
+    const titleBinding = (updatedStep.inputBindings || []).find((b) => b.argName === "title");
+    expect(titleBinding?.source).toEqual({ kind: "req_body", field: "title" });
+
+    const priceBinding = (updatedStep.inputBindings || []).find((b) => b.argName === "price");
+    expect(priceBinding?.source).toEqual({ kind: "req_body", field: "price" });
+
+    // author does not exist in mockEndpoint, so it should not be mapped
+    expect(mappedArgNames).not.toContain("author");
+  });
 });

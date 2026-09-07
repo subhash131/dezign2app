@@ -545,7 +545,7 @@ describe("Control Flow Pipeline Steps Compilation", () => {
 
       expect(code).toContain("let weatherData: Record<string, string | number | boolean | null> | null = null;");
       expect(code).toContain("try {");
-      expect(code).toContain("} catch (stepErr: unknown) {");
+      expect(code).toContain("} catch (stepErr) {");
       expect(code).toContain('logger.warn("Step Call Weather failed, using fallback value:", stepErr);');
       expect(code).toContain('weatherData = {"temperature": 20, "condition": "sunny"};');
     });
@@ -574,7 +574,7 @@ describe("Control Flow Pipeline Steps Compilation", () => {
 
       expect(code).toContain("try {");
       expect(code).toContain("const userRow = await findUserById();");
-      expect(code).toContain("} catch (stepErr: unknown) {");
+      expect(code).toContain("} catch (stepErr) {");
       expect(code).toContain("return res.status(502).json({");
       expect(code).toContain('error: "Failed to connect to user database"');
     });
@@ -631,7 +631,7 @@ describe("Control Flow Pipeline Steps Compilation", () => {
       expect(code).toContain("let analyticsRes: Record<string, string | number | boolean | null> | null = null;");
       expect(code).toContain("try {");
       expect(code).toContain("analyticsRes = await sendAnalytics();");
-      expect(code).toContain("} catch (stepErr: unknown) {");
+      expect(code).toContain("} catch (stepErr) {");
       expect(code).toContain('logger.error("Step Optional Analytics failed, proceeding to next step:", stepErr);');
     });
 
@@ -657,7 +657,7 @@ describe("Control Flow Pipeline Steps Compilation", () => {
 
       expect(code).toContain("try {");
       expect(code).toContain("const validRes = validateStrict();");
-      expect(code).toContain("} catch (stepErr: unknown) {");
+      expect(code).toContain("} catch (stepErr) {");
       expect(code).toContain('logger.error("Step Strict Validation failed:", stepErr);');
       expect(code).toContain("throw stepErr;");
     });

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -13,7 +13,6 @@ import {
 import { DraggableProvidedDragHandleProps } from "@hello-pangea/dnd";
 import { PipelineStepDraft } from "./types";
 import { StepTypeMeta, formatConditionSummary } from "./utils";
-import { Textarea } from "@workspace/ui/components/textarea";
 
 export interface StepRowHeaderProps {
   step: PipelineStepDraft;
@@ -46,37 +45,7 @@ export const StepRowHeader = ({
   onMoveUp,
   onMoveDown,
   onDelete,
-  onChange,
 }: StepRowHeaderProps) => {
-  const [description, setDescription] = useState(step.description ?? "");
-  const [isEditing, setIsEditing] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    setDescription(step.description ?? "");
-  }, [step.description]);
-
-  useEffect(() => {
-    if (isEditing && textareaRef.current) {
-      textareaRef.current.focus();
-      const len = textareaRef.current.value.length;
-      textareaRef.current.setSelectionRange(len, len);
-    }
-  }, [isEditing]);
-
-  const handleBlur = () => {
-    if (description !== (step.description ?? "")) {
-      onChange?.({
-        ...step,
-        description,
-      });
-    }
-  };
-
-  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setDescription(e.target.value);
-  };
-
   return (
     <div
       className="flex flex-col gap-0.5 px-2.5 py-1.5 cursor-pointer select-none"
@@ -212,57 +181,14 @@ export const StepRowHeader = ({
         )}
       </div>
 
-      {/* Second Line: Description (div/span on blur, Textarea on click) */}
-      {isEditing ? (
-        <div
-          className="flex items-start ml-7 mr-6 -mt-0.5 mb-0.5"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <Textarea
-            ref={textareaRef}
-            rows={2}
-            value={description}
-            onChange={handleChange}
-            onBlur={() => {
-              handleBlur();
-              setIsEditing(false);
-            }}
-            onKeyDown={(e) => {
-              e.stopPropagation();
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleBlur();
-                setIsEditing(false);
-              } else if (e.key === "Escape") {
-                setDescription(step.description ?? "");
-                setIsEditing(false);
-              }
-            }}
-            placeholder="Add description..."
-            className="w-full bg-background/90 text-[11px] leading-relaxed text-foreground placeholder:text-muted-foreground/35 placeholder:italic px-2 py-1 rounded border border-border/80 focus:border-primary/60 focus:outline-none transition-colors resize-none font-sans min-h-[44px]"
-            autoFocus
-          />
+      {/* Second Line: Description (read-only, no events) */}
+      {step.description?.trim() ? (
+        <div className="flex items-center ml-7 mr-6 -mt-0.5 mb-0.5 pointer-events-none min-h-[18px]">
+          <span className="text-[11px] font-sans leading-relaxed text-muted-foreground/75 line-clamp-2">
+            {step.description}
+          </span>
         </div>
-      ) : (
-        <div
-          className="flex items-center ml-7 mr-6 -mt-0.5 mb-0.5 cursor-pointer group/desc min-h-[20px]"
-          onClick={(e) => {
-            e.stopPropagation();
-            setIsEditing(true);
-          }}
-          title="Click to edit description"
-        >
-          {description.trim() ? (
-            <span className="text-[11px] font-sans leading-relaxed text-muted-foreground/80 group-hover/desc:text-foreground line-clamp-2 transition-colors">
-              {description}
-            </span>
-          ) : (
-            <span className="text-[11px] font-sans italic text-muted-foreground/35 group-hover/desc:text-muted-foreground/60 transition-colors">
-              Add description...
-            </span>
-          )}
-        </div>
-      )}
+      ) : null}
     </div>
   );
 };
