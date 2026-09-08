@@ -116,20 +116,15 @@ export function performGraphLayout({
 
   const isHangingReferenceEdge = (edge: LayoutEdge): boolean => {
     const targetNode = graphNodes.find((n: LayoutNode) => n.id === edge.target);
-    if (!targetNode) return false;
-    return REFERENCE_NODE_TYPES.has(targetNode.type ?? "");
+    const sourceNode = graphNodes.find((n: LayoutNode) => n.id === edge.source);
+    if (targetNode && REFERENCE_NODE_TYPES.has(targetNode.type ?? "")) return true;
+    if (sourceNode && REFERENCE_NODE_TYPES.has(sourceNode.type ?? "")) return true;
+    return false;
   };
 
   const headEdges: LayoutEdge[] = graphEdges.filter(isHeadConnectionEdge);
   const hangingEdges: LayoutEdge[] = graphEdges.filter(isHangingTransformerEdge);
   const hangingRefEdges: LayoutEdge[] = graphEdges.filter(isHangingReferenceEdge);
-
-  const flowEdges: LayoutEdge[] = graphEdges.filter(
-    (e: LayoutEdge) =>
-      !isHeadConnectionEdge(e) &&
-      !isHangingTransformerEdge(e) &&
-      !isHangingReferenceEdge(e),
-  );
 
   // 3. Identify attached head nodes, hanging transformer nodes, and hanging reference nodes
   const attachedHeadNodeIdSet = new Set<string>(
@@ -153,10 +148,26 @@ export function performGraphLayout({
     }
   });
   hangingRefEdges.forEach((e: LayoutEdge) => {
-    hangingRefNodeIdSet.add(e.target);
+    const sourceNode = graphNodes.find((n) => n.id === e.source);
+    const targetNode = graphNodes.find((n) => n.id === e.target);
+    if (sourceNode && REFERENCE_NODE_TYPES.has(sourceNode.type ?? "")) {
+      hangingRefNodeIdSet.add(sourceNode.id);
+    }
+    if (targetNode && REFERENCE_NODE_TYPES.has(targetNode.type ?? "")) {
+      hangingRefNodeIdSet.add(targetNode.id);
+    }
   });
   const hangingRefNodes: LayoutNode[] = graphNodes.filter((n: LayoutNode) =>
     hangingRefNodeIdSet.has(n.id),
+  );
+
+  const flowEdges: LayoutEdge[] = graphEdges.filter(
+    (e: LayoutEdge) =>
+      !isHeadConnectionEdge(e) &&
+      !isHangingTransformerEdge(e) &&
+      !isHangingReferenceEdge(e) &&
+      !hangingRefNodeIdSet.has(e.source) &&
+      !hangingRefNodeIdSet.has(e.target),
   );
 
   const mainGraphNodes: LayoutNode[] = graphNodes.filter(
@@ -174,7 +185,7 @@ export function performGraphLayout({
     marginy: 80,
     ranksep: isHorizontal
       ? hangingRefEdges.length > 0
-        ? 440
+        ? 520
         : 200
       : 150,
     nodesep: 50,
@@ -186,7 +197,9 @@ export function performGraphLayout({
   });
 
   flowEdges.forEach((edge: LayoutEdge) => {
-    dagreGraph.setEdge(edge.source, edge.target);
+    if (dagreGraph.hasNode(edge.source) && dagreGraph.hasNode(edge.target)) {
+      dagreGraph.setEdge(edge.source, edge.target);
+    }
   });
 
   dagre.layout(dagreGraph);
@@ -217,6 +230,7 @@ export function performGraphLayout({
     storeEvents,
     hangingEdges,
     hangingRefEdges,
+    hangingRefNodes,
   });
 
   // 6. Layout attached head nodes grouped by category columns above each target node

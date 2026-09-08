@@ -15,6 +15,7 @@ import {
   LogOut,
   MonitorSmartphone,
   Globe,
+  Network,
 } from "lucide-react";
 import {
   StepType,
@@ -108,6 +109,11 @@ export const STEP_TYPE_META: Record<StepType, StepTypeMeta> = {
     icon: React.createElement(MonitorSmartphone, { size: 13 }),
     color: "text-foreground/80 bg-secondary/40 border-border/60",
   },
+  langgraph_invoke: {
+    label: "LangGraph Agent",
+    icon: React.createElement(Network, { size: 13 }),
+    color: "text-primary bg-primary/10 border-primary/30",
+  },
 };
 
 export const ADDABLE_STEP_TYPES: readonly StepType[] = [
@@ -125,6 +131,7 @@ export const ADDABLE_STEP_TYPES: readonly StepType[] = [
   "loop",
   "early_return",
   "push_to_client",
+  "langgraph_invoke",
 ];
 
 export const CONDITION_OPERATORS: readonly {

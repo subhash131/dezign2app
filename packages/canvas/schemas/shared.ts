@@ -170,6 +170,7 @@ export const pipelineStepTypeEnum = z.enum([
   "loop",             // collection iteration (forEach / map)
   "early_return",     // mid-pipeline short circuit response
   "push_to_client",   // deliver processed result to a web-page client via SSE / WS / WebRTC / Webhook
+  "langgraph_invoke", // invoke a LangGraph agent (streaming or sync)
 ]);
 export type PipelineStepType = z.infer<typeof pipelineStepTypeEnum>;
 
@@ -325,6 +326,26 @@ export interface PipelineStep {
   clientDeliveryFilterExpr?: string;
   /** Optional payload mapping — reshape the data object before pushing */
   clientDeliveryPayloadMapping?: string;
+
+  // ─── langgraph_invoke step ───
+  /** ID of the LangGraph canvas node to invoke */
+  langGraphTargetNodeId?: string;
+  /** Maps incoming request fields → graph state channel keys (e.g. { messages: "body.message" }) */
+  langGraphStateMapping?: Record<string, string>;
+  /**
+   * Whether to stream the graph output to the client.
+   * When true the route emits Server-Sent Events via `graph.stream()`;
+   * when false it awaits `graph.invoke()` and returns the final state.
+   */
+  langGraphStreamingEnabled?: boolean;
+  /** Streaming delivery protocol (only relevant when langGraphStreamingEnabled = true) */
+  langGraphStreamingProtocol?: "sse" | "websocket";
+  /** Which state channel keys to forward to the client as streaming chunks (empty = all) */
+  langGraphStreamingFields?: string[];
+  /** What the step exposes as its output variable */
+  langGraphOutputMode?: "full_state" | "specific_fields" | "last_message";
+  /** State channel keys to include when outputMode = "specific_fields" */
+  langGraphOutputFields?: string[];
 }
 
 export const pipelineStepSchema: z.ZodType<PipelineStep> = z.lazy(() =>
@@ -395,6 +416,15 @@ export const pipelineStepSchema: z.ZodType<PipelineStep> = z.lazy(() =>
     clientDeliveryWebhookMethod: z.enum(["POST", "PUT", "PATCH"]).optional(),
     clientDeliveryFilterExpr: z.string().optional(),
     clientDeliveryPayloadMapping: z.string().optional(),
+
+    // langgraph_invoke fields
+    langGraphTargetNodeId: z.string().optional(),
+    langGraphStateMapping: z.record(z.string()).optional(),
+    langGraphStreamingEnabled: z.boolean().optional(),
+    langGraphStreamingProtocol: z.enum(["sse", "websocket"]).optional(),
+    langGraphStreamingFields: z.array(z.string()).optional(),
+    langGraphOutputMode: z.enum(["full_state", "specific_fields", "last_message"]).optional(),
+    langGraphOutputFields: z.array(z.string()).optional(),
   })
 );
 

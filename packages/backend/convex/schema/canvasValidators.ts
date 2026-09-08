@@ -154,6 +154,15 @@ export const safePipelineStepSchema = z.object({
   clientDeliveryWebhookMethod: z.enum(["POST", "PUT", "PATCH"]).optional(),
   clientDeliveryFilterExpr: z.string().optional(),
   clientDeliveryPayloadMapping: z.string().optional(),
+
+  // langgraph_invoke fields
+  langGraphTargetNodeId: z.string().optional(),
+  langGraphStateMapping: z.record(z.string()).optional(),
+  langGraphStreamingEnabled: z.boolean().optional(),
+  langGraphStreamingProtocol: z.enum(["sse", "websocket"]).optional(),
+  langGraphStreamingFields: z.array(z.string()).optional(),
+  langGraphOutputMode: z.enum(["full_state", "specific_fields", "last_message"]).optional(),
+  langGraphOutputFields: z.array(z.string()).optional(),
 });
 
 /**

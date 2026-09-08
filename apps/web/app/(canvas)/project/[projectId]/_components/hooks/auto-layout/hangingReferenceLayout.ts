@@ -15,10 +15,13 @@ export const REFERENCE_NODE_TYPES = new Set<string>([
   "db_ref",
   "redis-cache",
   "vector_db_ref",
+  "langgraph",
+  "langgraph_agent",
+  "langgraph_node",
 ]);
 
 /**
- * Positions hanging reference nodes (Table Ref, Redis Cache Ref, Vector DB Ref)
+ * Positions hanging reference nodes (Table Ref, Redis Cache Ref, Vector DB Ref, LangGraph Agent)
  * in a dedicated column immediately following (to the right of) the service node they connect to.
  */
 export function layoutHangingReferenceNodes({
@@ -93,12 +96,15 @@ export function layoutHangingReferenceNodes({
   const unattachedRefs: LayoutNode[] = [];
 
   hangingRefNodes.forEach((refNode) => {
-    const edge = hangingRefEdges.find((e) => e.target === refNode.id);
+    const edge = hangingRefEdges.find(
+      (e) => e.target === refNode.id || e.source === refNode.id,
+    );
     if (!edge) {
       unattachedRefs.push(refNode);
       return;
     }
-    const sourceServiceId = edge.source;
+    const sourceServiceId =
+      edge.target === refNode.id ? edge.source : edge.target;
     if (!refsByService.has(sourceServiceId)) {
       refsByService.set(sourceServiceId, []);
     }
@@ -123,6 +129,7 @@ export function layoutHangingReferenceNodes({
         node: LayoutNode;
         width: number;
         height: number;
+        sourceHandleY: number;
         idealY: number;
         y: number;
       }
@@ -130,11 +137,15 @@ export function layoutHangingReferenceNodes({
       const items: RefItem[] = refs.map((refNode) => {
         const { width, height } = getNodeDimensions(refNode);
         const edge = hangingRefEdges.find(
-          (e) => e.target === refNode.id && e.source === serviceId,
+          (e) =>
+            (e.target === refNode.id && e.source === serviceId) ||
+            (e.source === refNode.id && e.target === serviceId),
         );
+        const serviceHandle =
+          edge?.target === refNode.id ? edge?.sourceHandle : edge?.targetHandle;
         const handleRatio = resolveServiceSourceHandleRatio(
           serviceNode,
-          edge?.sourceHandle,
+          serviceHandle,
         );
         const sourceHandleY = servicePos.y + handleRatio * serviceH;
         const idealY = sourceHandleY - height / 2;
@@ -143,13 +154,40 @@ export function layoutHangingReferenceNodes({
           node: refNode,
           width,
           height,
+          sourceHandleY,
           idealY,
           y: idealY,
         };
       });
 
-      // Sort by ideal Y
-      items.sort((a, b) => a.idealY - b.idealY);
+      // Sort primarily by source handle Y so edges don't cross.
+      // When connected to the same handle (or endpoints at the same vertical height),
+      // order db_ref / redis-cache / vector_db_ref first, then langgraph.
+      items.sort((a, b) => {
+        const diffHandleY = a.sourceHandleY - b.sourceHandleY;
+        if (Math.abs(diffHandleY) > 5) {
+          return diffHandleY;
+        }
+
+        const typePriority = (type?: string) => {
+          if (type === "db_ref") return 1;
+          if (type === "redis-cache") return 2;
+          if (type === "vector_db_ref") return 3;
+          if (
+            type === "langgraph" ||
+            type === "langgraph_agent" ||
+            type === "langgraph_node"
+          )
+            return 4;
+          return 5;
+        };
+
+        const pA = typePriority(a.node.type);
+        const pB = typePriority(b.node.type);
+        if (pA !== pB) return pA - pB;
+
+        return a.idealY - b.idealY;
+      });
 
       // Relax / resolve collisions so no reference nodes overlap
       if (items.length > 1) {
@@ -201,6 +239,22 @@ export function layoutHangingReferenceNodes({
           height,
           x: servicePos.x + serviceW / 2 - width / 2,
         };
+      });
+
+      items.sort((a, b) => {
+        const typePriority = (type?: string) => {
+          if (type === "db_ref") return 1;
+          if (type === "redis-cache") return 2;
+          if (type === "vector_db_ref") return 3;
+          if (
+            type === "langgraph" ||
+            type === "langgraph_agent" ||
+            type === "langgraph_node"
+          )
+            return 4;
+          return 5;
+        };
+        return typePriority(a.node.type) - typePriority(b.node.type);
       });
 
       const totalW =

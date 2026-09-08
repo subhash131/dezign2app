@@ -118,6 +118,12 @@ export function cleanupDeletedNodesState(
       .filter(Boolean),
   );
 
+  // Track deleted langgraph nodes for pipeline step cleanup
+  const deletedLangGraphNodes = currentState.nodes.filter(
+    (n) => n && n.type === "langgraph" && allIdsSet.has(n.id),
+  );
+  const deletedLangGraphIds = new Set(deletedLangGraphNodes.map((n) => n.id));
+
   // 2. Events to remove (publishers & consumers)
   const eventsToDelete = currentState.events.filter((ev) =>
     allIdsSet.has(ev.nodeId),
@@ -145,6 +151,24 @@ export function cleanupDeletedNodesState(
                 (s.functionRef?.name &&
                   (allIdsSet.has(s.functionRef.name) ||
                     deletedTransformerNames.has(s.functionRef.name))))
+            ),
+        );
+        if (filteredSteps.length !== updatedEv.pipelineSteps.length) {
+          updatedEv = { ...updatedEv, pipelineSteps: filteredSteps };
+          evChanged = true;
+        }
+      }
+      if (
+        deletedLangGraphIds.size > 0 &&
+        updatedEv.pipelineSteps &&
+        updatedEv.pipelineSteps.length > 0
+      ) {
+        const filteredSteps = updatedEv.pipelineSteps.filter(
+          (s) =>
+            !(
+              s.type === "langgraph_invoke" &&
+              s.langGraphTargetNodeId &&
+              deletedLangGraphIds.has(s.langGraphTargetNodeId)
             ),
         );
         if (filteredSteps.length !== updatedEv.pipelineSteps.length) {
@@ -184,6 +208,25 @@ export function cleanupDeletedNodesState(
                 (s.functionRef?.name &&
                   (allIdsSet.has(s.functionRef.name) ||
                     deletedTransformerNames.has(s.functionRef.name))))
+            ),
+        );
+        if (filteredSteps.length !== newPipelineSteps.length) {
+          changed = true;
+          newPipelineSteps = filteredSteps;
+        }
+      }
+
+      if (
+        deletedLangGraphIds.size > 0 &&
+        newPipelineSteps &&
+        newPipelineSteps.length > 0
+      ) {
+        const filteredSteps = newPipelineSteps.filter(
+          (s) =>
+            !(
+              s.type === "langgraph_invoke" &&
+              s.langGraphTargetNodeId &&
+              deletedLangGraphIds.has(s.langGraphTargetNodeId)
             ),
         );
         if (filteredSteps.length !== newPipelineSteps.length) {
@@ -573,6 +616,103 @@ export function cleanupDeletedEdgesState(
         }
         return ev;
       });
+    }
+
+    // LangGraph <-> Endpoint / Consumed Event edge cleanup: remove langgraph_invoke step when edge is deleted
+    const lgSrcNode = currentState.nodes.find((n) => n.id === edge.source);
+    const lgTgtNode = currentState.nodes.find((n) => n.id === edge.target);
+    const isServiceToLangGraph =
+      lgSrcNode?.type === "service" && lgTgtNode?.type === "langgraph";
+    const isLangGraphToService =
+      lgSrcNode?.type === "langgraph" && lgTgtNode?.type === "service";
+
+    if (isServiceToLangGraph || isLangGraphToService) {
+      const lgNode = isServiceToLangGraph ? lgTgtNode! : lgSrcNode!;
+      const svcNode = isServiceToLangGraph ? lgSrcNode! : lgTgtNode!;
+      const handle = isServiceToLangGraph
+        ? edge.sourceHandle
+        : edge.targetHandle;
+
+      const epId = handle?.startsWith("endpoint-out-")
+        ? handle.replace("endpoint-out-", "")
+        : handle?.startsWith("endpoint-in-")
+        ? handle.replace("endpoint-in-", "")
+        : null;
+
+      const evId = handle?.startsWith("consumedEvents-out-")
+        ? handle.replace("consumedEvents-out-", "")
+        : handle?.startsWith("consumedEvents-in-")
+        ? handle.replace("consumedEvents-in-", "")
+        : null;
+
+      // Check if any other edge still connects this endpoint or event to this langgraph node
+      const hasOtherEdge = nextEdges.some((e) => {
+        if (!e) return false;
+        const connectsBoth =
+          (e.source === svcNode.id && e.target === lgNode.id) ||
+          (e.source === lgNode.id && e.target === svcNode.id);
+        if (!connectsBoth) return false;
+        if (epId) {
+          return (
+            e.sourceHandle === `endpoint-out-${epId}` ||
+            e.sourceHandle === `endpoint-in-${epId}` ||
+            e.targetHandle === `endpoint-in-${epId}` ||
+            e.targetHandle === `endpoint-out-${epId}`
+          );
+        }
+        if (evId) {
+          return (
+            e.sourceHandle === `consumedEvents-out-${evId}` ||
+            e.sourceHandle === `consumedEvents-in-${evId}` ||
+            e.targetHandle === `consumedEvents-in-${evId}` ||
+            e.targetHandle === `consumedEvents-out-${evId}`
+          );
+        }
+        return true;
+      });
+
+      if (!hasOtherEdge) {
+        if (epId) {
+          nextEndpoints = nextEndpoints.map((ep) => {
+            if (ep.id === epId && ep.pipelineSteps && ep.pipelineSteps.length > 0) {
+              const updatedSteps = ep.pipelineSteps.filter(
+                (step) =>
+                  !(
+                    step.type === "langgraph_invoke" &&
+                    step.langGraphTargetNodeId === lgNode.id
+                  ),
+              );
+              if (updatedSteps.length !== ep.pipelineSteps.length) {
+                endpointsChanged = true;
+                const updatedEp = { ...ep, pipelineSteps: updatedSteps };
+                pendingEndpointUpserts.push(updatedEp);
+                return updatedEp;
+              }
+            }
+            return ep;
+          });
+        }
+        if (evId) {
+          nextEvents = nextEvents.map((ev) => {
+            if (ev.id === evId && ev.pipelineSteps && ev.pipelineSteps.length > 0) {
+              const updatedSteps = ev.pipelineSteps.filter(
+                (step) =>
+                  !(
+                    step.type === "langgraph_invoke" &&
+                    step.langGraphTargetNodeId === lgNode.id
+                  ),
+              );
+              if (updatedSteps.length !== ev.pipelineSteps.length) {
+                eventsChanged = true;
+                const updatedEv = { ...ev, pipelineSteps: updatedSteps };
+                pendingEventUpserts.push(updatedEv);
+                return updatedEv;
+              }
+            }
+            return ev;
+          });
+        }
+      }
     }
 
     // 3. Foreign Key edge cleanup: remove isForeignKey and references if no edge remains for column
