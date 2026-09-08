@@ -1,5 +1,5 @@
 export type LangGraphMemoryConfig = {
-  checkpointer?: "convex" | "redis" | "postgres" | "memory";
+  checkpointer?: "memory" | "redis" | "postgres" | "convex" | string;
   checkpointerConnectionId?: string;
   threadScope?: "session" | "user" | "global";
   autoSummarize?: boolean;

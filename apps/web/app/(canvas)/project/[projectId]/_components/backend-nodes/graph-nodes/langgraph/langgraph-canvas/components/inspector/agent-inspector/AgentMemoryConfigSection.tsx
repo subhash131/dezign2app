@@ -48,7 +48,7 @@ export function AgentMemoryConfigSection({
               Memory & Checkpointer
               {memConfig.enabled !== false && (
                 <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 font-mono font-semibold">
-                  {memConfig.checkpointer || "convex"}
+                  {memConfig.checkpointer || "memory"}
                 </span>
               )}
             </h3>

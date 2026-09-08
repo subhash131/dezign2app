@@ -46,7 +46,7 @@ export function useLangGraphCanvasState({
   );
   const [memoryConfig, setMemoryConfig] = useState<LangGraphMemoryConfig>(
     data.memoryConfig || {
-      checkpointer: "convex",
+      checkpointer: "memory",
       threadScope: "session",
       autoSummarize: true,
       maxWindowMessages: 10,
