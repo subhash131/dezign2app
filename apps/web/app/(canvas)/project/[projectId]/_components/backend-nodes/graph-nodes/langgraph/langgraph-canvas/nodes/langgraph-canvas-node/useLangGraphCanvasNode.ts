@@ -192,7 +192,7 @@ export function useLangGraphCanvasNode({
   const updateMemoryConfig = (changes: Partial<LangGraphAgentMemoryConfig>) => {
     const updated: LangGraphAgentMemoryConfig = {
       enabled: true,
-      checkpointer: "convex",
+      checkpointer: "memory",
       threadIdKey: "thread_id",
       threadScope: "session",
       autoSummarize: true,

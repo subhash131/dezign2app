@@ -292,7 +292,7 @@ export function AgentAttachedComponentsSection({
                         {mem.data.name || mem.data.label}
                       </span>
                       <span className="text-[9px] text-muted-foreground font-mono">
-                        checkpointer: {mem.data.checkpointer || "convex"} (
+                        checkpointer: {mem.data.checkpointer || "memory"} (
                         {mem.data.threadIdKey || "thread_id"})
                       </span>
                     </div>

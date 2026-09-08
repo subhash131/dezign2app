@@ -192,7 +192,7 @@ export const LangGraphNode = ({
   const stateChannels = data.stateChannels || [];
   const graphSteps = data.graphSteps || [];
   const memoryConfig = data.memoryConfig || {
-    checkpointer: "convex",
+    checkpointer: "memory",
     threadScope: "session",
     autoSummarize: true,
     maxWindowMessages: 10,
@@ -417,7 +417,7 @@ export const LangGraphNode = ({
         {/* Memory badge */}
         <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
           <span className="px-1.5 py-0.5 rounded bg-secondary text-foreground border border-border/40 font-mono">
-            {memoryConfig.checkpointer || "convex"}
+            {memoryConfig.checkpointer || "memory"}
           </span>
           <span>checkpointer</span>
           {memoryConfig.autoSummarize && (
