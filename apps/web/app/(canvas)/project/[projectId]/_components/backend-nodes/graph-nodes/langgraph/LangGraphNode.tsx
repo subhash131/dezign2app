@@ -8,10 +8,9 @@ import {
   ExternalLink,
   Trash,
   Pencil,
+  Radio,
   Plug,
   Zap,
-  Settings,
-  Radio,
   Globe,
 } from "lucide-react";
 import type {
@@ -141,15 +140,6 @@ export function useConnectedRoutes(nodeId: string): ConnectedRouteInfo[] {
   });
 }
 
-const METHOD_COLORS: Record<string, string> = {
-  GET: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
-  POST: "bg-blue-500/15 text-blue-400 border-blue-500/30",
-  PUT: "bg-amber-500/15 text-amber-400 border-amber-500/30",
-  PATCH: "bg-orange-500/15 text-orange-400 border-orange-500/30",
-  DELETE: "bg-red-500/15 text-red-400 border-red-500/30",
-  EVENT: "bg-purple-500/15 text-purple-400 border-purple-500/30",
-  INVOKE: "bg-secondary text-muted-foreground border-border/50",
-};
 
 export const LangGraphNode = ({
   id,
@@ -158,9 +148,6 @@ export const LangGraphNode = ({
 }: NodeProps<BackendNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const requestDeleteNode = useBackendCanvasStore((s) => s.requestDeleteNode);
-  const setActiveConfigItem = useBackendCanvasStore(
-    (s) => s.setActiveConfigItem,
-  );
   const storeProjectId = useBackendCanvasStore((s) => s.projectId);
   const params = useParams();
   const router = useRouter();
@@ -169,6 +156,7 @@ export const LangGraphNode = ({
   const [name, setName] = useState(data.label || "");
 
   const connectedRoutes = useConnectedRoutes(id);
+  const connectedRoutesCount = connectedRoutes.length;
 
   useEffect(() => {
     setName(data.label || "");
@@ -213,7 +201,7 @@ export const LangGraphNode = ({
   return (
     <div
       className={cn(
-        "rounded-2xl bg-card/95 backdrop-blur-xl border-2 w-[340px] flex flex-col transition-all duration-300 relative shadow-2xl group",
+        "rounded-2xl bg-card/95 backdrop-blur-xl border-2 w-[280px] min-w-[280px] max-w-[340px] flex flex-col transition-all duration-300 relative shadow-2xl group",
         selected
           ? "border-primary ring-4 ring-primary/20 shadow-primary/10"
           : "border-border hover:border-border/80",
@@ -221,7 +209,7 @@ export const LangGraphNode = ({
       onDoubleClick={handleOpenEditor}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 bg-secondary/30 border-b border-border/60 rounded-t-2xl">
+      <div className="flex items-center justify-between px-3 py-2.5 bg-secondary/30 border-b border-border/60 rounded-t-2xl">
         <div className="flex items-center gap-2.5 flex-1 min-w-0">
           <div className="p-2 rounded-xl bg-primary/10 text-primary border border-primary/20 shrink-0">
             <Network className="w-4 h-4" />
@@ -279,6 +267,9 @@ export const LangGraphNode = ({
               <span className="truncate">
                 {inputChannels.length} inputs · {graphSteps.length} steps ·{" "}
                 {stateChannels.length} state fields
+                {connectedRoutesCount > 0 && (
+                  <> · <span className="text-primary font-semibold">{connectedRoutesCount} routes</span></>
+                )}
               </span>
             </div>
           </div>
@@ -308,97 +299,14 @@ export const LangGraphNode = ({
         </div>
       </div>
 
-      {/* ── Connected Routes Section ───────────────────────────────────── */}
-      <div className="border-b border-border/60">
-        <div className="px-3 py-1 bg-secondary/40 flex items-center justify-between">
-          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-            <Plug className="w-3 h-3" />
-            Invoked By
-          </span>
-          {connectedRoutes.length > 0 && (
-            <span className="text-[10px] font-mono bg-primary/10 text-primary px-1.5 py-0.5 rounded border border-primary/20">
-              {connectedRoutes.length}
-            </span>
-          )}
-        </div>
-
-        {connectedRoutes.length > 0 ? (
-          <div className="flex flex-col divide-y divide-border/40">
-            {connectedRoutes.map((route) => (
-              <div
-                key={route.edgeId}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setActiveConfigItem({
-                    type: "langgraphRoute",
-                    id: route.edgeId,
-                    nodeId: id,
-                    edgeId: route.edgeId,
-                  });
-                }}
-                className="flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-secondary/40 cursor-pointer transition-colors nodrag relative group/route"
-                title="Click to configure route payload mapping & pre-invoke business logic"
-              >
-                <Handle
-                  type="target"
-                  position={Position.Left}
-                  id={`route-in-${route.edgeId}`}
-                  className="!bg-primary !w-3 !h-3 !border-2 !border-background hover:!scale-125 transition-transform !-left-[7px]"
-                  title={`Incoming route: ${route.label} (${route.sourceNodeLabel})`}
-                />
-                <Handle
-                  type="target"
-                  position={Position.Left}
-                  id="input-start"
-                  className="!bg-primary !w-3 !h-3 !border-2 !border-background hover:!scale-125 transition-transform !-left-[7px]"
-                  title={`Incoming route: ${route.label} (${route.sourceNodeLabel})`}
-                />
-                {route.kind === "event" ? (
-                  <Zap className="w-3 h-3 text-purple-400 shrink-0" />
-                ) : (
-                  <Plug className="w-3 h-3 text-primary/60 shrink-0" />
-                )}
-                <span
-                  className={cn(
-                    "text-[9px] font-bold px-1.5 py-0.5 rounded border shrink-0 font-mono",
-                    METHOD_COLORS[route.method] ||
-                      METHOD_COLORS["INVOKE"] ||
-                      "",
-                  )}
-                >
-                  {route.method}
-                </span>
-                <span className="font-medium truncate text-foreground flex-1 group-hover/route:text-primary transition-colors">
-                  {route.label}
-                </span>
-                <span className="text-[9px] text-muted-foreground truncate shrink-0">
-                  {route.sourceNodeLabel}
-                </span>
-                <Settings className="w-3.5 h-3.5 text-muted-foreground/50 group-hover/route:text-primary group-hover/route:rotate-45 transition-all shrink-0 ml-0.5" />
-                <Handle
-                  type="source"
-                  position={Position.Right}
-                  id={`route-out-${route.edgeId}`}
-                  className="!bg-primary !w-3 !h-3 !border-2 !border-background hover:!scale-125 transition-transform !-right-[7px]"
-                  title={`Outgoing response channel for route: ${route.label}`}
-                />
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="px-3 py-2 flex items-center gap-2 text-[10px] text-muted-foreground/50 italic relative">
-            <Handle
-              type="target"
-              position={Position.Left}
-              id="input-start"
-              className="!bg-primary !w-3 !h-3 !border-2 !border-background hover:!scale-125 transition-transform !-left-[7px]"
-              title="Drag from an endpoint handle to invoke this agent"
-            />
-            <Plug className="w-3 h-3 shrink-0" />
-            <span>Drag from an endpoint handle to invoke this agent</span>
-          </div>
-        )}
-      </div>
+      {/* Single generic target Handle for canvas edges */}
+      <Handle
+        type="target"
+        position={Position.Left}
+        id="input-start"
+        className="!bg-primary !w-3 !h-3 !border-2 !border-background hover:!scale-125 transition-transform !-left-[7px]"
+        title="Drag from an endpoint or event handle to invoke this agent"
+      />
 
       {/* Emitted Output Channels Section */}
       {(data.outputChannels || []).length > 0 && (

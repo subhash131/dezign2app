@@ -134,10 +134,11 @@ export function getNodeDimensions(node: LayoutNode): {
     case "state_global":
     case "STATE_GLOBAL":
       return { width: 260, height: 140 };
+    case "langgraph":
     case "langgraph_agent":
     case "langgraph_node":
     case "agent":
-      return { width: 340, height: 180 };
+      return { width: 280, height: 240 };
     case "langgraph_llm":
       return { width: 320, height: 220 };
     case "langgraph_tool":
@@ -149,7 +150,7 @@ export function getNodeDimensions(node: LayoutNode): {
     case "db_ref":
     case "vector_db_ref":
     case "redis-cache":
-      return { width: 240, height: 80 };
+      return { width: 280, height: 80 };
     case "end":
     case "END":
       return { width: 140, height: 60 };

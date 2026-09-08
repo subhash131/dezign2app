@@ -18,6 +18,17 @@ export function collectPipelineImports(
       } else {
         imports.set(importPath, new Set([name]));
       }
+    } else if (s.type === "langgraph_invoke" && s.enabled !== false) {
+      const graphName = s.langGraphTargetNodeId
+        ? `${s.langGraphTargetNodeId.replace(/[^a-zA-Z0-9]/g, "")}Graph`
+        : "agentGraph";
+      const importPath = `../graphs/${graphName}`;
+      const existing = imports.get(importPath);
+      if (existing) {
+        existing.add(graphName);
+      } else {
+        imports.set(importPath, new Set([graphName]));
+      }
     }
     if (s.thenSteps) s.thenSteps.forEach(addStepImports);
     if (s.elseSteps) s.elseSteps.forEach(addStepImports);

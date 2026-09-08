@@ -22,6 +22,7 @@ import {
 import {
   getConnectedTransformersForEndpoint,
   getConnectedKafkaForEndpoint,
+  getConnectedLangGraphForEndpoint,
   isStepInputUnconfigured,
 } from "@/lib/utils/pipelineValidation";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -229,6 +230,93 @@ export function usePipelineSteps({
     steps,
   ]);
 
+  const connectedLangGraph = useMemo(() => {
+    if (!targetId || !serviceNodeId) return [];
+    return getConnectedLangGraphForEndpoint(
+      targetId,
+      serviceNodeId,
+      allNodes,
+      allEdges,
+    );
+  }, [targetId, serviceNodeId, allNodes, allEdges]);
+
+  // Auto-synchronize connected LangGraph agents into the pipeline steps
+  useEffect(() => {
+    if (connectedLangGraph.length === 0) return;
+
+    const missingLangGraph = connectedLangGraph.filter(
+      (clg) =>
+        !executableSteps.some(
+          (s) =>
+            s.type === "langgraph_invoke" &&
+            (s.langGraphTargetNodeId === clg.id || s.name === clg.label),
+        ),
+    );
+
+    if (missingLangGraph.length > 0) {
+      const newLangGraphSteps: PipelineStepDraft[] = missingLangGraph.map(
+        (clg, idx) => {
+          const stepNum = executableSteps.length + idx + 1;
+          const agentLabel = clg.label || "LangGraph Agent";
+          const outputVar = `${toVarName(agentLabel)}Result${stepNum > 1 ? stepNum : ""}`;
+          const defaultMapping: Record<string, string> = {};
+          if (clg.stateChannels && clg.stateChannels.length > 0) {
+            clg.stateChannels.forEach((ch: any) => {
+              if (ch.key === "messages") {
+                defaultMapping[ch.key] = isConsumer ? "event.message" : "body.message";
+              } else {
+                defaultMapping[ch.key] = isConsumer ? `event.${ch.key}` : `body.${ch.key}`;
+              }
+            });
+          } else {
+            defaultMapping["messages"] = isConsumer ? "event.message" : "body.message";
+          }
+
+          return {
+            id: generateId(),
+            name: agentLabel,
+            type: "langgraph_invoke",
+            enabled: true,
+            outputVariable: outputVar,
+            langGraphTargetNodeId: clg.id,
+            langGraphStreamingEnabled: false,
+            langGraphStreamingProtocol: "sse",
+            langGraphOutputMode: "full_state",
+            langGraphStateMapping: defaultMapping,
+            inputBindings: [],
+          };
+        },
+      );
+
+      if (isConsumer) {
+        onChange([...executableSteps, ...newLangGraphSteps]);
+      } else {
+        const foundReturn = steps.find((s) => s.type === "return_response");
+        onChange([
+          ...executableSteps,
+          ...newLangGraphSteps,
+          foundReturn || {
+            id: "return-response-step",
+            name: "Return Response",
+            type: "return_response",
+            enabled: true,
+            statusCode: endpoint?.type === "POST" ? 201 : 200,
+            inputBindings: [],
+            outputVariable: "",
+          },
+        ]);
+      }
+    }
+  }, [
+    connectedLangGraph,
+    executableSteps,
+    isConsumer,
+    onChange,
+    serviceNodeId,
+    endpoint?.type,
+    steps,
+  ]);
+
   // Auto-synchronize connected Redis cache nodes and edges for configured redis_operation steps
   useEffect(() => {
     if (!serviceNodeId || executableSteps.length === 0) return;
@@ -326,6 +414,8 @@ export function usePipelineSteps({
         ? `loop${stepNum}Results`
         : type === "early_return"
         ? `earlyReturn${stepNum}`
+        : type === "langgraph_invoke"
+        ? `agentResult${stepNum}`
         : `step${stepNum}Result`;
 
     let initialFields: Partial<PipelineStepDraft> = {};
@@ -452,6 +542,35 @@ export function usePipelineSteps({
     } else if (type === "early_return") {
       initialFields = {
         statusCode: 404,
+        inputBindings: [],
+      };
+    } else if (type === "langgraph_invoke") {
+      const allLangGraphNodes = allNodes.filter((n) => n.type === "langgraph");
+      const firstAgent = allLangGraphNodes[0];
+      const agentLabel = firstAgent?.data?.label || "LangGraph Agent";
+      const varName = `${toVarName(agentLabel)}Result`;
+      const stateChannels = firstAgent?.data?.stateChannels || [];
+      const defaultStateMapping: Record<string, string> = {};
+      if (stateChannels.length > 0) {
+        stateChannels.forEach((ch: any) => {
+          if (ch.key === "messages") {
+            defaultStateMapping[ch.key] = isConsumer ? "event.message" : "body.message";
+          } else {
+            defaultStateMapping[ch.key] = isConsumer ? `event.${ch.key}` : `body.${ch.key}`;
+          }
+        });
+      } else {
+        defaultStateMapping["messages"] = isConsumer ? "event.message" : "body.message";
+      }
+
+      initialFields = {
+        name: agentLabel,
+        outputVariable: varName,
+        langGraphTargetNodeId: firstAgent?.id,
+        langGraphStreamingEnabled: false,
+        langGraphStreamingProtocol: "sse",
+        langGraphOutputMode: "full_state",
+        langGraphStateMapping: defaultStateMapping,
         inputBindings: [],
       };
     }
@@ -699,6 +818,40 @@ export function usePipelineSteps({
             publishedEvents: remainingPubs,
           });
         }
+      }
+    }
+
+    if (stepToDelete.type === "langgraph_invoke") {
+      const store = useBackendCanvasStore.getState();
+      const targetAgentId = stepToDelete.langGraphTargetNodeId;
+      if (targetAgentId) {
+        const edgesToDelete = store.edges.filter((e) => {
+          if (!e) return false;
+          const isWithAgent =
+            e.source === targetAgentId || e.target === targetAgentId;
+          if (!isWithAgent) return false;
+          const isWithService =
+            Boolean(serviceNodeId) &&
+            (e.source === serviceNodeId || e.target === serviceNodeId);
+          if (!isWithService) return false;
+
+          const isToThisTargetHandle =
+            Boolean(targetId) &&
+            (e.targetHandle === `endpoint-in-${targetId}` ||
+              e.targetHandle === `endpoint-out-${targetId}` ||
+              e.targetHandle === `consumedEvents-in-${targetId}` ||
+              e.targetHandle === `consumedEvents-out-${targetId}` ||
+              e.targetHandle === targetId ||
+              e.sourceHandle === `endpoint-out-${targetId}` ||
+              e.sourceHandle === `endpoint-in-${targetId}` ||
+              e.sourceHandle === `consumedEvents-out-${targetId}` ||
+              e.sourceHandle === `consumedEvents-in-${targetId}` ||
+              e.sourceHandle === targetId);
+
+          return isToThisTargetHandle;
+        });
+
+        edgesToDelete.forEach((e) => store.deleteEdge(e.id));
       }
     }
 

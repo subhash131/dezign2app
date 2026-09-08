@@ -215,6 +215,87 @@ export function getConnectedKafkaForEndpoint(
 }
 
 /**
+ * Returns all LangGraph agent nodes connected via canvas edges to an endpoint or consumer.
+ */
+export function getConnectedLangGraphForEndpoint(
+  endpointOrConsumerId: string,
+  serviceNodeId: string,
+  allNodes: BackendNode[] = [],
+  allEdges: BackendEdge[] = [],
+) {
+  const langGraphNodes = allNodes.filter((n) => n.type === "langgraph");
+  if (langGraphNodes.length === 0) return [];
+  const langGraphNodeIds = new Set(langGraphNodes.map((n) => n.id));
+
+  const epOutHandle = `endpoint-out-${endpointOrConsumerId}`;
+  const epInHandle = `endpoint-in-${endpointOrConsumerId}`;
+  const evOutHandle = `consumedEvents-out-${endpointOrConsumerId}`;
+  const evInHandle = `consumedEvents-in-${endpointOrConsumerId}`;
+
+  const connectedLangGraphIds = new Set<string>();
+
+  allEdges.forEach((edge) => {
+    if (!edge) return;
+
+    // Service -> LangGraph
+    if (edge.source === serviceNodeId && langGraphNodeIds.has(edge.target)) {
+      const isForThisHandle =
+        edge.sourceHandle === epOutHandle ||
+        edge.sourceHandle === epInHandle ||
+        edge.sourceHandle === evOutHandle ||
+        edge.sourceHandle === evInHandle ||
+        edge.sourceHandle === endpointOrConsumerId;
+
+      const isGeneral = !edge.sourceHandle;
+
+      if (isForThisHandle || isGeneral) {
+        connectedLangGraphIds.add(edge.target);
+      }
+    }
+
+    // LangGraph -> Service
+    if (edge.target === serviceNodeId && langGraphNodeIds.has(edge.source)) {
+      const isForThisHandle =
+        edge.targetHandle === epInHandle ||
+        edge.targetHandle === epOutHandle ||
+        edge.targetHandle === evInHandle ||
+        edge.targetHandle === evOutHandle ||
+        edge.targetHandle === endpointOrConsumerId;
+
+      const isGeneral = !edge.targetHandle;
+
+      if (isForThisHandle || isGeneral) {
+        connectedLangGraphIds.add(edge.source);
+      }
+    }
+  });
+
+  return Array.from(connectedLangGraphIds)
+    .map((id) => {
+      const node = langGraphNodes.find((n) => n.id === id);
+      if (!node) return null;
+      return {
+        id: node.id,
+        nodeId: node.id,
+        label: node.data?.label || "LangGraph Agent",
+        stateChannels: node.data?.stateChannels || [],
+        inputChannels: node.data?.inputChannels || [],
+        graphSteps: node.data?.graphSteps || [],
+        node,
+      };
+    })
+    .filter(Boolean) as Array<{
+    id: string;
+    nodeId: string;
+    label: string;
+    stateChannels: any[];
+    inputChannels: any[];
+    graphSteps: any[];
+    node: BackendNode;
+  }>;
+}
+
+/**
  * Validates if an individual pipeline step has missing / unconfigured input bindings.
  */
 export function isStepInputUnconfigured(
@@ -330,6 +411,12 @@ export function isStepInputUnconfigured(
     return false;
   }
 
+  // 7. LangGraph Invoke Step validation
+  if (step.type === "langgraph_invoke") {
+    if (!step.langGraphTargetNodeId) return true;
+    return false;
+  }
+
   return false;
 }
 
@@ -428,6 +515,28 @@ export function isEndpointPipelineUnconfigured(
           (s.functionRef?.name === ck.functionName ||
             s.brokerNodeId === ck.brokerNodeId ||
             s.messagingResourceId === ck.topicId),
+      );
+
+      if (!matchingStep || isStepInputUnconfigured(matchingStep, allNodes)) {
+        return true;
+      }
+    }
+  }
+
+  // Check 4: Are there LangGraph agents connected via canvas edges to this endpoint?
+  const connectedLangGraph = getConnectedLangGraphForEndpoint(
+    endpointOrConsumer.id,
+    serviceNodeId,
+    allNodes,
+    allEdges,
+  );
+
+  if (connectedLangGraph.length > 0) {
+    for (const clg of connectedLangGraph) {
+      const matchingStep = steps.find(
+        (s) =>
+          s.type === "langgraph_invoke" &&
+          (s.langGraphTargetNodeId === clg.id || s.name === clg.label),
       );
 
       if (!matchingStep || isStepInputUnconfigured(matchingStep, allNodes)) {

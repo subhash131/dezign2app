@@ -92,6 +92,26 @@ describe("Convex canvasValidators exact schema", () => {
     expect(parsed.success).toBe(true);
   });
 
+  it("successfully parses langgraph_invoke steps with langGraphTargetNodeId and streaming fields", () => {
+    const lgStep = {
+      id: "r3xth6oj",
+      name: "step3Result",
+      type: "langgraph_invoke",
+      enabled: true,
+      inputBindings: [],
+      langGraphTargetNodeId: "399b5a18-385d-4aa4-995b-edf965747fc5",
+      langGraphStreamingEnabled: true,
+      langGraphStreamingProtocol: "sse" as const,
+      langGraphStateMapping: {
+        messages: "body.message",
+      },
+      outputVariable: "step3Result",
+    };
+
+    const parsed = safePipelineStepSchema.safeParse(lgStep);
+    expect(parsed.success).toBe(true);
+  });
+
   it("backendEndpointDataValidator, backendEventDataValidator, backendNodeDataValidator are valid Convex validators", () => {
     expect(backendEndpointDataValidator).toBeDefined();
     expect(backendEventDataValidator).toBeDefined();

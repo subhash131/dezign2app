@@ -8,6 +8,7 @@ import {
   renderCustomCodeStep,
   renderControlFlowStep,
   renderResponseStep,
+  renderLangGraphInvokeStep,
 } from "./stepRenderers";
 import { applyStepDecorators } from "./stepDecorators";
 
@@ -68,6 +69,10 @@ export function renderPipelineStep(
     case "early_return":
     case "return_response":
       rawLines = renderResponseStep(step, ctx);
+      break;
+
+    case "langgraph_invoke":
+      rawLines = renderLangGraphInvokeStep(step, ctx);
       break;
 
     default:

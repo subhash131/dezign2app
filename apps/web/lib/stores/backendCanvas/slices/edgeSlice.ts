@@ -19,6 +19,7 @@ import {
   handleFrontendConnect,
   handleEndpointConnect,
   handleForeignKeyConnect,
+  handleLangGraphConnect,
 } from "../edge";
 
 export interface EdgeSlice {
@@ -173,7 +174,10 @@ export const createEdgeSlice = (
       return;
     }
 
-    // 6. Handle Foreign Key column-to-column metadata updates
+    // 6. Handle LangGraph connections
+    handleLangGraphConnect(context);
+
+    // 7. Handle Foreign Key column-to-column metadata updates
     handleForeignKeyConnect(context);
   },
 
@@ -210,6 +214,24 @@ export const createEdgeSlice = (
       edges: next,
       pendingEdgeUpserts: [...get().pendingEdgeUpserts, edge],
     });
+
+    const sourceNode = nodes.find((n) => n.id === edge.source);
+    const targetNode = nodes.find((n) => n.id === edge.target);
+    if (sourceNode && targetNode) {
+      handleLangGraphConnect({
+        set,
+        get,
+        connection: {
+          source: edge.source,
+          target: edge.target,
+          sourceHandle: edge.sourceHandle ?? null,
+          targetHandle: edge.targetHandle ?? null,
+        },
+        sourceNode,
+        targetNode,
+        newEdge: edge,
+      });
+    }
   },
 
   updateEdge: (id, changes) => {

@@ -494,12 +494,15 @@ export async function ${handlerName}(
       routeHandlerCode += `    ${line}\n`;
     });
 
-    // Check if the pipeline includes an explicit return_response step
+    // Check if the pipeline includes an explicit return_response step or streaming langgraph_invoke step
     const hasReturnStep = pipelineSteps.some(
       (s) => s.type === "return_response" && s.enabled !== false,
     );
+    const hasStreamingStep = pipelineSteps.some(
+      (s) => s.type === "langgraph_invoke" && s.langGraphStreamingEnabled && s.enabled !== false,
+    );
 
-    if (!hasReturnStep) {
+    if (!hasReturnStep && !hasStreamingStep) {
       // Determine the response payload: use the last step's outputVariable
       const lastStep = [...pipelineSteps].reverse().find((s) => s.enabled !== false);
       const lastOutputVar = lastStep?.outputVariable || payloadVar;
@@ -511,7 +514,12 @@ export async function ${handlerName}(
     routeHandlerCode += `  } catch (err) {\n`;
     routeHandlerCode += `    const message = err instanceof Error ? err.message : String(err);\n`;
     routeHandlerCode += `    logger.error("Error in ${method.toUpperCase()} ${path}:", message);\n`;
-    routeHandlerCode += `    return res.status(500).json({ error: "Internal Server Error", details: message });\n`;
+    routeHandlerCode += `    if (res.headersSent) {\n`;
+    routeHandlerCode += `      res.write(\`data: \${JSON.stringify({ error: message })}\\n\\n\`);\n`;
+    routeHandlerCode += `      res.end();\n`;
+    routeHandlerCode += `    } else {\n`;
+    routeHandlerCode += `      return res.status(500).json({ error: "Internal Server Error", details: message });\n`;
+    routeHandlerCode += `    }\n`;
     routeHandlerCode += `  }\n}\n`;
 
     return {
