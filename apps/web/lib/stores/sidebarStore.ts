@@ -119,7 +119,7 @@ export const useSidebarStore = create<SidebarState>()(
         }),
     }),
     {
-      name: "blueprint_sidebar_layout_state_v1",
+      name: "dezign2app_sidebar_layout_state_v1",
       storage: createJSONStorage(() => localStorage),
     },
   ),

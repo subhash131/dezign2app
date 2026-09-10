@@ -84,7 +84,7 @@ export const useSectionCollapseStore = create<SectionCollapseStore>()(
       },
     }),
     {
-      name: "blueprint_webpage_section_collapse_state_v1",
+      name: "dezign2app_webpage_section_collapse_state_v1",
       storage: createJSONStorage(() => localStorage),
     },
   ),

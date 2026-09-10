@@ -86,7 +86,7 @@ export function CompiledCodeViewer({
   const [dockerDialogOpen, setDockerDialogOpen] = useState<boolean>(false);
 
   const formattedProjectName = useMemo(() => {
-    const raw = (projectName || "Blueprint").trim();
+    const raw = (projectName || "Dezign2App").trim();
     if (raw.toLowerCase().endsWith("monorepo")) {
       return raw;
     }
@@ -445,7 +445,7 @@ export function CompiledCodeViewer({
       <DockerRunnerDialog
         open={dockerDialogOpen}
         onOpenChange={setDockerDialogOpen}
-        projectName={projectName || "Blueprint"}
+        projectName={projectName || "Dezign2App"}
         projectId={projectId || "default"}
         monorepoResult={monorepoResult}
         onDownloadZip={handleDownloadZip}

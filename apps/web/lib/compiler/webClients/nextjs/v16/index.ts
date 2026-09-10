@@ -37,7 +37,7 @@ export function compileNextjsV16WebClient(
   })[] = [],
   allNodes: BackendNode[] = [],
   allEdges: BackendEdge[] = [],
-  projectName: string = "Blueprint Monorepo",
+  projectName: string = "Dezign2App Monorepo",
   testCases: SimulationTestCase[] = [],
   appSlug?: string,
   webAppNode?: BackendNode,

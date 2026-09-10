@@ -29,7 +29,7 @@ import { TerminalDockButton } from "./components/TerminalDockButton";
 
 export function Terminal({
   projectId,
-  projectName = "Blueprint",
+  projectName = "Dezign2App",
   isOpen: controlledIsOpen,
   onToggleOpen: controlledOnToggleOpen,
 }: TerminalProps) {

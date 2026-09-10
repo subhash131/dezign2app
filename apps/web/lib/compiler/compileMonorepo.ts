@@ -33,7 +33,7 @@ export function compileMonorepo(
   })[] = [],
   edges: BackendEdge[] = [],
   testCases: SimulationTestCase[] = [],
-  projectName: string = "Blueprint Monorepo",
+  projectName: string = "Dezign2App Monorepo",
 ): CompiledMonorepoResult {
   const files: CompiledFile[] = [];
 

@@ -15,9 +15,9 @@ const activeListeners = new Map<
 export function getShellPrompt(
   shell: string | undefined,
   dir: string = "",
-  projectName: string = "blueprint",
+  projectName: string = "dezign2app",
 ): string {
-  const normalizedProject = (projectName || "blueprint")
+  const normalizedProject = (projectName || "dezign2app")
     .toLowerCase()
     .replace(/[^a-z0-9-]/g, "");
   const normalizedDir = dir
@@ -40,7 +40,7 @@ function simulateCommand(rawCmd: string, targetDir: string): string {
 
   if (lowerCmd === "help") {
     return (
-      `\x1b[1;36mBlueprint Monorepo CLI — Interactive Web Shell\x1b[0m\r\n\r\n` +
+      `\x1b[1;36mDezign2App Monorepo CLI — Interactive Web Shell\x1b[0m\r\n\r\n` +
       `  \x1b[32mpnpm dev\x1b[0m         Start all workspace apps (Next.js, Express, APIs) with hot reload\r\n` +
       `  \x1b[32mpnpm build\x1b[0m       Compile monorepo packages, libraries, and applications\r\n` +
       `  \x1b[32mpnpm i / install\x1b[0m Install and link workspace monorepo dependencies\r\n` +
@@ -62,7 +62,7 @@ function simulateCommand(rawCmd: string, targetDir: string): string {
     lowerCmd === "bun dev"
   ) {
     return (
-      `\x1b[90m> blueprint@0.1.0 dev /workspace/blueprint\x1b[0m\r\n` +
+      `\x1b[90m> dezign2app@0.1.0 dev /workspace/dezign2app\x1b[0m\r\n` +
       `\x1b[90m> turbo run dev\x1b[0m\r\n\r\n` +
       `\x1b[36m• packages:cache\x1b[0m \x1b[32m✔ Up to date (turbo)\x1b[0m\r\n` +
       `\x1b[35m• web:dev\x1b[0m       ▲ Next.js 16.0.10 (Turbopack) ready in 420ms\r\n` +
@@ -113,10 +113,10 @@ function simulateCommand(rawCmd: string, targetDir: string): string {
   ) {
     return (
       `\x1b[36m[+] Running 4/4\x1b[0m\r\n` +
-      `\x1b[32m ✔ Network blueprint_default     Created\x1b[0m\r\n` +
-      `\x1b[32m ✔ Container blueprint-postgres  Started (listening on port 5432)\x1b[0m\r\n` +
-      `\x1b[32m ✔ Container blueprint-redis     Started (listening on port 6379)\x1b[0m\r\n` +
-      `\x1b[32m ✔ Container blueprint-api       Started (listening on port 4000)\x1b[0m\r\n` +
+      `\x1b[32m ✔ Network dezign2app_default     Created\x1b[0m\r\n` +
+      `\x1b[32m ✔ Container dezign2app-postgres  Started (listening on port 5432)\x1b[0m\r\n` +
+      `\x1b[32m ✔ Container dezign2app-redis     Started (listening on port 6379)\x1b[0m\r\n` +
+      `\x1b[32m ✔ Container dezign2app-api       Started (listening on port 4000)\x1b[0m\r\n` +
       `\x1b[32m✔ Containers healthy & ready.\x1b[0m`
     );
   }
@@ -129,16 +129,16 @@ function simulateCommand(rawCmd: string, targetDir: string): string {
   }
 
   if (lowerCmd === "pwd") {
-    return targetDir || "/workspace/blueprint";
+    return targetDir || "/workspace/dezign2app";
   }
 
   if (lowerCmd.startsWith("cat ")) {
     const file = cmd.slice(4).trim();
     if (file === "package.json") {
-      return `{\r\n  "name": "blueprint-monorepo",\r\n  "version": "0.1.0",\r\n  "private": true,\r\n  "workspaces": [\r\n    "apps/*",\r\n    "packages/*"\r\n  ]\r\n}`;
+      return `{\r\n  "name": "dezign2app-monorepo",\r\n  "version": "0.1.0",\r\n  "private": true,\r\n  "workspaces": [\r\n    "apps/*",\r\n    "packages/*"\r\n  ]\r\n}`;
     }
     if (file === "README.md" || file === "readme.md") {
-      return `# Blueprint Monorepo\r\nArchitecture diagram compiled into fullstack Next.js and Microservices workspace.`;
+      return `# Dezign2App Monorepo\r\nArchitecture diagram compiled into fullstack Next.js and Microservices workspace.`;
     }
     return `[Preview of ${file}]\r\n// Workspace generated file`;
   }
@@ -283,7 +283,7 @@ export function useDynamicTerminalSessions({
           targetDir =
             localStorage.getItem(`workspace_dir_${projectId}`) ||
             localStorage.getItem(`docker_dir_${projectId}`) ||
-            localStorage.getItem("blueprint_workspace_dir") ||
+            localStorage.getItem("dezign2app_workspace_dir") ||
             "";
         } catch (e) {}
       }

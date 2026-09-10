@@ -77,7 +77,7 @@ export async function createSession(
           content: [
             {
               type: "text" as const,
-              text: "Unauthorized: this API key is not bound to a project. Please regenerate your key from the Blueprint dashboard.",
+              text: "Unauthorized: this API key is not bound to a project. Please regenerate your key from the Dezign2App dashboard.",
             },
           ],
           isError: true,
@@ -201,7 +201,7 @@ export async function createSession(
           content: [
             {
               type: "text" as const,
-              text: "Unauthorized: this API key is not bound to a project. Please regenerate your key from the Blueprint dashboard.",
+              text: "Unauthorized: this API key is not bound to a project. Please regenerate your key from the Dezign2App dashboard.",
             },
           ],
           isError: true,
@@ -302,7 +302,7 @@ export async function createSession(
           content: [
             {
               type: "text" as const,
-              text: "Unauthorized: this API key is not bound to a project. Please regenerate your key from the Blueprint dashboard.",
+              text: "Unauthorized: this API key is not bound to a project. Please regenerate your key from the Dezign2App dashboard.",
             },
           ],
           isError: true,

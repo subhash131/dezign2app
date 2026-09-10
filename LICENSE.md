@@ -10,7 +10,7 @@ Permission is hereby granted, free of charge, to any person obtaining a copy of 
 
 **Direct Commercial Competition is Strictly Prohibited.**
 
-You may **NOT** use, host, rebrand, sub-license, deploy, or distribute this Software (or any substantially similar derivative work derived from this codebase) as a commercial product, SaaS offering, managed service, or direct competitor to **Dezign2App** (Blueprint) without prior explicit written permission from the copyright owner (Subhash Nayak).
+You may **NOT** use, host, rebrand, sub-license, deploy, or distribute this Software (or any substantially similar derivative work derived from this codebase) as a commercial product, SaaS offering, managed service, or direct competitor to **Dezign2App** without prior explicit written permission from the copyright owner (Subhash Nayak).
 
 Specifically, you agree not to:
 

@@ -85,7 +85,7 @@ export function generateDockerFiles(
     projectName
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "") || "blueprint";
+      .replace(/^-+|-+$/g, "") || "dezign2app";
 
   // Check database configuration
   const dbNodes = nodes.filter((n) => n.type === "database");

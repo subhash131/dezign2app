@@ -74,7 +74,7 @@ export function getActiveProjectOutputDir(projectId?: string): string {
         localStorage.getItem(`docker_dir_${projectId}`);
       if (saved) return saved;
     }
-    return localStorage.getItem("blueprint_workspace_dir") || "";
+    return localStorage.getItem("dezign2app_workspace_dir") || "";
   } catch {
     return "";
   }
@@ -95,7 +95,7 @@ export async function saveLocalEnvVariable(
   // 1. Cache in browser localStorage so the user can see their local secret across page refreshes
   if (typeof window !== "undefined") {
     try {
-      localStorage.setItem(`blueprint_env_${cleanKey}`, value);
+      localStorage.setItem(`dezign2app_env_${cleanKey}`, value);
     } catch {}
   }
 
@@ -152,7 +152,7 @@ export function getLocalEnvVariable(key: string): string {
   const cleanKey = cleanEnvVarName(key);
   if (!cleanKey || typeof window === "undefined") return "";
   try {
-    return localStorage.getItem(`blueprint_env_${cleanKey}`) || "";
+    return localStorage.getItem(`dezign2app_env_${cleanKey}`) || "";
   } catch {
     return "";
   }
@@ -180,7 +180,7 @@ export async function fetchLocalEnvVariable(
       if (match && match[1] !== undefined) {
         const val = match[1].trim();
         if (typeof window !== "undefined") {
-          localStorage.setItem(`blueprint_env_${cleanKey}`, val);
+          localStorage.setItem(`dezign2app_env_${cleanKey}`, val);
         }
         return val;
       }
@@ -196,7 +196,7 @@ export async function fetchLocalEnvVariable(
       if (res.ok) {
         const data = await res.json();
         if (data.value !== undefined && data.value !== null && data.value !== "") {
-          localStorage.setItem(`blueprint_env_${cleanKey}`, data.value);
+          localStorage.setItem(`dezign2app_env_${cleanKey}`, data.value);
           return data.value;
         }
       }
@@ -243,7 +243,7 @@ export async function deleteLocalEnvVariable(
   // 1. Remove from localStorage
   if (typeof window !== "undefined") {
     try {
-      localStorage.removeItem(`blueprint_env_${cleanKey}`);
+      localStorage.removeItem(`dezign2app_env_${cleanKey}`);
     } catch {}
   }
 

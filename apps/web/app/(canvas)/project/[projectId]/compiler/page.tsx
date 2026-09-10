@@ -58,7 +58,7 @@ export default function CompilerPage({
   useStoreHydration(projectId, canvasElements);
 
   // Compile the monorepo file tree
-  const projectName = project?.name || "Blueprint";
+  const projectName = project?.name || "Dezign2App";
   const formattedProjectName = useMemo(() => {
     const raw = projectName.trim();
     return raw.toLowerCase().endsWith("monorepo") ? raw : `${raw} Monorepo`;

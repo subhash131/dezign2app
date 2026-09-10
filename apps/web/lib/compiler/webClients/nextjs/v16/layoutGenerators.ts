@@ -25,7 +25,7 @@ import "@workspace/ui/globals.css";
 
 export const metadata: Metadata = {
   title: "${projectName}",
-  description: "${projectName} generated with Blueprint",
+  description: "${projectName} generated with Dezign2App",
 };
 
 export default function RootLayout({

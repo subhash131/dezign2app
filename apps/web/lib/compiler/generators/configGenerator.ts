@@ -360,7 +360,7 @@ dist
     `# ${serviceName} Microservice`,
     ``,
     `Port: \`${port}\``,
-    `Description: ${node.data?.description || "Modular microservice compiled from Blueprint architecture canvas."}`,
+    `Description: ${node.data?.description || "Modular microservice compiled from Dezign2App architecture canvas."}`,
     ``,
     `## Connected Routes & Endpoint Data Flow`,
     ``,

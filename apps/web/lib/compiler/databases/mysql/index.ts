@@ -331,7 +331,7 @@ export function compileMysqlDatabase(
     "",
     "export type SqlParam = string | number | boolean | null | undefined | Date;",
     "",
-    `const connectionUri = process.env.${connEnvKey} || process.env.DATABASE_URL || "mysql://root:root@localhost:3306/blueprint";`,
+    `const connectionUri = process.env.${connEnvKey} || process.env.DATABASE_URL || "mysql://root:root@localhost:3306/dezign2app";`,
     "",
     "export const pool = mysql.createPool({",
     "  uri: connectionUri,",

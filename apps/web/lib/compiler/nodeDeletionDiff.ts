@@ -33,7 +33,7 @@ export function computeNodeDeletionDiff(
   })[] = [],
   edges: BackendEdge[] = [],
   testCases: SimulationTestCase[] = [],
-  projectName: string = "Blueprint Monorepo",
+  projectName: string = "Dezign2App Monorepo",
   nodeIdsToDelete: string[] = [],
 ): NodeDeletionDiffResult {
   if (!nodeIdsToDelete || nodeIdsToDelete.length === 0) {

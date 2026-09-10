@@ -4,7 +4,7 @@ type TableRecord = {
   updatedAt: number;
 };
 
-const DATABASE_NAME = "blueprint-simulation";
+const DATABASE_NAME = "dezign2app-simulation";
 const STORE_NAME = "tables";
 const memoryTables = new Map<string, TableRecord>();
 

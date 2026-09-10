@@ -6,7 +6,7 @@ import { useSimulationStore } from "@/lib/stores/simulationStore";
 import { compileMonorepo, CompiledMonorepoResult } from "@/lib/compiler";
 import { ServiceEndpoint } from "../types";
 
-export function useMonorepoEndpoints(projectName: string = "Blueprint") {
+export function useMonorepoEndpoints(projectName: string = "Dezign2App") {
   // Zustand Store selectors
   const nodes = useBackendCanvasStore((s) => s.nodes);
   const endpoints = useBackendCanvasStore((s) => s.endpoints);
