@@ -1,6 +1,6 @@
 /* eslint-disable */
 /**
- * Generated `api` utility.
+ * Generated `ComponentApi` utility.
  *
  * THIS CODE IS AUTOMATICALLY GENERATED.
  *
@@ -8,110 +8,21 @@
  * @module
  */
 
-import type * as ai_conversations from "../ai/conversations.js";
-import type * as ai_messages from "../ai/messages.js";
-import type * as api_keys from "../api_keys.js";
-import type * as auth from "../auth.js";
-import type * as billing from "../billing.js";
-import type * as canvas from "../canvas.js";
-import type * as canvas_edges from "../canvas/edges.js";
-import type * as canvas_elements from "../canvas/elements.js";
-import type * as canvas_entities from "../canvas/entities.js";
-import type * as canvas_frontend from "../canvas/frontend.js";
-import type * as canvas_nodes from "../canvas/nodes.js";
-import type * as canvas_testCases from "../canvas/testCases.js";
-import type * as canvas_versions from "../canvas/versions.js";
-import type * as http from "../http.js";
-import type * as kanban from "../kanban.js";
-import type * as langgraph from "../langgraph.js";
-import type * as project_chat from "../project_chat.js";
-import type * as projects from "../projects.js";
-import type * as requirements from "../requirements.js";
-import type * as schema_auth from "../schema/auth.js";
-import type * as schema_canvasValidators from "../schema/canvasValidators.js";
-import type * as schema_canvasVersionsValidator from "../schema/canvasVersionsValidator.js";
-import type * as schema_features from "../schema/features.js";
-import type * as schema_langgraph from "../schema/langgraph.js";
-import type * as schema_requirements from "../schema/requirements.js";
-import type * as schema_workflows from "../schema/workflows.js";
-import type * as users from "../users.js";
-import type * as workflows__utils from "../workflows/_utils.js";
-import type * as workflows_cron from "../workflows/cron.js";
-import type * as workflows_crud from "../workflows/crud.js";
-import type * as workflows_runs from "../workflows/runs.js";
-import type * as workflows_secrets from "../workflows/secrets.js";
-import type * as workflows_versions from "../workflows/versions.js";
-
-import type {
-  ApiFromModules,
-  FilterApi,
-  FunctionReference,
-} from "convex/server";
-
-declare const fullApi: ApiFromModules<{
-  "ai/conversations": typeof ai_conversations;
-  "ai/messages": typeof ai_messages;
-  api_keys: typeof api_keys;
-  auth: typeof auth;
-  billing: typeof billing;
-  canvas: typeof canvas;
-  "canvas/edges": typeof canvas_edges;
-  "canvas/elements": typeof canvas_elements;
-  "canvas/entities": typeof canvas_entities;
-  "canvas/frontend": typeof canvas_frontend;
-  "canvas/nodes": typeof canvas_nodes;
-  "canvas/testCases": typeof canvas_testCases;
-  "canvas/versions": typeof canvas_versions;
-  http: typeof http;
-  kanban: typeof kanban;
-  langgraph: typeof langgraph;
-  project_chat: typeof project_chat;
-  projects: typeof projects;
-  requirements: typeof requirements;
-  "schema/auth": typeof schema_auth;
-  "schema/canvasValidators": typeof schema_canvasValidators;
-  "schema/canvasVersionsValidator": typeof schema_canvasVersionsValidator;
-  "schema/features": typeof schema_features;
-  "schema/langgraph": typeof schema_langgraph;
-  "schema/requirements": typeof schema_requirements;
-  "schema/workflows": typeof schema_workflows;
-  users: typeof users;
-  "workflows/_utils": typeof workflows__utils;
-  "workflows/cron": typeof workflows_cron;
-  "workflows/crud": typeof workflows_crud;
-  "workflows/runs": typeof workflows_runs;
-  "workflows/secrets": typeof workflows_secrets;
-  "workflows/versions": typeof workflows_versions;
-}>;
+import type { FunctionReference } from "convex/server";
 
 /**
- * A utility for referencing Convex functions in your app's public API.
+ * A utility for referencing a Convex component's exposed API.
  *
+ * Useful when expecting a parameter like `components.myComponent`.
  * Usage:
- * ```js
- * const myFunctionReference = api.myModule.myFunction;
+ * ```ts
+ * async function myFunction(ctx: QueryCtx, component: ComponentApi) {
+ *   return ctx.runQuery(component.someFile.someQuery, { ...args });
+ * }
  * ```
  */
-export declare const api: FilterApi<
-  typeof fullApi,
-  FunctionReference<any, "public">
->;
-
-/**
- * A utility for referencing Convex functions in your app's internal API.
- *
- * Usage:
- * ```js
- * const myFunctionReference = internal.myModule.myFunction;
- * ```
- */
-export declare const internal: FilterApi<
-  typeof fullApi,
-  FunctionReference<any, "internal">
->;
-
-export declare const components: {
-  betterAuth: {
+export type ComponentApi<Name extends string | undefined = string | undefined> =
+  {
     adapter: {
       create: FunctionReference<
         "mutation",
@@ -273,7 +184,8 @@ export declare const components: {
           onCreateHandle?: string;
           select?: Array<string>;
         },
-        any
+        any,
+        Name
       >;
       deleteMany: FunctionReference<
         "mutation",
@@ -741,7 +653,8 @@ export declare const components: {
             numItems: number;
           };
         },
-        any
+        any,
+        Name
       >;
       deleteOne: FunctionReference<
         "mutation",
@@ -1201,7 +1114,8 @@ export declare const components: {
               };
           onDeleteHandle?: string;
         },
-        any
+        any,
+        Name
       >;
       findMany: FunctionReference<
         "query",
@@ -1259,7 +1173,8 @@ export declare const components: {
               | null;
           }>;
         },
-        any
+        any,
+        Name
       >;
       findOne: FunctionReference<
         "query",
@@ -1306,7 +1221,8 @@ export declare const components: {
               | null;
           }>;
         },
-        any
+        any,
+        Name
       >;
       updateMany: FunctionReference<
         "mutation",
@@ -1887,7 +1803,8 @@ export declare const components: {
             numItems: number;
           };
         },
-        any
+        any,
+        Name
       >;
       updateOne: FunctionReference<
         "mutation",
@@ -2460,8 +2377,8 @@ export declare const components: {
               };
           onUpdateHandle?: string;
         },
-        any
+        any,
+        Name
       >;
     };
   };
-};
