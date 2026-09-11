@@ -26,6 +26,7 @@ export const CONNECTION_RULES: Record<HandleKind, HandleKind[]> = {
     "websocket-in",
     "pageload-in",
     "langgraph-in",
+    "page-ref-in",
   ],
   "published-event-out": [
     "resource-def-in",
@@ -43,6 +44,7 @@ export const CONNECTION_RULES: Record<HandleKind, HandleKind[]> = {
     "websocket-in",
     "langgraph-in",
     "hook-in",
+    "page-ref-in",
   ],
   "resource-def-in": [],
   "resource-def-out": [
@@ -154,6 +156,8 @@ export const EDGE_TYPE_MAP: Record<string, string> = {
   "event-source→page-ref-in": "connection",
   "event-source→webrtc-in": "connection",
   "page-out→page-ref-in": "connection",
+  "endpoint-out→page-ref-in": "connection",
+  "consumed-event-out→page-ref-in": "connection",
   "transformer-out→endpoint-in": "connection",
   "transformer-out→consumed-event-in": "connection",
   "transformer-out→task-in": "connection",

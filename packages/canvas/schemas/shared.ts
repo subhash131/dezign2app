@@ -314,6 +314,8 @@ export interface PipelineStep {
   clientDeliveryTargetWebAppId?: string;
   /** ID of the WebPageNode this step targets (stored as a reference, no graph edge drawn) */
   clientDeliveryTargetPageId?: string;
+  /** Optional ID of the PageRefNode connected to this step on the canvas */
+  clientDeliveryPageRefNodeId?: string;
   /** SSE event name or WebSocket message type (e.g. "order.updated") */
   clientDeliveryEventName?: string;
   /** WebSocket broadcast room / channel key */
@@ -410,6 +412,7 @@ export const pipelineStepSchema: z.ZodType<PipelineStep> = z.lazy(() =>
     clientDeliveryProtocol: z.enum(["SSE", "WEBSOCKET", "WEBRTC", "API_PUSH"]).optional(),
     clientDeliveryTargetWebAppId: z.string().optional(),
     clientDeliveryTargetPageId: z.string().optional(),
+    clientDeliveryPageRefNodeId: z.string().optional(),
     clientDeliveryEventName: z.string().optional(),
     clientDeliveryRoom: z.string().optional(),
     clientDeliveryWebhookUrl: z.string().optional(),

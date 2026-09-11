@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo } from "react";
+import { Compass, Plus } from "lucide-react";
 import { BackendNode, BackendEdge, AnyMessagingResource, Endpoint } from "@workspace/canvas/types";
 import { ClientDeliveryProtocol, RealtimeConnection } from "@workspace/canvas/types";
 import {
@@ -12,6 +13,7 @@ import {
 } from "@workspace/ui/components/select";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { PipelineStepDraft, AvailableSource, ExpectedArg } from "./types";
+import { ensurePageRefConnection } from "./utils";
 import { LocalInput } from "../../backend-nodes/graph-nodes/common/LocalInput";
 
 // ---------------------------------------------------------------------------
@@ -195,6 +197,60 @@ export const PushToClientStepSection: React.FC<PushToClientStepSectionProps> = (
         sourceItemId,
         sourceItemType,
       );
+
+      if (serviceNodeId) {
+        const conn = ensurePageRefConnection({
+          targetPageId: tgtId,
+          pageRefNodeId: updated.clientDeliveryPageRefNodeId || step.clientDeliveryPageRefNodeId,
+          serviceNodeId,
+          endpointId: endpoint?.id,
+          consumedEventId: consumedEvent?.id,
+          stepId: step.id,
+        });
+        if (conn?.pageRefNodeId && updated.clientDeliveryPageRefNodeId !== conn.pageRefNodeId) {
+          updated.clientDeliveryPageRefNodeId = conn.pageRefNodeId;
+          onChange(updated);
+        }
+      }
+    }
+  };
+
+  const sourceHandle = endpoint?.id
+    ? `endpoint-out-${endpoint.id}`
+    : consumedEvent?.id
+    ? `consumedEvents-out-${consumedEvent.id}`
+    : serviceNodeId
+    ? `endpoint-out-${serviceNodeId}`
+    : undefined;
+
+  const connectedEdge = edges.find(
+    (e) =>
+      e.source === serviceNodeId &&
+      (sourceHandle ? e.sourceHandle === sourceHandle || !e.sourceHandle : true) &&
+      nodes.some((n) => n.id === e.target && n.type === "page_ref"),
+  );
+
+  const connectedPageRefNode = connectedEdge
+    ? nodes.find((n) => n.id === connectedEdge.target && n.type === "page_ref")
+    : step.clientDeliveryPageRefNodeId
+    ? nodes.find((n) => n.id === step.clientDeliveryPageRefNodeId && n.type === "page_ref")
+    : null;
+
+  const handleSpawnPageRefNode = () => {
+    if (!serviceNodeId) return;
+    const conn = ensurePageRefConnection({
+      targetPageId: targetPageId || undefined,
+      pageRefNodeId: step.clientDeliveryPageRefNodeId,
+      serviceNodeId,
+      endpointId: endpoint?.id,
+      consumedEventId: consumedEvent?.id,
+      stepId: step.id,
+    });
+    if (conn?.pageRefNodeId) {
+      update({
+        clientDeliveryPageRefNodeId: conn.pageRefNodeId,
+        ...(conn.targetPageId && !targetPageId ? { clientDeliveryTargetPageId: conn.targetPageId } : {}),
+      });
     }
   };
 
@@ -242,9 +298,25 @@ export const PushToClientStepSection: React.FC<PushToClientStepSectionProps> = (
 
       {/* Target Page */}
       <div className="flex flex-col gap-1">
-        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-          Target Web Page
-        </span>
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+            Target Web Page
+          </span>
+          {connectedPageRefNode ? (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono bg-indigo-500/15 border border-indigo-500/30 text-indigo-600 dark:text-indigo-400">
+              <Compass size={10} /> Connected PageRef Node
+            </span>
+          ) : (
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline font-medium cursor-pointer"
+              onClick={handleSpawnPageRefNode}
+              title="Spawn & Connect PageRef node on canvas"
+            >
+              <Plus size={10} /> Connect PageRef
+            </button>
+          )}
+        </div>
         <Select
           value={targetPageId || "__none__"}
           onValueChange={(val) => {

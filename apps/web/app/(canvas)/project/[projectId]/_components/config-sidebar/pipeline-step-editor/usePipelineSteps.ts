@@ -18,7 +18,13 @@ import {
   cleanupRedisCacheConnection,
   ensureDatabaseRefConnection,
   cleanupDatabaseRefConnection,
+  ensurePageRefConnection,
+  cleanupPageRefConnection,
 } from "./utils";
+import {
+  upsertDerivedConnection,
+  removeDerivedConnection,
+} from "./PushToClientStepSection";
 import {
   getConnectedTransformersForEndpoint,
   getConnectedKafkaForEndpoint,
@@ -356,6 +362,24 @@ export function usePipelineSteps({
     });
   }, [executableSteps, serviceNodeId, endpoint?.id, consumedEvent?.id]);
 
+  // Auto-synchronize connected PageRef nodes and edges for configured push_to_client steps
+  useEffect(() => {
+    if (!serviceNodeId || executableSteps.length === 0) return;
+    const pushSteps = executableSteps.filter((s) => s.type === "push_to_client");
+    if (pushSteps.length === 0) return;
+
+    pushSteps.forEach((s) => {
+      ensurePageRefConnection({
+        targetPageId: s.clientDeliveryTargetPageId,
+        pageRefNodeId: s.clientDeliveryPageRefNodeId,
+        serviceNodeId,
+        endpointId: endpoint?.id,
+        consumedEventId: consumedEvent?.id,
+        stepId: s.id,
+      });
+    });
+  }, [executableSteps, serviceNodeId, endpoint?.id, consumedEvent?.id]);
+
   const hasUnconfiguredInputs = useMemo(
     () => executableSteps.some((s) => isStepInputUnconfigured(s, allNodes)),
     [executableSteps, allNodes],
@@ -573,6 +597,47 @@ export function usePipelineSteps({
         langGraphStateMapping: defaultStateMapping,
         inputBindings: [],
       };
+    } else if (type === "push_to_client") {
+      const allWebPageNodes = allNodes.filter((n) => n.type === "webPage");
+      const firstPage = allWebPageNodes[0];
+      const connectionResult = ensurePageRefConnection({
+        targetPageId: firstPage?.id,
+        serviceNodeId,
+        endpointId: endpoint?.id,
+        consumedEventId: consumedEvent?.id,
+        stepId: id,
+      });
+
+      const varName = `pushToClient${stepNum}`;
+      initialFields = {
+        name: varName,
+        outputVariable: varName,
+        clientDeliveryProtocol: "SSE",
+        clientDeliveryTargetPageId: connectionResult?.targetPageId || firstPage?.id,
+        clientDeliveryPageRefNodeId: connectionResult?.pageRefNodeId,
+        clientDeliveryTargetWebAppId: firstPage?.data?.appSlug || undefined,
+        inputBindings: [],
+      };
+
+      if (firstPage) {
+        const store = useBackendCanvasStore.getState();
+        const sourceItemName = endpoint
+          ? endpoint.name || "Endpoint"
+          : consumedEvent
+          ? consumedEvent.name
+          : undefined;
+        const sourceItemId = endpoint ? endpoint.id : consumedEvent ? consumedEvent.id : undefined;
+        const sourceItemType = endpoint ? "endpoint" : consumedEvent ? "event" : undefined;
+        upsertDerivedConnection(
+          store,
+          firstPage.id,
+          { id, type: "push_to_client", ...initialFields } as PipelineStepDraft,
+          serviceNodeId,
+          sourceItemName,
+          sourceItemId,
+          sourceItemType,
+        );
+      }
     }
 
     const newStep: PipelineStepDraft = {
@@ -670,6 +735,37 @@ export function usePipelineSteps({
       }
     }
 
+    if (prevStep?.type === "push_to_client" && updated.type !== "push_to_client") {
+      const remainingSteps = executableSteps.filter((_, i) => i !== index);
+      cleanupPageRefConnection({
+        pageRefNodeId: prevStep.clientDeliveryPageRefNodeId,
+        serviceNodeId,
+        endpointId: endpoint?.id,
+        consumedEventId: consumedEvent?.id,
+        remainingSteps,
+      });
+      if (prevStep.clientDeliveryTargetPageId) {
+        const store = useBackendCanvasStore.getState();
+        removeDerivedConnection(store, prevStep.clientDeliveryTargetPageId, prevStep.id);
+      }
+    } else if (prevStep?.type !== "push_to_client" && updated.type === "push_to_client") {
+      const allWebPageNodes = allNodes.filter((n) => n.type === "webPage");
+      const targetPageId = updated.clientDeliveryTargetPageId || allWebPageNodes[0]?.id;
+      const connectionResult = ensurePageRefConnection({
+        targetPageId,
+        serviceNodeId,
+        endpointId: endpoint?.id,
+        consumedEventId: consumedEvent?.id,
+        stepId: updated.id,
+      });
+      if (connectionResult) {
+        updated.clientDeliveryPageRefNodeId = connectionResult.pageRefNodeId;
+        if (!updated.clientDeliveryTargetPageId && connectionResult.targetPageId) {
+          updated.clientDeliveryTargetPageId = connectionResult.targetPageId;
+        }
+      }
+    }
+
     const next = [...executableSteps];
     next[index] = updated;
     if (isConsumer || isNested) {
@@ -682,6 +778,21 @@ export function usePipelineSteps({
   const deleteStep = (index: number) => {
     const stepToDelete = executableSteps[index];
     if (!stepToDelete) return;
+
+    if (stepToDelete.type === "push_to_client") {
+      const remainingSteps = executableSteps.filter((_, i) => i !== index);
+      cleanupPageRefConnection({
+        pageRefNodeId: stepToDelete.clientDeliveryPageRefNodeId,
+        serviceNodeId,
+        endpointId: endpoint?.id,
+        consumedEventId: consumedEvent?.id,
+        remainingSteps,
+      });
+      if (stepToDelete.clientDeliveryTargetPageId) {
+        const store = useBackendCanvasStore.getState();
+        removeDerivedConnection(store, stepToDelete.clientDeliveryTargetPageId, stepToDelete.id);
+      }
+    }
 
     if (stepToDelete.type === "redis_operation") {
       const remainingSteps = executableSteps.filter((_, i) => i !== index);
