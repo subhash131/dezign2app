@@ -507,3 +507,73 @@ export function renderLangGraphInvokeStep(
   return rawLines;
 }
 
+/**
+ * Renders a push_to_client pipeline step (delivering real-time events via SSE, WebSocket, WebRTC, or Webhook).
+ */
+export function renderPushToClientStep(
+  step: PipelineStep,
+  ctx: PipelineRenderContext,
+): string[] {
+  const {
+    inputBindings = [],
+    clientDeliveryProtocol = "SSE",
+    clientDeliveryEventName,
+    outputVariable = "deliveryResult",
+  } = step;
+  const eventName = clientDeliveryEventName || "message";
+
+  const payloadBinding = inputBindings.find(
+    (b) => b.argName === "payload" || b.argName === "data",
+  );
+  const fieldBindings = inputBindings.filter(
+    (b) => b.argName !== "payload" && b.argName !== "data",
+  );
+
+  let payloadExpr: string;
+  if (fieldBindings.length > 0) {
+    const fieldsStr = fieldBindings
+      .map((b) => `    ${b.argName}: ${resolveBinding(b, ctx)},`)
+      .join("\n");
+    if (payloadBinding) {
+      const baseExpr = resolveBinding(payloadBinding, ctx);
+      payloadExpr = `{\n    ...${baseExpr},\n${fieldsStr}\n  }`;
+    } else {
+      payloadExpr = `{\n${fieldsStr}\n  }`;
+    }
+  } else if (payloadBinding) {
+    payloadExpr = resolveBinding(payloadBinding, ctx);
+  } else {
+    payloadExpr = ctx.bodyVar || "{}";
+  }
+
+  const rawLines: string[] = [];
+  if (clientDeliveryProtocol === "SSE") {
+    rawLines.push(`// --- Push to Client via Server-Sent Events (SSE) ---`);
+    rawLines.push(`sseBroadcast(${JSON.stringify(eventName)}, ${payloadExpr});`);
+  } else if (clientDeliveryProtocol === "WEBSOCKET") {
+    const roomParam = step.clientDeliveryRoom ? `, ${JSON.stringify(step.clientDeliveryRoom)}` : "";
+    rawLines.push(`// --- Push to Client via WebSocket ---`);
+    rawLines.push(`wsBroadcast(${JSON.stringify(eventName)}, ${payloadExpr}${roomParam});`);
+  } else if (clientDeliveryProtocol === "API_PUSH") {
+    const url = JSON.stringify(step.clientDeliveryWebhookUrl || "https://example.com/webhook");
+    const method = JSON.stringify(step.clientDeliveryWebhookMethod || "POST");
+    rawLines.push(`// --- Push to Client via Outbound Webhook ---`);
+    rawLines.push(`await fetch(${url}, {`);
+    rawLines.push(`  method: ${method},`);
+    rawLines.push(`  headers: { "Content-Type": "application/json" },`);
+    rawLines.push(`  body: JSON.stringify(${payloadExpr}),`);
+    rawLines.push(`});`);
+  } else {
+    rawLines.push(`// --- Push to Client via WebRTC Data Channel ---`);
+    rawLines.push(`webrtcBroadcast(${JSON.stringify(eventName)}, ${payloadExpr});`);
+  }
+
+  if (outputVariable) {
+    rawLines.push(
+      `const ${outputVariable} = { delivered: true, event: ${JSON.stringify(eventName)} };`,
+    );
+  }
+
+  return rawLines;
+}
+

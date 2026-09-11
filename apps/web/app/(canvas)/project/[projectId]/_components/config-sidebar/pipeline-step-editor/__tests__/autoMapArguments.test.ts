@@ -278,5 +278,78 @@ describe("pipeline-step-editor: useStepRowState handleAutoMapArguments", () => {
 
     // author does not exist in mockEndpoint, so it should not be mapped
     expect(mappedArgNames).not.toContain("author");
+
+    // Redundant whole-object payload should not be auto-mapped when schema fields are mapped
+    expect(mappedArgNames).not.toContain("payload");
+  });
+
+  it("unpacks consumedEvent schema fields into expectedArgs and auto-maps them for push_to_client", () => {
+    const mockConsumedEvent: any = {
+      id: "ev-kafka-message-sent",
+      name: "message.sent",
+      variant: "consume",
+      payloadSchema: {
+        fields: [
+          { name: "message", type: "string", required: true },
+          { name: "sender", type: "string", required: true },
+          { name: "conversation_id", type: "string", required: true },
+        ],
+      },
+    };
+
+    const pushStep: PipelineStepDraft = {
+      id: "step-push-1",
+      name: "pushToClientResult",
+      type: "push_to_client",
+      enabled: true,
+      clientDeliveryTargetPageId: "webpage-root",
+      clientDeliveryProtocol: "SSE",
+      clientDeliveryEventName: "message.sent.notification",
+      inputBindings: [],
+    };
+
+    let updatedStep: PipelineStepDraft = pushStep;
+    const onChange = vi.fn((updated) => {
+      updatedStep = updated;
+    });
+
+    const { result } = renderHook(() =>
+      useStepRowState({
+        step: pushStep,
+        index: 0,
+        priorSteps: [],
+        consumedEvent: mockConsumedEvent,
+        allNodes: [],
+        allEdges: [],
+        onChange,
+      }),
+    );
+
+    // 1. Verify expectedArgs unpacked topic schema fields
+    const argNames = result.current.expectedArgs.map((a) => a.name);
+    expect(argNames).toContain("payload");
+    expect(argNames).toContain("message");
+    expect(argNames).toContain("sender");
+    expect(argNames).toContain("conversation_id");
+
+    // 2. Run handleAutoMapArguments
+    act(() => {
+      result.current.handleAutoMapArguments();
+    });
+
+    expect(onChange).toHaveBeenCalled();
+    const mappedArgNames = (updatedStep.inputBindings || []).map((b) => b.argName);
+    expect(mappedArgNames).toContain("message");
+    expect(mappedArgNames).toContain("sender");
+    expect(mappedArgNames).toContain("conversation_id");
+
+    const msgBinding = (updatedStep.inputBindings || []).find((b) => b.argName === "message");
+    expect(msgBinding?.source).toEqual({ kind: "req_body", field: "message" });
+
+    const senderBinding = (updatedStep.inputBindings || []).find((b) => b.argName === "sender");
+    expect(senderBinding?.source).toEqual({ kind: "req_body", field: "sender" });
+
+    const convBinding = (updatedStep.inputBindings || []).find((b) => b.argName === "conversation_id");
+    expect(convBinding?.source).toEqual({ kind: "req_body", field: "conversation_id" });
   });
 });
