@@ -88,5 +88,21 @@ export const authTables = {
   })
     .index("by_organization", ["organizationId"])
     .index("by_owner", ["ownerUserId"]),
+
+  organization_deletions: defineTable({
+    organizationId: v.string(),
+    ownerUserId: v.id("users"),
+    scheduledAt: v.number(),
+    deleteAfter: v.number(),
+    cancelledAt: v.optional(v.number()),
+    convexSchedulerId: v.optional(v.string()),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("cancelled"),
+      v.literal("completed"),
+    ),
+  })
+    .index("by_organization", ["organizationId"])
+    .index("by_status", ["status"]),
 };
 

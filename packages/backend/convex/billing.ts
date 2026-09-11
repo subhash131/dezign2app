@@ -738,4 +738,412 @@ export const getInvitationById = query({
   },
 });
 
+export const getOrgMembersPaginated = query({
+  args: {
+    organizationId: v.string(),
+    paginationOpts: v.object({
+      numItems: v.number(),
+      cursor: v.union(v.string(), v.null()),
+      id: v.optional(v.number()),
+    }),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return { page: [], isDone: true, continueCursor: "" };
+    }
 
+    const authUserId = identity.subject;
+
+    const callerMember = await ctx.runQuery(
+      components.betterAuth.adapter.findOne,
+      {
+        model: "member",
+        where: [
+          { field: "organizationId", value: args.organizationId },
+          { field: "userId", value: authUserId },
+        ],
+      },
+    );
+    if (!callerMember) return { page: [], isDone: true, continueCursor: "" };
+
+    // Implement manual offset-based pagination over the betterAuth adapter
+    const offset = args.paginationOpts.cursor
+      ? parseInt(args.paginationOpts.cursor, 10)
+      : 0;
+    const numItems = args.paginationOpts.numItems;
+
+    const membersRes = await ctx.runQuery(
+      components.betterAuth.adapter.findMany,
+      {
+        model: "member",
+        where: [{ field: "organizationId", value: args.organizationId }],
+        paginationOpts: { cursor: null, numItems: offset + numItems + 1 },
+      },
+    );
+
+    const allMembers: OrgMemberItem[] = membersRes?.page ?? [];
+    const pageItems = allMembers.slice(offset, offset + numItems);
+    const isDone = offset + numItems >= allMembers.length;
+    const continueCursor = isDone ? "" : String(offset + numItems);
+
+    const memberDetails = await Promise.all(
+      pageItems.map(async (m) => {
+        let name = "Team Member";
+        let email = "";
+        let avatarUrl: string | undefined = undefined;
+
+        const userDoc = await ctx.db
+          .query("users")
+          .withIndex("by_auth_id", (q) => q.eq("authId", m.userId))
+          .first();
+
+        if (userDoc) {
+          name = userDoc.name;
+          email = userDoc.email;
+          avatarUrl = userDoc.avatarUrl;
+        } else {
+          const authUser = await ctx.runQuery(
+            components.betterAuth.adapter.findOne,
+            {
+              model: "user",
+              where: [{ field: "_id", value: m.userId }],
+            },
+          );
+          if (authUser) {
+            if (typeof authUser.name === "string" && authUser.name.length > 0) name = authUser.name;
+            if (typeof authUser.email === "string") email = authUser.email;
+            if (typeof authUser.image === "string") avatarUrl = authUser.image;
+          }
+        }
+
+        return {
+          id: m._id,
+          userId: m.userId,
+          role: m.role,
+          createdAt: m.createdAt,
+          name,
+          email,
+          avatarUrl,
+          isCurrentUser: m.userId === authUserId,
+        };
+      }),
+    );
+
+    return { page: memberDetails, isDone, continueCursor };
+  },
+});
+
+export const getOrgInvitationsPaginated = query({
+  args: {
+    organizationId: v.string(),
+    paginationOpts: v.object({
+      numItems: v.number(),
+      cursor: v.union(v.string(), v.null()),
+      id: v.optional(v.number()),
+    }),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return { page: [], isDone: true, continueCursor: "" };
+
+    const authUserId = identity.subject;
+    const member = await ctx.runQuery(
+      components.betterAuth.adapter.findOne,
+      {
+        model: "member",
+        where: [
+          { field: "organizationId", value: args.organizationId },
+          { field: "userId", value: authUserId },
+        ],
+      },
+    );
+    if (!member) return { page: [], isDone: true, continueCursor: "" };
+
+    const offset = args.paginationOpts.cursor
+      ? parseInt(args.paginationOpts.cursor, 10)
+      : 0;
+    const numItems = args.paginationOpts.numItems;
+
+    const invitationsRes = await ctx.runQuery(
+      components.betterAuth.adapter.findMany,
+      {
+        model: "invitation",
+        where: [
+          { field: "organizationId", value: args.organizationId },
+          { field: "status", value: "pending" },
+        ],
+        paginationOpts: { cursor: null, numItems: offset + numItems + 1 },
+      },
+    );
+
+    const allInvitations: OrgInvitationItem[] = invitationsRes?.page ?? [];
+    const pageItems = allInvitations.slice(offset, offset + numItems);
+    const isDone = offset + numItems >= allInvitations.length;
+    const continueCursor = isDone ? "" : String(offset + numItems);
+
+    const page = pageItems.map((inv) => ({
+      id: inv._id,
+      email: inv.email,
+      role: inv.role ?? "member",
+      status: inv.status,
+      expiresAt: inv.expiresAt,
+      createdAt: inv.createdAt ?? 0,
+      isExpired: inv.expiresAt < Date.now(),
+    }));
+
+    return { page, isDone, continueCursor };
+  },
+});
+
+export const removeMember = mutation({
+  args: {
+    memberId: v.string(),
+    organizationId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthorized");
+
+    const authUserId = identity.subject;
+    const callerMember = await ctx.runQuery(
+      components.betterAuth.adapter.findOne,
+      {
+        model: "member",
+        where: [
+          { field: "organizationId", value: args.organizationId },
+          { field: "userId", value: authUserId },
+        ],
+      },
+    );
+
+    if (
+      !callerMember ||
+      (callerMember.role !== "owner" && callerMember.role !== "admin")
+    ) {
+      throw new Error("Only owners and admins can remove members");
+    }
+
+    const targetMember = await ctx.runQuery(
+      components.betterAuth.adapter.findOne,
+      {
+        model: "member",
+        where: [{ field: "_id", value: args.memberId }],
+      },
+    );
+    if (!targetMember) throw new Error("Member not found");
+    if (targetMember.userId === authUserId) {
+      throw new Error("You cannot remove yourself. Use 'Leave Organization' instead.");
+    }
+
+    await ctx.runMutation(components.betterAuth.adapter.deleteMany, {
+      input: {
+        model: "member",
+        where: [
+          { field: "_id", value: args.memberId },
+          { field: "organizationId", value: args.organizationId },
+        ],
+      },
+      paginationOpts: { cursor: null, numItems: 10 },
+    });
+
+    return { success: true };
+  },
+});
+
+export const getOrgDeletionStatus = query({
+  args: { organizationId: v.string() },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return null;
+
+    const record = await ctx.db
+      .query("organization_deletions")
+      .withIndex("by_organization", (q) =>
+        q.eq("organizationId", args.organizationId),
+      )
+      .filter((q) => q.eq(q.field("status"), "pending"))
+      .first();
+
+    if (!record) return null;
+
+    return {
+      id: record._id,
+      organizationId: record.organizationId,
+      scheduledAt: record.scheduledAt,
+      deleteAfter: record.deleteAfter,
+      daysRemaining: Math.max(
+        0,
+        Math.ceil((record.deleteAfter - Date.now()) / (1000 * 60 * 60 * 24)),
+      ),
+      status: record.status,
+    };
+  },
+});
+
+export const scheduleOrgDeletion = mutation({
+  args: { organizationId: v.string() },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity || !identity.email) throw new Error("Unauthorized");
+
+    const authUserId = identity.subject;
+    const callerMember = await ctx.runQuery(
+      components.betterAuth.adapter.findOne,
+      {
+        model: "member",
+        where: [
+          { field: "organizationId", value: args.organizationId },
+          { field: "userId", value: authUserId },
+        ],
+      },
+    );
+    if (!callerMember || callerMember.role !== "owner") {
+      throw new Error("Only organization owners can schedule deletion");
+    }
+
+    const existing = await ctx.db
+      .query("organization_deletions")
+      .withIndex("by_organization", (q) =>
+        q.eq("organizationId", args.organizationId),
+      )
+      .filter((q) => q.eq(q.field("status"), "pending"))
+      .first();
+    if (existing) throw new Error("A deletion is already scheduled");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_email", (q) => q.eq("email", identity.email!))
+      .first();
+    if (!user) throw new Error("User not found");
+
+    const now = Date.now();
+    const GRACE_PERIOD_MS = 75 * 24 * 60 * 60 * 1000;
+
+    await ctx.db.insert("organization_deletions", {
+      organizationId: args.organizationId,
+      ownerUserId: user._id,
+      scheduledAt: now,
+      deleteAfter: now + GRACE_PERIOD_MS,
+      status: "pending",
+    });
+
+    return { success: true };
+  },
+});
+
+export const cancelOrgDeletion = mutation({
+  args: { organizationId: v.string() },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthorized");
+
+    const authUserId = identity.subject;
+    const callerMember = await ctx.runQuery(
+      components.betterAuth.adapter.findOne,
+      {
+        model: "member",
+        where: [
+          { field: "organizationId", value: args.organizationId },
+          { field: "userId", value: authUserId },
+        ],
+      },
+    );
+    if (!callerMember || callerMember.role !== "owner") {
+      throw new Error("Only organization owners can cancel deletion");
+    }
+
+    const record = await ctx.db
+      .query("organization_deletions")
+      .withIndex("by_organization", (q) =>
+        q.eq("organizationId", args.organizationId),
+      )
+      .filter((q) => q.eq(q.field("status"), "pending"))
+      .first();
+
+    if (!record) throw new Error("No pending deletion found");
+
+    await ctx.db.patch(record._id, {
+      status: "cancelled",
+      cancelledAt: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
+
+export const updateMemberRole = mutation({
+  args: {
+    memberId: v.string(),
+    organizationId: v.string(),
+    role: v.union(v.literal("owner"), v.literal("admin"), v.literal("member")),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthorized");
+
+    const authUserId = identity.subject;
+    const callerMember = await ctx.runQuery(
+      components.betterAuth.adapter.findOne,
+      {
+        model: "member",
+        where: [
+          { field: "organizationId", value: args.organizationId },
+          { field: "userId", value: authUserId },
+        ],
+      },
+    );
+
+    if (
+      !callerMember ||
+      (callerMember.role !== "owner" && callerMember.role !== "admin")
+    ) {
+      throw new Error("Only owners and admins can change member roles");
+    }
+
+    const targetMember = await ctx.runQuery(
+      components.betterAuth.adapter.findOne,
+      {
+        model: "member",
+        where: [
+          { field: "_id", value: args.memberId },
+          { field: "organizationId", value: args.organizationId },
+        ],
+      },
+    );
+    if (!targetMember) throw new Error("Member not found");
+
+    if (
+      targetMember.userId === authUserId &&
+      targetMember.role === "owner" &&
+      args.role !== "owner"
+    ) {
+      throw new Error("Organization owners cannot demote themselves");
+    }
+
+    if (callerMember.role === "admin") {
+      if (targetMember.role === "owner") {
+        throw new Error("Admins cannot modify owner roles");
+      }
+      if (args.role === "owner") {
+        throw new Error("Only owners can assign the owner role");
+      }
+    }
+
+    await ctx.runMutation(components.betterAuth.adapter.updateOne, {
+      input: {
+        model: "member",
+        where: [
+          { field: "_id", value: args.memberId },
+          { field: "organizationId", value: args.organizationId },
+        ],
+        update: {
+          role: args.role,
+        },
+      },
+    });
+
+    return { success: true };
+  },
+});

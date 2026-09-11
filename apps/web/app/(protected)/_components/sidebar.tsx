@@ -3,6 +3,7 @@ import React from "react";
 import {
   type LucideIcon,
   BookOpenText,
+  Building2,
   ClipboardList,
   GitBranchPlus,
   Info,
@@ -56,6 +57,11 @@ const helpNavItems: SidebarItem[] = [
   },
 ];
 const configurationItems: SidebarItem[] = [
+  {
+    title: "Organization",
+    url: "/organization",
+    icon: Building2,
+  },
   {
     title: "API Keys",
     url: "/api-keys",
