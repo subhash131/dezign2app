@@ -241,11 +241,23 @@ export function compileKafkaNodes(
   const brokerConfig = firstKafkaNode?.data?.kafkaBroker ?? {};
   const defaultPartitions = brokerConfig.partitions ?? 3;
   const defaultReplication = brokerConfig.replication ?? 1;
+  const brokerCount = brokerConfig.brokerCount ?? 3;
+  const clusterMode = brokerConfig.clusterMode ?? "kraft";
+  const basePort = brokerConfig.port ?? 9092;
 
   // Package configuration files
   files.push(generatePackageJson(packageName, nodeLabel));
   files.push(generateTsConfig());
-  files.push(generateConfigFile(nodeLabel, packageFolder, defaultPartitions, defaultReplication));
+  files.push(
+    generateConfigFile(
+      nodeLabel,
+      packageFolder,
+      defaultPartitions,
+      defaultReplication,
+      brokerCount,
+      basePort,
+    ),
+  );
   files.push(generateClientFile(nodeLabel));
   files.push(generateAdminFile(nodeLabel));
 
@@ -316,7 +328,14 @@ export function compileKafkaNodes(
 
   // Master barrel index & docker compose
   files.push(generateIndexFile(packageName, nodeLabel));
-  files.push(generateDockerComposeFile(packageFolder));
+  files.push(
+    generateDockerComposeFile(
+      packageFolder,
+      brokerCount,
+      clusterMode,
+      basePort,
+    ),
+  );
 
   const reusableFunctions = generateReusableFunctions(packageName, packageFolder, topicList);
 

@@ -9,17 +9,27 @@ export const kafkaTopicSchema = resourceItemSchema.extend({
   schema: z.string().optional(),
   payloadSchema: schemaModelSchema.optional(),
   version: z.string().optional(),
+  partitions: z.number().int().min(1).optional(),
+  replication: z.number().int().min(1).optional(),
 });
 export type KafkaTopic = z.infer<typeof kafkaTopicSchema>;
 
 export const kafkaTopicInputSchema = kafkaTopicSchema;
 
 export const kafkaBrokerSchema = z.object({
-  partitions: z.number().optional(),
-  replication: z.number().optional(),
-  batchSize: z.string().optional(),
-  compression: z.string().optional(),
+  brokerCount: z.number().int().min(1).max(9).default(3).optional(),
+  clusterMode: z.enum(["kraft", "zookeeper"]).default("kraft").optional(),
+  port: z.number().default(9092).optional(),
+  partitions: z.number().int().min(1).default(3).optional(),
+  replication: z.number().int().min(1).default(2).optional(),
+  minInSyncReplicas: z.number().int().min(1).optional(),
+  producerAcks: z.enum(["all", "1", "0"]).default("all").optional(),
+  compression: z
+    .enum(["None", "Gzip", "Snappy", "LZ4", "Zstd"])
+    .default("None")
+    .optional(),
   ttl: z.string().optional(),
+  batchSize: z.string().optional(),
 });
 export type KafkaBrokerConfig = z.infer<typeof kafkaBrokerSchema>;
 

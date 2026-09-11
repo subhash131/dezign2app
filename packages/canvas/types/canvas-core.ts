@@ -148,6 +148,7 @@ export type ConfigItemType =
   | "db_ref"
   | "redis_cache"
   | "vector_db_ref"
+  | "kafka"
   | "realtimeConnection"
   | "types";
 

@@ -394,6 +394,45 @@ describe("compileKafkaNodes", () => {
     expect(routeFileConnected!.content).toContain("publishKafkaEvent");
     expect(routeFileConnected!.content).toContain("KAFKA_TOPICS");
   });
+
+  it("compiles multi-broker cluster with KRaft mode and multiple ports", () => {
+    const kafkaNode: BackendNode = {
+      id: "kafka-1",
+      type: "kafka",
+      position: { x: 100, y: 100 },
+      fractionalIndex: "a0",
+      data: {
+        label: "Event Bus",
+        kafkaBroker: {
+          brokerCount: 3,
+          clusterMode: "kraft",
+          port: 9092,
+          partitions: 4,
+          replication: 3,
+        },
+        topics: [{ id: "t-1", name: "order-events" }],
+      },
+    };
+
+    const result = compileKafkaNodes([kafkaNode]);
+    const configFile = result.files.find((f) => f.filename === "src/config.ts");
+    expect(configFile).toBeDefined();
+    expect(configFile!.content).toContain(
+      "localhost:9092,localhost:9093,localhost:9094",
+    );
+
+    const composeFile = result.files.find(
+      (f) => f.filename === "docker-compose.yml",
+    );
+    expect(composeFile).toBeDefined();
+    expect(composeFile!.content).toContain("kafka-1:");
+    expect(composeFile!.content).toContain("kafka-2:");
+    expect(composeFile!.content).toContain("kafka-3:");
+    expect(composeFile!.content).toContain(
+      "KAFKA_PROCESS_ROLES: 'broker,controller'",
+    );
+  });
 });
+
 
 
