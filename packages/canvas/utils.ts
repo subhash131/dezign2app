@@ -414,3 +414,23 @@ export function sanitizeEndpointRoute(route: string): string {
   if (!route) return "";
   return route.trim().replace(/\s+/g, "-");
 }
+
+/**
+ * Normalizes a topic or event name by replacing whitespace with dots,
+ * matching standard event-driven and Kafka hierarchical topic naming conventions (e.g. "message sent" -> "message.sent").
+ */
+export function formatTopicName(name: string): string {
+  if (!name) return "";
+  const noLeading = name.replace(/^[\s.]+/, "");
+  return noLeading.replace(/[\s.]*\s+[\s.]*/g, ".");
+}
+
+/**
+ * Sanitizes a topic or event name for persistence (e.g. on blur/save),
+ * trimming whitespace, collapsing dots, and stripping trailing dots.
+ */
+export function sanitizeTopicName(name: string): string {
+  if (!name) return "";
+  const formatted = formatTopicName(name.trim());
+  return formatted.replace(/\.+/g, ".").replace(/^\.+|\.+$/g, "");
+}

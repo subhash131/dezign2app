@@ -1,4 +1,5 @@
 import { AnyMessagingResource } from "@workspace/canvas/types";
+import { sanitizeTopicName } from "@workspace/canvas";
 import {
   BackendCanvasState,
   EventWithNode,
@@ -33,7 +34,8 @@ export const createEventSlice = (
 
   addEvent: (nodeId, variant, event) => {
     get().pushHistorySnapshot("graph");
-    const newEvent = { ...event, nodeId, variant };
+    const sanitizedName = event.name ? sanitizeTopicName(event.name) : event.name;
+    const newEvent = { ...event, name: sanitizedName, nodeId, variant };
     set({
       events: [...get().events, newEvent],
       pendingEventUpserts: [...get().pendingEventUpserts, newEvent],
@@ -42,8 +44,12 @@ export const createEventSlice = (
 
   updateEvent: (id, changes) => {
     get().pushHistorySnapshot("graph");
+    const sanitizedChanges = { ...changes };
+    if (typeof sanitizedChanges.name === "string") {
+      sanitizedChanges.name = sanitizeTopicName(sanitizedChanges.name);
+    }
     const nextEvents = get().events.map((e) =>
-      e.id === id ? { ...e, ...changes } : e,
+      e.id === id ? { ...e, ...sanitizedChanges } : e,
     );
     const updated = nextEvents.find((e) => e.id === id);
 
