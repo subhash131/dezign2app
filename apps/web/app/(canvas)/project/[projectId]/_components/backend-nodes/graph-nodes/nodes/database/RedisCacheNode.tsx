@@ -2,7 +2,7 @@
 
 import React, { useMemo } from "react";
 import { Handle, Position, NodeProps } from "@xyflow/react";
-import { DatabaseZap, Server, Layers, Settings, Trash } from "lucide-react";
+import { DatabaseZap, Server, Layers, Settings, Trash, AlertTriangle } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import {
@@ -17,12 +17,14 @@ import {
   useSimulationNodeState,
   getSimulationNodeBorderClass,
 } from "../../common";
+import { useNodePipelineError } from "@/lib/utils/pipelineValidation";
 
 export const RedisCacheNode = ({
   id,
   data,
   selected,
 }: NodeProps<BackendNode>) => {
+  const hasPipelineError = useNodePipelineError(id);
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const requestDeleteNode = useBackendCanvasStore((s) => s.requestDeleteNode);
   const deleteEdge = useBackendCanvasStore((s) => s.deleteEdge);
@@ -106,6 +108,8 @@ export const RedisCacheNode = ({
         selected
           ? "border-red-500 shadow-red-500/15 ring-1 ring-red-500/20"
           : "border-border/80 hover:border-red-500/50 hover:shadow-lg",
+        hasPipelineError &&
+          "border-destructive/80 ring-1 ring-destructive/30 shadow-destructive/5",
         borderClass,
       )}
       onDoubleClick={handleOpenConfig}
@@ -122,6 +126,12 @@ export const RedisCacheNode = ({
           {redisStructure && (
             <span className="text-[7px] font-mono px-1 py-0.2 rounded font-medium bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 uppercase shrink-0">
               {redisStructure}
+            </span>
+          )}
+          {hasPipelineError && (
+            <span className="text-[7px] font-medium px-1 py-0.5 rounded bg-destructive/15 text-destructive border border-destructive/30 flex items-center gap-0.5 shrink-0 animate-pulse">
+              <AlertTriangle size={8} />
+              Unmapped
             </span>
           )}
         </div>
@@ -143,6 +153,13 @@ export const RedisCacheNode = ({
           </button>
         </div>
       </div>
+
+      {hasPipelineError && (
+        <div className="flex items-center gap-1 px-1.5 py-1 rounded bg-destructive/10 border border-destructive/20 text-[10px] text-destructive leading-tight">
+          <AlertTriangle size={11} className="shrink-0" />
+          <span className="font-medium">Missing required input mapping</span>
+        </div>
+      )}
 
       {/* Dropdowns in flex-col */}
       <div className="flex flex-col gap-1.5 nodrag">

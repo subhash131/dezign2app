@@ -1,9 +1,10 @@
 import React, { useState } from "react";
 import { NodeProps } from "@xyflow/react";
-import { Waves, ChevronDown, ChevronUp } from "lucide-react";
+import { Waves, ChevronDown, ChevronUp, AlertTriangle, AlertCircle } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { useNodePipelineError } from "@/lib/utils/pipelineValidation";
 import {
   NodeHeader,
   MessagingResourceList,
@@ -52,11 +53,18 @@ export const KafkaNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
     });
   };
 
+  const hasPipelineError = useNodePipelineError(id);
+
   return (
     <div
       className={cn(
-        "shadow-md rounded-xl bg-card border-2 min-w-[280px] max-w-[350px] flex flex-col transition-all duration-300",
-        borderClass,
+        "shadow-md rounded-xl bg-card border-2 min-w-[280px] max-w-[350px] flex flex-col transition-all duration-300 relative",
+        hasPipelineError
+          ? cn(
+              "border-destructive/80 ring-1 ring-destructive/30 shadow-destructive/5",
+              selected && "ring-2 ring-destructive/60 border-destructive",
+            )
+          : borderClass,
       )}
     >
       <NodeHeader
@@ -66,7 +74,26 @@ export const KafkaNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
         title="Kafka"
         colorClass="bg-teal-500/10 text-teal-700 dark:text-teal-400"
         selected={selected}
+        badges={
+          hasPipelineError ? (
+            <div
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-destructive/15 text-destructive border border-destructive/30 text-[9px] font-semibold shrink-0"
+              title="Kafka publish step has unmapped required fields in pipeline"
+            >
+              <AlertTriangle size={10} className="shrink-0" />
+              <span>Unmapped Inputs</span>
+            </div>
+          ) : undefined
+        }
       />
+
+      {/* Pipeline unmapped error banner */}
+      {hasPipelineError && (
+        <div className="px-3 py-1.5 bg-destructive/10 border-b border-destructive/25 flex items-center gap-1.5 text-[10px] text-destructive font-medium leading-tight nodrag">
+          <AlertCircle size={12} className="shrink-0 text-destructive animate-pulse" />
+          <span>Required payload field(s) not mapped in pipeline</span>
+        </div>
+      )}
 
       {/* Description */}
       <div className="px-3 py-2 bg-secondary/5 border-b nodrag">

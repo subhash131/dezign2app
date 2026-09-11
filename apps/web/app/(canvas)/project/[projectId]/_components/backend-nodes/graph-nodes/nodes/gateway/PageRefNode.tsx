@@ -1,6 +1,6 @@
 import React from "react";
 import { Handle, Position, NodeProps } from "@xyflow/react";
-import { Compass, Globe, Trash } from "lucide-react";
+import { Compass, Globe, Trash, AlertTriangle } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import {
@@ -17,12 +17,14 @@ import {
   useSimulationNodeState,
   getSimulationNodeBorderClass,
 } from "../../common";
+import { useNodePipelineError } from "@/lib/utils/pipelineValidation";
 
 export const PageRefNode = ({
   id,
   data,
   selected,
 }: NodeProps<BackendNode>) => {
+  const hasPipelineError = useNodePipelineError(id);
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const requestDeleteNode = useBackendCanvasStore((s) => s.requestDeleteNode);
   const edges = useBackendCanvasStore((s) => s.edges);
@@ -123,6 +125,8 @@ export const PageRefNode = ({
       className={cn(
         "shadow-md rounded-xl bg-card border-2 min-w-[210px] max-w-[320px] flex flex-col transition-all duration-300 relative",
         selected ? "border-indigo-500" : "border-transparent",
+        hasPipelineError &&
+          "border-destructive/80 ring-1 ring-destructive/30 shadow-destructive/5",
         borderClass,
       )}
     >
@@ -154,9 +158,17 @@ export const PageRefNode = ({
             <Compass size={14} />
           </div>
           <div className="flex flex-col min-w-0">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400">
-              Page Ref
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400">
+                Page Ref
+              </span>
+              {hasPipelineError && (
+                <span className="text-[7px] font-medium px-1 py-0.2 rounded bg-destructive/15 text-destructive border border-destructive/30 flex items-center gap-0.5 shrink-0 animate-pulse">
+                  <AlertTriangle size={8} />
+                  Unmapped
+                </span>
+              )}
+            </div>
             <span className="text-xs font-semibold text-foreground truncate">
               {selectedPage ? selectedPage.data?.label || "Untitled Page" : "Select Target"}
             </span>
@@ -178,6 +190,13 @@ export const PageRefNode = ({
           </button>
         </div>
       </div>
+
+      {hasPipelineError && (
+        <div className="flex items-center gap-1 px-2.5 py-1.5 bg-destructive/10 border-b border-destructive/20 text-[10px] text-destructive leading-tight">
+          <AlertTriangle size={11} className="shrink-0" />
+          <span className="font-medium">Missing required input mapping</span>
+        </div>
+      )}
 
       <div className="p-3 bg-secondary/5 flex flex-col gap-2 nodrag rounded-b-[10px]">
         <div className="space-y-1">

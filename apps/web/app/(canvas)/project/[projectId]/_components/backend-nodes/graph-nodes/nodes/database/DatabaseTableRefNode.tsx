@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState, useEffect } from "react";
 import { Handle, Position, NodeProps, useUpdateNodeInternals } from "@xyflow/react";
-import { Database, Server, Table2, Settings, Trash, Code2, ChevronDown, ChevronRight } from "lucide-react";
+import { Database, Server, Table2, Settings, Trash, Code2, ChevronDown, ChevronRight, AlertTriangle } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import {
@@ -20,12 +20,14 @@ import {
 import { getEntityDbOperations } from "@/lib/utils/entityOperationsHelper";
 import { DbOperationFunction } from "@workspace/canvas/types";
 import { useSectionCollapseStore } from "@/lib/stores/sectionCollapseStore";
+import { useNodePipelineError } from "@/lib/utils/pipelineValidation";
 
 export const DatabaseTableRefNode = ({
   id,
   data,
   selected,
 }: NodeProps<BackendNode>) => {
+  const hasPipelineError = useNodePipelineError(id);
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const requestDeleteNode = useBackendCanvasStore((s) => s.requestDeleteNode);
   const deleteEdge = useBackendCanvasStore((s) => s.deleteEdge);
@@ -148,6 +150,8 @@ export const DatabaseTableRefNode = ({
         selected
           ? "border-orange-500 shadow-orange-500/15 ring-1 ring-orange-500/20"
           : "border-border/80 hover:border-orange-500/50 hover:shadow-lg",
+        hasPipelineError &&
+          "border-destructive/80 ring-1 ring-destructive/30 shadow-destructive/5",
         borderClass,
       )}
       onDoubleClick={handleOpenConfig}
@@ -166,6 +170,12 @@ export const DatabaseTableRefNode = ({
               {engineName && (
                 <span className="text-[8px] font-mono px-1 py-0.2 rounded font-semibold bg-orange-500/15 text-orange-600 dark:text-orange-400 border border-orange-500/20 uppercase shrink-0">
                   {engineName}
+                </span>
+              )}
+              {hasPipelineError && (
+                <span className="text-[7px] font-medium px-1 py-0.5 rounded bg-destructive/15 text-destructive border border-destructive/30 flex items-center gap-0.5 shrink-0 animate-pulse">
+                  <AlertTriangle size={8} />
+                  Unmapped
                 </span>
               )}
             </div>
@@ -192,6 +202,13 @@ export const DatabaseTableRefNode = ({
           </button>
         </div>
       </div>
+
+      {hasPipelineError && (
+        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-destructive/10 border-b border-destructive/20 text-[11px] text-destructive leading-tight">
+          <AlertTriangle size={12} className="shrink-0" />
+          <span className="font-medium">Missing required input mapping</span>
+        </div>
+      )}
 
       {/* Selectors section: matches ServiceNode body bg-secondary/5 and border-b */}
       <div className="px-3 py-2.5 bg-secondary/5 border-b flex flex-col gap-2 nodrag">

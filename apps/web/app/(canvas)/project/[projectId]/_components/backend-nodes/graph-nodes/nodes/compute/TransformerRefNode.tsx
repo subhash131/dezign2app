@@ -2,7 +2,7 @@
 
 import React from "react";
 import { NodeProps, Handle, Position } from "@xyflow/react";
-import { Shuffle, Settings, Trash } from "lucide-react";
+import { Shuffle, Settings, Trash, AlertTriangle } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -18,12 +18,14 @@ import {
   useSimulationNodeState,
   getSimulationNodeBorderClass,
 } from "../../common";
+import { useNodePipelineError } from "@/lib/utils/pipelineValidation";
 
 export const TransformerRefNode = ({
   id,
   data,
   selected,
 }: NodeProps<BackendNode>) => {
+  const hasPipelineError = useNodePipelineError(id);
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const requestDeleteNode = useBackendCanvasStore((s) => s.requestDeleteNode);
   const edges = useBackendCanvasStore((s) => s.edges);
@@ -147,79 +149,96 @@ export const TransformerRefNode = ({
   return (
     <div
       className={cn(
-        "group relative flex items-center justify-between gap-2.5 px-3 py-2.5 rounded-xl bg-card/95 backdrop-blur border-2 min-w-[240px] max-w-[280px] shadow-md transition-all duration-150 cursor-pointer select-none",
+        "group relative flex flex-col gap-1.5 px-3 py-2.5 rounded-xl bg-card/95 backdrop-blur border-2 min-w-[240px] max-w-[280px] shadow-md transition-all duration-150 cursor-pointer select-none",
         selected
           ? "border-purple-500 shadow-purple-500/15 ring-1 ring-purple-500/20"
           : "border-border/80 hover:border-purple-500/50 hover:shadow-lg",
+        hasPipelineError &&
+          "border-destructive/80 ring-1 ring-destructive/30 shadow-destructive/5",
         borderClass,
       )}
       onDoubleClick={handleOpenConfig}
     >
-      {/* Icon + Global Selector */}
-      <div className="flex items-center gap-2.5 min-w-0 flex-1 overflow-hidden">
-        <div className="p-1.5 rounded-lg bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/30 shrink-0">
-          <Shuffle size={14} />
-        </div>
-
-        <div className="flex flex-col min-w-0 flex-1 overflow-hidden nodrag">
-          <div className="flex items-center gap-1.5 mb-0.5">
-            <span className="text-[8px] uppercase font-bold tracking-wider text-purple-600 dark:text-purple-400">
-              Transformer Ref
-            </span>
-            <span className="text-[7px] font-mono px-1 py-0.2 rounded font-medium bg-purple-500/10 text-purple-400 border border-purple-500/20">
-              GLOBAL
-            </span>
+      <div className="flex items-center justify-between gap-2.5 w-full">
+        {/* Icon + Global Selector */}
+        <div className="flex items-center gap-2.5 min-w-0 flex-1 overflow-hidden">
+          <div className="p-1.5 rounded-lg bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/30 shrink-0">
+            <Shuffle size={14} />
           </div>
 
-          <Select
-            value={selectedMaster?.id || data.transformerRef || ""}
-            onValueChange={handleMasterChange}
-          >
-            <SelectTrigger className="h-6 !w-full max-w-[155px] min-w-0 text-xs font-mono font-semibold bg-background/60 border-border/70 hover:border-purple-500/50 px-2 py-0 truncate overflow-hidden">
-              <SelectValue placeholder="Select global..." />
-            </SelectTrigger>
-            <SelectContent className="nodrag">
-              {globalTransformers.length === 0 ? (
-                <div className="p-2 text-xs text-muted-foreground italic">
-                  No global transformers on canvas
-                </div>
-              ) : (
-                globalTransformers.map((t) => (
-                  <SelectItem
-                    key={t.id}
-                    value={t.id}
-                    className="text-xs font-mono"
-                  >
-                    {t.data?.functionName || t.data?.label || "Transformer"}
-                  </SelectItem>
-                ))
+          <div className="flex flex-col min-w-0 flex-1 overflow-hidden nodrag">
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <span className="text-[8px] uppercase font-bold tracking-wider text-purple-600 dark:text-purple-400">
+                Transformer Ref
+              </span>
+              <span className="text-[7px] font-mono px-1 py-0.2 rounded font-medium bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                GLOBAL
+              </span>
+              {hasPipelineError && (
+                <span className="text-[7px] font-medium px-1 py-0.2 rounded bg-destructive/15 text-destructive border border-destructive/30 flex items-center gap-0.5 shrink-0 animate-pulse">
+                  <AlertTriangle size={8} />
+                  Unmapped
+                </span>
               )}
-            </SelectContent>
-          </Select>
+            </div>
+
+            <Select
+              value={selectedMaster?.id || data.transformerRef || ""}
+              onValueChange={handleMasterChange}
+            >
+              <SelectTrigger className="h-6 !w-full max-w-[155px] min-w-0 text-xs font-mono font-semibold bg-background/60 border-border/70 hover:border-purple-500/50 px-2 py-0 truncate overflow-hidden">
+                <SelectValue placeholder="Select global..." />
+              </SelectTrigger>
+              <SelectContent className="nodrag">
+                {globalTransformers.length === 0 ? (
+                  <div className="p-2 text-xs text-muted-foreground italic">
+                    No global transformers on canvas
+                  </div>
+                ) : (
+                  globalTransformers.map((t) => (
+                    <SelectItem
+                      key={t.id}
+                      value={t.id}
+                      className="text-xs font-mono"
+                    >
+                      {t.data?.functionName || t.data?.label || "Transformer"}
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {/* Action Buttons: Gear (Settings) + Delete */}
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            className="p-1 rounded-md text-muted-foreground/60 hover:text-foreground hover:bg-muted/40 transition-colors"
+            onClick={handleOpenConfig}
+            title={
+              selectedMaster
+                ? "Edit Master Transformer"
+                : "Configure Transformer Ref"
+            }
+          >
+            <Settings size={13} />
+          </button>
+          <button
+            className="p-1 rounded-md text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors"
+            onClick={handleDelete}
+            title="Delete Node"
+          >
+            <Trash size={13} />
+          </button>
         </div>
       </div>
 
-      {/* Action Buttons: Gear (Settings) + Delete */}
-      <div className="flex items-center gap-1 shrink-0">
-        <button
-          className="p-1 rounded-md text-muted-foreground/60 hover:text-foreground hover:bg-muted/40 transition-colors"
-          onClick={handleOpenConfig}
-          title={
-            selectedMaster
-              ? "Edit Master Transformer"
-              : "Configure Transformer Ref"
-          }
-        >
-          <Settings size={13} />
-        </button>
-        <button
-          className="p-1 rounded-md text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors"
-          onClick={handleDelete}
-          title="Delete Node"
-        >
-          <Trash size={13} />
-        </button>
-      </div>
+      {hasPipelineError && (
+        <div className="flex items-center gap-1 px-1.5 py-1 rounded bg-destructive/10 border border-destructive/20 text-[10px] text-destructive leading-tight">
+          <AlertTriangle size={11} className="shrink-0" />
+          <span className="font-medium">Missing required input mapping</span>
+        </div>
+      )}
 
       {/* Left target handle */}
       <Handle
