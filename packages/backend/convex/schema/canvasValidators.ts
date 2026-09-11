@@ -148,6 +148,7 @@ export const safePipelineStepSchema = z.object({
   clientDeliveryProtocol: z.enum(["SSE", "WEBSOCKET", "WEBRTC", "API_PUSH"]).optional(),
   clientDeliveryTargetWebAppId: z.string().optional(),
   clientDeliveryTargetPageId: z.string().optional(),
+  clientDeliveryPageRefNodeId: z.string().optional(),
   clientDeliveryEventName: z.string().optional(),
   clientDeliveryRoom: z.string().optional(),
   clientDeliveryWebhookUrl: z.string().optional(),

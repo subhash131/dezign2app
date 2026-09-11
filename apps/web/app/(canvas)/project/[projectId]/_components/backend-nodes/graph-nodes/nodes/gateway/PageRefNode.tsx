@@ -66,6 +66,51 @@ export const PageRefNode = ({
         label: `Ref: ${isRoot ? "/" : pageLabel}`,
       },
     });
+
+    // Synchronize connected push_to_client steps on Service endpoints or consumers
+    const incomingEdges = edges.filter((e) => e.target === id);
+    const store = useBackendCanvasStore.getState();
+    incomingEdges.forEach((edge) => {
+      if (edge.sourceHandle?.startsWith("endpoint-out-")) {
+        const epId = edge.sourceHandle.replace("endpoint-out-", "");
+        const ep = store.endpoints.find((e) => e.id === epId);
+        if (ep && ep.pipelineSteps) {
+          const hasPushStep = ep.pipelineSteps.some((s) => s.type === "push_to_client");
+          if (hasPushStep) {
+            const updatedSteps = ep.pipelineSteps.map((s) => {
+              if (s.type === "push_to_client" && (s.clientDeliveryPageRefNodeId === id || !s.clientDeliveryPageRefNodeId)) {
+                return {
+                  ...s,
+                  clientDeliveryTargetPageId: pageId,
+                  clientDeliveryPageRefNodeId: id,
+                };
+              }
+              return s;
+            });
+            store.updateEndpoint(ep.id, { pipelineSteps: updatedSteps });
+          }
+        }
+      } else if (edge.sourceHandle?.startsWith("consumedEvents-out-")) {
+        const evId = edge.sourceHandle.replace("consumedEvents-out-", "");
+        const ev = store.events.find((e) => e.id === evId);
+        if (ev && ev.pipelineSteps) {
+          const hasPushStep = ev.pipelineSteps.some((s) => s.type === "push_to_client");
+          if (hasPushStep) {
+            const updatedSteps = ev.pipelineSteps.map((s) => {
+              if (s.type === "push_to_client" && (s.clientDeliveryPageRefNodeId === id || !s.clientDeliveryPageRefNodeId)) {
+                return {
+                  ...s,
+                  clientDeliveryTargetPageId: pageId,
+                  clientDeliveryPageRefNodeId: id,
+                };
+              }
+              return s;
+            });
+            store.updateEvent(ev.id, { pipelineSteps: updatedSteps });
+          }
+        }
+      }
+    });
   };
 
   const selectedCleanLabel = (selectedPage?.data?.label || "").trim().toLowerCase();
@@ -84,8 +129,15 @@ export const PageRefNode = ({
       <Handle
         type="target"
         position={Position.Left}
-        id="ref-in"
+        id="page-ref-in"
         className="w-2.5 h-2.5 !bg-indigo-500 rounded-full border-2 border-background -left-1.5"
+        style={{ top: "18px" }}
+      />
+      <Handle
+        type="target"
+        position={Position.Left}
+        id="ref-in"
+        className="w-2.5 h-2.5 !bg-indigo-500 rounded-full border-2 border-background -left-1.5 opacity-0 pointer-events-none"
         style={{ top: "18px" }}
       />
       <Handle
