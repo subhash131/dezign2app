@@ -1,12 +1,13 @@
-import React, { useState, useRef, useEffect } from "react";
+import React from "react";
 import { NodeProps, Handle, Position } from "@xyflow/react";
-import { Database, Trash, Settings, Server, Table2, Key, Palette } from "lucide-react";
+import { Database, Trash, Settings, Server, Palette, Key, Table2 } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
-import { Input } from "@workspace/ui/components/input";
 import { Badge } from "@workspace/ui/components/badge";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { DEFAULT_DATABASE_NODE_LABEL } from "@workspace/canvas";
+
+import { NodeHeader } from "../graph-nodes/common";
 
 export const DB_COLOR_PRESETS = [
   { name: "Amber", hex: "#f59e0b" },
@@ -32,41 +33,6 @@ export const DatabaseNode = ({ id, data, selected }: NodeProps<BackendNode>) => 
   const engine = data.dbEngine || "sqlite";
   const color = data.color || "#f59e0b"; // Default to Amber
   const label = data.label || "";
-  const [editingName, setEditingName] = useState(label);
-  const [isEditingName, setIsEditingName] = useState(!data.label);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    setEditingName(data.label || "");
-    if (!data.label) {
-      setIsEditingName(true);
-    }
-  }, [data.label]);
-
-  useEffect(() => {
-    if (isEditingName) {
-      setTimeout(() => {
-        inputRef.current?.focus();
-        inputRef.current?.select();
-      }, 10);
-    }
-  }, [isEditingName]);
-
-  const saveName = () => {
-    const finalName = editingName.trim();
-    if (!finalName) {
-      if (!data.label || data.label.trim() === "") {
-        useBackendCanvasStore.getState().deleteNode(id);
-        return;
-      }
-      setEditingName(data.label);
-      setIsEditingName(false);
-      return;
-    }
-    updateNode(id, { data: { ...data, label: finalName } });
-    setEditingName(finalName);
-    setIsEditingName(false);
-  };
 
   // Find all SQL / document table entity nodes hanging off this DB
   const attachedTables = allNodes.filter(
@@ -106,84 +72,47 @@ export const DatabaseNode = ({ id, data, selected }: NodeProps<BackendNode>) => 
       />
 
       {/* Node Header */}
-      <div
-        className="px-3 py-2 border-b flex flex-col gap-1.5 rounded-t-[10px] text-foreground"
+      <NodeHeader
+        id={id}
+        data={data}
+        nodeType="database"
+        icon={Database}
+        title="Database"
         style={{ backgroundColor: `${color}18` }}
-      >
-        <div className="flex items-center justify-between w-full">
-          <div className="flex items-center flex-1 min-w-0">
-            <Database size={16} className="mr-2 shrink-0" style={{ color }} />
-            {isEditingName ? (
-              <Input
-                ref={inputRef}
-                value={editingName}
-                placeholder="Enter database name..."
-                onChange={(e) => setEditingName(e.target.value)}
-                className="h-6 text-xs px-1 font-semibold"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") saveName();
-                  if (e.key === "Escape") {
-                    if (!data.label || data.label.trim() === "") {
-                      useBackendCanvasStore.getState().deleteNode(id);
-                      return;
-                    }
-                    setEditingName(data.label);
-                    setIsEditingName(false);
-                  }
-                }}
-                onBlur={saveName}
-              />
-            ) : (
-              <span
-                className="font-bold text-sm cursor-pointer hover:opacity-80 transition-colors truncate"
-                style={{ color }}
-                onClick={() => setIsEditingName(true)}
-              >
-                {label || "Database"}
-              </span>
-            )}
+        iconColor={color}
+        selected={selected}
+        placeholder="Enter database name..."
+        badges={
+          <Badge
+            variant="outline"
+            className="text-[10px] px-1.5 py-0 font-mono uppercase"
+            style={{
+              backgroundColor: `${color}15`,
+              borderColor: `${color}40`,
+              color: color,
+            }}
+          >
+            {engine}
+          </Badge>
+        }
+        rightElement={
+          <div
+            className="flex items-center justify-center p-1.5 rounded hover:bg-background/40 transition-all cursor-pointer"
+            style={{ color }}
+            title="Configure Database"
+            onClick={(e) => {
+              e.stopPropagation();
+              setActiveConfigItem({
+                type: "database",
+                id: id,
+                nodeId: id,
+              });
+            }}
+          >
+            <Settings size={15} />
           </div>
-
-          <div className="flex items-center gap-1 shrink-0 ml-2">
-            <Badge
-              variant="outline"
-              className="text-[10px] px-1.5 py-0 font-mono uppercase"
-              style={{
-                backgroundColor: `${color}15`,
-                borderColor: `${color}40`,
-                color: color,
-              }}
-            >
-              {engine}
-            </Badge>
-            <div
-              className="flex items-center justify-center p-1.5 rounded hover:bg-background/40 transition-all cursor-pointer"
-              style={{ color }}
-              title="Configure Database"
-              onClick={(e) => {
-                e.stopPropagation();
-                setActiveConfigItem({
-                  type: "database",
-                  id: id,
-                  nodeId: id,
-                });
-              }}
-            >
-              <Settings size={15} />
-            </div>
-            <div
-              className="opacity-0 group-hover:opacity-100 flex items-center justify-center p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all cursor-pointer"
-              title="Delete Database"
-              onClick={(e) => {
-                e.stopPropagation();
-                requestDeleteNode(id);
-              }}
-            >
-              <Trash size={14} />
-            </div>
-          </div>
-        </div>
-      </div>
+        }
+      />
 
       {/* Body / Config Summary */}
       <div className="p-3 flex flex-col gap-2 text-xs">

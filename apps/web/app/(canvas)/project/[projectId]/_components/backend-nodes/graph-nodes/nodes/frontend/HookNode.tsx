@@ -43,10 +43,18 @@ export const HookNode = ({
 
   React.useEffect(() => {
     if (isEditing) {
-      setTimeout(() => {
-        inputRef.current?.focus();
-        inputRef.current?.select();
-      }, 10);
+      const focus = () => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+          inputRef.current.select();
+        }
+      };
+      const raf = requestAnimationFrame(focus);
+      const timer = setTimeout(focus, 50);
+      return () => {
+        cancelAnimationFrame(raf);
+        clearTimeout(timer);
+      };
     }
   }, [isEditing]);
 
@@ -135,30 +143,37 @@ export const HookNode = ({
           </div>
 
           {isEditing ? (
-            <LocalInput
-              ref={inputRef}
-              value={name}
-              placeholder="Enter hook name..."
-              onChange={(e) => setName(e.target.value)}
-              className="h-5 text-xs font-semibold px-1 py-0 bg-background/80 border-border/80"
-              autoFocus
-              onKeyDown={(e: React.KeyboardEvent) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  handleSave();
-                }
-                if (e.key === "Escape") {
-                  e.preventDefault();
-                  if (!data.label && !data.hookName) {
-                    deleteNode(id);
-                    return;
+            <div
+              className="nodrag nowheel nopan relative flex-1 min-w-0"
+              onMouseDown={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
+              onDragStart={(e) => e.stopPropagation()}
+            >
+              <LocalInput
+                ref={inputRef}
+                value={name}
+                placeholder="Enter hook name..."
+                onChange={(e) => setName(e.target.value)}
+                className="h-5 text-xs font-semibold px-1 py-0 bg-background/80 border-border/80 w-full"
+                autoFocus
+                onKeyDown={(e: React.KeyboardEvent) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleSave();
                   }
-                  setName(data.label || data.hookName || "");
-                  setIsEditing(false);
-                }
-              }}
-              onBlur={handleSave}
-            />
+                  if (e.key === "Escape") {
+                    e.preventDefault();
+                    if (!data.label && !data.hookName) {
+                      deleteNode(id);
+                      return;
+                    }
+                    setName(data.label || data.hookName || "");
+                    setIsEditing(false);
+                  }
+                }}
+                onBlur={handleSave}
+              />
+            </div>
           ) : (
             <span
               className="text-xs font-semibold text-foreground truncate hover:text-cyan-400 transition-colors"

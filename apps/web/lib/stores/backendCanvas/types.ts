@@ -112,7 +112,7 @@ export interface BackendCanvasState {
     parentId: string,
     position?: { x: number; y: number },
     name?: string,
-    stepType?: string,
+    stepType?: BackendNode["data"]["stepType"],
   ) => void;
   updateNode: (id: string, changes: Partial<BackendNode>) => void;
   deleteNode: (id: string) => void;

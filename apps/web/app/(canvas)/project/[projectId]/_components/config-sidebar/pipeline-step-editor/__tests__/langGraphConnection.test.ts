@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
-import { BackendNode, Endpoint, EventItem } from "@/types/canvas";
+import { BackendNode } from "@/types/canvas";
+import type { EndpointWithNode, EventWithNode } from "@workspace/canvas";
 import { getConnectedLangGraphForEndpoint } from "@/lib/utils/pipelineValidation";
 
 describe("pipeline-step-editor: LangGraph Node and Edge Synchronization", () => {
@@ -25,13 +26,13 @@ describe("pipeline-step-editor: LangGraph Node and Edge Synchronization", () => 
     data: {
       label: "Support Agent",
       stateChannels: [
-        { key: "messages", type: "BaseMessage[]" },
-        { key: "userId", type: "string" },
+        { key: "messages", type: "messages", reducer: "add_messages" },
+        { key: "userId", type: "string", reducer: "replace" },
       ],
     },
   };
 
-  const endpoint: Endpoint = {
+  const endpoint: EndpointWithNode = {
     id: endpointId,
     nodeId: serviceNodeId,
     name: "/api/chat",
@@ -49,7 +50,7 @@ describe("pipeline-step-editor: LangGraph Node and Edge Synchronization", () => 
     ],
   };
 
-  const consumedEvent: EventItem = {
+  const consumedEvent: EventWithNode = {
     id: eventId,
     nodeId: serviceNodeId,
     name: "user_message_received",

@@ -2,6 +2,7 @@ import type {
   BackendNodeType,
   BackendNodeData,
   BackendNode,
+  PageSection,
 } from "@workspace/canvas/types";
 import { parsePageRoute, DEFAULT_ZONES } from "@workspace/canvas";
 
@@ -17,9 +18,10 @@ export function createGraphNodeData(
   if (type === "webApp") {
     const existingWebApps = existingNodes.filter((n) => n.type === "webApp");
     const count = existingWebApps.length;
-    const defaultLabel = count === 0 ? "Web App" : `Web App ${count + 1}`;
-    const effectiveLabel = label || defaultLabel;
-    const slug = effectiveLabel.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    const effectiveLabel = label || "";
+    const slug = effectiveLabel
+      ? effectiveLabel.toLowerCase().replace(/[^a-z0-9]+/g, "-")
+      : `web-app-${count + 1}`;
     const existingPorts = new Set(
       existingNodes
         .filter((n) => n.type === "webApp")
@@ -117,7 +119,7 @@ export function createGraphNodeData(
   if (type === "types") {
     return {
       ...baseData,
-      label: label || "Custom Types",
+      label: label || "",
       scope: "global",
       definitionMode: "visual",
       types: [
@@ -145,8 +147,8 @@ export function createGraphNodeData(
         {
           id: `sec-${Date.now()}`,
           name: "Main Section",
-          renderMode: "server" as const,
-          loadStrategy: "eager" as const,
+          renderMode: "server",
+          loadStrategy: "eager",
           actions: [
             {
               id: `evt-${Date.now()}`,
@@ -154,7 +156,7 @@ export function createGraphNodeData(
               event: "pageLoad",
             },
           ],
-        },
+        } satisfies PageSection,
       ],
     };
   }

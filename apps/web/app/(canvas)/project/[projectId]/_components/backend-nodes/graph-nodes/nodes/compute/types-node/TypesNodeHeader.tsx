@@ -112,30 +112,37 @@ export const TypesNodeHeader: React.FC<TypesNodeHeaderProps> = ({
               {data.packageName || data.label || "Package Types"}
             </span>
           ) : isEditing ? (
-            <LocalInput
-              ref={inputRef}
-              value={name}
-              placeholder="Enter types label..."
-              onChange={(e) => setName(e.target.value)}
-              className="h-5 text-xs font-semibold px-1 py-0 bg-background/80 border-border/80"
-              autoFocus
-              onKeyDown={(e: React.KeyboardEvent) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  onSave();
-                }
-                if (e.key === "Escape") {
-                  e.preventDefault();
-                  if (!data.label) {
-                    onDeleteNode();
-                    return;
+            <div
+              className="nodrag nowheel nopan relative flex-1 min-w-0"
+              onMouseDown={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
+              onDragStart={(e) => e.stopPropagation()}
+            >
+              <LocalInput
+                ref={inputRef}
+                value={name}
+                placeholder="Enter types label..."
+                onChange={(e) => setName(e.target.value)}
+                className="h-5 text-xs font-semibold px-1 py-0 bg-background/80 border-border/80 w-full"
+                autoFocus
+                onKeyDown={(e: React.KeyboardEvent) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    onSave();
                   }
-                  setName(data.label || "Custom Types");
-                  setIsEditing(false);
-                }
-              }}
-              onBlur={onSave}
-            />
+                  if (e.key === "Escape") {
+                    e.preventDefault();
+                    if (!data.label || !data.label.trim()) {
+                      onDeleteNode();
+                      return;
+                    }
+                    setName(data.label || "");
+                    setIsEditing(false);
+                  }
+                }}
+                onBlur={onSave}
+              />
+            </div>
           ) : (
             <span
               className="text-xs font-semibold text-foreground truncate hover:text-indigo-400 transition-colors"
