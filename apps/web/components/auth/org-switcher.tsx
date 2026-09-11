@@ -2,10 +2,12 @@
 
 import React, { useState, useEffect } from "react";
 import {
+  authClient,
   useActiveOrganization,
   useListOrganizations,
-  organization as orgActions,
 } from "@/lib/auth-client";
+import { useQuery } from "convex/react";
+import { api } from "@workspace/backend/_generated/api";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,17 +18,6 @@ import {
   DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@workspace/ui/components/dialog";
-import { Button } from "@workspace/ui/components/button";
-import { Input } from "@workspace/ui/components/input";
-import { Label } from "@workspace/ui/components/label";
-import {
   Building2,
   Check,
   ChevronsUpDown,
@@ -34,19 +25,19 @@ import {
   UserPlus,
   User,
   Loader2,
+  CreditCard,
+  Users,
 } from "lucide-react";
 import { toast } from "sonner";
-
-interface OrgItem {
-  id: string;
-  name: string;
-  slug?: string;
-}
+import type { OrgItem } from "./org/types";
+import { CreateOrgDialog } from "./org/create-org-dialog";
+import { InviteMemberDialog } from "./org/invite-member-dialog";
+import { TeamManagementDialog } from "./org/team-management-dialog";
+import { BuySeatsDialog } from "./org/buy-seats-dialog";
 
 export function OrgSwitcher() {
-  const { data: serverActiveOrg, isPending: isActivePending } =
-    useActiveOrganization();
-  const { data: serverOrganizations, isPending: isListPending } =
+  const { data: serverActiveOrg } = useActiveOrganization();
+  const { data: serverOrganizations, isPending: isListPending, refetch: refetchOrgs } =
     useListOrganizations();
 
   // Optimistic tracking for instant local updates
@@ -66,25 +57,48 @@ export function OrgSwitcher() {
     }
   }, [serverActiveOrg, optimisticOrg]);
 
+  // Re-fetch org list on workspace change events (e.g. after accepting an invite)
+  useEffect(() => {
+    const handleWorkspaceChanged = () => {
+      void refetchOrgs();
+    };
+    window.addEventListener("auth:workspace-changed", handleWorkspaceChanged);
+    return () => {
+      window.removeEventListener("auth:workspace-changed", handleWorkspaceChanged);
+    };
+  }, [refetchOrgs]);
+
   const activeOrg: OrgItem | null =
     optimisticOrg !== null
       ? optimisticOrg.id === null
         ? null
         : { id: optimisticOrg.id, name: optimisticOrg.name }
-      : (serverActiveOrg as OrgItem | null);
+      : serverActiveOrg
+        ? { id: serverActiveOrg.id, name: serverActiveOrg.name }
+        : null;
 
-  const organizations: OrgItem[] = (serverOrganizations as OrgItem[]) || [];
+  const organizations: OrgItem[] = serverOrganizations
+    ? serverOrganizations.map((org) => ({ id: org.id, name: org.name }))
+    : [];
 
+  const seatStatus = useQuery(
+    api.billing.getOrgSeatStatus,
+    activeOrg?.id ? { organizationId: activeOrg.id } : "skip",
+  );
+
+  // Dialog open states
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
-  const [orgName, setOrgName] = useState("");
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<"member" | "admin">("member");
-  const [submitting, setSubmitting] = useState(false);
+  const [teamDialogOpen, setTeamDialogOpen] = useState(false);
+  const [buySeatsDialogOpen, setBuySeatsDialogOpen] = useState(false);
 
   const handleSelectOrg = async (orgId: string | null) => {
     const currentId = activeOrg?.id ?? null;
     if (orgId === currentId) return;
+
+    if (typeof window !== "undefined") {
+      localStorage.setItem("preferred_workspace", orgId ?? "personal");
+    }
 
     // Instant optimistic switch
     if (orgId === null) {
@@ -95,9 +109,9 @@ export function OrgSwitcher() {
     }
 
     try {
-      const res = await orgActions.setActive({
-        organizationId: (orgId ?? null) as string,
-      });
+      const res = await authClient.organization.setActive(
+        orgId ? { organizationId: orgId } : { organizationId: null },
+      );
       if (res?.error) {
         setOptimisticOrg(null);
         toast.error(res.error.message || "Failed to switch workspace");
@@ -106,6 +120,9 @@ export function OrgSwitcher() {
       toast.success(
         orgId ? "Switched organization" : "Switched to Personal Workspace",
       );
+      // Always refresh org list after a workspace switch so the dropdown
+      // reflects the current membership (accounts for stale $listOrg cache).
+      void refetchOrgs();
       if (typeof window !== "undefined") {
         window.dispatchEvent(
           new CustomEvent("auth:workspace-changed", {
@@ -113,89 +130,11 @@ export function OrgSwitcher() {
           }),
         );
       }
-    } catch (err: unknown) {
+    } catch (err) {
       setOptimisticOrg(null);
       const msg =
         err instanceof Error ? err.message : "Failed to switch workspace";
       toast.error(msg);
-    }
-  };
-
-  const handleCreateOrg = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!orgName.trim()) return;
-
-    setSubmitting(true);
-    try {
-      const baseSlug = orgName
-        .toLowerCase()
-        .trim()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "");
-
-      const slug = `${baseSlug || "org"}-${Date.now().toString(36)}`;
-
-      const created = await orgActions.create({
-        name: orgName.trim(),
-        slug,
-      });
-
-      if (created?.error) {
-        toast.error(created.error.message || "Failed to create organization");
-        return;
-      }
-
-      if (created?.data?.id) {
-        // Optimistically activate immediately
-        setOptimisticOrg({ id: created.data.id, name: orgName.trim() });
-        toast.success(`Organization "${orgName}" created!`);
-        setOrgName("");
-        setCreateDialogOpen(false);
-
-        await orgActions.setActive({ organizationId: created.data.id });
-        if (typeof window !== "undefined") {
-          window.dispatchEvent(
-            new CustomEvent("auth:workspace-changed", {
-              detail: { organizationId: created.data.id },
-            }),
-          );
-        }
-      }
-    } catch (err: unknown) {
-      const msg =
-        err instanceof Error ? err.message : "Failed to create organization";
-      toast.error(msg);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleInviteMember = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inviteEmail.trim() || !activeOrg?.id) return;
-
-    setSubmitting(true);
-    try {
-      const res = await orgActions.inviteMember({
-        email: inviteEmail.trim(),
-        role: inviteRole,
-        organizationId: activeOrg.id,
-      });
-
-      if (res?.error) {
-        toast.error(res.error.message || "Failed to send invitation");
-        return;
-      }
-
-      toast.success(`Invitation sent to ${inviteEmail}`);
-      setInviteEmail("");
-      setInviteDialogOpen(false);
-    } catch (err: unknown) {
-      const msg =
-        err instanceof Error ? err.message : "Failed to send invitation";
-      toast.error(msg);
-    } finally {
-      setSubmitting(false);
     }
   };
 
@@ -270,7 +209,9 @@ export function OrgSwitcher() {
                       <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
                       <span className="truncate font-medium">{org.name}</span>
                     </div>
-                    {isSelected && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+                    {isSelected && (
+                      <Check className="h-3.5 w-3.5 text-primary shrink-0" />
+                    )}
                   </DropdownMenuItem>
                 );
               })
@@ -284,156 +225,108 @@ export function OrgSwitcher() {
           <DropdownMenuSeparator />
 
           {activeOrg && (
-            <DropdownMenuItem
-              onClick={() => setInviteDialogOpen(true)}
-              className="cursor-pointer text-xs gap-2"
-            >
-              <UserPlus className="h-4 w-4 text-muted-foreground" />
-              Invite Team Member
-            </DropdownMenuItem>
+            <>
+              <DropdownMenuItem
+                onClick={() => setInviteDialogOpen(true)}
+                className="cursor-pointer text-xs justify-between"
+              >
+                <div className="flex items-center gap-2">
+                  <UserPlus className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span>Invite Team Member</span>
+                </div>
+                {seatStatus && (
+                  <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground font-mono">
+                    {seatStatus.usedSeats}/{seatStatus.totalSeats}
+                  </span>
+                )}
+              </DropdownMenuItem>
+
+              <DropdownMenuItem
+                onClick={() => setTeamDialogOpen(true)}
+                className="cursor-pointer text-xs justify-between"
+              >
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span>Team & Invites</span>
+                </div>
+                {seatStatus && (
+                  <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground font-mono">
+                    {seatStatus.memberCount} active
+                  </span>
+                )}
+              </DropdownMenuItem>
+
+              {seatStatus?.isOwner && (
+                <DropdownMenuItem
+                  onClick={() => setBuySeatsDialogOpen(true)}
+                  className="cursor-pointer text-xs justify-between"
+                >
+                  <div className="flex items-center gap-2">
+                    <CreditCard className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span>Manage / Add Seats</span>
+                  </div>
+                </DropdownMenuItem>
+              )}
+            </>
           )}
 
           <DropdownMenuItem
-            onClick={() => setCreateDialogOpen(true)}
-            className="cursor-pointer text-xs gap-2"
+            onClick={() => {
+              if (organizations.length >= 1) {
+                toast.info("Your plan includes 1 Organization workspace.");
+                return;
+              }
+              setCreateDialogOpen(true);
+            }}
+            disabled={organizations.length >= 1}
+            className="cursor-pointer text-xs justify-between"
           >
-            <PlusCircle className="h-4 w-4 text-muted-foreground" />
-            Create Organization
+            <div className="flex items-center gap-2">
+              <PlusCircle className="h-4 w-4 text-muted-foreground shrink-0" />
+              <span>Create Organization</span>
+            </div>
+            {organizations.length >= 1 && (
+              <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                1 Org Limit
+              </span>
+            )}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {/* Dialog: Create Organization */}
-      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <form onSubmit={handleCreateOrg}>
-            <DialogHeader>
-              <DialogTitle className="text-lg font-semibold">
-                Create Organization
-              </DialogTitle>
-              <DialogDescription className="text-xs text-muted-foreground">
-                Create a shared workspace to collaborate with your team on system architectures, APIs, and workflows.
-              </DialogDescription>
-            </DialogHeader>
+      {/* Modular Dialog Components */}
+      <CreateOrgDialog
+        open={createDialogOpen}
+        onOpenChange={setCreateDialogOpen}
+        existingOrgsCount={organizations.length}
+        onCreated={(newOrg) => {
+          setOptimisticOrg(newOrg);
+        }}
+      />
 
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="org-name" className="text-xs font-medium">
-                  Organization Name
-                </Label>
-                <Input
-                  id="org-name"
-                  placeholder="Acme Corp"
-                  value={orgName}
-                  onChange={(e) => setOrgName(e.target.value)}
-                  className="h-9 text-xs"
-                  autoFocus
-                />
-              </div>
-            </div>
+      <InviteMemberDialog
+        open={inviteDialogOpen}
+        onOpenChange={setInviteDialogOpen}
+        activeOrg={activeOrg}
+        seatStatus={seatStatus}
+        onOpenBuySeats={() => setBuySeatsDialogOpen(true)}
+      />
 
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setCreateDialogOpen(false)}
-                disabled={submitting}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                size="sm"
-                disabled={!orgName.trim() || submitting}
-              >
-                {submitting ? (
-                  <>
-                    <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-                    Creating...
-                  </>
-                ) : (
-                  "Create Organization"
-                )}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <TeamManagementDialog
+        open={teamDialogOpen}
+        onOpenChange={setTeamDialogOpen}
+        activeOrg={activeOrg}
+        seatStatus={seatStatus}
+        onOpenInvite={() => setInviteDialogOpen(true)}
+        onOpenBuySeats={() => setBuySeatsDialogOpen(true)}
+      />
 
-      {/* Dialog: Invite Member */}
-      <Dialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <form onSubmit={handleInviteMember}>
-            <DialogHeader>
-              <DialogTitle className="text-lg font-semibold">
-                Invite to {activeOrg?.name}
-              </DialogTitle>
-              <DialogDescription className="text-xs text-muted-foreground">
-                Send an invitation to a colleague to join this organization.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="invite-email" className="text-xs font-medium">
-                  Email Address
-                </Label>
-                <Input
-                  id="invite-email"
-                  type="email"
-                  placeholder="colleague@example.com"
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
-                  className="h-9 text-xs"
-                  autoFocus
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="invite-role" className="text-xs font-medium">
-                  Role
-                </Label>
-                <select
-                  id="invite-role"
-                  value={inviteRole}
-                  onChange={(e) => setInviteRole(e.target.value as "member" | "admin")}
-                  className="w-full h-9 rounded-md border border-border bg-background px-3 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                >
-                  <option value="member">Member (Can edit and view projects)</option>
-                  <option value="admin">Admin (Can manage team & billing)</option>
-                </select>
-              </div>
-            </div>
-
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setInviteDialogOpen(false)}
-                disabled={submitting}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                size="sm"
-                disabled={!inviteEmail.trim() || submitting}
-              >
-                {submitting ? (
-                  <>
-                    <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-                    Sending Invite...
-                  </>
-                ) : (
-                  "Send Invitation"
-                )}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <BuySeatsDialog
+        open={buySeatsDialogOpen}
+        onOpenChange={setBuySeatsDialogOpen}
+        activeOrg={activeOrg}
+        seatStatus={seatStatus}
+      />
     </>
   );
 }

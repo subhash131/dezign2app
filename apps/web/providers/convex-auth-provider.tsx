@@ -41,8 +41,10 @@ function useAuthFromBetterAuthWithOrg(authClient: any, initialToken?: string | n
   const sessionId = session?.session?.id ?? null;
   const activeOrgId =
     activeOrg?.id ??
-    (session?.session?.activeOrganizationId as string | undefined) ??
-    null;
+    (typeof session?.session?.activeOrganizationId === "string"
+      ? session.session.activeOrganizationId
+      : null);
+
 
   const authKey = `${sessionId ?? ""}:${activeOrgId ?? "personal"}`;
 
@@ -72,6 +74,49 @@ function useAuthFromBetterAuthWithOrg(authClient: any, initialToken?: string | n
       window.removeEventListener("auth:workspace-changed", handleWorkspaceChanged);
     };
   }, []);
+
+  const { data: orgs } =
+    typeof authClient.useListOrganizations === "function"
+      ? authClient.useListOrganizations()
+      : { data: null };
+
+  // Smart routing: auto-select team organization on initial login if member of an org
+  const autoSwitchedRef = useRef(false);
+  useEffect(() => {
+    if (
+      !autoSwitchedRef.current &&
+      session?.user &&
+      !activeOrgId &&
+      orgs &&
+      Array.isArray(orgs) &&
+      orgs.length > 0
+    ) {
+      const firstOrg = orgs[0];
+      if (!firstOrg) return;
+
+      if (typeof window !== "undefined") {
+        const preferred = localStorage.getItem("preferred_workspace");
+        if (preferred === "personal") return;
+      }
+      autoSwitchedRef.current = true;
+      if (typeof authClient.organization?.setActive === "function") {
+        authClient.organization
+          .setActive({ organizationId: firstOrg.id })
+          .then(() => {
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(
+                new CustomEvent("auth:workspace-changed", {
+                  detail: { organizationId: firstOrg.id },
+                }),
+              );
+            }
+          })
+          .catch(() => {});
+      }
+    }
+  }, [session, activeOrgId, orgs]);
+
+
 
   const fetchAccessToken = useCallback(
     async ({ forceRefreshToken = false }: { forceRefreshToken?: boolean } = {}) => {
