@@ -45,6 +45,7 @@ export const SectionBlock = ({
   const [isEditingName, setIsEditingName] = useState(false);
   const [sectionName, setSectionName] = useState(section.name);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [editingActionId, setEditingActionId] = useState<string | null>(null);
 
   const updateNodeInternals = useUpdateNodeInternals();
 
@@ -115,9 +116,10 @@ export const SectionBlock = ({
 
   const handleAddAction = (e: React.MouseEvent) => {
     e.stopPropagation();
+    const newId = generateId();
     const newAction: UIEventItem = {
-      id: generateId(),
-      name: "New Action",
+      id: newId,
+      name: "",
       event: "click",
     };
     const updated = sections.map((s) =>
@@ -125,6 +127,7 @@ export const SectionBlock = ({
     );
     updateSections(updated);
     setSectionCollapsed(nodeId, section.id, false);
+    setEditingActionId(newId);
   };
 
   const renderMode = section.renderMode || "server";
@@ -347,6 +350,13 @@ export const SectionBlock = ({
               updateSections={updateSections}
               getLinkedEndpoint={getLinkedEndpoint}
               onTriggerEvent={onTriggerEvent}
+              isEditing={editingActionId === act.id}
+              onStartEdit={() => setEditingActionId(act.id)}
+              onFinishEdit={() => {
+                if (editingActionId === act.id) {
+                  setEditingActionId(null);
+                }
+              }}
             />
           ))}
 
