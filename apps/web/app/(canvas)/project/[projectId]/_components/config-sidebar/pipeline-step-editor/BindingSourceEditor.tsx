@@ -40,8 +40,11 @@ export const BindingSourceEditor = ({
     if (source.kind === "step_output") {
       return `step:${source.stepId}`;
     }
-    return source.kind;
-  }, [source]);
+    const matched = availableSources.find(
+      (s) => s.id === source.kind || s.kind === source.kind,
+    );
+    return matched ? matched.id : source.kind;
+  }, [source, availableSources]);
 
   const activeSource = availableSources.find((s) => s.id === currentSourceOptionId);
 
@@ -52,16 +55,28 @@ export const BindingSourceEditor = ({
         ...binding,
         source: { kind: "step_output", stepId, field: "" },
       });
-    } else if (selectedId === "req_body") {
-      onChange({ ...binding, source: { kind: "req_body", field: "" } });
-    } else if (selectedId === "req_params") {
-      onChange({ ...binding, source: { kind: "req_params", field: "" } });
-    } else if (selectedId === "req_query") {
-      onChange({ ...binding, source: { kind: "req_query", field: "" } });
-    } else if (selectedId === "req_headers") {
-      onChange({ ...binding, source: { kind: "req_headers", field: "" } });
-    } else if (selectedId === "inline") {
-      onChange({ ...binding, source: { kind: "inline", value: "" } });
+    } else {
+      const foundSource = availableSources.find((s) => s.id === selectedId);
+      if (foundSource) {
+        if (foundSource.kind === "inline") {
+          onChange({ ...binding, source: { kind: "inline", value: "" } });
+        } else {
+          onChange({
+            ...binding,
+            source: { kind: foundSource.kind as any, field: "" },
+          });
+        }
+      } else if (selectedId === "inline") {
+        onChange({ ...binding, source: { kind: "inline", value: "" } });
+      } else if (selectedId === "req_body") {
+        onChange({ ...binding, source: { kind: "req_body", field: "" } });
+      } else if (selectedId === "req_params") {
+        onChange({ ...binding, source: { kind: "req_params", field: "" } });
+      } else if (selectedId === "req_query") {
+        onChange({ ...binding, source: { kind: "req_query", field: "" } });
+      } else if (selectedId === "req_headers") {
+        onChange({ ...binding, source: { kind: "req_headers", field: "" } });
+      }
     }
   };
 
@@ -74,7 +89,8 @@ export const BindingSourceEditor = ({
 
       const category = src.label;
       const prefix =
-        src.kind === "req_body"
+        src.rootVariableName ||
+        (src.kind === "req_body"
           ? "body"
           : src.kind === "req_params"
           ? "params"
@@ -82,7 +98,7 @@ export const BindingSourceEditor = ({
           ? "query"
           : src.kind === "req_headers"
           ? "headers"
-          : src.variableName || "step";
+          : src.variableName || "step");
 
       // Whole object token
       if (src.paths.length > 0) {

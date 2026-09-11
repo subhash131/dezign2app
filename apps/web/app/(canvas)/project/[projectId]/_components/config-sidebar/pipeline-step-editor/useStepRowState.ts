@@ -415,13 +415,80 @@ export function useStepRowState({
       }
 
       if (step.type === "push_to_client") {
-        return [
+        const args: ExpectedArg[] = [
           {
             name: "payload",
             type: "any",
-            required: true,
+            required: false,
           },
         ];
+
+        // 1. From consumedEvent schema (e.g. Kafka topic schema fields)
+        if (consumedEvent?.payloadSchema) {
+          if (
+            Array.isArray(consumedEvent.payloadSchema.fields) &&
+            consumedEvent.payloadSchema.fields.length > 0
+          ) {
+            consumedEvent.payloadSchema.fields.forEach((f) => {
+              if (f.name && f.name.trim()) {
+                args.push({
+                  name: f.name.trim(),
+                  type: f.type || "string",
+                  required: f.required !== false,
+                });
+              }
+            });
+          } else if (consumedEvent.payloadSchema.rawJson) {
+            const parsed = parseSchemaJson(consumedEvent.payloadSchema.rawJson);
+            if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+              Object.entries(parsed).forEach(([k, v]) => {
+                const valType = typeof v === "object" && v !== null ? "object" : typeof v;
+                args.push({
+                  name: k,
+                  type: valType === "undefined" ? "string" : valType,
+                  required: true,
+                });
+              });
+            }
+          }
+        }
+
+        // 2. From endpoint request body schema
+        if (endpoint?.requestBody) {
+          if (
+            Array.isArray(endpoint.requestBody.fields) &&
+            endpoint.requestBody.fields.length > 0
+          ) {
+            endpoint.requestBody.fields.forEach((f) => {
+              if (f.name && f.name.trim()) {
+                args.push({
+                  name: f.name.trim(),
+                  type: f.type || "string",
+                  required: f.required !== false,
+                });
+              }
+            });
+          } else if (endpoint.requestBody.rawJson) {
+            const parsed = parseSchemaJson(endpoint.requestBody.rawJson);
+            if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+              Object.entries(parsed).forEach(([k, v]) => {
+                const valType = typeof v === "object" && v !== null ? "object" : typeof v;
+                args.push({
+                  name: k,
+                  type: valType === "undefined" ? "string" : valType,
+                  required: true,
+                });
+              });
+            }
+          }
+        }
+
+        // If specific schema args were added, payload is optional; otherwise payload is required
+        if (args.length === 1) {
+          args[0]!.required = true;
+        }
+
+        return args;
       }
 
       return [];
@@ -439,6 +506,8 @@ export function useStepRowState({
     step.functionRef?.name,
     step.operationId,
     allNodes,
+    consumedEvent,
+    endpoint,
   ]);
 
   // Auto-map arguments from route params / query / body / prior steps (preserving existing)
@@ -559,6 +628,9 @@ export function useStepRowState({
 
       // 7b. If payload argument and has prior step outputs, auto-bind to the immediate last prior step output
       if (arg.name === "payload") {
+        if ((step.type === "push_to_client" || step.type === "kafka_publish") && newBindings.length > 0) {
+          continue;
+        }
         const stepSources = availableSources.filter((s) => s.kind === "step_output");
         const lastStep = stepSources.length > 0 ? stepSources[stepSources.length - 1] : undefined;
         if (lastStep?.stepId) {

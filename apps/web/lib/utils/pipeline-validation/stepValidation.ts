@@ -17,6 +17,12 @@ export function isBindingSourceConfigured(
 ): boolean {
   if (!binding || !binding.source || !binding.source.kind) return false;
   const source = binding.source;
+  const isWholeObjectArg =
+    !binding.argName ||
+    binding.argName.toLowerCase() === "payload" ||
+    binding.argName.toLowerCase() === "data" ||
+    binding.argName.toLowerCase() === "body" ||
+    binding.argName.toLowerCase() === "_spread";
 
   if (source.kind === "inline") {
     if ("value" in source) {
@@ -28,14 +34,18 @@ export function isBindingSourceConfigured(
   }
 
   if (source.kind === "step_output") {
-    if ("stepId" in source && "field" in source) {
-      return Boolean(
-        source.stepId?.trim() &&
-          source.field !== undefined &&
-          String(source.field).trim().length > 0,
-      );
+    if ("stepId" in source) {
+      if (!source.stepId?.trim()) return false;
+      if (isWholeObjectArg) return true;
+      return Boolean(source.field !== undefined && String(source.field).trim().length > 0);
     }
     return false;
+  }
+
+  if (source.kind === "req_body") {
+    // If binding whole object arg (e.g. payload, body, data), field can be empty. Otherwise field must be specified.
+    if (isWholeObjectArg) return true;
+    return Boolean(source.field !== undefined && String(source.field).trim().length > 0);
   }
 
   if ("field" in source) {
@@ -464,10 +474,17 @@ function isPushToClientStepUnconfigured(
     const payloadBinding = bindings.find(
       (b) =>
         (b.argName || "").trim().toLowerCase() === "payload" ||
-        (b.argName || "").trim().toLowerCase() === "message",
+        (b.argName || "").trim().toLowerCase() === "message" ||
+        (b.argName || "").trim().toLowerCase() === "data",
     );
-    if (!payloadBinding || !isBindingSourceConfigured(payloadBinding)) {
-      return true;
+    if (payloadBinding) {
+      if (!isBindingSourceConfigured(payloadBinding)) {
+        return true;
+      }
+    } else {
+      if (bindings.length === 0) {
+        return true;
+      }
     }
   }
   if (bindings.some((b) => !isBindingSourceConfigured(b))) {

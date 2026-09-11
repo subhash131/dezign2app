@@ -535,6 +535,7 @@ export const StepRow = ({
                       endpoint={endpoint}
                       consumedEvent={consumedEvent}
                       expectedArgs={expectedArgs}
+                      availableSources={availableSources}
                       onChange={onChange}
                       onAutoMapArguments={handleAutoMapArguments}
                     >
