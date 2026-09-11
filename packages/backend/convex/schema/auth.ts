@@ -13,7 +13,8 @@ export const authTables = {
     createdAt: v.number(),
   })
     .index("by_email", ["email"])
-    .index("by_creem_customer", ["creemCustomerId"]),
+    .index("by_creem_customer", ["creemCustomerId"])
+    .index("by_auth_id", ["authId"]),
 
   subscriptions: defineTable({
     userId: v.id("users"),
@@ -66,4 +67,26 @@ export const authTables = {
   })
     .index("by_user", ["userId"])
     .index("by_creem_customer", ["creemCustomerId"]),
+
+  organization_billing: defineTable({
+    organizationId: v.string(),
+    ownerUserId: v.id("users"),
+    baseSeats: v.number(),
+    extraSeats: v.number(),
+    totalSeats: v.number(),
+    status: v.union(
+      v.literal("active"),
+      v.literal("canceled"),
+      v.literal("past_due"),
+      v.literal("expired"),
+      v.literal("trialing"),
+    ),
+    creemSubscriptionId: v.optional(v.string()),
+    creemCustomerId: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_organization", ["organizationId"])
+    .index("by_owner", ["ownerUserId"]),
 };
+

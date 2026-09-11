@@ -155,6 +155,7 @@ export const tables = {
     expiresAt: v.number(),
     createdAt: v.optional(v.union(v.null(), v.number())),
     inviterId: v.string(),
+    teamId: v.optional(v.union(v.null(), v.string())),
   })
     .index("organizationId", ["organizationId"])
     .index("email", ["email"]),

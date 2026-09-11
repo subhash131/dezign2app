@@ -17,7 +17,12 @@ import { useQuery } from "convex/react";
 import { api } from "@workspace/backend/_generated/api";
 import { SubscriptionAccessContext } from "@/providers/subscription-access-context";
 import { useRouter, usePathname } from "next/navigation";
-import { useSession } from "@/lib/auth-client";
+import {
+  authClient,
+  useSession,
+  useActiveOrganization,
+  useListOrganizations,
+} from "@/lib/auth-client";
 import { ReadOnlyBanner } from "./read-only-banner";
 import Link from "next/link";
 import { isElectron, getElectronAPI } from "@/lib/electron";
@@ -31,7 +36,7 @@ import {
 } from "@workspace/ui/components/card";
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
-import { Sparkles, ExternalLink, Lock, X } from "lucide-react";
+import { Sparkles, ExternalLink, Lock, X, Building2 } from "lucide-react";
 
 /**
  * Access levels defined below:
@@ -72,11 +77,19 @@ export const PaywallModal = ({ children }: { children: React.ReactNode }) => {
   const router = useRouter();
   const pathname = usePathname();
   const { data: session, isPending: isSessionPending } = useSession();
+  const { data: activeOrg } = useActiveOrganization();
+  const { data: orgs } = useListOrganizations();
+
   const isAuthLoaded = !isSessionPending;
   const isSignedIn = !!session?.user;
   const subscriptionStatus = useQuery(
     api.users.getSubscriptionStatus,
-    session?.user?.email ? { email: session.user.email } : "skip",
+    session?.user?.email
+      ? {
+          email: session.user.email,
+          organizationId: activeOrg?.id ?? null,
+        }
+      : "skip",
   );
 
   const [isPaywallActive, setIsPaywallActive] = useState(false);
@@ -194,6 +207,22 @@ export const PaywallModal = ({ children }: { children: React.ReactNode }) => {
     currentAccess === "premium-limited" &&
     subscriptionStatus?.status === "inactive";
 
+  const handleSwitchToOrg = async (orgId: string) => {
+    try {
+      await authClient.organization.setActive({ organizationId: orgId });
+      setIsPaywallActive(false);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("auth:workspace-changed", {
+            detail: { organizationId: orgId },
+          }),
+        );
+      }
+    } catch (e) {
+      console.error("Failed to switch workspace:", e);
+    }
+  };
+
   const handleDismiss = () => {
     setIsPaywallActive(false);
     if (!hasDismissedInitialModal) {
@@ -257,6 +286,33 @@ export const PaywallModal = ({ children }: { children: React.ReactNode }) => {
             </CardHeader>
 
             <CardContent className="space-y-4 pt-0">
+              {/* Friendly prompt for users who belong to an organization */}
+              {(() => {
+                if (activeOrg || !orgs || orgs.length === 0) return null;
+                const primaryOrg = orgs[0];
+                if (!primaryOrg) return null;
+                return (
+                  <div className="rounded-lg border border-primary/30 bg-primary/5 p-3.5 text-xs space-y-2 text-left">
+                    <div className="flex items-center gap-1.5 font-semibold text-foreground">
+                      <Building2 className="h-4 w-4 text-primary shrink-0" />
+                      <span>Team Workspace Available</span>
+                    </div>
+                    <p className="text-muted-foreground leading-relaxed">
+                      You are currently in your Personal Workspace. You have access to the{" "}
+                      <strong className="text-foreground">{primaryOrg.name}</strong> team workspace where Pro access is active.
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="default"
+                      onClick={() => handleSwitchToOrg(primaryOrg.id)}
+                      className="w-full mt-1 font-medium text-xs shadow-sm"
+                    >
+                      Switch to {primaryOrg.name} Workspace
+                    </Button>
+                  </div>
+                );
+              })()}
+
               <div className="rounded-lg border border-border bg-muted/40 p-4 text-xs text-muted-foreground leading-relaxed">
                 <span className="font-medium text-foreground block mb-1">
                   🌐 Browser Checkout & Instant Sync

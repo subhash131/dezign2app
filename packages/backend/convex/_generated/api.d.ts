@@ -267,6 +267,7 @@ export declare const components: {
                   organizationId: string;
                   role?: null | string;
                   status: string;
+                  teamId?: null | string;
                 };
                 model: "invitation";
               };
@@ -708,6 +709,7 @@ export declare const components: {
                     | "expiresAt"
                     | "createdAt"
                     | "inviterId"
+                    | "teamId"
                     | "_id";
                   mode?: "sensitive" | "insensitive";
                   operator?:
@@ -1176,6 +1178,7 @@ export declare const components: {
                     | "expiresAt"
                     | "createdAt"
                     | "inviterId"
+                    | "teamId"
                     | "_id";
                   mode?: "sensitive" | "insensitive";
                   operator?:
@@ -1843,6 +1846,7 @@ export declare const components: {
                   organizationId?: string;
                   role?: null | string;
                   status?: string;
+                  teamId?: null | string;
                 };
                 where?: Array<{
                   connector?: "AND" | "OR";
@@ -1854,6 +1858,7 @@ export declare const components: {
                     | "expiresAt"
                     | "createdAt"
                     | "inviterId"
+                    | "teamId"
                     | "_id";
                   mode?: "sensitive" | "insensitive";
                   operator?:
@@ -2424,6 +2429,7 @@ export declare const components: {
                   organizationId?: string;
                   role?: null | string;
                   status?: string;
+                  teamId?: null | string;
                 };
                 where?: Array<{
                   connector?: "AND" | "OR";
@@ -2435,6 +2441,7 @@ export declare const components: {
                     | "expiresAt"
                     | "createdAt"
                     | "inviterId"
+                    | "teamId"
                     | "_id";
                   mode?: "sensitive" | "insensitive";
                   operator?:

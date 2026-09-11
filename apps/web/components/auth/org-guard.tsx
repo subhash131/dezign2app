@@ -2,10 +2,12 @@
 
 import React, { ReactNode, useState } from "react";
 import {
+  authClient,
   useActiveOrganization,
   useListOrganizations,
-  organization as orgActions,
 } from "@/lib/auth-client";
+import { useMutation } from "convex/react";
+import { api } from "@workspace/backend/_generated/api";
 import {
   Card,
   CardHeader,
@@ -26,23 +28,7 @@ export const OrganizationGuard = ({ children }: { children: ReactNode }) => {
 
   const [orgName, setOrgName] = useState("");
   const [submitting, setSubmitting] = useState(false);
-
-  const handleSelectOrg = async (orgId: string) => {
-    try {
-      await orgActions.setActive({ organizationId: orgId });
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(
-          new CustomEvent("auth:workspace-changed", {
-            detail: { organizationId: orgId },
-          }),
-        );
-      }
-      toast.success("Organization selected");
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to select organization";
-      toast.error(message);
-    }
-  };
+  const ensureOrgBilling = useMutation(api.billing.ensureOrgBilling);
 
   const handleCreateOrg = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,17 +41,27 @@ export const OrganizationGuard = ({ children }: { children: ReactNode }) => {
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/(^-|-$)/g, "");
 
-      const created = await orgActions.create({
+      const created = await authClient.organization.create({
         name: orgName.trim(),
         slug: `${slug}-${Date.now().toString().slice(-4)}`,
       });
 
-      if (created?.data) {
-        await orgActions.setActive({ organizationId: created.data.id });
+      const createdId =
+        typeof created?.data?.id === "string" ? created.data.id : null;
+
+      if (createdId) {
+        try {
+          await ensureOrgBilling({ organizationId: createdId });
+        } catch (billingErr) {
+          console.error("Error initializing org billing:", billingErr);
+        }
+
+        await authClient.organization.setActive({ organizationId: createdId });
         if (typeof window !== "undefined") {
+          localStorage.setItem("preferred_workspace", createdId);
           window.dispatchEvent(
             new CustomEvent("auth:workspace-changed", {
-              detail: { organizationId: created.data.id },
+              detail: { organizationId: createdId },
             }),
           );
         }
