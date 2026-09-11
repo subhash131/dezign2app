@@ -24,6 +24,9 @@ export interface SectionActionRowProps {
   updateSections: (sections: PageSection[]) => void;
   getLinkedEndpoint: (actionId: string) => { targetNode: BackendNode; endpoint: Endpoint } | null;
   onTriggerEvent: (triggerInfo: { event: UIEventItem; targetNode: BackendNode; endpoint: Endpoint }) => void;
+  isEditing?: boolean;
+  onStartEdit?: () => void;
+  onFinishEdit?: () => void;
 }
 
 export const SectionActionRow = ({
@@ -34,12 +37,60 @@ export const SectionActionRow = ({
   updateSections,
   getLinkedEndpoint,
   onTriggerEvent,
+  isEditing: isEditingProp,
+  onStartEdit,
+  onFinishEdit,
 }: SectionActionRowProps) => {
-  const [isEditing, setIsEditing] = useState(false);
+  const [internalIsEditing, setInternalIsEditing] = useState(
+    !action.name || action.name.trim() === "" || Boolean(isEditingProp),
+  );
+  const isEditing = isEditingProp !== undefined ? isEditingProp : internalIsEditing;
+
+  const setIsEditing = (val: boolean) => {
+    setInternalIsEditing(val);
+    if (val) {
+      onStartEdit?.();
+    } else {
+      onFinishEdit?.();
+    }
+  };
+
   const [editName, setEditName] = useState(action.name || "");
   const [editEvent, setEditEvent] = useState(action.event || "click");
   const [customEvent, setCustomEvent] = useState("");
+  const [isSelectOpen, setIsSelectOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    if (isEditing) {
+      setEditName(action.name || "");
+      const evt = action.event || "click";
+      const isStandard = (EVENT_OPTIONS as readonly string[]).includes(evt);
+      setEditEvent(isStandard ? evt : evt ? "other" : "click");
+      setCustomEvent(isStandard ? "" : evt);
+
+      const focus = () => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+          inputRef.current.select();
+        }
+      };
+      focus();
+      const raf = requestAnimationFrame(focus);
+      const timer = setTimeout(focus, 50);
+      return () => {
+        cancelAnimationFrame(raf);
+        clearTimeout(timer);
+      };
+    }
+  }, [isEditing]);
+
+  React.useEffect(() => {
+    if (!isEditing) {
+      setEditName(action.name || "");
+    }
+  }, [action.name, isEditing]);
 
   const setActiveConfigItem = useBackendCanvasStore((s) => s.setActiveConfigItem);
 
@@ -97,11 +148,34 @@ export const SectionActionRow = ({
     updateSections(updatedSections);
   };
 
-  const saveAction = () => {
-    const finalEvent = editEvent === "other" ? customEvent : editEvent;
-    const finalName = editName.trim() || "Unnamed Action";
-    const trimmedEvent = finalEvent.trim();
-    handleUpdate(finalName, trimmedEvent);
+  const handleDiscard = () => {
+    setIsEditing(false);
+    handleDelete();
+  };
+
+  const handleCancel = () => {
+    if (!action.name || action.name.trim() === "") {
+      handleDiscard();
+    } else {
+      setEditName(action.name);
+      setIsEditing(false);
+    }
+  };
+
+  const handleSaveOrDiscard = () => {
+    const trimmedName = editName.trim();
+    if (!trimmedName) {
+      if (!action.name || action.name.trim() === "") {
+        handleDiscard();
+      } else {
+        setEditName(action.name);
+        setIsEditing(false);
+      }
+      return;
+    }
+
+    const finalEvent = editEvent === "other" ? customEvent.trim() : editEvent.trim();
+    handleUpdate(trimmedName, finalEvent);
     setIsEditing(false);
 
     const store = useBackendCanvasStore.getState();
@@ -109,7 +183,7 @@ export const SectionActionRow = ({
       (e) => e.source === nodeId && e.sourceHandle === `events-${action.id}`,
     );
 
-    if (trimmedEvent === "navigateToPage") {
+    if (finalEvent === "navigateToPage") {
       if (!existingEdge) {
         const currentNode = store.nodes.find((n) => n.id === nodeId);
         const pos = currentNode?.position || { x: 100, y: 100 };
@@ -182,29 +256,43 @@ export const SectionActionRow = ({
         <div
           className="flex flex-col gap-1.5 w-full"
           onBlur={(e) => {
+            if (isSelectOpen) return;
             const related = e.relatedTarget as HTMLElement | null;
             if (related?.closest('[role="combobox"]')) return;
             if (related?.closest('[role="listbox"]')) return;
+            if (related?.closest('[role="option"]')) return;
             if (related?.closest("[data-radix-popper-content-wrapper]")) return;
 
             if (!e.currentTarget.contains(related)) {
-              saveAction();
+              handleSaveOrDiscard();
             }
           }}
         >
           <Input
+            ref={inputRef}
             value={editName}
             onChange={(e) => setEditName(e.target.value)}
             placeholder="Action name (e.g. submitForm)"
             className="h-6 text-xs"
             autoFocus
             onKeyDown={(e) => {
-              if (e.key === "Enter") saveAction();
-              if (e.key === "Escape") setIsEditing(false);
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleSaveOrDiscard();
+              }
+              if (e.key === "Escape") {
+                e.preventDefault();
+                handleCancel();
+              }
             }}
           />
           <div className="flex items-center gap-1">
-            <Select value={editEvent} onValueChange={(v) => setEditEvent(v)}>
+            <Select
+              open={isSelectOpen}
+              onOpenChange={setIsSelectOpen}
+              value={editEvent}
+              onValueChange={(v) => setEditEvent(v)}
+            >
               <SelectTrigger className="h-6 text-xs w-full bg-background focus:ring-1 focus:ring-ring focus:ring-offset-0">
                 <SelectValue placeholder="Event type" />
               </SelectTrigger>
@@ -224,8 +312,14 @@ export const SectionActionRow = ({
                 placeholder="Custom event"
                 className="h-6 text-xs w-full"
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") saveAction();
-                  if (e.key === "Escape") setIsEditing(false);
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleSaveOrDiscard();
+                  }
+                  if (e.key === "Escape") {
+                    e.preventDefault();
+                    handleCancel();
+                  }
                 }}
               />
             )}
