@@ -6,6 +6,7 @@ import { cn } from "@workspace/ui/lib/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { AnyMessagingResource, Schema } from "@/types/canvas";
 import { isEndpointPipelineUnconfigured } from "@/lib/utils/pipelineValidation";
+import { formatTopicName, sanitizeTopicName } from "@workspace/canvas";
 import { generateId } from "./utils";
 import { LocalInput } from "./LocalInput";
 
@@ -146,6 +147,15 @@ export const MessagingResourceRow = ({
     allAvailableBrokerTopics.find((t) => t.resourceId === item.messagingResourceId)?.name ||
     (item._legacyName as string | undefined);
 
+  const isTopicOrEvent =
+    resourceType === "topics" ||
+    resourceType === "channels" ||
+    variant === "publish" ||
+    variant === "consume" ||
+    field === "publishedEvents" ||
+    field === "consumedEvents" ||
+    !resourceType;
+
   return (
     <div
       className="flex flex-col border-b last:border-b-0 text-xs relative group/row hover:bg-secondary/20 nodrag"
@@ -162,8 +172,13 @@ export const MessagingResourceRow = ({
               setEditingId(null);
             } else {
               const wasEmpty = !item.name;
-              handleUpdate(item.id, editingName.trim());
-              if (wasEmpty && editingName.trim()) {
+              const sanitized = isTopicOrEvent
+                ? sanitizeTopicName(editingName)
+                : editingName.trim();
+              if (sanitized) {
+                handleUpdate(item.id, sanitized);
+              }
+              if (wasEmpty && sanitized) {
                 setActiveConfigItem({ type: "event", id: item.id, nodeId });
               }
               setEditingId(null);
@@ -279,16 +294,24 @@ export const MessagingResourceRow = ({
             <div className="flex items-center gap-1 nodrag">
               <LocalInput
                 value={editingName}
-                onChange={(e) => setEditingName(e.target.value)}
+                onChange={(e) => {
+                  const val = isTopicOrEvent
+                    ? formatTopicName(e.target.value)
+                    : e.target.value;
+                  setEditingName(val);
+                }}
                 className="h-6 text-xs flex-1 nodrag"
-                placeholder="e.g. OrderCreated"
+                placeholder={isTopicOrEvent ? "e.g. order.created" : "e.g. OrderCreated"}
                 autoFocus
                 onKeyDown={(e: React.KeyboardEvent) => {
                   if (e.key === "Enter") {
-                    if (!editingName.trim()) handleDelete(item.id);
+                    const sanitized = isTopicOrEvent
+                      ? sanitizeTopicName(editingName)
+                      : editingName.trim();
+                    if (!sanitized) handleDelete(item.id);
                     else {
                       const wasEmpty = !item.name;
-                      handleUpdate(item.id, editingName.trim());
+                      handleUpdate(item.id, sanitized);
                       if (wasEmpty)
                         setActiveConfigItem({
                           type: "event",
@@ -309,10 +332,13 @@ export const MessagingResourceRow = ({
                 variant="ghost"
                 className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
                 onClick={() => {
-                  if (!editingName.trim()) handleDelete(item.id);
+                  const sanitized = isTopicOrEvent
+                    ? sanitizeTopicName(editingName)
+                    : (editingName || "").trim();
+                  if (!sanitized) handleDelete(item.id);
                   else {
                     const wasEmpty = !item.name;
-                    handleUpdate(item.id, editingName.trim());
+                    handleUpdate(item.id, sanitized);
                     if (wasEmpty)
                       setActiveConfigItem({ type: "event", id: item.id, nodeId });
                   }
@@ -332,7 +358,11 @@ export const MessagingResourceRow = ({
                   setActiveConfigItem({ type: "event", id: item.id, nodeId });
                 } else {
                   setEditingId(item.id);
-                  setEditingName(item.name || "");
+                  setEditingName(
+                    isTopicOrEvent
+                      ? formatTopicName(item.name || "")
+                      : item.name || "",
+                  );
                 }
               }}
             >
@@ -344,7 +374,9 @@ export const MessagingResourceRow = ({
                     isConsumerUnconfigured && "text-destructive font-semibold",
                   )}
                 >
-                  {resolvedTopicName || (isConsumed ? "Select Topic..." : "Untitled Resource")}
+                  {(isTopicOrEvent && resolvedTopicName
+                    ? formatTopicName(resolvedTopicName)
+                    : resolvedTopicName) || (isConsumed ? "Select Topic..." : "Untitled Resource")}
                 </span>
                 {isConsumerUnconfigured && (
                   <span
@@ -466,12 +498,22 @@ export const MessagingResourceList = <
     }
   };
 
+  const isTopicOrEvent =
+    resourceType === "topics" ||
+    resourceType === "channels" ||
+    variant === "publish" ||
+    variant === "consume" ||
+    field === "publishedEvents" ||
+    field === "consumedEvents" ||
+    !resourceType;
+
   const handleUpdate = (id: string, name: string) => {
+    const sanitizedName = isTopicOrEvent ? sanitizeTopicName(name) : name;
     if (onUpdate) {
-      onUpdate(id, name);
+      onUpdate(id, sanitizedName);
     } else if (onChange) {
       onChange(
-        items.map((item) => (item.id === id ? { ...item, name } : item)) as T[],
+        items.map((item) => (item.id === id ? { ...item, name: sanitizedName } : item)) as T[],
       );
     }
   };
