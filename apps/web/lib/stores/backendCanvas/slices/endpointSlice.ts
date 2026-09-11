@@ -1,5 +1,6 @@
 import { BackendEdge } from "@/types/canvas";
 import { Endpoint } from "@workspace/canvas/types";
+import { sanitizeEndpointRoute } from "@workspace/canvas";
 import { generateKeyBetween } from "fractional-indexing";
 import {
   BackendCanvasState,
@@ -32,7 +33,11 @@ export const createEndpointSlice = (
 
   addEndpoint: (nodeId, endpoint) => {
     get().pushHistorySnapshot("graph");
-    const newEndpoint = { ...endpoint, nodeId };
+    const newEndpoint = {
+      ...endpoint,
+      name: endpoint.name ? sanitizeEndpointRoute(endpoint.name) : endpoint.name,
+      nodeId,
+    };
     set({
       endpoints: [...get().endpoints, newEndpoint],
       pendingEndpointUpserts: [...get().pendingEndpointUpserts, newEndpoint],
@@ -41,8 +46,12 @@ export const createEndpointSlice = (
 
   updateEndpoint: (id, changes) => {
     get().pushHistorySnapshot("graph");
+    const sanitizedChanges = { ...changes };
+    if (typeof sanitizedChanges.name === "string") {
+      sanitizedChanges.name = sanitizeEndpointRoute(sanitizedChanges.name);
+    }
     const next = get().endpoints.map((e) =>
-      e.id === id ? { ...e, ...changes } : e,
+      e.id === id ? { ...e, ...sanitizedChanges } : e,
     );
     const updated = next.find((e) => e.id === id);
     if (updated) {

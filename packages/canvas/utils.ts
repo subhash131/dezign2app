@@ -397,4 +397,20 @@ export function pageRouteToUrl(routeOrLabel: string): string {
   return folder ? `/${folder}` : "/";
 }
 
+/**
+ * Normalizes an endpoint route path by replacing whitespace with hyphens,
+ * matching compiler endpoint path transformation (e.g. "send msg" -> "send-msg", "/send msg" -> "/send-msg").
+ */
+export function formatEndpointRoute(route: string): string {
+  if (!route) return "";
+  return route.replace(/\s+/g, "-");
+}
 
+/**
+ * Sanitizes an endpoint route for persistence (e.g. on blur/save),
+ * trimming whitespace and replacing internal spaces with hyphens.
+ */
+export function sanitizeEndpointRoute(route: string): string {
+  if (!route) return "";
+  return route.trim().replace(/\s+/g, "-");
+}
