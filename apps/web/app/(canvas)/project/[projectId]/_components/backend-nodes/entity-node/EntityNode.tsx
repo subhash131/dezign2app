@@ -1,9 +1,8 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useRef } from "react";
 import { NodeProps, Handle, Position } from "@xyflow/react";
 import { Database, Table2, Trash, Settings } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
-import { Input } from "@workspace/ui/components/input";
 import {
   Select,
   SelectContent,
@@ -18,6 +17,9 @@ import { IndexList } from "./IndexList";
 import { VectorConfig } from "./VectorConfig";
 import { DbOperationsList } from "./DbOperationsList";
 import { getUniqueNodeLabel } from "@workspace/canvas";
+import { NodeHeader } from "../graph-nodes/common";
+import { Layers } from "lucide-react";
+import { toast } from "sonner";
 
 export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
@@ -27,34 +29,12 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
   const setNodesPendingDeletion = useBackendCanvasStore(
     (s) => s.setNodesPendingDeletion,
   );
-  const [editingName, setEditingName] = useState(data.label);
-  const [isEditingName, setIsEditingName] = useState(data.label === "");
-  const [nameError, setNameError] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
   const nodeRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (isEditingName) {
-      setTimeout(() => inputRef.current?.focus(), 10);
-    }
-  }, [isEditingName]);
 
   const columns = data.columns || [];
   const indexes = data.indexes || [];
 
-  const saveName = (e?: React.FocusEvent | React.KeyboardEvent) => {
-    let finalName = editingName.trim();
-    if (!finalName) {
-      if (!data.label || data.label.trim() === "") {
-        useBackendCanvasStore.getState().deleteNode(id);
-        return;
-      }
-      setEditingName(data.label);
-      setNameError(false);
-      setIsEditingName(false);
-      return;
-    }
-
+  const handleSaveName = (finalName: string) => {
     // Check global uniqueness for entities
     const allNodes = useBackendCanvasStore.getState().nodes;
     const exists = allNodes.some(
@@ -65,14 +45,10 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
     );
 
     if (exists) {
-      setNameError(true);
-      if (e?.type === "blur") {
-        setTimeout(() => inputRef.current?.focus(), 0);
-      }
+      toast.error(`Table name "${finalName}" is already used!`);
       return;
     }
 
-    setNameError(false);
     const latestNode = useBackendCanvasStore
       .getState()
       .nodes.find((n) => n.id === id);
@@ -81,8 +57,6 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
     } else {
       updateNode(id, { data: { ...data, label: finalName } });
     }
-    setEditingName(finalName);
-    setIsEditingName(false);
   };
 
   const isVector = data.dbType === "vector";
@@ -128,99 +102,33 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
         style={{ backgroundColor: dbThemeColor || "#f59e0b" }}
       />
 
-      <div
-        className={cn(
-          "px-3 py-2 border-b flex flex-col gap-1.5 group rounded-t-[10px]",
+      <NodeHeader
+        id={id}
+        data={data}
+        nodeType="entity"
+        icon={isVector ? Database : Table2}
+        iconColor={dbThemeColor ? dbThemeColor : undefined}
+        title={isVector ? "Vector Collection" : "Table"}
+        colorClass={
           isVector
             ? "bg-violet-500/10 text-violet-700 dark:text-violet-400"
-            : "bg-secondary/80",
-        )}
-      >
-        <div className="flex items-center justify-between w-full">
-          <div className="flex items-center flex-1 min-w-0">
-            {isVector ? (
-              <Database
-                size={14}
-                className="mr-2 shrink-0"
-                style={dbThemeColor ? { color: dbThemeColor } : undefined}
-              />
-            ) : (
-              <Table2
-                size={14}
-                className="mr-2 shrink-0 text-muted-foreground"
-                style={dbThemeColor ? { color: dbThemeColor } : undefined}
-              />
-            )}
-            {isEditingName ? (
-              <div className="flex flex-1 items-center gap-1">
-                <Input
-                  ref={inputRef}
-                  value={editingName}
-                  placeholder={isVector ? "Enter vector collection name..." : "Enter table name..."}
-                  onChange={(e) => {
-                    setEditingName(e.target.value);
-                    if (nameError) setNameError(false);
-                  }}
-                  className={cn(
-                    "h-6 text-xs px-1",
-                    nameError &&
-                      "border-destructive focus-visible:ring-destructive",
-                  )}
-                  autoFocus
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") saveName(e);
-                    if (e.key === "Escape") {
-                      if (!data.label || data.label.trim() === "") {
-                        useBackendCanvasStore.getState().deleteNode(id);
-                        return;
-                      }
-                      setEditingName(data.label);
-                      setNameError(false);
-                      setIsEditingName(false);
-                    }
-                  }}
-                  onBlur={saveName}
-                />
-              </div>
-            ) : (
-              <div className="flex items-center gap-1.5 min-w-0">
-                <span
-                  className={cn(
-                    "font-bold text-xs cursor-pointer hover:opacity-80 transition-colors truncate",
-                    isVector
-                      ? "text-violet-700 dark:text-violet-300"
-                      : "text-foreground",
-                  )}
-                  style={dbThemeColor ? { color: dbThemeColor } : undefined}
-                  onClick={() => setIsEditingName(true)}
-                >
-                  {data.label || "Table"}
-                </span>
-              </div>
-            )}
+            : "bg-secondary/80"
+        }
+        placeholder={isVector ? "Enter vector collection name..." : "Enter table name..."}
+        selected={selected}
+        onSave={handleSaveName}
+        rightElement={
+          <div
+            className="opacity-0 group-hover:opacity-100 flex items-center justify-center p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-all cursor-pointer mr-1"
+            title="DB Operation Functions"
+            onClick={openSettings}
+          >
+            <Settings size={14} />
           </div>
-          <div className="flex items-center gap-1 shrink-0 ml-2">
-            <div
-              className="opacity-0 group-hover:opacity-100 flex items-center justify-center p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-all cursor-pointer"
-              title="DB Operation Functions"
-              onClick={openSettings}
-            >
-              <Settings size={14} />
-            </div>
-            <div
-              className="opacity-0 group-hover:opacity-100 flex items-center justify-center p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all cursor-pointer"
-              onClick={(e) => {
-                e.stopPropagation();
-                useBackendCanvasStore.getState().requestDeleteNode(id);
-              }}
-            >
-              <Trash size={14} />
-            </div>
-          </div>
-        </div>
+        }
+      />
 
-        {/* Database Node Association Dropdown */}
-        <div className="flex items-center justify-between gap-1.5 nodrag pt-1 border-t border-border/40 text-[10px]">
+      <div className="px-3 py-1.5 border-b flex items-center justify-between gap-1.5 nodrag text-[10px] bg-muted/20">
           <span className="text-muted-foreground font-medium shrink-0 flex items-center gap-1">
             <Database size={10} style={{ color: dbThemeColor || (isVector ? "#8b5cf6" : "#f59e0b") }} />
             DB Node:
@@ -280,7 +188,6 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
             </SelectContent>
           </Select>
         </div>
-      </div>
 
       {/* Description */}
       <div className="px-3 py-2 bg-secondary/5 border-b nodrag">

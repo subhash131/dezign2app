@@ -6,11 +6,13 @@ import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { ColumnList } from "../entity-node/ColumnList";
 import { RedisConfig } from "../entity-node/RedisConfig";
 import { DbOperationsList } from "../entity-node/DbOperationsList";
-import { RedisSchemaHeader } from "./components/RedisSchemaHeader";
 import { RedisSchemaDescription } from "./components/RedisSchemaDescription";
-import { useRedisSchemaName } from "./hooks/useRedisSchemaName";
+import { RedisSchemaInstanceSelect } from "./components/RedisSchemaInstanceSelect";
 import { useRedisInstanceConnection } from "./hooks/useRedisInstanceConnection";
 import { syncHashColumns } from "./utils";
+import { NodeHeader } from "../graph-nodes/common";
+import { DatabaseZap, Settings } from "lucide-react";
+import { Badge } from "@workspace/ui/components/badge";
 
 export const RedisSchemaNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
@@ -22,7 +24,6 @@ export const RedisSchemaNode = ({ id, data, selected }: NodeProps<BackendNode>) 
   );
   const nodeRef = useRef<HTMLDivElement>(null);
 
-  const nameController = useRedisSchemaName(id, data, updateNode);
   const { redisInstanceNodes, dbThemeColor, handleInstanceChange } =
     useRedisInstanceConnection(id, data, updateNode);
 
@@ -35,11 +36,6 @@ export const RedisSchemaNode = ({ id, data, selected }: NodeProps<BackendNode>) 
       id: id,
       nodeId: id,
     });
-  };
-
-  const handleDelete = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    useBackendCanvasStore.getState().requestDeleteNode(id);
   };
 
   const handleUpdateNodeWithSync = (
@@ -75,27 +71,45 @@ export const RedisSchemaNode = ({ id, data, selected }: NodeProps<BackendNode>) 
         style={{ backgroundColor: dbThemeColor }}
       />
 
-      {/* Header with inline name edit, badge, actions & instance selector */}
-      <RedisSchemaHeader
+      {/* Header with inline name edit, badge & actions */}
+      <NodeHeader
         id={id}
-        label={data.label || "User_Cache"}
-        redisStructure={redisStructure}
-        dbThemeColor={dbThemeColor}
-        isEditingName={nameController.isEditingName}
-        setIsEditingName={nameController.setIsEditingName}
-        editingName={nameController.editingName}
-        setEditingName={nameController.setEditingName}
-        nameError={nameController.nameError}
-        setNameError={nameController.setNameError}
-        inputRef={nameController.inputRef}
-        saveName={nameController.saveName}
-        cancelEdit={nameController.cancelEdit}
-        openSettings={openSettings}
-        onDelete={handleDelete}
-        currentDatabaseId={data.databaseId}
-        redisInstanceNodes={redisInstanceNodes}
-        onInstanceChange={handleInstanceChange}
+        data={data}
+        nodeType="redis_schema"
+        icon={DatabaseZap}
+        iconColor={dbThemeColor || "#ef4444"}
+        title="Redis Schema"
+        colorClass="bg-red-500/10 text-red-700 dark:text-red-400"
+        placeholder="Enter cache name..."
+        selected={selected}
+        badges={
+          <Badge
+            variant="outline"
+            className="text-[9px] px-1 py-0 uppercase font-mono bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30 shrink-0"
+          >
+            {redisStructure}
+          </Badge>
+        }
+        rightElement={
+          <div
+            className="opacity-0 group-hover:opacity-100 flex items-center justify-center p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-all cursor-pointer mr-1"
+            title="Configure Redis Schema"
+            onClick={openSettings}
+          >
+            <Settings size={14} />
+          </div>
+        }
       />
+
+      {/* Redis Instance Selector Dropdown */}
+      <div className="px-3 py-1.5 border-b bg-muted/20">
+        <RedisSchemaInstanceSelect
+          currentDatabaseId={data.databaseId}
+          dbThemeColor={dbThemeColor}
+          redisInstanceNodes={redisInstanceNodes}
+          onInstanceChange={handleInstanceChange}
+        />
+      </div>
 
       {/* Description */}
       <RedisSchemaDescription

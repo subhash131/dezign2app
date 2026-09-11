@@ -1,11 +1,19 @@
-import React, { useState, useRef, useEffect } from "react";
+import React from "react";
 import { NodeProps, Handle, Position } from "@xyflow/react";
-import { DatabaseZap, Trash, Settings, Key, Palette, HardDrive, ShieldCheck, Radio } from "lucide-react";
+import {
+  DatabaseZap,
+  Settings,
+  Palette,
+  Radio,
+  Key,
+  ShieldCheck,
+  HardDrive,
+} from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
-import { Input } from "@workspace/ui/components/input";
 import { Badge } from "@workspace/ui/components/badge";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { NodeHeader } from "../graph-nodes/common";
 
 export const REDIS_COLOR_PRESETS = [
   { name: "Crimson", hex: "#ef4444" },
@@ -30,41 +38,6 @@ export const RedisInstanceNode = ({ id, data, selected }: NodeProps<BackendNode>
   const label = data.label || "";
   const port = String(data.port || "6379");
   const host = data.host || "localhost";
-  const [editingName, setEditingName] = useState(label);
-  const [isEditingName, setIsEditingName] = useState(!data.label);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    setEditingName(data.label || "");
-    if (!data.label) {
-      setIsEditingName(true);
-    }
-  }, [data.label]);
-
-  useEffect(() => {
-    if (isEditingName) {
-      setTimeout(() => {
-        inputRef.current?.focus();
-        inputRef.current?.select();
-      }, 10);
-    }
-  }, [isEditingName]);
-
-  const saveName = () => {
-    const finalName = editingName.trim();
-    if (!finalName) {
-      if (!data.label || data.label.trim() === "") {
-        useBackendCanvasStore.getState().deleteNode(id);
-        return;
-      }
-      setEditingName(data.label);
-      setIsEditingName(false);
-      return;
-    }
-    updateNode(id, { data: { ...data, label: finalName } });
-    setEditingName(finalName);
-    setIsEditingName(false);
-  };
 
   // Find all Redis schema entities hanging off this instance
   const attachedSchemas = allNodes.filter(
@@ -107,45 +80,18 @@ export const RedisInstanceNode = ({ id, data, selected }: NodeProps<BackendNode>
       />
 
       {/* Node Header */}
-      <div
-        className="px-3 py-2 border-b flex flex-col gap-1.5 rounded-t-[10px] text-foreground"
+      <NodeHeader
+        id={id}
+        data={data}
+        nodeType="redis_instance"
+        icon={DatabaseZap}
+        title="Redis Instance"
         style={{ backgroundColor: `${color}18` }}
-      >
-        <div className="flex items-center justify-between w-full">
-          <div className="flex items-center flex-1 min-w-0">
-            <DatabaseZap size={16} className="mr-2 shrink-0" style={{ color }} />
-            {isEditingName ? (
-              <Input
-                ref={inputRef}
-                value={editingName}
-                placeholder="Enter Redis instance name..."
-                onChange={(e) => setEditingName(e.target.value)}
-                className="h-6 text-xs px-1 font-semibold"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") saveName();
-                  if (e.key === "Escape") {
-                    if (!data.label || data.label.trim() === "") {
-                      useBackendCanvasStore.getState().deleteNode(id);
-                      return;
-                    }
-                    setEditingName(data.label);
-                    setIsEditingName(false);
-                  }
-                }}
-                onBlur={saveName}
-              />
-            ) : (
-              <span
-                className="font-bold text-sm cursor-pointer hover:opacity-80 transition-colors truncate"
-                style={{ color }}
-                onClick={() => setIsEditingName(true)}
-              >
-                {label || "Redis Instance"}
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-1 shrink-0 ml-2">
+        iconColor={color}
+        selected={selected}
+        placeholder="Enter Redis instance name..."
+        badges={
+          <>
             <Badge
               variant="outline"
               className="text-[10px] px-1.5 py-0 font-mono font-bold"
@@ -168,34 +114,26 @@ export const RedisInstanceNode = ({ id, data, selected }: NodeProps<BackendNode>
             >
               REDIS 7.x
             </Badge>
-            <div
-              className="flex items-center justify-center p-1.5 rounded hover:bg-background/40 transition-all cursor-pointer"
-              style={{ color }}
-              title="Configure Redis Instance"
-              onClick={(e) => {
-                e.stopPropagation();
-                setActiveConfigItem({
-                  type: "database",
-                  id: id,
-                  nodeId: id,
-                });
-              }}
-            >
-              <Settings size={15} />
-            </div>
-            <div
-              className="opacity-0 group-hover:opacity-100 flex items-center justify-center p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all cursor-pointer"
-              title="Delete Redis Instance"
-              onClick={(e) => {
-                e.stopPropagation();
-                requestDeleteNode(id);
-              }}
-            >
-              <Trash size={14} />
-            </div>
+          </>
+        }
+        rightElement={
+          <div
+            className="flex items-center justify-center p-1.5 rounded hover:bg-background/40 transition-all cursor-pointer"
+            style={{ color }}
+            title="Configure Redis Instance"
+            onClick={(e) => {
+              e.stopPropagation();
+              setActiveConfigItem({
+                type: "database",
+                id: id,
+                nodeId: id,
+              });
+            }}
+          >
+            <Settings size={15} />
           </div>
-        </div>
-      </div>
+        }
+      />
 
       {/* Body / Config Summary */}
       <div className="p-3 flex flex-col gap-2 text-xs">

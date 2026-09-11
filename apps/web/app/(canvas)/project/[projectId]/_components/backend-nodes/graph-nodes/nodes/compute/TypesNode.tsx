@@ -41,8 +41,8 @@ export const TypesNode = ({
     Boolean(selected),
   );
 
-  const [isEditing, setIsEditing] = useState(!data.label);
-  const [name, setName] = useState(data.label || "Custom Types");
+  const [isEditing, setIsEditing] = useState(!data.label || data.label.trim() === "");
+  const [name, setName] = useState(data.label || "");
   const inputRef = useRef<HTMLInputElement>(null);
 
   const rawTypesList: CustomTypeItem[] = data.types || [];
@@ -89,29 +89,37 @@ export const TypesNode = ({
   }, [id, rawTypesList, updateNodeInternals]);
 
   useEffect(() => {
-    setName(data.label || "Custom Types");
-    if (!data.label) {
+    setName(data.label || "");
+    if (!data.label || !data.label.trim()) {
       setIsEditing(true);
     }
   }, [data.label]);
 
   useEffect(() => {
     if (isEditing) {
-      setTimeout(() => {
-        inputRef.current?.focus();
-        inputRef.current?.select();
-      }, 10);
+      const focus = () => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+          inputRef.current.select();
+        }
+      };
+      const raf = requestAnimationFrame(focus);
+      const timer = setTimeout(focus, 50);
+      return () => {
+        cancelAnimationFrame(raf);
+        clearTimeout(timer);
+      };
     }
   }, [isEditing]);
 
   const handleSave = () => {
     const trimmed = name.trim();
     if (!trimmed) {
-      if (!data.label) {
+      if (!data.label || !data.label.trim()) {
         deleteNode(id);
         return;
       }
-      setName(data.label || "Custom Types");
+      setName(data.label || "");
       setIsEditing(false);
       return;
     }

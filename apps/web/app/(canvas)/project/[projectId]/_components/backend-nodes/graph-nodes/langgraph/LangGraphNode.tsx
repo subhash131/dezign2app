@@ -22,7 +22,7 @@ import type {
 import { cn } from "@workspace/ui/lib/utils";
 import { Button } from "@workspace/ui/components/button";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
-import { LocalInput } from "../common";
+import { NodeHeader } from "../common";
 
 export interface ConnectedRouteInfo {
   edgeId: string;
@@ -151,35 +151,16 @@ export const LangGraphNode = ({
   const storeProjectId = useBackendCanvasStore((s) => s.projectId);
   const params = useParams();
   const router = useRouter();
-  const projectId = (params?.projectId as string) || storeProjectId;
-  const [isEditing, setIsEditing] = useState(!data.label);
-  const [name, setName] = useState(data.label || "");
-
+  const rawProjectId = params?.projectId;
+  const routeProjectId =
+    typeof rawProjectId === "string"
+      ? rawProjectId
+      : Array.isArray(rawProjectId)
+        ? rawProjectId[0]
+        : undefined;
+  const projectId = routeProjectId || storeProjectId;
   const connectedRoutes = useConnectedRoutes(id);
   const connectedRoutesCount = connectedRoutes.length;
-
-  useEffect(() => {
-    setName(data.label || "");
-    if (!data.label) {
-      setIsEditing(true);
-    }
-  }, [data.label]);
-
-  const handleSaveName = () => {
-    const finalName = name.trim();
-    if (!finalName) {
-      if (!data.label || data.label.trim() === "") {
-        useBackendCanvasStore.getState().deleteNode(id);
-        return;
-      }
-      setName(data.label);
-      setIsEditing(false);
-      return;
-    }
-    setName(finalName);
-    updateNode(id, { data: { ...data, label: finalName } });
-    setIsEditing(false);
-  };
 
   const handleOpenEditor = (e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -209,72 +190,15 @@ export const LangGraphNode = ({
       onDoubleClick={handleOpenEditor}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2.5 bg-secondary/30 border-b border-border/60 rounded-t-2xl">
-        <div className="flex items-center gap-2.5 flex-1 min-w-0">
-          <div className="p-2 rounded-xl bg-primary/10 text-primary border border-primary/20 shrink-0">
-            <Network className="w-4 h-4" />
-          </div>
-          <div className="flex flex-col flex-1 min-w-0">
-            {isEditing ? (
-              <div
-                className="nodrag"
-                onClick={(e) => e.stopPropagation()}
-                onDoubleClick={(e) => e.stopPropagation()}
-                onPointerDown={(e) => e.stopPropagation()}
-                onMouseDown={(e) => e.stopPropagation()}
-              >
-                <LocalInput
-                  value={name}
-                  placeholder="Enter agent name..."
-                  onChange={(e) => setName(e.target.value)}
-                  className="h-6 text-xs px-1 bg-background/80 font-semibold flex-1 nodrag"
-                  autoFocus
-                  onKeyDown={(e) => {
-                    e.stopPropagation();
-                    if (e.key === "Enter") handleSaveName();
-                    if (e.key === "Escape") {
-                      if (!data.label || data.label.trim() === "") {
-                        useBackendCanvasStore.getState().deleteNode(id);
-                        return;
-                      }
-                      setName(data.label);
-                      setIsEditing(false);
-                    }
-                  }}
-                  onBlur={handleSaveName}
-                />
-              </div>
-            ) : (
-              <div
-                className="flex flex-col cursor-pointer flex-1 min-w-0 nodrag group/title"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsEditing(true);
-                }}
-                onDoubleClick={(e) => e.stopPropagation()}
-                title="Click to edit name"
-              >
-                <span className="text-[9px] uppercase font-bold tracking-wider opacity-70 truncate text-muted-foreground">
-                  LangGraph Agent
-                </span>
-                <span className="font-semibold text-sm truncate text-foreground group-hover/title:text-primary transition-colors">
-                  {data.label || "LangGraph Agent"}
-                </span>
-              </div>
-            )}
-            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground mt-0.5">
-              <ShieldCheck className="w-3 h-3 text-primary shrink-0" />
-              <span className="truncate">
-                {inputChannels.length} inputs · {graphSteps.length} steps ·{" "}
-                {stateChannels.length} state fields
-                {connectedRoutesCount > 0 && (
-                  <> · <span className="text-primary font-semibold">{connectedRoutesCount} routes</span></>
-                )}
-              </span>
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2">
+      <NodeHeader
+        id={id}
+        data={data}
+        nodeType="langgraph"
+        icon={Network}
+        title="LangGraph Agent"
+        placeholder="Enter agent name..."
+        selected={selected}
+        rightElement={
           <Button
             variant="ghost"
             size="icon"
@@ -284,19 +208,17 @@ export const LangGraphNode = ({
           >
             <Pencil className="w-3.5 h-3.5" />
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 nodrag"
-            onClick={(e) => {
-              e.stopPropagation();
-              requestDeleteNode(id);
-            }}
-            title="Delete Node"
-          >
-            <Trash className="w-3.5 h-3.5" />
-          </Button>
-        </div>
+        }
+      />
+      <div className="px-3 py-1 bg-muted/20 border-b flex items-center gap-1.5 text-[10px] text-muted-foreground">
+        <ShieldCheck className="w-3 h-3 text-primary shrink-0" />
+        <span className="truncate">
+          {inputChannels.length} inputs · {graphSteps.length} steps ·{" "}
+          {stateChannels.length} state fields
+          {connectedRoutesCount > 0 && (
+            <> · <span className="text-primary font-semibold">{connectedRoutesCount} routes</span></>
+          )}
+        </span>
       </div>
 
       {/* Single generic target Handle for canvas edges */}
