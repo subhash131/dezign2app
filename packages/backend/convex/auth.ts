@@ -1,4 +1,4 @@
-import { betterAuth, type User } from "better-auth";
+import { betterAuth, type User, type BetterAuthOptions } from "better-auth";
 import {
   createClient,
   type CreateAuth,
@@ -6,13 +6,21 @@ import {
 } from "@convex-dev/better-auth";
 import { components, api } from "./_generated/api";
 import authConfig from "./auth.config";
+import authSchema from "./betterAuth/schema";
 import { convex } from "@convex-dev/better-auth/plugins";
 import { organization, bearer } from "better-auth/plugins";
 import type { GenericDataModel } from "convex/server";
 
 import { mutation } from "./_generated/server";
 
-export const betterAuthComponentClient = createClient(components.betterAuth);
+export const betterAuthComponentClient = createClient<
+  GenericDataModel,
+  typeof authSchema
+>(components.betterAuth, {
+  local: {
+    schema: authSchema,
+  },
+});
 
 export const cleanStaleJwks = mutation({
   args: {},
@@ -31,7 +39,7 @@ export const cleanStaleJwks = mutation({
   },
 });
 
-export const createAuth: CreateAuth<GenericDataModel> = (
+export const createAuthOptions = (
   ctx: GenericCtx<GenericDataModel>,
 ) => {
   const baseURL =
@@ -53,7 +61,7 @@ export const createAuth: CreateAuth<GenericDataModel> = (
   const finalTrustedOrigins = Array.from(new Set(trustedOrigins));
   console.log("[convex:auth] createAuth invoked. baseURL:", baseURL, "trustedOrigins:", finalTrustedOrigins);
 
-  return betterAuth({
+  return {
     appName: "Dezign2App",
     baseURL,
     secret: process.env.BETTER_AUTH_SECRET,
@@ -139,5 +147,11 @@ export const createAuth: CreateAuth<GenericDataModel> = (
         },
       }),
     ],
-  });
+  } satisfies BetterAuthOptions;
+};
+
+export const createAuth: CreateAuth<GenericDataModel> = (
+  ctx: GenericCtx<GenericDataModel>,
+) => {
+  return betterAuth(createAuthOptions(ctx));
 };
