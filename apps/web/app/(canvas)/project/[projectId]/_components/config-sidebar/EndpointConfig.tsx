@@ -28,6 +28,7 @@ import { ChevronDown, ChevronRight, Globe, AlertCircle } from "lucide-react";
 import { isEndpointPipelineUnconfigured } from "@/lib/utils/pipelineValidation";
 import { useBufferedInput } from "@/lib/hooks/useBufferedInput";
 import { cn } from "@workspace/ui/lib/utils";
+import { formatEndpointRoute, sanitizeEndpointRoute } from "@workspace/canvas";
 
 interface EndpointConfigProps {
   id: string;
@@ -114,9 +115,10 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
   }, [isExternal, isAuthEnabled, item?.id, item?.headers, item?.queryParams, updateEndpoint]);
 
   const nameBuffer = useBufferedInput(
-    item?.name || "",
+    formatEndpointRoute(item?.name || ""),
     React.useCallback(
-      (name: string) => updateEndpoint(id, { name }),
+      (name: string) =>
+        updateEndpoint(id, { name: sanitizeEndpointRoute(name) }),
       [id, updateEndpoint],
     ),
     200,
@@ -228,7 +230,7 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
             className="h-8 text-sm font-semibold tracking-tight text-foreground bg-background font-mono flex-1"
             placeholder="/v1/resource"
             value={nameBuffer.value}
-            onChange={(e) => nameBuffer.onChange(e.target.value)}
+            onChange={(e) => nameBuffer.onChange(formatEndpointRoute(e.target.value))}
             onBlur={nameBuffer.flush}
           />
         </div>

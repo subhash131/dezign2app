@@ -23,6 +23,7 @@ import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { Endpoint } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { isEndpointPipelineUnconfigured } from "@/lib/utils/pipelineValidation";
+import { formatEndpointRoute, sanitizeEndpointRoute } from "@workspace/canvas";
 import { generateId } from "./utils";
 import { LocalInput } from "./LocalInput";
 
@@ -104,8 +105,9 @@ export const EndpointRow = ({
             if (isEditing) setEditingId(null);
           } else if (isEditing) {
             const wasEmpty = !item.name;
-            handleUpdate(item.id, editingName.trim(), editingType);
-            if (wasEmpty && editingName.trim()) {
+            const sanitized = sanitizeEndpointRoute(editingName);
+            handleUpdate(item.id, sanitized, editingType);
+            if (wasEmpty && sanitized) {
               setActiveConfigItem({ type: "endpoint", id: item.id, nodeId });
             }
             setEditingId(null);
@@ -163,16 +165,17 @@ export const EndpointRow = ({
             </Select>
             <LocalInput
               value={editingName}
-              onChange={(e) => setEditingName(e.target.value)}
+              onChange={(e) => setEditingName(formatEndpointRoute(e.target.value))}
               className="h-6 text-xs flex-1 nodrag"
               placeholder="e.g. /users"
               autoFocus
               onKeyDown={(e: React.KeyboardEvent) => {
                 if (e.key === "Enter") {
-                  if (!editingName.trim()) handleDelete(item.id);
+                  const sanitized = sanitizeEndpointRoute(editingName);
+                  if (!sanitized) handleDelete(item.id);
                   else {
                     const wasEmpty = !item.name;
-                    handleUpdate(item.id, editingName.trim(), editingType);
+                    handleUpdate(item.id, sanitized, editingType);
                     if (wasEmpty)
                       setActiveConfigItem({
                         type: "endpoint",
@@ -193,12 +196,13 @@ export const EndpointRow = ({
               variant="ghost"
               className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
               onClick={() => {
-                if (!(editingName || "").trim()) handleDelete(item.id);
+                const sanitized = sanitizeEndpointRoute(editingName || "");
+                if (!sanitized) handleDelete(item.id);
                 else {
                   const wasEmpty = !item.name;
                   handleUpdate(
                     item.id,
-                    (editingName || "").trim(),
+                    sanitized,
                     editingType || "GET",
                   );
                   if (wasEmpty)
@@ -220,7 +224,7 @@ export const EndpointRow = ({
               className="flex items-center justify-between w-full cursor-pointer"
               onClick={() => {
                 setEditingId(item.id);
-                setEditingName(item.name || "");
+                setEditingName(formatEndpointRoute(item.name || ""));
                 setEditingType(item.type || "GET");
               }}
             >
@@ -241,7 +245,7 @@ export const EndpointRow = ({
                     isUnconfigured && "text-destructive font-semibold",
                   )}
                 >
-                  {item.name}
+                  {formatEndpointRoute(item.name || "")}
                 </span>
                 {isUnconfigured && (
                   <span
@@ -403,7 +407,7 @@ export const EndpointList = ({
   };
 
   const handleUpdate = (id: string, name: string, type: string) => {
-    updateEndpoint(id, { name, type });
+    updateEndpoint(id, { name: sanitizeEndpointRoute(name), type });
   };
 
   const handleDelete = (id: string) => {
