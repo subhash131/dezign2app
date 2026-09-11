@@ -53,7 +53,7 @@ pnpm install
 
 ### 3. Configure Environment Variables
 
-Create a `.env.local` file in `packages/backend/` based on [.env.local.example](file:///d:/ai/yt/pro/blueprint/packages/backend/.env.local.example):
+Create a `.env.local` file in `packages/backend/` based on [.env.local.example](../.env.local.example):
 
 ```bash
 # In packages/backend/

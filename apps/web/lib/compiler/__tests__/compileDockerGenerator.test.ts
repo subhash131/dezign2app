@@ -139,7 +139,7 @@ describe("compileMonorepo Docker generator and local runner manifests", () => {
     expect(dockerComposeFile?.content).toContain("paymentservice:");
     expect(dockerComposeFile?.content).toContain("customer-app:");
     expect(dockerComposeFile?.content).toContain("postgres:");
-    expect(dockerComposeFile?.content).toContain("blueprint-network");
+    expect(dockerComposeFile?.content).toContain("dezign2app-network");
     expect(dockerComposeFile?.content).toContain("postgres_data:");
     expect(dockerComposeFile?.content).toContain("PAYMENT_SERVICE_BASE_URL=http://paymentservice:8000");
 

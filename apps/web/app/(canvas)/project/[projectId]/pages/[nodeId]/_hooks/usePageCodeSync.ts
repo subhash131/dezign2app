@@ -36,7 +36,7 @@ export function usePageCodeSync({
 
   const candidatePaths = useMemo<string[]>(() => {
     return [
-      // Standard Monorepo root paths (used by Blueprint monorepo exports)
+      // Standard Monorepo root paths (used by Dezign2App monorepo exports)
       isRoot ? `apps/${webAppSlug}/app/(public)/page.tsx` : `apps/${webAppSlug}/app/(public)/${pageFolderSlug}/page.tsx`,
       isRoot ? `apps/${webAppSlug}/app/(${webAppSlug})/page.tsx` : `apps/${webAppSlug}/app/(${webAppSlug})/${pageFolderSlug}/page.tsx`,
       isRoot ? `apps/${webAppSlug}/app/(${pageFolderSlug})/page.tsx` : `apps/${webAppSlug}/app/(${pageFolderSlug})/page.tsx`,

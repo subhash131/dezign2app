@@ -33,7 +33,7 @@ export function computeSubItemDeletion(
   })[] = [],
   edges: BackendEdge[] = [],
   testCases: SimulationTestCase[] = [],
-  projectName: string = "Blueprint Monorepo",
+  projectName: string = "Dezign2App Monorepo",
   target: DeletionTarget,
 ): SubItemDeletionComputationResult {
   // 1. Compile before state

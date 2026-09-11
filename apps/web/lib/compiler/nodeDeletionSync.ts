@@ -13,7 +13,7 @@ export function getSavedWorkspaceDir(projectId: string): string {
     return (
       localStorage.getItem(`workspace_dir_${projectId}`) ||
       localStorage.getItem(`docker_dir_${projectId}`) ||
-      localStorage.getItem("blueprint_workspace_dir") ||
+      localStorage.getItem("dezign2app_workspace_dir") ||
       ""
     );
   } catch {

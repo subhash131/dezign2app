@@ -50,7 +50,7 @@ describe("localEnvSync utility", () => {
 
     const result = await saveLocalEnvVariable("MY_SECRET_KEY", "sk_test_abc123");
     expect(result.success).toBe(true);
-    expect(setItemSpy).toHaveBeenCalledWith("blueprint_env_MY_SECRET_KEY", "sk_test_abc123");
+    expect(setItemSpy).toHaveBeenCalledWith("dezign2app_env_MY_SECRET_KEY", "sk_test_abc123");
 
     const retrieved = getLocalEnvVariable("MY_SECRET_KEY");
     expect(retrieved).toBe("sk_test_abc123");

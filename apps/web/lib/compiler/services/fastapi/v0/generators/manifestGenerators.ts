@@ -84,7 +84,7 @@ testpaths = [
     ``,
     `Port: \`${port}\``,
     `Framework: **FastAPI (Python)**`,
-    `Description: ${node.data?.description || "Modular FastAPI microservice compiled from Blueprint architecture canvas."}`,
+    `Description: ${node.data?.description || "Modular FastAPI microservice compiled from Dezign2App architecture canvas."}`,
     ``,
     `## Project Structure`,
     ``,

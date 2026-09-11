@@ -152,10 +152,10 @@ export function TerminalViewport({
                 onReady={() => {
                   if (!inElectron) {
                     const handle = terminalRefs.current.get(session.id);
-                    const targetDir = outputDir || `/workspace/${projectId || "blueprint"}`;
+                    const targetDir = outputDir || `/workspace/${projectId || "dezign2app"}`;
                     const prompt = getShellPrompt(session.shell, targetDir);
                     handle?.write(
-                      `\x1b[36mBlueprint Monorepo Terminal: ${session.title || "Main Terminal"} [Web Preview]\x1b[0m\r\n\x1b[90mWorkspace: ${targetDir}\x1b[0m\r\n\x1b[90mType commands like "help", "pnpm dev", "pnpm build", "docker compose", "clear".\x1b[0m\r\n\r\n${prompt}`,
+                      `\x1b[36mDezign2App Monorepo Terminal: ${session.title || "Main Terminal"} [Web Preview]\x1b[0m\r\n\x1b[90mWorkspace: ${targetDir}\x1b[0m\r\n\x1b[90mType commands like "help", "pnpm dev", "pnpm build", "docker compose", "clear".\x1b[0m\r\n\r\n${prompt}`,
                     );
                   }
                 }}

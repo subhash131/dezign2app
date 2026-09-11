@@ -125,7 +125,7 @@ export const useTestUsersStore = create<TestUsersState>()(
       resetToDefaults: () => set({ personas: DEFAULT_TEST_PERSONAS }),
     }),
     {
-      name: "blueprint_test_user_personas_v1",
+      name: "dezign2app_test_user_personas_v1",
       storage: createJSONStorage(() => localStorage),
     },
   ),

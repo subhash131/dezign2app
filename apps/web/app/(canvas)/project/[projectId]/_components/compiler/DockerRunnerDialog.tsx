@@ -59,7 +59,7 @@ export function DockerRunnerDialog({
         return (
           localStorage.getItem(`workspace_dir_${projectId}`) ||
           localStorage.getItem(`docker_dir_${projectId}`) ||
-          localStorage.getItem("blueprint_workspace_dir") ||
+          localStorage.getItem("dezign2app_workspace_dir") ||
           ""
         );
       } catch (e) {}
@@ -73,7 +73,7 @@ export function DockerRunnerDialog({
       const saved =
         localStorage.getItem(`workspace_dir_${projectId}`) ||
         localStorage.getItem(`docker_dir_${projectId}`) ||
-        localStorage.getItem("blueprint_workspace_dir") ||
+        localStorage.getItem("dezign2app_workspace_dir") ||
         "";
       if (saved && saved !== outputDir) {
         setOutputDir(saved);
@@ -87,7 +87,7 @@ export function DockerRunnerDialog({
       try {
         localStorage.setItem(`workspace_dir_${projectId}`, dir);
         localStorage.setItem(`docker_dir_${projectId}`, dir);
-        localStorage.setItem("blueprint_workspace_dir", dir);
+        localStorage.setItem("dezign2app_workspace_dir", dir);
       } catch (e) {}
     }
   };
@@ -189,7 +189,7 @@ export function DockerRunnerDialog({
         targetDir =
           localStorage.getItem(`workspace_dir_${projectId}`) ||
           localStorage.getItem(`docker_dir_${projectId}`) ||
-          localStorage.getItem("blueprint_workspace_dir") ||
+          localStorage.getItem("dezign2app_workspace_dir") ||
           "";
       } catch (e) {}
     }
@@ -270,7 +270,7 @@ export function DockerRunnerDialog({
       ...webClients.map(
         (w) => `[+] Building ${w.folderName} (Dockerfile: apps/${w.folderName}/Dockerfile) [4.1s] DONE\n`,
       ),
-      "📦 Creating network blueprint-network...\n",
+      "📦 Creating network dezign2app-network...\n",
       "📦 Creating container postgres...\n",
       "📦 Creating container redis...\n",
       ...services.map((s) => `📦 Creating container ${s.folderName}...\n`),

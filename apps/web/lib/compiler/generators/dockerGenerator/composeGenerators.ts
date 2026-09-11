@@ -113,7 +113,7 @@ export function generateRootDockerCompose(ctx: ComposeGeneratorContext): string 
     }
 
     composeLines.push(`    networks:`);
-    composeLines.push(`      - blueprint-network`);
+    composeLines.push(`      - dezign2app-network`);
     composeLines.push(``);
   });
 
@@ -160,7 +160,7 @@ export function generateRootDockerCompose(ctx: ComposeGeneratorContext): string 
     }
 
     composeLines.push(`    networks:`);
-    composeLines.push(`      - blueprint-network`);
+    composeLines.push(`      - dezign2app-network`);
     composeLines.push(``);
   });
 
@@ -187,7 +187,7 @@ export function generateRootDockerCompose(ctx: ComposeGeneratorContext): string 
     composeLines.push(`      timeout: 5s`);
     composeLines.push(`      retries: 5`);
     composeLines.push(`    networks:`);
-    composeLines.push(`      - blueprint-network`);
+    composeLines.push(`      - dezign2app-network`);
     composeLines.push(``);
   }
 
@@ -220,7 +220,7 @@ export function generateRootDockerCompose(ctx: ComposeGeneratorContext): string 
       composeLines.push(`      timeout: 3s`);
       composeLines.push(`      retries: 5`);
       composeLines.push(`    networks:`);
-      composeLines.push(`      - blueprint-network`);
+      composeLines.push(`      - dezign2app-network`);
       composeLines.push(``);
     } else {
       redisInstances.forEach((inst, idx) => {
@@ -245,7 +245,7 @@ export function generateRootDockerCompose(ctx: ComposeGeneratorContext): string 
         composeLines.push(`      timeout: 3s`);
         composeLines.push(`      retries: 5`);
         composeLines.push(`    networks:`);
-        composeLines.push(`      - blueprint-network`);
+        composeLines.push(`      - dezign2app-network`);
         composeLines.push(``);
       });
     }
@@ -284,13 +284,13 @@ export function generateRootDockerCompose(ctx: ComposeGeneratorContext): string 
     composeLines.push(`      timeout: 5s`);
     composeLines.push(`      retries: 5`);
     composeLines.push(`    networks:`);
-    composeLines.push(`      - blueprint-network`);
+    composeLines.push(`      - dezign2app-network`);
     composeLines.push(``);
   }
 
   // 6. Networks & Volumes
   composeLines.push(`networks:`);
-  composeLines.push(`  blueprint-network:`);
+  composeLines.push(`  dezign2app-network:`);
   composeLines.push(`    driver: bridge`);
   composeLines.push(``);
 

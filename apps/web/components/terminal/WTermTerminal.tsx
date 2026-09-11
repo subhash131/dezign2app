@@ -324,7 +324,7 @@ export const WTermTerminal = forwardRef<WTermTerminalHandle, WTermTerminalProps>
           let response = "\r\n";
 
           if (lowerCmd === "clear" || lowerCmd === "cls") {
-            response = "\x1bc\x1b[32mblueprint\x1b[0m \x1b[34m❯\x1b[0m ";
+            response = "\x1bc\x1b[32mdezign2app\x1b[0m \x1b[34m❯\x1b[0m ";
           } else if (lowerCmd === "help") {
             response +=
               "\x1b[36mAvailable commands:\x1b[0m\r\n" +
@@ -333,7 +333,7 @@ export const WTermTerminal = forwardRef<WTermTerminalHandle, WTermTerminalProps>
               "  docker compose   - Run containerized stack\r\n" +
               "  clear / cls      - Clear terminal window\r\n" +
               "  help             - Show this help message\r\n\n" +
-              "\x1b[32mblueprint\x1b[0m \x1b[34m❯\x1b[0m ";
+              "\x1b[32mdezign2app\x1b[0m \x1b[34m❯\x1b[0m ";
           } else if (
             lowerCmd === "pnpm i" ||
             lowerCmd === "pnpm install" ||
@@ -344,18 +344,18 @@ export const WTermTerminal = forwardRef<WTermTerminalHandle, WTermTerminalProps>
             response +=
               "\x1b[90mResolving dependencies...\x1b[0m\r\n" +
               "\x1b[32m✔ Packages are up to date.\x1b[0m (Simulated workspace environment)\r\n\r\n" +
-              "\x1b[32mblueprint\x1b[0m \x1b[34m❯\x1b[0m ";
+              "\x1b[32mdezign2app\x1b[0m \x1b[34m❯\x1b[0m ";
           } else if (lowerCmd === "pnpm dev" || lowerCmd === "npm run dev") {
             response +=
               "\x1b[32m✔\x1b[0m Ready in 450ms\r\n" +
               "\x1b[36m▲ Next.js 16.0.10 (Turbopack)\x1b[0m\r\n" +
               "  - Local:   http://localhost:3000\r\n" +
               "  - Network: http://192.168.1.100:3000\r\n\r\n" +
-              "\x1b[32mblueprint\x1b[0m \x1b[34m❯\x1b[0m ";
+              "\x1b[32mdezign2app\x1b[0m \x1b[34m❯\x1b[0m ";
           } else if (cmd) {
-            response += `\x1b[90mExecuted: ${cmd}\x1b[0m\r\n\x1b[32mblueprint\x1b[0m \x1b[34m❯\x1b[0m `;
+            response += `\x1b[90mExecuted: ${cmd}\x1b[0m\r\n\x1b[32mdezign2app\x1b[0m \x1b[34m❯\x1b[0m `;
           } else {
-            response += "\x1b[32mblueprint\x1b[0m \x1b[34m❯\x1b[0m ";
+            response += "\x1b[32mdezign2app\x1b[0m \x1b[34m❯\x1b[0m ";
           }
 
           // Single batched write to avoid multi-layout passes triggering ResizeObserver loops
@@ -375,14 +375,14 @@ export const WTermTerminal = forwardRef<WTermTerminalHandle, WTermTerminalProps>
         // Ctrl+C
         if (data === "\x03") {
           inputBufferRef.current = "";
-          write("^C\r\n\x1b[32mblueprint\x1b[0m \x1b[34m❯\x1b[0m ");
+          write("^C\r\n\x1b[32mdezign2app\x1b[0m \x1b[34m❯\x1b[0m ");
           return;
         }
 
         // Ctrl+L (Clear)
         if (data === "\x0c") {
           inputBufferRef.current = "";
-          write("\x1bc\x1b[32mblueprint\x1b[0m \x1b[34m❯\x1b[0m ");
+          write("\x1bc\x1b[32mdezign2app\x1b[0m \x1b[34m❯\x1b[0m ");
           return;
         }
 

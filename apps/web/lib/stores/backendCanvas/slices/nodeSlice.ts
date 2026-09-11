@@ -98,7 +98,7 @@ export const createNodeSlice = (
           currentState.events,
           currentState.edges,
           testCases,
-          "Blueprint Monorepo",
+          "Dezign2App Monorepo",
           removedIds,
         );
         void handleNodeDeletionSync(currentState.projectId || "", diff);
@@ -810,7 +810,7 @@ export const createNodeSlice = (
         currentState.events,
         currentState.edges,
         testCases,
-        "Blueprint Monorepo",
+        "Dezign2App Monorepo",
         [id],
       );
       void handleNodeDeletionSync(currentState.projectId || "", diff);
@@ -845,7 +845,7 @@ export const createNodeSlice = (
         currentState.events,
         currentState.edges,
         testCases,
-        "Blueprint Monorepo",
+        "Dezign2App Monorepo",
         ids,
       );
       void handleNodeDeletionSync(currentState.projectId || "", diff);

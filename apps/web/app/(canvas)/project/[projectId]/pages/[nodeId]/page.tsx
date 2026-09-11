@@ -48,7 +48,7 @@ export default function PageEditorPage({
   const project = useQuery(api.projects.getProjectById, {
     projectId: projectId as Id<"projects">,
   });
-  const projectName = project?.name || "Blueprint";
+  const projectName = project?.name || "Dezign2App";
 
   // Canvas store selectors
   const node = useBackendCanvasStore((s) => s.nodes.find((n) => n.id === nodeId));

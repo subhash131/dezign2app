@@ -90,7 +90,7 @@ describe("packageTypesSync - Dynamic Inference from node_modules", () => {
       data: { label: "Portal App" },
     });
 
-    const uninstalledPkg = "@blueprint-tests/non-existent-lib";
+    const uninstalledPkg = "@dezign2app-tests/non-existent-lib";
     syncPackageTypesToCanvas("web-app-1", [uninstalledPkg]);
 
     // Give async extraction a moment to complete

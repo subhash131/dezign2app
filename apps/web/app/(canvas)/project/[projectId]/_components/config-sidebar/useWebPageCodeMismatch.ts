@@ -143,7 +143,7 @@ export function useWebPageCodeMismatch({
         [],
         allNodes,
         allEdges,
-        "Blueprint App",
+        "Dezign2App",
         [],
         webAppSlug,
         connectedWebAppNode || undefined,

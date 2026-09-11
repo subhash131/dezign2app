@@ -1,6 +1,6 @@
 # Dezign2App — System Design Automation Monorepo
 
-Welcome to **Dezign2App** (Blueprint)—a state-of-the-art, high-performance, enterprise-grade monorepo designed to build, edit, and analyze system design architectures and cloud infrastructure diagrams.
+Welcome to **Dezign2App**—a state-of-the-art, high-performance, enterprise-grade monorepo designed to build, edit, and analyze system design architectures and cloud infrastructure diagrams.
 
 This platform combines visual canvas editors, stateful AI graph execution, Model Context Protocol (MCP) tooling, real-time streaming, secure multi-tenant authentication, and subscription billing into a unified TypeScript workspace.
 

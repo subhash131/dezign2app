@@ -1,7 +1,7 @@
 {
   "name": "@workspace/canvas",
   "version": "1.0.0",
-  "description": "Shared pure domain models for Blueprint canvas",
+  "description": "Shared pure domain models for Dezign2App canvas",
   "main": "index.ts",
   "types": "index.ts",
   "type": "module",

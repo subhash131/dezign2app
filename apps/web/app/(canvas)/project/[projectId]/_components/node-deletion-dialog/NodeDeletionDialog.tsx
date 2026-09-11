@@ -54,7 +54,7 @@ function NodeDeletionDialogInner({
   nodesPendingDeletion = EMPTY_NODES,
   deletionTarget,
   projectId = "",
-  projectName = "Blueprint",
+  projectName = "Dezign2App",
 }: NodeDeletionDialogProps): React.JSX.Element {
   const nodes = useBackendCanvasStore((s) => s.nodes);
   const endpoints = useBackendCanvasStore((s) => s.endpoints);
