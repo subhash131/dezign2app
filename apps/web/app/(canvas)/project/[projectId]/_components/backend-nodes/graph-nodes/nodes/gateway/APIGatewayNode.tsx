@@ -23,6 +23,8 @@ import {
 } from "@workspace/ui/components/alert-dialog";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { NodeHeader, EndpointList } from "../../common";
+import { useNodePipelineError } from "@/lib/utils/pipelineValidation";
+import { AlertTriangle, AlertCircle } from "lucide-react";
 import { Textarea } from "@workspace/ui/components/textarea";
 import {
   Select,
@@ -88,11 +90,20 @@ export const APIGatewayNode = ({
     });
   };
 
+  const hasPipelineError = useNodePipelineError(id);
+
   return (
     <div
       className={cn(
-        "shadow-md rounded-xl bg-card border-2 min-w-[320px] max-w-[440px] flex flex-col",
-        selected ? "border-primary" : "border-border",
+        "shadow-md rounded-xl bg-card border-2 min-w-[320px] max-w-[440px] flex flex-col transition-all duration-300 relative",
+        hasPipelineError
+          ? cn(
+              "border-destructive/80 ring-1 ring-destructive/30 shadow-destructive/5",
+              selected && "ring-2 ring-destructive/60 border-destructive",
+            )
+          : selected
+          ? "border-primary"
+          : "border-border",
       )}
     >
       <NodeHeader
@@ -102,7 +113,26 @@ export const APIGatewayNode = ({
         title="API Gateway"
         colorClass="bg-teal-500/10 text-teal-700 dark:text-teal-400"
         selected={selected}
+        badges={
+          hasPipelineError ? (
+            <div
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-destructive/15 text-destructive border border-destructive/30 text-[9px] font-semibold shrink-0"
+              title="Pipeline has unmapped required inputs! Check endpoints."
+            >
+              <AlertTriangle size={10} className="shrink-0" />
+              <span>Pipeline Error</span>
+            </div>
+          ) : undefined
+        }
       />
+
+      {/* Pipeline unmapped error banner */}
+      {hasPipelineError && (
+        <div className="px-3 py-1.5 bg-destructive/10 border-b border-destructive/25 flex items-center gap-1.5 text-[10px] text-destructive font-medium leading-tight nodrag">
+          <AlertCircle size={12} className="shrink-0 text-destructive animate-pulse" />
+          <span>Required pipeline field(s) not mapped</span>
+        </div>
+      )}
 
       <div className="px-3 py-2 bg-secondary/5 border-b nodrag">
         <Textarea

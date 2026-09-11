@@ -12,6 +12,7 @@ import {
   Plug,
   Zap,
   Globe,
+  AlertTriangle,
 } from "lucide-react";
 import type {
   BackendNode,
@@ -23,6 +24,7 @@ import { cn } from "@workspace/ui/lib/utils";
 import { Button } from "@workspace/ui/components/button";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { NodeHeader } from "../common";
+import { useNodePipelineError } from "@/lib/utils/pipelineValidation";
 
 export interface ConnectedRouteInfo {
   edgeId: string;
@@ -146,6 +148,7 @@ export const LangGraphNode = ({
   data,
   selected,
 }: NodeProps<BackendNode>) => {
+  const hasPipelineError = useNodePipelineError(id);
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const requestDeleteNode = useBackendCanvasStore((s) => s.requestDeleteNode);
   const storeProjectId = useBackendCanvasStore((s) => s.projectId);
@@ -186,6 +189,8 @@ export const LangGraphNode = ({
         selected
           ? "border-primary ring-4 ring-primary/20 shadow-primary/10"
           : "border-border hover:border-border/80",
+        hasPipelineError &&
+          "border-destructive/80 ring-4 ring-destructive/20 shadow-destructive/10",
       )}
       onDoubleClick={handleOpenEditor}
     >
@@ -198,6 +203,14 @@ export const LangGraphNode = ({
         title="LangGraph Agent"
         placeholder="Enter agent name..."
         selected={selected}
+        badges={
+          hasPipelineError ? (
+            <span className="text-[7px] font-medium px-1 py-0.5 rounded bg-destructive/15 text-destructive border border-destructive/30 flex items-center gap-0.5 shrink-0 animate-pulse">
+              <AlertTriangle size={8} />
+              Unmapped
+            </span>
+          ) : undefined
+        }
         rightElement={
           <Button
             variant="ghost"
@@ -210,6 +223,13 @@ export const LangGraphNode = ({
           </Button>
         }
       />
+
+      {hasPipelineError && (
+        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-destructive/10 border-b border-destructive/20 text-[11px] text-destructive leading-tight">
+          <AlertTriangle size={12} className="shrink-0" />
+          <span className="font-medium">Missing required input mapping</span>
+        </div>
+      )}
       <div className="px-3 py-1 bg-muted/20 border-b flex items-center gap-1.5 text-[10px] text-muted-foreground">
         <ShieldCheck className="w-3 h-3 text-primary shrink-0" />
         <span className="truncate">

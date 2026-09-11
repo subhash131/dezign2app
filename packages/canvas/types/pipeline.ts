@@ -9,6 +9,13 @@ import type {
   SwitchCase,
   ParallelBranch,
 } from "../schemas/shared";
+import type { BackendNode } from "./nodes";
+import type { PublishedEventItem } from "./services";
+import type {
+  LangGraphStateChannel,
+  LangGraphInputChannel,
+  LangGraphStepConfig,
+} from "./langgraph";
 
 // ─── Step Binding & Source Types ──────────────────────────────────────────────
 
@@ -67,6 +74,7 @@ export interface AvailableSource {
 }
 
 export interface TransformerSchemaField {
+  id?: string;
   name: string;
   type: string;
   required?: boolean;
@@ -107,4 +115,62 @@ export interface ExpectedArg {
   type: string;
   required?: boolean;
   description?: string;
+}
+
+// ─── Connected Resources & Validation Types ───────────────────────────────────
+
+export interface ConnectedTransformer {
+  id: string;
+  nodeId: string;
+  masterId?: string;
+  functionName: string;
+  isGlobal: boolean;
+  inputSchema: TransformerSchemaField[];
+  returnSchema: TransformerSchemaField[];
+  sourceNode: BackendNode;
+}
+
+export interface ConnectedKafka {
+  id: string;
+  brokerNodeId: string;
+  brokerNode: BackendNode;
+  topicId?: string;
+  topicName: string;
+  packageFolder: string;
+  functionName: string;
+  importPath: string;
+  publisherName: string;
+}
+
+export interface ConnectedLangGraph {
+  id: string;
+  nodeId: string;
+  label: string;
+  stateChannels: LangGraphStateChannel[];
+  inputChannels: LangGraphInputChannel[];
+  graphSteps: LangGraphStepConfig[];
+  node: BackendNode;
+}
+
+export interface BindingCheckSource {
+  kind?: string;
+  field?: string;
+  stepId?: string;
+  value?: string | number | boolean | Record<string, string | number | boolean | null>;
+}
+
+export interface BindingCheckItem {
+  argName?: string;
+  source?: BindingCheckSource;
+}
+
+export interface EndpointLike {
+  id: string;
+  pipelineSteps?: PipelineStepDraft[];
+  publishedEvents?: PublishedEventItem[];
+  responseBody?: {
+    fields?: Array<{ name?: string }>;
+    rawJson?: string;
+  };
+  responseMode?: string;
 }

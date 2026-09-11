@@ -50,7 +50,7 @@ describe("pipeline-step-editor: PageRefNode and Edge Synchronization", () => {
           id: consumedEventId,
           nodeId: serviceNodeId,
           name: "Order Updated Consumer",
-          type: "consume",
+          variant: "consume",
           pipelineSteps: [],
         },
       ],

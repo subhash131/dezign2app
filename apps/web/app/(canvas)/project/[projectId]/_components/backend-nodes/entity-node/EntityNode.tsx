@@ -18,10 +18,12 @@ import { VectorConfig } from "./VectorConfig";
 import { DbOperationsList } from "./DbOperationsList";
 import { getUniqueNodeLabel } from "@workspace/canvas";
 import { NodeHeader } from "../graph-nodes/common";
-import { Layers } from "lucide-react";
+import { Layers, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import { useNodePipelineError } from "@/lib/utils/pipelineValidation";
 
 export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
+  const hasPipelineError = useNodePipelineError(id);
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const setActiveConfigItem = useBackendCanvasStore(
     (s) => s.setActiveConfigItem,
@@ -84,13 +86,17 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
       tabIndex={-1}
       className={cn(
         "shadow-md rounded-xl bg-card border-2 min-w-[260px] max-w-[360px] focus:outline-none transition-all",
-        !dbThemeColor && (selected ? "border-primary" : "border-border"),
+        hasPipelineError
+          ? "border-destructive/80 ring-1 ring-destructive/30 shadow-destructive/5"
+          : !dbThemeColor && (selected ? "border-primary" : "border-border"),
       )}
       style={{
-        borderColor: dbThemeColor ? dbThemeColor : undefined,
-        boxShadow: selected
-          ? `0 0 0 2px ${dbThemeColor || "var(--primary)"}50, 0 4px 6px -1px rgba(0, 0, 0, 0.1)`
-          : undefined,
+        borderColor: hasPipelineError ? undefined : (dbThemeColor ? dbThemeColor : undefined),
+        boxShadow: hasPipelineError
+          ? undefined
+          : selected
+            ? `0 0 0 2px ${dbThemeColor || "var(--primary)"}50, 0 4px 6px -1px rgba(0, 0, 0, 0.1)`
+            : undefined,
       }}
     >
       {/* Top Handle for Database Node connection */}
@@ -116,6 +122,14 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
         }
         placeholder={isVector ? "Enter vector collection name..." : "Enter table name..."}
         selected={selected}
+        badges={
+          hasPipelineError ? (
+            <span className="text-[7px] font-medium px-1 py-0.5 rounded bg-destructive/15 text-destructive border border-destructive/30 flex items-center gap-0.5 shrink-0 animate-pulse">
+              <AlertTriangle size={8} />
+              Unmapped Inputs
+            </span>
+          ) : undefined
+        }
         onSave={handleSaveName}
         rightElement={
           <div
@@ -127,6 +141,13 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
           </div>
         }
       />
+
+      {hasPipelineError && (
+        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-destructive/10 border-b border-destructive/20 text-[11px] text-destructive leading-tight">
+          <AlertTriangle size={12} className="shrink-0" />
+          <span className="font-medium">Missing required input mapping</span>
+        </div>
+      )}
 
       <div className="px-3 py-1.5 border-b flex items-center justify-between gap-1.5 nodrag text-[10px] bg-muted/20">
           <span className="text-muted-foreground font-medium shrink-0 flex items-center gap-1">

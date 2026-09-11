@@ -23,6 +23,7 @@ import {
   LocalTextarea,
 } from "../../common";
 import { ExternalEnvVarsDrawer } from "./ExternalEnvVarsDrawer";
+import { useNodePipelineError } from "@/lib/utils/pipelineValidation";
 
 const METHOD_COLORS: Record<string, string> = {
   GET: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30",
@@ -37,6 +38,7 @@ export const ExternalNode = ({
   data,
   selected,
 }: NodeProps<BackendNode>) => {
+  const hasPipelineError = useNodePipelineError(id);
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const setActiveConfigItem = useBackendCanvasStore(
     (s) => s.setActiveConfigItem,
@@ -77,6 +79,8 @@ export const ExternalNode = ({
         "shadow-md rounded-xl bg-card border-2 min-w-[320px] max-w-[420px] flex flex-col transition-all duration-300 relative",
         borderClass,
         isUrlMissing && !selected && "border-destructive/60",
+        hasPipelineError &&
+          "border-destructive/80 ring-1 ring-destructive/30 shadow-destructive/5",
       )}
       onDoubleClick={handleOpenConfig}
     >
@@ -121,6 +125,14 @@ export const ExternalNode = ({
         title="External API"
         colorClass="bg-secondary/40 text-foreground"
         selected={selected}
+        badges={
+          hasPipelineError ? (
+            <span className="text-[7px] font-medium px-1 py-0.5 rounded bg-destructive/15 text-destructive border border-destructive/30 flex items-center gap-0.5 shrink-0 animate-pulse">
+              <AlertCircle size={8} />
+              Unmapped
+            </span>
+          ) : undefined
+        }
         rightElement={
           <div className="flex items-center gap-1">
             <span
@@ -141,6 +153,13 @@ export const ExternalNode = ({
           </div>
         }
       />
+
+      {hasPipelineError && (
+        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-destructive/10 border-b border-destructive/20 text-[11px] text-destructive leading-tight">
+          <AlertCircle size={12} className="shrink-0" />
+          <span className="font-medium">Missing required input mapping or base URL</span>
+        </div>
+      )}
 
       {/* Description */}
       <div className="px-3 py-1.5 bg-secondary/5 border-b nodrag">

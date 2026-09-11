@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Plus, Trash, Edit2, List } from "lucide-react";
+import { Plus, Trash, Edit2, List, AlertTriangle } from "lucide-react";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import { cn } from "@workspace/ui/lib/utils";
@@ -16,6 +16,7 @@ import {
 import { BindingSourceEditor } from "./BindingSourceEditor";
 import { StepBinding, ExpectedArg, AvailableSource } from "./types";
 import { isPathMatch } from "./utils";
+import { isBindingSourceConfigured } from "@/lib/utils/pipelineValidation";
 
 export interface ArgumentBindingsSectionProps {
   bindings: StepBinding[];
@@ -152,12 +153,20 @@ export const ArgumentBindingsSection = ({
 
         const isInlineSource = binding.source.kind === "inline";
 
+        // Highlight row red when it maps a required arg that has no configured source
+        const isRequiredAndUnmapped =
+          matchingExpectedArg?.required !== false &&
+          !isBindingSourceConfigured(binding);
+
         return (
           <div
             key={bi}
             className={cn(
-              "grid grid-cols-[1.1fr_auto_2.2fr_auto] gap-1.5 bg-background/60 p-1.5 rounded border border-border/40",
+              "grid grid-cols-[1.1fr_auto_2.2fr_auto] gap-1.5 bg-background/60 p-1.5 rounded border",
               isInlineSource ? "items-start pt-2" : "items-center",
+              isRequiredAndUnmapped
+                ? "border-destructive/50 bg-destructive/5"
+                : "border-border/40",
             )}
           >
             {/* Arg name (Dropdown of function input variables or custom text input) */}
@@ -257,11 +266,19 @@ export const ArgumentBindingsSection = ({
             <span className="text-[10px] text-muted-foreground/50 px-0.5 select-none">←</span>
 
             {/* Source & Smart Path Editor */}
-            <BindingSourceEditor
-              binding={binding}
-              availableSources={availableSources}
-              onChange={(updated) => onUpdateBinding(bi, updated)}
-            />
+            <div className="min-w-0">
+              <BindingSourceEditor
+                binding={binding}
+                availableSources={availableSources}
+                onChange={(updated) => onUpdateBinding(bi, updated)}
+              />
+              {isRequiredAndUnmapped && (
+                <span className="flex items-center gap-0.5 mt-0.5 text-[9px] text-destructive font-medium">
+                  <AlertTriangle size={9} />
+                  Not mapped
+                </span>
+              )}
+            </div>
 
             {/* Delete */}
             <button
