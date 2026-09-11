@@ -39,6 +39,13 @@ export const OrgSelectionView = () => {
       toast.success(
         orgId ? "Organization selected" : "Switched to Personal Workspace",
       );
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("auth:workspace-changed", {
+            detail: { organizationId: orgId },
+          }),
+        );
+      }
     } catch (err: unknown) {
       const msg =
         err instanceof Error ? err.message : "Failed to select workspace";
@@ -72,6 +79,13 @@ export const OrgSelectionView = () => {
 
       if (created?.data?.id) {
         await orgActions.setActive({ organizationId: created.data.id });
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("auth:workspace-changed", {
+              detail: { organizationId: created.data.id },
+            }),
+          );
+        }
         toast.success(`Organization "${newOrgName}" created!`);
         setCreating(false);
         setNewOrgName("");

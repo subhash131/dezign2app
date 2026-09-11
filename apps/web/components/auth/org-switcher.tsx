@@ -106,6 +106,13 @@ export function OrgSwitcher() {
       toast.success(
         orgId ? "Switched organization" : "Switched to Personal Workspace",
       );
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("auth:workspace-changed", {
+            detail: { organizationId: orgId },
+          }),
+        );
+      }
     } catch (err: unknown) {
       setOptimisticOrg(null);
       const msg =
@@ -146,6 +153,13 @@ export function OrgSwitcher() {
         setCreateDialogOpen(false);
 
         await orgActions.setActive({ organizationId: created.data.id });
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("auth:workspace-changed", {
+              detail: { organizationId: created.data.id },
+            }),
+          );
+        }
       }
     } catch (err: unknown) {
       const msg =

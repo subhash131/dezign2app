@@ -30,6 +30,13 @@ export const OrganizationGuard = ({ children }: { children: ReactNode }) => {
   const handleSelectOrg = async (orgId: string) => {
     try {
       await orgActions.setActive({ organizationId: orgId });
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("auth:workspace-changed", {
+            detail: { organizationId: orgId },
+          }),
+        );
+      }
       toast.success("Organization selected");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to select organization";
@@ -55,6 +62,13 @@ export const OrganizationGuard = ({ children }: { children: ReactNode }) => {
 
       if (created?.data) {
         await orgActions.setActive({ organizationId: created.data.id });
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("auth:workspace-changed", {
+              detail: { organizationId: created.data.id },
+            }),
+          );
+        }
         toast.success(`Organization "${orgName}" created!`);
       }
     } catch (err) {
