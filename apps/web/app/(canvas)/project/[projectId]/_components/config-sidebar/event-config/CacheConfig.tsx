@@ -341,7 +341,7 @@ export const CacheConfig: React.FC<CacheConfigProps> = ({
             Replication
           </span>
           <Select
-            value={item.replication || "Standalone"}
+            value={item.replication !== undefined ? String(item.replication) : "Standalone"}
             onValueChange={(v) =>
               handleUpdate(item.id, { replication: v })
             }
