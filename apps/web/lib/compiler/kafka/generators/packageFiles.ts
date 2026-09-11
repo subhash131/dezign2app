@@ -55,14 +55,7 @@ export function generateConfigFile(
   packageFolder: string,
   defaultPartitions: number,
   defaultReplication: number,
-  brokerCount: number = 1,
-  basePort: number = 9092,
 ): CompiledFile {
-  const defaultBrokers = Array.from(
-    { length: Math.max(1, brokerCount) },
-    (_, i) => `localhost:${basePort + i}`,
-  ).join(",");
-
   return {
     filename: "src/config.ts",
     language: "typescript",
@@ -76,7 +69,7 @@ export function generateConfigFile(
       `}`,
       ``,
       `export function getKafkaConfig(): KafkaClientConfig {`,
-      `  const brokersEnv = process.env.KAFKA_BROKERS ?? "${defaultBrokers}";`,
+      `  const brokersEnv = process.env.KAFKA_BROKERS ?? "localhost:9092";`,
       `  return {`,
       `    brokers: brokersEnv.split(",").map((b) => b.trim()),`,
       `    clientId: process.env.KAFKA_CLIENT_ID ?? "${packageFolder}-client",`,
@@ -203,77 +196,7 @@ export function generateIndexFile(packageName: string, nodeLabel: string): Compi
   };
 }
 
-export function generateDockerComposeFile(
-  packageFolder: string,
-  brokerCount: number = 1,
-  clusterMode: "kraft" | "zookeeper" = "kraft",
-  basePort: number = 9092,
-): CompiledFile {
-  const count = Math.max(1, Math.min(9, Math.floor(brokerCount)));
-
-  if (clusterMode === "kraft") {
-    const clusterId = "MkU3OEVBNTcwNTJENDM2Qk";
-    const controllerQuorumVoters = Array.from(
-      { length: count },
-      (_, i) => `${i + 1}@kafka-${i + 1}:29093`,
-    ).join(",");
-
-    const services = Array.from({ length: count }, (_, i) => {
-      const brokerId = i + 1;
-      const extPort = basePort + i;
-      const intPort = 29092;
-      const ctrlPort = 29093;
-      return [
-        `  kafka-${brokerId}:`,
-        `    image: confluentinc/cp-kafka:7.5.0`,
-        `    container_name: ${packageFolder}-broker-${brokerId}`,
-        `    ports:`,
-        `      - "${extPort}:${extPort}"`,
-        `    environment:`,
-        `      KAFKA_NODE_ID: ${brokerId}`,
-        `      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'`,
-        `      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka-${brokerId}:${intPort},PLAINTEXT_HOST://localhost:${extPort}'`,
-        `      KAFKA_PROCESS_ROLES: 'broker,controller'`,
-        `      KAFKA_CONTROLLER_QUORUM_VOTERS: '${controllerQuorumVoters}'`,
-        `      KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:${intPort},CONTROLLER://0.0.0.0:${ctrlPort},PLAINTEXT_HOST://0.0.0.0:${extPort}'`,
-        `      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'`,
-        `      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'`,
-        `      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'`,
-        `      CLUSTER_ID: '${clusterId}'`,
-      ].join("\n");
-    }).join("\n\n");
-
-    return {
-      filename: "docker-compose.yml",
-      language: "yaml",
-      content: [`version: "3.8"`, ``, `services:`, services, ``].join("\n"),
-    };
-  }
-
-  // ZooKeeper mode
-  const services = Array.from({ length: count }, (_, i) => {
-    const brokerId = i + 1;
-    const extPort = basePort + i;
-    const intPort = 29092;
-    return [
-      `  kafka-${brokerId}:`,
-      `    image: confluentinc/cp-kafka:7.5.0`,
-      `    container_name: ${packageFolder}-broker-${brokerId}`,
-      `    depends_on:`,
-      `      - zookeeper`,
-      `    ports:`,
-      `      - "${extPort}:${extPort}"`,
-      `    environment:`,
-      `      KAFKA_BROKER_ID: ${brokerId}`,
-      `      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181`,
-      `      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:${extPort},PLAINTEXT_HOST://kafka-${brokerId}:${intPort}`,
-      `      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT`,
-      `      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT`,
-      `      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1`,
-      `      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0`,
-    ].join("\n");
-  }).join("\n\n");
-
+export function generateDockerComposeFile(packageFolder: string): CompiledFile {
   return {
     filename: "docker-compose.yml",
     language: "yaml",
@@ -290,7 +213,22 @@ export function generateDockerComposeFile(
       `      ZOOKEEPER_CLIENT_PORT: 2181`,
       `      ZOOKEEPER_TICK_TIME: 2000`,
       ``,
-      services,
+      `  kafka:`,
+      `    image: confluentinc/cp-kafka:7.5.0`,
+      `    container_name: ${packageFolder}-broker`,
+      `    depends_on:`,
+      `      - zookeeper`,
+      `    ports:`,
+      `      - "9092:9092"`,
+      `      - "29092:29092"`,
+      `    environment:`,
+      `      KAFKA_BROKER_ID: 1`,
+      `      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181`,
+      `      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_HOST://kafka:29092`,
+      `      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT`,
+      `      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT`,
+      `      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1`,
+      `      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0`,
       ``,
     ].join("\n"),
   };

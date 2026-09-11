@@ -37,7 +37,6 @@ import { RedisCacheRefConfig } from "./config-sidebar/RedisCacheRefConfig";
 import { HookConfig } from "./config-sidebar/HookConfig";
 import { TypesConfig } from "./config-sidebar/TypesConfig";
 import { WebPageRealtimeConnectionConfig } from "./config-sidebar/WebPageRealtimeConnectionConfig";
-import { KafkaConfig } from "./config-sidebar/KafkaConfig";
 
 export const ConfigSidebar = () => {
   const activeConfigItem = useBackendCanvasStore((s) => s.activeConfigItem);
@@ -243,8 +242,6 @@ export const ConfigSidebar = () => {
             <LangGraphRouteConfig id={id} nodeId={nodeId} />
           ) : type === "entityFunctions" ? (
             <EntityFunctionsConfig id={id} nodeId={nodeId} />
-          ) : type === "kafka" ? (
-            <KafkaConfig id={id} nodeId={nodeId} />
           ) : type === "database" ? (
             <DatabaseConfig id={id} nodeId={nodeId} />
           ) : type === "testUsers" ? (

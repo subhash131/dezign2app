@@ -414,5 +414,3 @@ export function sanitizeEndpointRoute(route: string): string {
   if (!route) return "";
   return route.trim().replace(/\s+/g, "-");
 }
-
-export * from "./utils/kafkaTopology";

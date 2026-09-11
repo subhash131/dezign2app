@@ -223,8 +223,7 @@ export type AnyMessagingResource = {
   serialization?: string;
   maxObjectSize?: string;
   persistence?: string;
-  replication?: string | number;
-  partitions?: number;
+  replication?: string;
 };
 
 export type ConfigItemData = AnyMessagingResource & {
