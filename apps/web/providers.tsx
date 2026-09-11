@@ -9,7 +9,7 @@ import {
   Unauthenticated,
   useMutation,
 } from "convex/react";
-import { ConvexBetterAuthProvider } from "@convex-dev/better-auth/react";
+import { ConvexBetterAuthProvider } from "@/providers/convex-auth-provider";
 import { authClient, useSession } from "@/lib/auth-client";
 import { api } from "@workspace/backend/_generated/api";
 import "@/lib/utils/patchResizeObserver";

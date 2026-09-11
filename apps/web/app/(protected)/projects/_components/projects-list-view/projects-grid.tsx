@@ -2,18 +2,22 @@
 import { api } from "@workspace/backend/_generated/api";
 import { usePaginatedQuery } from "convex/react";
 import React from "react";
+import { useActiveOrganization } from "@/lib/auth-client";
 import { ProjectCard } from "@/app/(protected)/projects/_components/project-card";
 import { Spinner } from "@workspace/ui/components/spinner";
 import { Sparkles } from "lucide-react";
 
 export const ProjectsGrid = () => {
+  const { data: activeOrg } = useActiveOrganization();
+  const organizationId = activeOrg?.id ?? null;
+
   const {
     results: projects,
     status,
     loadMore,
   } = usePaginatedQuery(
     api.projects.getProjectsByOrganization,
-    {},
+    { organizationId },
     { initialNumItems: 16 },
   );
 
@@ -70,7 +74,11 @@ export const ProjectsGrid = () => {
           </div>
           <h3 className="mt-6 text-2xl font-bold">No projects found!</h3>
           <p className="mt-2 text-sm text-muted-foreground max-w-xs">
-            There are currently no projects. Create one to get started!
+            There are currently no projects in{" "}
+            <span className="font-semibold text-foreground">
+              {activeOrg?.name || "Personal Workspace"}
+            </span>
+            . Create one to get started!
           </p>
         </div>
       )}

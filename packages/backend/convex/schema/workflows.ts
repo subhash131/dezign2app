@@ -39,7 +39,8 @@ export const workflowTables = {
   })
     .index("by_organization", ["organizationId"])
     .index("by_name", ["name"])
-    .index("by_creator", ["createdBy"]),
+    .index("by_creator", ["createdBy"])
+    .index("by_creator_organization", ["createdBy", "organizationId"]),
 
   workflows: defineTable({
     name: v.string(),

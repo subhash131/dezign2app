@@ -1,13 +1,39 @@
 import { ConvexError, v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, QueryCtx, MutationCtx } from "./_generated/server";
 import { paginationOptsValidator } from "convex/server";
 import { Doc } from "./_generated/dataModel";
+import { components } from "./_generated/api";
+
+// Helper to verify if a user belongs to an organization
+async function isUserAuthorizedForOrg(
+  ctx: QueryCtx | MutationCtx,
+  userId: string,
+  targetOrgId: string,
+  tokenOrgId?: string,
+): Promise<boolean> {
+  if (tokenOrgId && tokenOrgId === targetOrgId) {
+    return true;
+  }
+  try {
+    const member = await ctx.runQuery(components.betterAuth.adapter.findOne, {
+      model: "member",
+      where: [
+        { field: "userId", value: userId },
+        { field: "organizationId", value: targetOrgId },
+      ],
+    });
+    return !!member;
+  } catch (err) {
+    console.error("[projects] Error checking org membership:", err);
+    return false;
+  }
+}
 
 export const createProject = mutation({
   args: {
     name: v.string(),
     description: v.optional(v.string()),
-    organizationId: v.optional(v.string()),
+    organizationId: v.optional(v.union(v.string(), v.null())),
   },
   async handler(ctx, args) {
     const identity = await ctx.auth.getUserIdentity();
@@ -18,11 +44,40 @@ export const createProject = mutation({
       });
     }
 
+    const userId = identity.subject;
+    const tokenOrgId = identity.org_id?.toString();
+
+    let targetOrgId: string | undefined = undefined;
+    if (
+      args.organizationId !== undefined &&
+      args.organizationId !== null &&
+      args.organizationId !== "personal"
+    ) {
+      targetOrgId = args.organizationId;
+    } else if (args.organizationId === undefined && tokenOrgId) {
+      targetOrgId = tokenOrgId;
+    }
+
+    if (targetOrgId) {
+      const authorized = await isUserAuthorizedForOrg(
+        ctx,
+        userId,
+        targetOrgId,
+        tokenOrgId,
+      );
+      if (!authorized) {
+        throw new ConvexError({
+          code: "UNAUTHORIZED",
+          message: "Not authorized to create project in this organization",
+        });
+      }
+    }
+
     const projectId = await ctx.db.insert("projects", {
       name: args.name,
       description: args.description,
-      organizationId: identity.org_id?.toString(),
-      createdBy: identity.subject,
+      organizationId: targetOrgId,
+      createdBy: userId,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });
@@ -47,51 +102,69 @@ export const createProject = mutation({
 export const getProjectsByOrganization = query({
   args: {
     paginationOpts: paginationOptsValidator,
+    organizationId: v.optional(v.union(v.string(), v.null())),
     userEmail: v.optional(v.string()),
   },
   async handler(ctx, args) {
     const identity = await ctx.auth.getUserIdentity();
-    const userOrgId = identity?.org_id?.toString();
-    const userId = identity?.subject;
-
-    if (userOrgId) {
-      return await ctx.db
-        .query("projects")
-        .withIndex("by_organization", (q) => q.eq("organizationId", userOrgId))
-        .order("desc")
-        .paginate(args.paginationOpts);
+    if (!identity) {
+      return {
+        page: [],
+        isDone: true,
+        continueCursor: "",
+      };
     }
 
-    if (userId) {
-      return await ctx.db
-        .query("projects")
-        .withIndex("by_creator", (q) => q.eq("createdBy", userId))
-        .order("desc")
-        .paginate(args.paginationOpts);
+    const userId = identity.subject;
+    const tokenOrgId = identity.org_id?.toString();
+
+    // Determine target organization:
+    // If organizationId is specified:
+    //   - non-empty string: target organization
+    //   - null or "personal" or empty string: personal workspace
+    // If organizationId is undefined:
+    //   - fallback to tokenOrgId (if present) else personal workspace
+    let targetOrgId: string | null = null;
+    if (args.organizationId !== undefined) {
+      targetOrgId =
+        args.organizationId && args.organizationId !== "personal"
+          ? args.organizationId
+          : null;
+    } else if (tokenOrgId) {
+      targetOrgId = tokenOrgId;
     }
 
-    if (args.userEmail) {
-      const user = await ctx.db
-        .query("users")
-        .withIndex("by_email", (q) => q.eq("email", args.userEmail!))
-        .first();
-
-      if (user?.authId) {
-        return await ctx.db
-          .query("projects")
-          .withIndex("by_creator", (q) => q.eq("createdBy", user.authId!))
-          .order("desc")
-          .paginate(args.paginationOpts);
+    if (targetOrgId) {
+      // Verify user is authorized for this organization
+      const authorized = await isUserAuthorizedForOrg(
+        ctx,
+        userId,
+        targetOrgId,
+        tokenOrgId,
+      );
+      if (!authorized) {
+        return {
+          page: [],
+          isDone: true,
+          continueCursor: "",
+        };
       }
+
+      return await ctx.db
+        .query("projects")
+        .withIndex("by_organization", (q) => q.eq("organizationId", targetOrgId))
+        .order("desc")
+        .paginate(args.paginationOpts);
     }
 
-    const projects = await ctx.db
+    // Personal Workspace: Strictly personal projects created by this user
+    return await ctx.db
       .query("projects")
-      .withIndex("by_organization", (q) => q.eq("organizationId", undefined))
+      .withIndex("by_creator_organization", (q) =>
+        q.eq("createdBy", userId).eq("organizationId", undefined),
+      )
       .order("desc")
       .paginate(args.paginationOpts);
-
-    return projects;
   },
 });
 
@@ -112,10 +185,13 @@ export const getProjectById = query({
 
     // Check organization membership or creator status
     if (project.organizationId) {
-      if (
-        project.organizationId !== userOrgId &&
-        project.createdBy !== identity.subject
-      ) {
+      const authorized = await isUserAuthorizedForOrg(
+        ctx,
+        identity.subject,
+        project.organizationId,
+        userOrgId,
+      );
+      if (!authorized && project.createdBy !== identity.subject) {
         return null;
       }
     } else {
@@ -125,6 +201,47 @@ export const getProjectById = query({
     }
 
     return project;
+  },
+});
+
+export const assignProjectOrganization = mutation({
+  args: {
+    projectId: v.id("projects"),
+    organizationId: v.optional(v.union(v.string(), v.null())),
+  },
+  async handler(ctx, args) {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new ConvexError("Not authenticated");
+    }
+    const project = await ctx.db.get(args.projectId);
+    if (!project) {
+      throw new ConvexError("Project not found");
+    }
+    if (project.createdBy !== identity.subject) {
+      throw new ConvexError("Unauthorized");
+    }
+    const targetOrgId =
+      args.organizationId && args.organizationId !== "personal"
+        ? args.organizationId
+        : undefined;
+
+    if (targetOrgId) {
+      const authorized = await isUserAuthorizedForOrg(
+        ctx,
+        identity.subject,
+        targetOrgId,
+        identity.org_id?.toString(),
+      );
+      if (!authorized) {
+        throw new ConvexError("Not authorized for this organization");
+      }
+    }
+    await ctx.db.patch(args.projectId, {
+      organizationId: targetOrgId,
+      updatedAt: Date.now(),
+    });
+    return { success: true };
   },
 });
 

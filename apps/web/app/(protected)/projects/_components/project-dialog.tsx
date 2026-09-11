@@ -18,6 +18,7 @@ import { useMutation } from "convex/react";
 import { api } from "@workspace/backend/_generated/api";
 import { toast } from "sonner";
 import { Doc } from "@workspace/backend/_generated/dataModel";
+import { useActiveOrganization } from "@/lib/auth-client";
 
 interface ProjectDialogProps {
   project?: Doc<"projects">;
@@ -33,6 +34,7 @@ export function ProjectDialog({
   onOpenChange: setControlledOpen,
 }: ProjectDialogProps) {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const { data: activeOrg } = useActiveOrganization();
 
   const open = controlledOpen ?? uncontrolledOpen;
   const setOpen = setControlledOpen ?? setUncontrolledOpen;
@@ -66,6 +68,7 @@ export function ProjectDialog({
         await createProject({
           name: name.trim(),
           description: description.trim(),
+          organizationId: activeOrg?.id ?? undefined,
         });
         toast.success("Project created");
       }
@@ -98,7 +101,7 @@ export function ProjectDialog({
             <DialogDescription>
               {isEditing
                 ? "Update your project's name and description."
-                : "This action will create a new space for your project."}
+                : `This action will create a new project in ${activeOrg?.name ? `"${activeOrg.name}"` : "your Personal Workspace"}.`}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">

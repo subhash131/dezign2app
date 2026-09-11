@@ -12,8 +12,10 @@ import { McpConfigCard } from "./_components/mcp-config-card";
 import { RevokeKeyDialog } from "./_components/revoke-key-dialog";
 import { GeneratedKeyDialog } from "./_components/generated-key-dialog";
 import { Doc, Id } from "@workspace/backend/_generated/dataModel";
+import { useActiveOrganization } from "@/lib/auth-client";
 
 export default function ApiKeysPage() {
+  const { data: activeOrg } = useActiveOrganization();
   const [newKeyName, setNewKeyName] = useState("");
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
     null,
@@ -29,9 +31,10 @@ export default function ApiKeysPage() {
     { initialNumItems: 20 },
   );
 
-  // Fetch all user projects for the project selector
+  // Fetch all user projects for the project selector in current workspace
   const projectsResult = useQuery(api.projects.getProjectsByOrganization, {
     paginationOpts: { numItems: 100, cursor: null },
+    organizationId: activeOrg?.id ?? null,
   });
   const projects = projectsResult?.page ?? [];
 
