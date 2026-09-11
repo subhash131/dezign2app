@@ -19,6 +19,9 @@ export interface SectionBlockProps {
   updateSections: (sections: PageSection[]) => void;
   getLinkedEndpoint: (actionId: string) => { targetNode: BackendNode; endpoint: Endpoint } | null;
   onTriggerEvent: (triggerInfo: { event: UIEventItem; targetNode: BackendNode; endpoint: Endpoint }) => void;
+  isEditingName?: boolean;
+  onStartEditName?: () => void;
+  onFinishEditName?: () => void;
 }
 
 export const SectionBlock = ({
@@ -29,6 +32,9 @@ export const SectionBlock = ({
   updateSections,
   getLinkedEndpoint,
   onTriggerEvent,
+  isEditingName: isEditingNameProp,
+  onStartEditName,
+  onFinishEditName,
 }: SectionBlockProps) => {
   const isCollapsed = useSectionCollapseStore((s) =>
     s.isSectionCollapsed(nodeId, section.id),
@@ -42,10 +48,52 @@ export const SectionBlock = ({
   );
 
   const isOpen = !isCollapsed;
-  const [isEditingName, setIsEditingName] = useState(false);
-  const [sectionName, setSectionName] = useState(section.name);
+  const [internalIsEditingName, setInternalIsEditingName] = useState(
+    !section.name || section.name.trim() === "" || Boolean(isEditingNameProp),
+  );
+  const isEditingName = isEditingNameProp !== undefined ? isEditingNameProp : internalIsEditingName;
+
+  const setIsEditingName = (val: boolean) => {
+    setInternalIsEditingName(val);
+    if (val) {
+      onStartEditName?.();
+    } else {
+      onFinishEditName?.();
+    }
+  };
+
+  const [sectionName, setSectionName] = useState(section.name || "");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [editingActionId, setEditingActionId] = useState<string | null>(null);
+
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  const isFinishedRef = React.useRef(false);
+
+  useEffect(() => {
+    if (isEditingName) {
+      isFinishedRef.current = false;
+      setSectionName(section.name || "");
+      const focus = () => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+          inputRef.current.select();
+        }
+      };
+      focus();
+      const raf = requestAnimationFrame(focus);
+      const timer = setTimeout(focus, 50);
+      return () => {
+        cancelAnimationFrame(raf);
+        clearTimeout(timer);
+      };
+    }
+  }, [isEditingName]);
+
+  useEffect(() => {
+    if (!isEditingName) {
+      setSectionName(section.name || "");
+    }
+  }, [section.name, isEditingName]);
 
   const updateNodeInternals = useUpdateNodeInternals();
 
@@ -57,8 +105,59 @@ export const SectionBlock = ({
 
   const setActiveConfigItem = useBackendCanvasStore((s) => s.setActiveConfigItem);
 
-  const handleSaveName = () => {
-    const trimmed = sectionName.trim() || "Section";
+  const handleDeleteSection = () => {
+    deleteSectionCollapseState(nodeId, section.id);
+    const store = useBackendCanvasStore.getState();
+    section.actions.forEach((act) => {
+      const edge = store.edges.find(
+        (ed) => ed.source === nodeId && ed.sourceHandle === `events-${act.id}`,
+      );
+      if (edge) {
+        store.deleteEdge(edge.id);
+        const targetNode = store.nodes.find((n) => n.id === edge.target);
+        if (targetNode && targetNode.type === "page_ref") {
+          const remaining = store.edges.filter(
+            (ed) => ed.target === targetNode.id && ed.id !== edge.id,
+          );
+          if (remaining.length === 0) store.deleteNode(targetNode.id);
+        }
+      }
+    });
+
+    const updated = sections.filter((s) => s.id !== section.id);
+    updateSections(updated);
+  };
+
+  const handleDiscardSection = () => {
+    setIsEditingName(false);
+    handleDeleteSection();
+  };
+
+  const handleCancel = () => {
+    if (isFinishedRef.current) return;
+    isFinishedRef.current = true;
+    if (!section.name || section.name.trim() === "") {
+      handleDiscardSection();
+    } else {
+      setSectionName(section.name);
+      setIsEditingName(false);
+    }
+  };
+
+  const handleSaveOrDiscard = () => {
+    if (isFinishedRef.current) return;
+    isFinishedRef.current = true;
+    const trimmed = sectionName.trim();
+    if (!trimmed) {
+      if (!section.name || section.name.trim() === "") {
+        handleDiscardSection();
+      } else {
+        setSectionName(section.name);
+        setIsEditingName(false);
+      }
+      return;
+    }
+
     const updated = sections.map((s) =>
       s.id === section.id ? { ...s, name: trimmed } : s,
     );
@@ -88,29 +187,6 @@ export const SectionBlock = ({
     const updated = sections.map((s) =>
       s.id === section.id ? { ...s, loadStrategy: nextStrategy } : s,
     );
-    updateSections(updated);
-  };
-
-  const handleDeleteSection = () => {
-    deleteSectionCollapseState(nodeId, section.id);
-    const store = useBackendCanvasStore.getState();
-    section.actions.forEach((act) => {
-      const edge = store.edges.find(
-        (ed) => ed.source === nodeId && ed.sourceHandle === `events-${act.id}`,
-      );
-      if (edge) {
-        store.deleteEdge(edge.id);
-        const targetNode = store.nodes.find((n) => n.id === edge.target);
-        if (targetNode && targetNode.type === "page_ref") {
-          const remaining = store.edges.filter(
-            (ed) => ed.target === targetNode.id && ed.id !== edge.id,
-          );
-          if (remaining.length === 0) store.deleteNode(targetNode.id);
-        }
-      }
-    });
-
-    const updated = sections.filter((s) => s.id !== section.id);
     updateSections(updated);
   };
 
@@ -233,15 +309,23 @@ export const SectionBlock = ({
 
           {isEditingName ? (
             <Input
+              ref={inputRef}
               value={sectionName}
               onChange={(e) => setSectionName(e.target.value)}
+              placeholder="Section name"
               className="h-5 text-xs px-1 py-0 bg-background"
               autoFocus
               onKeyDown={(e) => {
-                if (e.key === "Enter") handleSaveName();
-                if (e.key === "Escape") setIsEditingName(false);
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleSaveOrDiscard();
+                }
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  handleCancel();
+                }
               }}
-              onBlur={handleSaveName}
+              onBlur={handleSaveOrDiscard}
               onClick={(e) => e.stopPropagation()}
             />
           ) : (

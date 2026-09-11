@@ -50,6 +50,15 @@ vi.mock("@/lib/stores/sectionCollapseStore", () => ({
   }),
 }));
 
+// Mock @workspace/ui/components/select
+vi.mock("@workspace/ui/components/select", () => ({
+  Select: ({ children }: any) => <div data-testid="select">{children}</div>,
+  SelectTrigger: ({ children }: any) => <div data-testid="select-trigger">{children}</div>,
+  SelectValue: ({ placeholder }: any) => <div>{placeholder}</div>,
+  SelectContent: ({ children }: any) => <div>{children}</div>,
+  SelectItem: ({ children, value }: any) => <div data-value={value}>{children}</div>,
+}));
+
 describe("WebPage Event Addition and Auto-Discard", () => {
   it("when an event is added in SectionBlock, it activates the input with empty value", () => {
     const section: PageSection = {
@@ -71,7 +80,7 @@ describe("WebPage Event Addition and Auto-Discard", () => {
     );
 
     // Click "Add action"
-    const addActionBtn = screen.getByRole("button", { name: /add action/i });
+    const addActionBtn = screen.getByTitle(/add action/i);
     fireEvent.click(addActionBtn);
 
     // Verify updateSections was called with a new action having empty name
