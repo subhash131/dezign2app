@@ -149,19 +149,23 @@ export const SectionList = ({
     }
   }, [nodeId, sections, data, updateNode]);
 
+  const [editingSectionId, setEditingSectionId] = React.useState<string | null>(null);
+
   const updateSections = (newSections: PageSection[]) => {
     updateNode(nodeId, { data: { ...data, sections: newSections } });
   };
 
   const handleAddSection = () => {
+    const newId = `sec-${generateId()}`;
     const newSection: PageSection = {
-      id: `sec-${generateId()}`,
-      name: `Section ${sections.length + 1}`,
+      id: newId,
+      name: "",
       renderMode: "server",
       loadStrategy: "eager",
       actions: [],
     };
     updateSections([...sections, newSection]);
+    setEditingSectionId(newId);
   };
 
   return (
@@ -193,6 +197,13 @@ export const SectionList = ({
             updateSections={updateSections}
             getLinkedEndpoint={getLinkedEndpoint}
             onTriggerEvent={onTriggerEvent}
+            isEditingName={editingSectionId === section.id}
+            onStartEditName={() => setEditingSectionId(section.id)}
+            onFinishEditName={() => {
+              if (editingSectionId === section.id) {
+                setEditingSectionId(null);
+              }
+            }}
           />
         ))}
       </div>
