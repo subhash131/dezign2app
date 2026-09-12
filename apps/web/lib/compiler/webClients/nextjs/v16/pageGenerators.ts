@@ -71,10 +71,16 @@ ${sectionsJsx ? `${sectionsJsx}` : `          <Link
     pageLoadFetchStatements && pageLoadFetchStatements.trim().length > 0,
   );
 
+  const sseConnections = (pageMeta.realtimeConnections || []).filter(
+    (c) => c.protocol === "SSE" && c.streamUrl,
+  );
+  const hasSse = sseConnections.length > 0;
+  const hasLogsSection = hasApiActions || hasSse;
+
   const hooksList: string[] = [];
-  if (hasPageLoad) {
+  if (hasPageLoad || hasSse) {
     hooksList.push("useState", "useEffect");
-  } else if (hasApiActions) {
+  } else if (hasLogsSection) {
     hooksList.push("useState");
   }
 
@@ -130,7 +136,7 @@ ${sectionsJsx ? `${sectionsJsx}` : `          <Link
 `
     : "";
 
-  const triggerLogsStateJsx = hasApiActions
+  const triggerLogsStateJsx = hasLogsSection
     ? `  const [triggerLogs, setTriggerLogs] = useState<Array<{
     id: string;
     eventName: string;
@@ -146,6 +152,103 @@ ${sectionsJsx ? `${sectionsJsx}` : `          <Link
 
 `
     : "";
+
+  let sseEffectsJsx = "";
+  if (hasSse) {
+    const sseByUrl = new Map<string, typeof sseConnections>();
+    sseConnections.forEach((conn) => {
+      const url = conn.streamUrl!;
+      if (!sseByUrl.has(url)) sseByUrl.set(url, []);
+      sseByUrl.get(url)!.push(conn);
+    });
+
+    const effectBlocks: string[] = [];
+    sseByUrl.forEach((conns, streamUrl) => {
+      const customEvents = Array.from(
+        new Set(
+          conns
+            .map((c) => c.eventName?.trim())
+            .filter((name): name is string => Boolean(name && name !== "message")),
+        ),
+      );
+
+      const customListeners = customEvents
+        .map(
+          (evtName) => `      es.addEventListener("${evtName}", (event) => {
+        let parsed: unknown = event.data;
+        try {
+          parsed = JSON.parse(event.data);
+        } catch {
+          parsed = event.data;
+        }
+        setTriggerLogs((prev) => [
+          {
+            id: Math.random().toString(36).substring(2, 9),
+            eventName: "${evtName}",
+            eventType: "SSE",
+            timestamp: new Date().toLocaleTimeString(),
+            url: "${streamUrl}",
+            method: "SSE",
+            data: parsed,
+          },
+          ...prev,
+        ]);
+      });`,
+        )
+        .join("\n");
+
+      effectBlocks.push(`  // Real-time SSE listener for ${conns[0]?.sourceServiceName || "Service"}
+  useEffect(() => {
+    let es: EventSource | null = null;
+    let isMounted = true;
+    try {
+      es = new EventSource("${streamUrl}", { withCredentials: true });
+      es.onopen = () => {
+        if (isMounted) {
+          console.log("[SSE] Connected to ${streamUrl}");
+        }
+      };
+${customListeners ? `${customListeners}\n` : ""}      es.onmessage = (event) => {
+        if (!isMounted) return;
+        let parsed: unknown = event.data;
+        try {
+          parsed = JSON.parse(event.data);
+        } catch {
+          parsed = event.data;
+        }
+        setTriggerLogs((prev) => [
+          {
+            id: Math.random().toString(36).substring(2, 9),
+            eventName: "message",
+            eventType: "SSE",
+            timestamp: new Date().toLocaleTimeString(),
+            url: "${streamUrl}",
+            method: "SSE",
+            data: parsed,
+          },
+          ...prev,
+        ]);
+      };
+      es.onerror = (_event) => {
+        if (!isMounted || es?.readyState === EventSource.CLOSED) {
+          return;
+        }
+        console.warn("[SSE] Reconnecting to stream (${streamUrl})...");
+      };
+    } catch (err) {
+      console.error("[SSE] Failed to initialize EventSource (${streamUrl}):", err);
+    }
+    return () => {
+      isMounted = false;
+      if (es) {
+        es.close();
+      }
+    };
+  }, []);`);
+    });
+
+    sseEffectsJsx = effectBlocks.join("\n\n") + "\n\n";
+  }
 
   const triggerHandlerJsx = hasApiActions
     ? `  const handleTriggerAction = async (
@@ -208,12 +311,15 @@ ${sectionsJsx ? `${sectionsJsx}` : `          <Link
 `
     : "";
 
-  const triggerLogsSectionJsx = hasApiActions
+  const triggerLogsSectionJsx = hasLogsSection
     ? `        {/* Section: Trigger Output Logs */}
         <Card className="border-border shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-            <div>
+            <div className="flex items-center gap-3">
               <CardTitle className="text-lg font-bold text-card-foreground">Output Log</CardTitle>
+              ${hasSse ? `<Badge variant="outline" className="text-xs flex items-center gap-1.5 font-mono text-emerald-600 dark:text-emerald-400 border-emerald-500/30 bg-emerald-500/10">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live Stream Active
+              </Badge>` : ""}
             </div>
             {triggerLogs.length > 0 && (
               <Button
@@ -232,14 +338,25 @@ ${sectionsJsx ? `${sectionsJsx}` : `          <Link
           <CardContent>
             {triggerLogs.length === 0 ? (
               <div className="text-muted-foreground text-sm italic py-6 text-center border border-dashed border-border rounded-lg">
-                No activity logged yet.
+                ${hasSse ? "Listening for real-time events..." : "No activity logged yet."}
               </div>
             ) : (
               <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
                 {triggerLogs.map((log) => (
                   <div key={log.id} className="bg-muted/40 border border-border rounded-lg p-4 font-mono text-xs space-y-2">
                     <div className="flex items-center justify-between text-muted-foreground border-b border-border pb-2">
-                      <span className="font-semibold text-foreground">{log.eventName}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-foreground">{log.eventName}</span>
+                        {log.eventType === "SSE" ? (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded font-mono uppercase bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                            SSE
+                          </span>
+                        ) : (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded font-mono uppercase bg-primary/10 text-primary border border-primary/20">
+                            {log.method || "API"}
+                          </span>
+                        )}
+                      </div>
                       <span>{log.timestamp}</span>
                     </div>
                     {log.error ? (
@@ -248,7 +365,7 @@ ${sectionsJsx ? `${sectionsJsx}` : `          <Link
                       </div>
                     ) : (
                       <pre className="text-foreground/90 bg-background/80 p-3 rounded border border-border/50 overflow-x-auto whitespace-pre-wrap">
-                        {JSON.stringify(log.data, null, 2)}
+                        {typeof log.data === "string" ? log.data : JSON.stringify(log.data, null, 2)}
                       </pre>
                     )}
                   </div>
@@ -260,16 +377,18 @@ ${sectionsJsx ? `${sectionsJsx}` : `          <Link
 `
     : "";
 
-  const cardComponentsNeeded = hasPageLoad || hasApiActions;
+  const cardComponentsNeeded = hasPageLoad || hasLogsSection;
   const uiImports: string[] = [];
-  if (hasApiActions) {
+  if (hasLogsSection) {
     uiImports.push(`import { Button } from "@workspace/ui/components/button";`);
+  }
+  if (hasApiActions) {
     uiImports.push(`import { executeApiAction } from "@/lib/api-client";`);
   }
   if (cardComponentsNeeded) {
     uiImports.push(`import { Card, CardHeader, CardTitle, CardContent } from "@workspace/ui/components/card";`);
   }
-  if (hasPageLoad) {
+  if (hasPageLoad || hasSse) {
     uiImports.push(`import { Badge } from "@workspace/ui/components/badge";`);
   }
   if (hasAuth && hasPageLoad) {
@@ -292,7 +411,7 @@ type JSONValue = JSONPrimitive | JSONObject | JSONArray;
 
 ${reactImport}
 ${uiImports.join("\n")}${uiImports.length > 0 ? "\n" : ""}${allImports ? `${allImports}\n` : ""}${jsonValueTypeDecl}${namedTypeDecl}export default function ${pageMeta.componentName}() {
-${pageLoadStateJsx}${triggerLogsStateJsx}${pageLoadEffectJsx}${triggerHandlerJsx}  return (
+${pageLoadStateJsx}${triggerLogsStateJsx}${pageLoadEffectJsx}${sseEffectsJsx}${triggerHandlerJsx}  return (
     <main className="min-h-screen bg-background text-foreground p-6 md:p-10 font-sans">
       <div className="max-w-5xl mx-auto space-y-8">
 ${pageLoadSectionJsx}${sectionsJsx ? `        {/* Page Sections */}\n${sectionsJsx}\n` : ""}${triggerLogsSectionJsx}      </div>

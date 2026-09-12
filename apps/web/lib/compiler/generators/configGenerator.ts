@@ -49,22 +49,37 @@ const sseClients = new Set<SseClient>();
  */
 export function handleSseConnection(req: Request, res: Response): void {
   res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
   res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
   if (typeof (res as any).flushHeaders === "function") {
     (res as any).flushHeaders();
+  }
+
+  if (req.socket) {
+    req.socket.setKeepAlive(true);
+    req.socket.setTimeout(0);
   }
 
   const clientId = \`\${Date.now()}-\${Math.random().toString(36).substring(2, 9)}\`;
   const client: SseClient = { id: clientId, res };
   sseClients.add(client);
-  logger.debug(\`Client connected to SSE stream: \${clientId} (active: \${sseClients.size})\`);
+  logger.info(\`Client connected to SSE stream: \${clientId} (active: \${sseClients.size})\`);
 
   res.write(": connected\\n\\n");
 
+  const heartbeat = setInterval(() => {
+    try {
+      res.write(": ping\\n\\n");
+    } catch {
+      clearInterval(heartbeat);
+    }
+  }, 25000);
+
   req.on("close", () => {
+    clearInterval(heartbeat);
     sseClients.delete(client);
-    logger.debug(\`Client disconnected from SSE stream: \${clientId} (remaining: \${sseClients.size})\`);
+    logger.info(\`Client disconnected from SSE stream: \${clientId} (remaining: \${sseClients.size})\`);
   });
 }
 

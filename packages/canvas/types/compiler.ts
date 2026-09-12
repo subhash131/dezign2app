@@ -153,6 +153,8 @@ export interface LinkedRealtimeConnectionInfo {
   sourceServiceName?: string;
   sourceEventId?: string;
   description?: string;
+  sourceServicePort?: string;
+  streamUrl?: string;
 }
 
 export interface PageInfo {

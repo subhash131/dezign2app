@@ -66,6 +66,8 @@ export function compileNextjsV16WebClient(
     effectiveAppSlug,
     webAppNode,
     authNode,
+    endpoints,
+    events,
   );
 
   // 2. Generate Route Group Layouts
