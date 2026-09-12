@@ -192,7 +192,9 @@ app.get("/sse", handleSseConnection);
 app.use("/", apiRouter);
 
 // --- Initialize Event Consumers ---
-initConsumers();
+initConsumers().catch((err: unknown) => {
+  logger.error("Failed to initialize event consumers:", err);
+});
 
 // --- Server Startup ---
 app.listen(PORT, () => {

@@ -3,6 +3,8 @@ import { BackendNode, BackendEdge } from "@/types/canvas";
 import { CompiledFile } from "@workspace/canvas/types";
 import { toVarName, toPascalCase } from "../utils";
 import { resolveProducerTrace } from "../traceResolver";
+import { isKafkaNode, isServiceConnectedToKafka } from "../kafka";
+import { toFolderName, toTopicKey } from "../kafka/utils";
 
 export function generateProducers(
   serviceName: string,
@@ -16,6 +18,16 @@ export function generateProducers(
 ): CompiledFile[] {
   const files: CompiledFile[] = [];
   const producerExports: string[] = [];
+
+  const kafkaNodes = allNodes.filter(isKafkaNode);
+  const firstKafkaNode = kafkaNodes[0];
+  const kafkaPackageFolder = firstKafkaNode
+    ? toFolderName(firstKafkaNode.data?.label || "kafka") || "kafka"
+    : "kafka";
+  const kafkaPackageName = `@workspace/${kafkaPackageFolder}`;
+  const serviceHasKafka = serviceNode
+    ? isServiceConnectedToKafka(serviceNode, allNodes, allEdges, [], nodePublishedEvents)
+    : kafkaNodes.length > 0;
 
   if (nodePublishedEvents.length === 0) {
     files.push({
@@ -55,15 +67,24 @@ export function generateProducers(
         ? resolveProducerTrace(serviceNode, { ...ev, name: effectiveEventName }, allNodes, allEdges)
         : { incoming: [], outgoing: [] };
 
+      const isKafkaEvent = serviceHasKafka && (
+        Boolean(ev.brokerNodeId && kafkaNodes.some((k) => k.id === ev.brokerNodeId)) ||
+        trace.outgoing.some((out) => out.nodeType === "Message Broker" || kafkaNodes.some((k) => k.id === out.nodeId)) ||
+        kafkaNodes.some((k) => (k.data?.topics || []).some((t: { name?: string }) => t.name === effectiveEventName)) ||
+        kafkaNodes.length > 0
+      );
+
+      const topicKey = toTopicKey(effectiveEventName);
+
       let producerCode = `import { createLogger } from "@workspace/logger";
 import { ${payloadInterfaceName} } from "@workspace/types";
-
+${isKafkaEvent ? `import { publishKafkaEvent, KAFKA_TOPICS } from "${kafkaPackageName}";\n` : ""}
 const logger = createLogger("${serviceName}:Producer:${effectiveEventName}");
 
 /**
  * Event Producer for: "${effectiveEventName}"
  */
-export async function ${funcName}(eventData: ${payloadInterfaceName}): Promise<void> {
+export async function ${funcName}(eventData: ${payloadInterfaceName}, key?: string): Promise<void> {
   // =========================================================================
   // 🤖 AI CODING AGENT DIRECTIVE:
 `;
@@ -77,7 +98,12 @@ export async function ${funcName}(eventData: ${payloadInterfaceName}): Promise<v
       }
       producerCode += `  // =========================================================================\n`;
       producerCode += `  logger.info(\`Publishing event [${effectiveEventName}]\`, eventData);\n`;
-      producerCode += `  // TODO: Connect message broker (Kafka / NATS / RabbitMQ / Redis)\n`;
+      if (isKafkaEvent) {
+        producerCode += `  const topic = KAFKA_TOPICS.${topicKey} || "${effectiveEventName}";\n`;
+        producerCode += `  await publishKafkaEvent(topic, eventData, key);\n`;
+      } else {
+        producerCode += `  // TODO: Connect message broker (Kafka / NATS / RabbitMQ / Redis)\n`;
+      }
       producerCode += `}\n`;
 
       files.push({
