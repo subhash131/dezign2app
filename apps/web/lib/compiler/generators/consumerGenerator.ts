@@ -8,6 +8,8 @@ import {
   renderPipeline,
   collectPipelineImports,
 } from "./routeGenerator/pipelineRenderer";
+import { isKafkaNode, isServiceConnectedToKafka } from "../kafka";
+import { toFolderName } from "../kafka/utils";
 
 export function generateConsumers(
   serviceName: string,
@@ -21,7 +23,18 @@ export function generateConsumers(
 ): CompiledFile[] {
   const files: CompiledFile[] = [];
   const consumerImports: string[] = [];
+  const kafkaConsumerImports: string[] = [];
   const consumerInits: string[] = [];
+
+  const kafkaNodes = allNodes.filter(isKafkaNode);
+  const firstKafkaNode = kafkaNodes[0];
+  const kafkaPackageFolder = firstKafkaNode
+    ? toFolderName(firstKafkaNode.data?.label || "kafka") || "kafka"
+    : "kafka";
+  const kafkaPackageName = `@workspace/${kafkaPackageFolder}`;
+  const serviceHasKafka = serviceNode
+    ? isServiceConnectedToKafka(serviceNode, allNodes, allEdges, [], nodeConsumedEvents)
+    : kafkaNodes.length > 0;
 
   if (nodeConsumedEvents.length === 0) {
     files.push({
@@ -34,7 +47,7 @@ const logger = createLogger("${serviceName}:Consumer");
 /**
  * Event Consumers for ${serviceName}
  */
-export function initConsumers(): void {
+export async function initConsumers(): Promise<void> {
   logger.debug("No consumed events configured for this service");
 }
 `,
@@ -199,21 +212,59 @@ export async function ${handlerName}(payload: ${payloadInterfaceName}): Promise<
       consumerImports.push(
         `import { ${handlerName} } from "./${consumerFileName}";`,
       );
-      consumerInits.push(
-        `  logger.info("Registered listener for topic: ${effectiveEventName}");`,
+
+      const isKafkaEvent = serviceHasKafka && (
+        Boolean(ev.brokerNodeId && kafkaNodes.some((k) => k.id === ev.brokerNodeId)) ||
+        trace.incoming.some((inc) => inc.nodeType === "Message Broker" || kafkaNodes.some((k) => k.id === inc.nodeId)) ||
+        kafkaNodes.some((k) => (k.data?.topics || []).some((t: { name?: string }) => t.name === effectiveEventName)) ||
+        kafkaNodes.length > 0
       );
+
+      if (isKafkaEvent) {
+        const consumeFnName = `consume${eventPascalName}`;
+        kafkaConsumerImports.push(consumeFnName);
+        const sanitizedService = serviceName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "service";
+        const groupId = `${sanitizedService}-${consumerFileName}-group`;
+        consumerInits.push(
+`  try {
+    await ${consumeFnName}("${groupId}", async ({ message }) => {
+      try {
+        const rawValue = message.value?.toString();
+        const rawPayload = rawValue ? JSON.parse(rawValue) : {};
+        const payload = (rawPayload && typeof rawPayload === "object" && "payload" in rawPayload && Object.keys(rawPayload).length <= 3)
+          ? rawPayload.payload
+          : rawPayload;
+        await ${handlerName}(payload);
+      } catch (err) {
+        logger.error(\`Error processing message from topic [${effectiveEventName}]:\`, err);
+      }
+    });
+    logger.info(\`Registered Kafka consumer for topic [${effectiveEventName}] on group [${groupId}]\`);
+  } catch (err) {
+    logger.error(\`Failed to initialize Kafka consumer for topic [${effectiveEventName}]:\`, err);
+  }`
+        );
+      } else {
+        consumerInits.push(
+          `  logger.info("Registered listener for topic: ${effectiveEventName}");`,
+        );
+      }
     });
 
+    const uniqueKafkaImports = Array.from(new Set(kafkaConsumerImports));
+    const kafkaImportStmt = uniqueKafkaImports.length > 0
+      ? `import { ${uniqueKafkaImports.join(", ")} } from "${kafkaPackageName}";\n`
+      : "";
+
     const consumersIndexCode = `import { createLogger } from "@workspace/logger";
+${kafkaImportStmt}${consumerImports.join("\n")}
 
 const logger = createLogger("${serviceName}:Consumer");
 
 /**
  * Event Consumers Initialization for ${serviceName}
  */
-${consumerImports.join("\n")}
-
-export function initConsumers(): void {
+export async function initConsumers(): Promise<void> {
   logger.info("Initializing event consumers...");
 ${consumerInits.join("\n")}
 }
