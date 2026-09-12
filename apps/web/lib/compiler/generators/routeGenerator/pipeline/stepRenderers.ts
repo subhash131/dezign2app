@@ -161,18 +161,28 @@ export function renderKafkaPublishStep(
   const rawLines: string[] = [];
   const isGeneric = functionRef.name === "publishKafkaEvent";
   const topicBinding = inputBindings.find((b) => b.argName === "topic");
-  const payloadBinding = inputBindings.find(
-    (b) => b.argName === "payload" || b.argName === "message" || b.argName === "data",
-  );
   const keyBinding = inputBindings.find((b) => b.argName === "key");
 
-  const fieldBindings = inputBindings.filter(
+  // Determine if an explicit spread base was specified (e.g. "_spread" or whole-payload binding alongside discrete fields)
+  const spreadBinding = inputBindings.find(
     (b) =>
-      b.argName !== "topic" &&
-      b.argName !== "key" &&
-      b.argName !== "payload" &&
-      b.argName !== "message" &&
-      b.argName !== "data",
+      b.argName === "_spread" ||
+      b.argName === "..." ||
+      ((b.argName === "payload" || b.argName === "data") &&
+        (!b.source?.field || b.source.field.trim() === "") &&
+        inputBindings.some(
+          (other) =>
+            other !== b &&
+            other.argName !== "topic" &&
+            other.argName !== "key" &&
+            other.argName !== "_spread" &&
+            other.argName !== "...",
+        )),
+  );
+
+  // Field bindings are all non-topic, non-key bindings (excluding the spread binding)
+  const fieldBindings = inputBindings.filter(
+    (b) => b.argName !== "topic" && b.argName !== "key" && b !== spreadBinding,
   );
 
   const topicExpr = topicBinding
@@ -180,18 +190,27 @@ export function renderKafkaPublishStep(
     : JSON.stringify(step.name || "default-topic");
 
   let payloadExpr: string;
-  if (fieldBindings.length > 0) {
+  if (
+    fieldBindings.length === 1 &&
+    !spreadBinding &&
+    (!fieldBindings[0].source?.field || fieldBindings[0].source.field.trim() === "") &&
+    (fieldBindings[0].argName === "payload" ||
+      fieldBindings[0].argName === "data" ||
+      fieldBindings[0].argName === "message")
+  ) {
+    payloadExpr = resolveBinding(fieldBindings[0], ctx);
+  } else if (fieldBindings.length > 0 || spreadBinding) {
     const fieldsStr = fieldBindings
       .map((b) => `    ${b.argName}: ${resolveBinding(b, ctx)},`)
       .join("\n");
-    if (payloadBinding) {
-      const baseExpr = resolveBinding(payloadBinding, ctx);
-      payloadExpr = `{\n    ...${baseExpr},\n${fieldsStr}\n  }`;
+    if (spreadBinding) {
+      const baseExpr = resolveBinding(spreadBinding, ctx);
+      payloadExpr = fieldsStr
+        ? `{\n    ...${baseExpr},\n${fieldsStr}\n  }`
+        : `{\n    ...${baseExpr}\n  }`;
     } else {
       payloadExpr = `{\n${fieldsStr}\n  }`;
     }
-  } else if (payloadBinding) {
-    payloadExpr = resolveBinding(payloadBinding, ctx);
   } else {
     payloadExpr = "{}";
   }
@@ -522,26 +541,44 @@ export function renderPushToClientStep(
   } = step;
   const eventName = clientDeliveryEventName || "message";
 
-  const payloadBinding = inputBindings.find(
-    (b) => b.argName === "payload" || b.argName === "data",
-  );
-  const fieldBindings = inputBindings.filter(
-    (b) => b.argName !== "payload" && b.argName !== "data",
+  const spreadBinding = inputBindings.find(
+    (b) =>
+      b.argName === "_spread" ||
+      b.argName === "..." ||
+      ((b.argName === "payload" || b.argName === "data") &&
+        (!b.source?.field || b.source.field.trim() === "") &&
+        inputBindings.some(
+          (other) =>
+            other !== b &&
+            other.argName !== "_spread" &&
+            other.argName !== "...",
+        )),
   );
 
+  const fieldBindings = inputBindings.filter((b) => b !== spreadBinding);
+
   let payloadExpr: string;
-  if (fieldBindings.length > 0) {
+  if (
+    fieldBindings.length === 1 &&
+    !spreadBinding &&
+    (!fieldBindings[0].source?.field || fieldBindings[0].source.field.trim() === "") &&
+    (fieldBindings[0].argName === "payload" ||
+      fieldBindings[0].argName === "data" ||
+      fieldBindings[0].argName === "message")
+  ) {
+    payloadExpr = resolveBinding(fieldBindings[0], ctx);
+  } else if (fieldBindings.length > 0 || spreadBinding) {
     const fieldsStr = fieldBindings
       .map((b) => `    ${b.argName}: ${resolveBinding(b, ctx)},`)
       .join("\n");
-    if (payloadBinding) {
-      const baseExpr = resolveBinding(payloadBinding, ctx);
-      payloadExpr = `{\n    ...${baseExpr},\n${fieldsStr}\n  }`;
+    if (spreadBinding) {
+      const baseExpr = resolveBinding(spreadBinding, ctx);
+      payloadExpr = fieldsStr
+        ? `{\n    ...${baseExpr},\n${fieldsStr}\n  }`
+        : `{\n    ...${baseExpr}\n  }`;
     } else {
       payloadExpr = `{\n${fieldsStr}\n  }`;
     }
-  } else if (payloadBinding) {
-    payloadExpr = resolveBinding(payloadBinding, ctx);
   } else {
     payloadExpr = ctx.bodyVar || "{}";
   }
