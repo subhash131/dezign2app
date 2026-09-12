@@ -32,6 +32,8 @@ export function formatResponse<T>(data: T, message = "Success") {
 `;
 
   const realtimeCode = `import { Request, Response } from "express";
+import { Server as HttpServer } from "http";
+import { WebSocketServer, WebSocket } from "ws";
 import { createLogger } from "@workspace/logger";
 
 const logger = createLogger("Realtime");
@@ -83,10 +85,15 @@ export function handleSseConnection(req: Request, res: Response): void {
   });
 }
 
+export type JsonPrimitive = string | number | boolean | null;
+export type JsonObject = { [key: string]: JsonValue };
+export type JsonArray = JsonValue[];
+export type JsonValue = JsonPrimitive | JsonObject | JsonArray;
+
 /**
  * Broadcasts an event and data payload to all connected SSE clients.
  */
-export function sseBroadcast(eventName: string, data: unknown): void {
+export function sseBroadcast(eventName: string, data: JsonValue): void {
   logger.info(\`Broadcasting SSE event: "\${eventName}" to \${sseClients.size} client(s)\`);
   const payloadStr = typeof data === "string" ? data : JSON.stringify(data);
   for (const client of sseClients) {
@@ -99,17 +106,131 @@ export function sseBroadcast(eventName: string, data: unknown): void {
   }
 }
 
+export interface WsClientInfo {
+  id: string;
+  ws: WebSocket;
+  rooms: Set<string>;
+  token?: string;
+}
+
+export interface WebSocketInboundMessage {
+  action?: string;
+  type?: string;
+  room?: string;
+  event?: string;
+  data?: JsonValue;
+}
+
+let wssInstance: WebSocketServer | null = null;
+const wsClients = new Map<WebSocket, WsClientInfo>();
+
 /**
- * Broadcasts an event to WebSocket clients.
+ * Initializes the WebSocket server attached to an HTTP server instance.
  */
-export function wsBroadcast(eventName: string, data: unknown, room?: string): void {
+export function initWebSocketServer(server: HttpServer): WebSocketServer {
+  if (wssInstance) {
+    return wssInstance;
+  }
+
+  wssInstance = new WebSocketServer({ server, path: "/ws" });
+
+  wssInstance.on("connection", (ws: WebSocket, req) => {
+    const clientId = \`\${Date.now()}-\${Math.random().toString(36).substring(2, 9)}\`;
+    const urlObj = new URL(req.url || "/ws", "http://localhost");
+    const token = urlObj.searchParams.get("token") || undefined;
+
+    const clientInfo: WsClientInfo = {
+      id: clientId,
+      ws,
+      rooms: new Set<string>(),
+      token,
+    };
+    wsClients.set(ws, clientInfo);
+    logger.info(\`Client connected to WebSocket: \${clientId} (active: \${wsClients.size})\`);
+
+    ws.send(JSON.stringify({ type: "connected", clientId }));
+
+    ws.on("message", (raw) => {
+      try {
+        const msg = JSON.parse(raw.toString()) as WebSocketInboundMessage;
+        const action = msg.action || msg.type;
+
+        if (action === "join") {
+          const room = msg.room;
+          if (room && typeof room === "string") {
+            // Room protection guard: rooms starting with "private:" require valid authentication token
+            if (room.startsWith("private:") && !clientInfo.token) {
+              logger.warn(\`Unauthorized room join attempt for "\${room}" from client \${clientId}\`);
+              ws.send(JSON.stringify({ type: "error", error: "Authentication required for private rooms", room }));
+              return;
+            }
+            clientInfo.rooms.add(room);
+            logger.info(\`Client \${clientId} joined room: "\${room}"\`);
+            ws.send(JSON.stringify({ type: "joined", room }));
+          }
+        } else if (action === "leave") {
+          const room = msg.room;
+          if (room && typeof room === "string") {
+            clientInfo.rooms.delete(room);
+            logger.info(\`Client \${clientId} left room: "\${room}"\`);
+            ws.send(JSON.stringify({ type: "left", room }));
+          }
+        } else if (action === "ping") {
+          ws.send(JSON.stringify({ type: "pong" }));
+        }
+      } catch (err) {
+        logger.warn(\`Failed to parse message from client \${clientId}:\`, err);
+      }
+    });
+
+    ws.on("close", () => {
+      wsClients.delete(ws);
+      logger.info(\`Client disconnected from WebSocket: \${clientId} (remaining: \${wsClients.size})\`);
+    });
+
+    ws.on("error", (err) => {
+      logger.error(\`WebSocket error on client \${clientId}:\`, err);
+    });
+  });
+
+  return wssInstance;
+}
+
+/**
+ * Returns active WebSocket server instance if initialized.
+ */
+export function getWebSocketServer(): WebSocketServer | null {
+  return wssInstance;
+}
+
+/**
+ * Broadcasts an event to WebSocket clients. If room is provided, only broadcasts to clients in that room.
+ */
+export function wsBroadcast(eventName: string, data: JsonValue, room?: string): void {
   logger.info(\`Broadcasting WebSocket event: "\${eventName}"\${room ? \` to room "\${room}"\` : ""}\`, data);
+  const payloadStr = JSON.stringify({
+    event: eventName,
+    data,
+    room,
+    timestamp: new Date().toISOString(),
+  });
+
+  for (const [ws, client] of wsClients.entries()) {
+    if (ws.readyState !== WebSocket.OPEN) continue;
+    if (room && !client.rooms.has(room)) continue;
+
+    try {
+      ws.send(payloadStr);
+    } catch (err) {
+      logger.error(\`Failed to deliver WS message to client \${client.id}:\`, err);
+    }
+  }
 }
 
 /**
  * Broadcasts an event via WebRTC Data Channels.
  */
-export function webrtcBroadcast(eventName: string, data: unknown): void {
+export function webrtcBroadcast(eventName: string, data: JsonValue): void {
   logger.info(\`Broadcasting WebRTC event: "\${eventName}"\`, data);
 }
 `;
@@ -158,12 +279,13 @@ export function generateServerFile(
   const grpcPort = node?.data?.grpcPort || "50051";
 
   let serverCode = `import "dotenv/config";
+import http from "http";
 import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
 import { createLogger } from "@workspace/logger";
 import { router as apiRouter } from "./routes";
 import { initConsumers } from "./consumer";
-import { handleSseConnection } from "./lib";
+import { handleSseConnection, initWebSocketServer } from "./lib";
 
 const logger = createLogger("${serviceName}");
 const app = express();
@@ -211,11 +333,15 @@ initConsumers().catch((err: unknown) => {
   logger.error("Failed to initialize event consumers:", err);
 });
 
-// --- Server Startup ---
-app.listen(PORT, () => {
+// --- Server & WebSocket Startup ---
+const server = http.createServer(app);
+initWebSocketServer(server);
+
+server.listen(PORT, () => {
   logger.info(\`🚀 Service "${serviceName}" operational at http://localhost:\${PORT}\`);
   logger.info(\`📋 Health check available at http://localhost:\${PORT}/health\`);
   logger.info(\`📡 SSE realtime stream at http://localhost:\${PORT}/events\`);
+  logger.info(\`🔌 WebSocket realtime server at ws://localhost:\${PORT}/ws\`);
 });
 `;
 
@@ -228,13 +354,14 @@ const grpcServer = new grpc.Server();
 grpcServer.bindAsync(
   \`0.0.0.0:\${GRPC_PORT}\`,
   grpc.ServerCredentials.createInsecure(),
-  (err, boundPort) => {
+  (err: Error | null, port: number) => {
     if (err) {
-      logger.error(\`Failed to bind gRPC server on port \${GRPC_PORT}\`, { err });
-    } else {
-      logger.info(\`⚡ gRPC server for "${serviceName}" operational on port \${boundPort}\`);
+      logger.error(\`Failed to bind gRPC server on port \${GRPC_PORT}:\`, err);
+      return;
     }
-  },
+    logger.info(\`⚡ gRPC server running at 0.0.0.0:\${port}\`);
+    grpcServer.start();
+  }
 );
 `;
   }
@@ -304,6 +431,7 @@ export function generateConfigFiles(
     dotenv: "^16.4.5",
     zod: "^3.24.2",
     jose: "^5.9.6",
+    ws: "^8.18.0",
   };
 
   if (grpcEnabled) {
@@ -316,6 +444,7 @@ export function generateConfigFiles(
     "@types/express": "^4.17.21",
     "@types/cors": "^2.8.17",
     "@types/node": "^20.11.0",
+    "@types/ws": "^8.5.12",
     "ts-node-dev": "^2.0.0",
     typescript: "^5.3.3",
     vitest: "^1.6.0",
