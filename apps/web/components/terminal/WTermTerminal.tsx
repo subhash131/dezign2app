@@ -118,7 +118,7 @@ export const WTermTerminal = forwardRef<WTermTerminalHandle, WTermTerminalProps>
       theme = "monokai",
       autoScroll = false,
       className = "",
-      placeholder = "Terminal ready. Click to type commands.",
+      placeholder,
       interactive = true,
       rawStream = false,
     },
@@ -511,7 +511,7 @@ export const WTermTerminal = forwardRef<WTermTerminalHandle, WTermTerminalProps>
           className="w-full h-full !rounded-none"
         />
 
-        {logs.length === 0 && (
+        {!interactive && !rawStream && logs.length === 0 && Boolean(placeholder) && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-zinc-500 text-xs italic">
             {placeholder}
           </div>

@@ -59,7 +59,6 @@ export function TerminalTab({
           logs={formattedLogs}
           interactive={true}
           autoScroll={true}
-          placeholder="Terminal active. Type commands or view build logs."
         />
       )}
     </div>

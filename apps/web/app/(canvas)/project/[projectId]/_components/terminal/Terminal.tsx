@@ -35,6 +35,7 @@ export function Terminal({
 }: TerminalProps) {
   const inElectron = isElectron();
   const terminalRefs = useRef<Map<string, WTermTerminalHandle | null>>(new Map());
+  const hasCreatedInitialRef = useRef(false);
 
   // Drawer UI state from local store
   const storeTerminalOpen = useSidebarStore((s) => s.terminalOpen);
@@ -141,13 +142,15 @@ export function Terminal({
 
   // Handle first-time automatic creation of starter terminal
   useEffect(() => {
+    if (hasCreatedInitialRef.current) return;
     if (sessions.length === 0 && (inElectron || files.length > 0)) {
+      hasCreatedInitialRef.current = true;
       createTerminal({
         type: inElectron ? "shell" : "bash",
         title: "Main Terminal",
       });
     }
-  }, [files, formattedProjectName]);
+  }, [files, formattedProjectName, sessions.length, inElectron, createTerminal]);
 
   // Raw combined list of endpoints & detected process ports
   const rawPorts = useMemo(() => {

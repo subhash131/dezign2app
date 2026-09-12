@@ -164,7 +164,6 @@ export function TerminalViewport({
                 autoScroll={false}
                 onData={(data) => onTerminalInput(session.id, data)}
                 onResize={(cols, rows) => onTerminalResize(session.id, cols, rows)}
-                placeholder={`${session.title} ready. Type commands...`}
               />
             </div>
           );

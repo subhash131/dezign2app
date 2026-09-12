@@ -289,6 +289,17 @@ export function useDynamicTerminalSessions({
       }
 
       const currentSessions = store.getSessions(projectId);
+      if (
+        options?.title === "Main Terminal" &&
+        currentSessions.some((s) => s.title === "Main Terminal")
+      ) {
+        const existing = currentSessions.find((s) => s.title === "Main Terminal");
+        if (existing) {
+          store.setActiveSession(projectId, existing.id);
+          return existing.id;
+        }
+      }
+
       const nextIndex = currentSessions.length + 1;
       const defaultTitle =
         options?.title ||
