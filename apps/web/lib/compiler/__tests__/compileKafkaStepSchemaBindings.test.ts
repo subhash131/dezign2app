@@ -246,6 +246,42 @@ describe("Kafka Publish Pipeline Step Schema Bindings", () => {
     expect(code).toContain("const publishResult = await publishMessageSent(\n  body\n);");
     expect(code).not.toContain('"message_sent"');
   });
+
+  it("correctly formats Kafka payload when schema field is named 'message' without spreading primitive string", () => {
+    const step = {
+      id: "step-kafka-publish",
+      name: "publishMessageSentResult",
+      type: "kafka_publish" as const,
+      enabled: true,
+      functionRef: {
+        name: "publishMessageSent",
+        importPath: "@workspace/kafka/publishers",
+      },
+      inputBindings: [
+        {
+          argName: "message",
+          source: { kind: "req_body" as const, field: "message" },
+        },
+        {
+          argName: "conversationId",
+          source: { kind: "req_body" as const, field: "conversationId" },
+        },
+      ],
+      outputVariable: "publishMessageSentResult",
+    };
+
+    const lines = renderPipelineStep(step, {
+      priorOutputs: new Map(),
+      bodyVar: "body",
+    });
+    const code = lines.join("\n");
+
+    // Must NOT spread body.message as an object
+    expect(code).not.toContain("...body.message");
+    // Must assemble discrete properties
+    expect(code).toContain("message: body.message,");
+    expect(code).toContain("conversationId: body.conversationId,");
+  });
 });
 
 

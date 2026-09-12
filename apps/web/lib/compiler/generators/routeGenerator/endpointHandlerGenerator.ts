@@ -208,6 +208,9 @@ export function generateEndpointRouteHandler(
   // Pre-collect pipeline step imports so they land in the file's import block
   // (pipeline steps are processed later, but imports must be at the top)
   const pipelineStepsEarly = ep.pipelineSteps;
+  const hasStreamingStep = Array.isArray(pipelineStepsEarly) && pipelineStepsEarly.some(
+    (s) => s.type === "langgraph_invoke" && s.langGraphStreamingEnabled && s.enabled !== false,
+  );
   if (Array.isArray(pipelineStepsEarly) && pipelineStepsEarly.length > 0) {
     const pipelineImports = collectPipelineImports(pipelineStepsEarly);
     pipelineImports.forEach((names, importPath) => {
@@ -257,7 +260,7 @@ export type ${pascalName}Request =
       body: ${pascalName}Body;
     };
 
-export type ${pascalName}ResponseContext =
+${hasStreamingStep ? `export type ${pascalName}ResponseContext = Response;\n` : `export type ${pascalName}ResponseContext =
   | Response<${pascalName}Response | ${pascalName}ErrorResponse | Record<string, unknown> | string | number | boolean | null | undefined | unknown>
   | {
       status: (code: number) => {
@@ -265,6 +268,7 @@ export type ${pascalName}ResponseContext =
       };
       json: (data?: ${pascalName}Response | ${pascalName}ErrorResponse | Record<string, unknown> | string | number | boolean | null | unknown) => void | Response;
     };
+`}
 
 /**
  * ${ep.type || "GET"} ${path}
@@ -514,12 +518,16 @@ export async function ${handlerName}(
     routeHandlerCode += `  } catch (err) {\n`;
     routeHandlerCode += `    const message = err instanceof Error ? err.message : String(err);\n`;
     routeHandlerCode += `    logger.error("Error in ${method.toUpperCase()} ${path}:", message);\n`;
-    routeHandlerCode += `    if (res.headersSent) {\n`;
-    routeHandlerCode += `      res.write(\`data: \${JSON.stringify({ error: message })}\\n\\n\`);\n`;
-    routeHandlerCode += `      res.end();\n`;
-    routeHandlerCode += `    } else {\n`;
-    routeHandlerCode += `      return res.status(500).json({ error: "Internal Server Error", details: message });\n`;
-    routeHandlerCode += `    }\n`;
+    if (hasStreamingStep) {
+      routeHandlerCode += `    if (res.headersSent) {\n`;
+      routeHandlerCode += `      res.write(\`data: \${JSON.stringify({ error: message })}\\n\\n\`);\n`;
+      routeHandlerCode += `      res.end();\n`;
+      routeHandlerCode += `    } else {\n`;
+      routeHandlerCode += `      return res.status(500).json({ error: "Internal Server Error", details: message });\n`;
+      routeHandlerCode += `    }\n`;
+    } else {
+      routeHandlerCode += `    return res.status(500).json({ error: "Internal Server Error", details: message });\n`;
+    }
     routeHandlerCode += `  }\n}\n`;
 
     return {

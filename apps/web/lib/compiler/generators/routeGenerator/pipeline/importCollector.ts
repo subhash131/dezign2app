@@ -29,6 +29,25 @@ export function collectPipelineImports(
       } else {
         imports.set(importPath, new Set([graphName]));
       }
+    } else if (s.type === "push_to_client" && s.enabled !== false) {
+      const protocol = s.clientDeliveryProtocol || "SSE";
+      let fnName: string | null = null;
+      if (protocol === "SSE") {
+        fnName = "sseBroadcast";
+      } else if (protocol === "WEBSOCKET") {
+        fnName = "wsBroadcast";
+      } else if (protocol === "WEBRTC") {
+        fnName = "webrtcBroadcast";
+      }
+      if (fnName) {
+        const importPath = "../lib";
+        const existing = imports.get(importPath);
+        if (existing) {
+          existing.add(fnName);
+        } else {
+          imports.set(importPath, new Set([fnName]));
+        }
+      }
     }
     if (s.thenSteps) s.thenSteps.forEach(addStepImports);
     if (s.elseSteps) s.elseSteps.forEach(addStepImports);

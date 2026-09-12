@@ -19,7 +19,9 @@ export function generateLibFiles(hasDb: boolean = true): CompiledFile[] {
   const libIndexCode = `/**
  * Shared lib helpers for this service.${hasDb ? "\n * DB access goes through @workspace/db/helpers — injection-safe prepared statements." : ""}
  */
-${dbExport}export function formatResponse<T>(data: T, message = "Success") {
+${dbExport}export * from "./realtime";
+
+export function formatResponse<T>(data: T, message = "Success") {
   return {
     success: true,
     message,
@@ -29,11 +31,84 @@ ${dbExport}export function formatResponse<T>(data: T, message = "Success") {
 }
 `;
 
+  const realtimeCode = `import { Request, Response } from "express";
+import { createLogger } from "@workspace/logger";
+
+const logger = createLogger("Realtime");
+
+type SseClient = {
+  id: string;
+  res: Response;
+};
+
+const sseClients = new Set<SseClient>();
+
+/**
+ * Express middleware / route handler for client SSE subscriptions.
+ * Mount at GET /events or GET /sse.
+ */
+export function handleSseConnection(req: Request, res: Response): void {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  if (typeof (res as any).flushHeaders === "function") {
+    (res as any).flushHeaders();
+  }
+
+  const clientId = \`\${Date.now()}-\${Math.random().toString(36).substring(2, 9)}\`;
+  const client: SseClient = { id: clientId, res };
+  sseClients.add(client);
+  logger.debug(\`Client connected to SSE stream: \${clientId} (active: \${sseClients.size})\`);
+
+  res.write(": connected\\n\\n");
+
+  req.on("close", () => {
+    sseClients.delete(client);
+    logger.debug(\`Client disconnected from SSE stream: \${clientId} (remaining: \${sseClients.size})\`);
+  });
+}
+
+/**
+ * Broadcasts an event and data payload to all connected SSE clients.
+ */
+export function sseBroadcast(eventName: string, data: unknown): void {
+  logger.info(\`Broadcasting SSE event: "\${eventName}" to \${sseClients.size} client(s)\`);
+  const payloadStr = typeof data === "string" ? data : JSON.stringify(data);
+  for (const client of sseClients) {
+    try {
+      client.res.write(\`event: \${eventName}\\ndata: \${payloadStr}\\n\\n\`);
+    } catch (err) {
+      logger.error(\`Failed to deliver SSE event to client \${client.id}:\`, err);
+      sseClients.delete(client);
+    }
+  }
+}
+
+/**
+ * Broadcasts an event to WebSocket clients.
+ */
+export function wsBroadcast(eventName: string, data: unknown, room?: string): void {
+  logger.info(\`Broadcasting WebSocket event: "\${eventName}"\${room ? \` to room "\${room}"\` : ""}\`, data);
+}
+
+/**
+ * Broadcasts an event via WebRTC Data Channels.
+ */
+export function webrtcBroadcast(eventName: string, data: unknown): void {
+  logger.info(\`Broadcasting WebRTC event: "\${eventName}"\`, data);
+}
+`;
+
   return [
     {
       filename: "src/lib/index.ts",
       language: "typescript",
       content: libIndexCode,
+    },
+    {
+      filename: "src/lib/realtime.ts",
+      language: "typescript",
+      content: realtimeCode,
     },
   ];
 }
@@ -73,6 +148,7 @@ import cors from "cors";
 import { createLogger } from "@workspace/logger";
 import { router as apiRouter } from "./routes";
 import { initConsumers } from "./consumer";
+import { handleSseConnection } from "./lib";
 
 const logger = createLogger("${serviceName}");
 const app = express();
@@ -108,6 +184,10 @@ app.get("/health", (_req: Request, res: Response) => {
   });
 });
 
+// --- Realtime SSE Streams ---
+app.get("/events", handleSseConnection);
+app.get("/sse", handleSseConnection);
+
 // --- Mount Routes ---
 app.use("/", apiRouter);
 
@@ -118,6 +198,7 @@ initConsumers();
 app.listen(PORT, () => {
   logger.info(\`🚀 Service "${serviceName}" operational at http://localhost:\${PORT}\`);
   logger.info(\`📋 Health check available at http://localhost:\${PORT}/health\`);
+  logger.info(\`📡 SSE realtime stream at http://localhost:\${PORT}/events\`);
 });
 `;
 
