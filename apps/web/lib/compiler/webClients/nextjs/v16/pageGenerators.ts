@@ -75,10 +75,16 @@ ${sectionsJsx ? `${sectionsJsx}` : `          <Link
     (c) => c.protocol === "SSE" && c.streamUrl,
   );
   const hasSse = sseConnections.length > 0;
-  const hasLogsSection = hasApiActions || hasSse;
+
+  const wsConnections = (pageMeta.realtimeConnections || []).filter(
+    (c) => c.protocol === "WEBSOCKET" && c.streamUrl,
+  );
+  const hasWs = wsConnections.length > 0;
+  const hasRealtime = hasSse || hasWs;
+  const hasLogsSection = hasApiActions || hasRealtime;
 
   const hooksList: string[] = [];
-  if (hasPageLoad || hasSse) {
+  if (hasPageLoad || hasRealtime) {
     hooksList.push("useState", "useEffect");
   } else if (hasLogsSection) {
     hooksList.push("useState");
@@ -250,6 +256,125 @@ ${customListeners ? `${customListeners}\n` : ""}      es.onmessage = (event) => 
     sseEffectsJsx = effectBlocks.join("\n\n") + "\n\n";
   }
 
+  let wsEffectsJsx = "";
+  if (hasWs) {
+    const wsByUrl = new Map<string, typeof wsConnections>();
+    wsConnections.forEach((conn) => {
+      const url = conn.streamUrl!;
+      if (!wsByUrl.has(url)) wsByUrl.set(url, []);
+      wsByUrl.get(url)!.push(conn);
+    });
+
+    const effectBlocks: string[] = [];
+    wsByUrl.forEach((conns, streamUrl) => {
+      const rooms = Array.from(
+        new Set(
+          conns
+            .map((c) => c.room?.trim())
+            .filter((r): r is string => Boolean(r)),
+        ),
+      );
+
+      const joinStatements = rooms
+        .map((r) => `        ws?.send(JSON.stringify({ action: "join", room: "${r}" }));`)
+        .join("\n");
+
+      const leaveStatements = rooms
+        .map((r) => `        if (ws.readyState === WebSocket.OPEN) { ws.send(JSON.stringify({ action: "leave", room: "${r}" })); }`)
+        .join("\n");
+
+      effectBlocks.push(`  // Real-time WebSocket listener for ${conns[0]?.sourceServiceName || "Service"}
+  useEffect(() => {
+    let ws: WebSocket | null = null;
+    let isMounted = true;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+    async function initWs() {
+      if (!isMounted) return;
+      try {
+        ${hasAuth ? `const rawToken = await getAuthBearerToken();
+        const token = rawToken ? rawToken.replace(/^Bearer\\s+/i, "") : null;
+        const targetUrl = token ? \`${streamUrl}?token=\${encodeURIComponent(token)}\` : "${streamUrl}";` : `const targetUrl = "${streamUrl}";`}
+        ws = new WebSocket(targetUrl);
+
+        ws.onopen = () => {
+          if (!isMounted) return;
+          console.log("[WebSocket] Connected to " + targetUrl);
+${joinStatements ? `${joinStatements}\n` : ""}        };
+
+        ws.onmessage = (event) => {
+          if (!isMounted) return;
+          let parsed: unknown = event.data;
+          try {
+            parsed = JSON.parse(event.data);
+          } catch {
+            parsed = event.data;
+          }
+
+          const parsedObj =
+            typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+              ? (parsed as Record<string, unknown>)
+              : null;
+          const evtName =
+            parsedObj && typeof parsedObj.event === "string"
+              ? parsedObj.event
+              : parsedObj && typeof parsedObj.type === "string"
+              ? String(parsedObj.type)
+              : "message";
+          const evtData =
+            parsedObj && "data" in parsedObj && parsedObj.data !== undefined
+              ? parsedObj.data
+              : parsed;
+
+          setTriggerLogs((prev) => [
+            {
+              id: Math.random().toString(36).substring(2, 9),
+              eventName: evtName,
+              eventType: "WebSocket",
+              timestamp: new Date().toLocaleTimeString(),
+              url: "${streamUrl}",
+              method: "WS",
+              data: evtData,
+            },
+            ...prev,
+          ]);
+        };
+
+        ws.onerror = (_event) => {
+          if (!isMounted) return;
+          console.warn("[WebSocket] Error on stream (${streamUrl})");
+        };
+
+        ws.onclose = (_event) => {
+          if (!isMounted) return;
+          console.warn("[WebSocket] Connection closed (${streamUrl}). Reconnecting in 3s...");
+          reconnectTimer = setTimeout(initWs, 3000);
+        };
+      } catch (err) {
+        console.error("[WebSocket] Failed to initialize WebSocket (${streamUrl}):", err);
+        if (isMounted) {
+          reconnectTimer = setTimeout(initWs, 5000);
+        }
+      }
+    }
+
+    initWs();
+
+    return () => {
+      isMounted = false;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (ws) {
+        try {
+${leaveStatements ? `${leaveStatements}\n` : ""}          ws.close();
+        } catch {}
+      }
+    };
+  }, []);`);
+    });
+
+    wsEffectsJsx = effectBlocks.join("\n\n") + "\n\n";
+  }
+
   const triggerHandlerJsx = hasApiActions
     ? `  const handleTriggerAction = async (
     eventName: string,
@@ -320,6 +445,9 @@ ${customListeners ? `${customListeners}\n` : ""}      es.onmessage = (event) => 
               ${hasSse ? `<Badge variant="outline" className="text-xs flex items-center gap-1.5 font-mono text-emerald-600 dark:text-emerald-400 border-emerald-500/30 bg-emerald-500/10">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live Stream Active
               </Badge>` : ""}
+              ${hasWs ? `<Badge variant="outline" className="text-xs flex items-center gap-1.5 font-mono text-cyan-600 dark:text-cyan-400 border-cyan-500/30 bg-cyan-500/10">
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse" /> WebSocket Connected
+              </Badge>` : ""}
             </div>
             {triggerLogs.length > 0 && (
               <Button
@@ -338,7 +466,7 @@ ${customListeners ? `${customListeners}\n` : ""}      es.onmessage = (event) => 
           <CardContent>
             {triggerLogs.length === 0 ? (
               <div className="text-muted-foreground text-sm italic py-6 text-center border border-dashed border-border rounded-lg">
-                ${hasSse ? "Listening for real-time events..." : "No activity logged yet."}
+                ${hasRealtime ? "Listening for real-time events..." : "No activity logged yet."}
               </div>
             ) : (
               <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
@@ -350,6 +478,10 @@ ${customListeners ? `${customListeners}\n` : ""}      es.onmessage = (event) => 
                         {log.eventType === "SSE" ? (
                           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded font-mono uppercase bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
                             SSE
+                          </span>
+                        ) : log.eventType === "WebSocket" ? (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded font-mono uppercase bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30">
+                            WS
                           </span>
                         ) : (
                           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded font-mono uppercase bg-primary/10 text-primary border border-primary/20">
@@ -388,10 +520,10 @@ ${customListeners ? `${customListeners}\n` : ""}      es.onmessage = (event) => 
   if (cardComponentsNeeded) {
     uiImports.push(`import { Card, CardHeader, CardTitle, CardContent } from "@workspace/ui/components/card";`);
   }
-  if (hasPageLoad || hasSse) {
+  if (hasPageLoad || hasRealtime) {
     uiImports.push(`import { Badge } from "@workspace/ui/components/badge";`);
   }
-  if (hasAuth && hasPageLoad) {
+  if (hasAuth && (hasPageLoad || hasWs)) {
     uiImports.push(`import { getAuthBearerToken } from "@/lib/auth-token";`);
   }
 
@@ -411,7 +543,7 @@ type JSONValue = JSONPrimitive | JSONObject | JSONArray;
 
 ${reactImport}
 ${uiImports.join("\n")}${uiImports.length > 0 ? "\n" : ""}${allImports ? `${allImports}\n` : ""}${jsonValueTypeDecl}${namedTypeDecl}export default function ${pageMeta.componentName}() {
-${pageLoadStateJsx}${triggerLogsStateJsx}${pageLoadEffectJsx}${sseEffectsJsx}${triggerHandlerJsx}  return (
+${pageLoadStateJsx}${triggerLogsStateJsx}${pageLoadEffectJsx}${sseEffectsJsx}${wsEffectsJsx}${triggerHandlerJsx}  return (
     <main className="min-h-screen bg-background text-foreground p-6 md:p-10 font-sans">
       <div className="max-w-5xl mx-auto space-y-8">
 ${pageLoadSectionJsx}${sectionsJsx ? `        {/* Page Sections */}\n${sectionsJsx}\n` : ""}${triggerLogsSectionJsx}      </div>
@@ -419,5 +551,4 @@ ${pageLoadSectionJsx}${sectionsJsx ? `        {/* Page Sections */}\n${sectionsJ
   );
 }
 `;
-
 }

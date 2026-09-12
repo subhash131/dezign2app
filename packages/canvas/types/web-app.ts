@@ -1,6 +1,7 @@
 import type { UIEventItem, PageSection, Parameter, Schema } from "./simulation";
 import type { WebAppZone, ProtectionRule, PaymentsPlanConfig } from "./auth";
 import type { ClientDeliveryProtocol } from "./messaging";
+import type { RealtimeProtocol } from "./realtime";
 import type { NodeDependencyItem } from "./services";
 
 export type SectionIconName =
@@ -51,7 +52,7 @@ export interface PresetTriggerOption {
  */
 export interface RealtimeConnection {
   id: string;
-  protocol: ClientDeliveryProtocol | "POLLING";
+  protocol: RealtimeProtocol;
   /** SSE event name or WebSocket message type to listen for (e.g. "order.updated") */
   eventName?: string;
   /** WebSocket broadcast room / channel key */

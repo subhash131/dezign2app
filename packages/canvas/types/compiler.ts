@@ -1,6 +1,7 @@
 import type { ReusableFunction, BackendNode } from "./nodes";
 import type { BackendEdge } from "./edges";
 import type { Endpoint } from "../schemas";
+import type { RealtimeProtocol } from "./realtime";
 
 export interface ServiceInfo {
   id: string;
@@ -146,7 +147,7 @@ export interface LinkedPageRefInfo {
 
 export interface LinkedRealtimeConnectionInfo {
   connectionId: string;
-  protocol: "SSE" | "WEBSOCKET" | "WEBRTC" | "POLLING" | "API_PUSH";
+  protocol: RealtimeProtocol;
   eventName?: string;
   room?: string;
   sourceServiceNodeId?: string;

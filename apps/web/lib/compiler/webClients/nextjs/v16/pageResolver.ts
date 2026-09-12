@@ -6,6 +6,7 @@ import {
   AnyMessagingResource,
   RealtimeConnection,
   PipelineStep,
+  RealtimeProtocol,
 } from "@workspace/canvas/types";
 import { PageInfo, LinkedRealtimeConnectionInfo } from "./types";
 import { labelToSlug, slugToComponentName } from "./slugUtils";
@@ -175,9 +176,19 @@ export function resolvePagesInfo(
           step.clientDeliveryTargetPageId === node.id
         ) {
           const srcNode = allNodes.find((n) => n.id === srcNodeId);
+          const stepProtocol = step.clientDeliveryProtocol;
+          const deliveryProto: RealtimeProtocol =
+            stepProtocol === "WEBSOCKET"
+              ? "WEBSOCKET"
+              : stepProtocol === "WEBRTC"
+              ? "WEBRTC"
+              : stepProtocol === "API_PUSH"
+              ? "API_PUSH"
+              : "SSE";
+
           derivedConnections.push({
             id: step.id,
-            protocol: (step.clientDeliveryProtocol as any) || "SSE",
+            protocol: deliveryProto,
             eventName: step.clientDeliveryEventName || sourceItemName || "message",
             room: step.clientDeliveryRoom,
             description: sourceItemName || step.name,
@@ -256,11 +267,13 @@ export function resolvePagesInfo(
       if (!serviceNode) {
         for (const n of allNodes) {
           if (n.type === "service") {
+            const endpoints = Array.isArray(n.data?.endpoints) ? (n.data.endpoints as Endpoint[]) : [];
+            const consumedEvents = Array.isArray(n.data?.consumedEvents) ? (n.data.consumedEvents as AnyMessagingResource[]) : [];
             const hasMatch =
-              (n.data?.endpoints as any[])?.some((ep) =>
+              endpoints.some((ep) =>
                 JSON.stringify(ep.pipelineSteps || []).includes(conn.id),
               ) ||
-              (n.data?.consumedEvents as any[])?.some((ev) =>
+              consumedEvents.some((ev) =>
                 JSON.stringify(ev.pipelineSteps || []).includes(conn.id),
               );
             if (hasMatch) {
@@ -278,12 +291,31 @@ export function resolvePagesInfo(
         }
       }
 
+      const rawProtocol = String(conn.protocol || "SSE").toUpperCase();
+      const protocol: RealtimeProtocol =
+        rawProtocol === "WS" || rawProtocol === "WEBSOCKET"
+          ? "WEBSOCKET"
+          : rawProtocol === "WEBRTC"
+          ? "WEBRTC"
+          : rawProtocol === "POLLING"
+          ? "POLLING"
+          : rawProtocol === "API_PUSH"
+          ? "API_PUSH"
+          : "SSE";
+
       const port = serviceNode ? getServicePort(serviceNode) : undefined;
-      const streamUrl = port ? `http://localhost:${port}/events` : undefined;
+      let streamUrl: string | undefined = undefined;
+      if (port) {
+        if (protocol === "WEBSOCKET") {
+          streamUrl = `ws://localhost:${port}/ws`;
+        } else {
+          streamUrl = `http://localhost:${port}/events`;
+        }
+      }
 
       return {
         connectionId: conn.id,
-        protocol: conn.protocol || "SSE",
+        protocol,
         eventName: conn.eventName,
         room: conn.room,
         sourceServiceNodeId: serviceNode?.id || conn.sourceServiceNodeId,
