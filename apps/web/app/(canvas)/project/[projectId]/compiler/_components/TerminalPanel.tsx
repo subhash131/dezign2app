@@ -34,6 +34,7 @@ export function TerminalPanel({
 }: TerminalPanelProps) {
   const terminalRefs = useRef<Map<string, WTermTerminalHandle | null>>(new Map());
   const inElectron = isElectron();
+  const hasCreatedInitialRef = useRef(false);
 
   // 1. Persistent Tab Selection
   const [currentTab, setCurrentTab] = useState<TerminalPanelTab>(() => {
@@ -125,7 +126,9 @@ export function TerminalPanel({
 
   // Automatically ensure at least one session exists when projectId is provided
   useEffect(() => {
+    if (hasCreatedInitialRef.current) return;
     if (projectId && sessions.length === 0) {
+      hasCreatedInitialRef.current = true;
       createTerminal({
         type: inElectron ? "shell" : "bash",
         title: "Main Terminal",
