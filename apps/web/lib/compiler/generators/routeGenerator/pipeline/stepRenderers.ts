@@ -169,7 +169,7 @@ export function renderKafkaPublishStep(
       b.argName === "_spread" ||
       b.argName === "..." ||
       ((b.argName === "payload" || b.argName === "data") &&
-        (!b.source?.field || b.source.field.trim() === "") &&
+        (!b.source || !("field" in b.source) || !b.source.field || b.source.field.trim() === "") &&
         inputBindings.some(
           (other) =>
             other !== b &&
@@ -190,15 +190,18 @@ export function renderKafkaPublishStep(
     : JSON.stringify(step.name || "default-topic");
 
   let payloadExpr: string;
+  const firstField = fieldBindings[0];
+  const firstFieldSourceField = firstField?.source && "field" in firstField.source ? firstField.source.field : undefined;
   if (
     fieldBindings.length === 1 &&
+    firstField &&
     !spreadBinding &&
-    (!fieldBindings[0].source?.field || fieldBindings[0].source.field.trim() === "") &&
-    (fieldBindings[0].argName === "payload" ||
-      fieldBindings[0].argName === "data" ||
-      fieldBindings[0].argName === "message")
+    (!firstFieldSourceField || firstFieldSourceField.trim() === "") &&
+    (firstField.argName === "payload" ||
+      firstField.argName === "data" ||
+      firstField.argName === "message")
   ) {
-    payloadExpr = resolveBinding(fieldBindings[0], ctx);
+    payloadExpr = resolveBinding(firstField, ctx);
   } else if (fieldBindings.length > 0 || spreadBinding) {
     const fieldsStr = fieldBindings
       .map((b) => `    ${b.argName}: ${resolveBinding(b, ctx)},`)
@@ -546,7 +549,7 @@ export function renderPushToClientStep(
       b.argName === "_spread" ||
       b.argName === "..." ||
       ((b.argName === "payload" || b.argName === "data") &&
-        (!b.source?.field || b.source.field.trim() === "") &&
+        (!b.source || !("field" in b.source) || !b.source.field || b.source.field.trim() === "") &&
         inputBindings.some(
           (other) =>
             other !== b &&
@@ -558,15 +561,18 @@ export function renderPushToClientStep(
   const fieldBindings = inputBindings.filter((b) => b !== spreadBinding);
 
   let payloadExpr: string;
+  const firstClientField = fieldBindings[0];
+  const firstClientFieldSourceField = firstClientField?.source && "field" in firstClientField.source ? firstClientField.source.field : undefined;
   if (
     fieldBindings.length === 1 &&
+    firstClientField &&
     !spreadBinding &&
-    (!fieldBindings[0].source?.field || fieldBindings[0].source.field.trim() === "") &&
-    (fieldBindings[0].argName === "payload" ||
-      fieldBindings[0].argName === "data" ||
-      fieldBindings[0].argName === "message")
+    (!firstClientFieldSourceField || firstClientFieldSourceField.trim() === "") &&
+    (firstClientField.argName === "payload" ||
+      firstClientField.argName === "data" ||
+      firstClientField.argName === "message")
   ) {
-    payloadExpr = resolveBinding(fieldBindings[0], ctx);
+    payloadExpr = resolveBinding(firstClientField, ctx);
   } else if (fieldBindings.length > 0 || spreadBinding) {
     const fieldsStr = fieldBindings
       .map((b) => `    ${b.argName}: ${resolveBinding(b, ctx)},`)
