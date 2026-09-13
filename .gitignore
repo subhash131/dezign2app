@@ -34,6 +34,7 @@ out/
 build
 dist
 .source/
+.next-build-env.json
 
 # Electron build outputs (never commit these — they go to GitHub Releases via CI)
 dist-electron/
