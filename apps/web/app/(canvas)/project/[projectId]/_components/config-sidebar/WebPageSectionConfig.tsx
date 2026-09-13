@@ -10,6 +10,7 @@ import {
   SectionGeneralTab,
   SectionDependenciesTab,
   SectionActionsTab,
+  SectionStateTab,
   SectionUiDesignTab,
   useSectionState,
   useSectionActions,
@@ -41,6 +42,8 @@ export const WebPageSectionConfig: React.FC<WebPageSectionConfigProps> = ({ id, 
     primaryImageUrl,
     setPrimaryImageUrl,
     libraries,
+    states,
+    handleUpdateStates,
     handleUpdate,
     handleDeleteSection,
     handleAddLibrary,
@@ -95,6 +98,7 @@ export const WebPageSectionConfig: React.FC<WebPageSectionConfigProps> = ({ id, 
         <SectionTabsNav
           packagesCount={libraries.length}
           actionsCount={currentActions.length}
+          statesCount={states.length}
         />
 
         {/* 1. General Tab */}
@@ -171,7 +175,20 @@ export const WebPageSectionConfig: React.FC<WebPageSectionConfigProps> = ({ id, 
           />
         </TabsContent>
 
-        {/* 4. UI Design Tab */}
+        {/* 4. State Tab */}
+        <TabsContent value="state" className="flex-1 overflow-hidden p-0 m-0 outline-none flex flex-col">
+          <SectionStateTab
+            states={states}
+            renderMode={renderMode}
+            onUpdateStates={handleUpdateStates}
+            onUpdateRenderMode={(val) => {
+              setRenderMode(val);
+              handleUpdate({ renderMode: val });
+            }}
+          />
+        </TabsContent>
+
+        {/* 5. UI Design Tab */}
         <TabsContent value="ui-design" className="flex-1 overflow-hidden p-0 m-0 outline-none flex flex-col">
           <SectionUiDesignTab
             sectionName={section.name}

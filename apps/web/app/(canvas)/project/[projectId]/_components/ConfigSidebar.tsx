@@ -37,6 +37,7 @@ import { RedisCacheRefConfig } from "./config-sidebar/RedisCacheRefConfig";
 import { HookConfig } from "./config-sidebar/HookConfig";
 import { TypesConfig } from "./config-sidebar/TypesConfig";
 import { WebPageRealtimeConnectionConfig } from "./config-sidebar/WebPageRealtimeConnectionConfig";
+import { StateStoreConfig } from "./config-sidebar/StateStoreConfig";
 
 export const ConfigSidebar = () => {
   const activeConfigItem = useBackendCanvasStore((s) => s.activeConfigItem);
@@ -256,6 +257,8 @@ export const ConfigSidebar = () => {
             <TransformerConfig id={id} nodeId={nodeId} />
           ) : type === "hook" || type === "hook_ref" ? (
             <HookConfig id={id} nodeId={nodeId} />
+          ) : type === "state_store" ? (
+            <StateStoreConfig id={id} nodeId={nodeId} />
           ) : type === "types" ? (
             <TypesConfig
               id={id}

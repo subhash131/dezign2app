@@ -60,7 +60,6 @@ export interface PublishedEventItem {
   topic?: string;
   payloadSchema?: Schema;
   pipelineSteps?: PipelineStepDraft[];
-  [key: string]: unknown;
 }
 
 export interface ConsumedEventItem {
@@ -79,7 +78,6 @@ export interface ConsumedEventItem {
   pipelineSteps?: PipelineStepDraft[];
   nodeId?: string;
   variant?: "consume" | "publish";
-  [key: string]: unknown;
 }
 
 export interface CanvasServiceNodeData {
@@ -107,7 +105,6 @@ export interface CanvasServiceNodeData {
   inputs?: { id: string; name: string }[];
   logic?: { id: string; name: string }[];
   outputs?: { id: string; name: string }[];
-  actions?: { id: string; name: string }[];
   publishedEvents?: PublishedEventItem[];
   consumedEvents?: ConsumedEventItem[];
   /** Local data-transformation helper functions attached to this service */

@@ -74,6 +74,8 @@ export type HandleKind =
   | "slot-out"
   | "type-out"
   | "type-in"
+  | "store-out"
+  | "store-in"
 
   // --- Fallback ---
   | "unknown";

@@ -39,6 +39,7 @@ import {
 import {
   hookNodeDataSchema,
   hookRefDataSchema,
+  stateStoreNodeDataSchema,
 } from "./frontend";
 
 export const nodeDataSchemas: Record<string, z.ZodSchema> = {
@@ -79,4 +80,5 @@ export const nodeDataSchemas: Record<string, z.ZodSchema> = {
   transformer_ref: transformerRefDataSchema,
   hook: hookNodeDataSchema,
   hook_ref: hookRefDataSchema,
+  state_store: stateStoreNodeDataSchema,
 };

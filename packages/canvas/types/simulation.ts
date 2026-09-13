@@ -34,12 +34,23 @@ export type ParameterType = z.infer<typeof parameterTypeEnum>;
 
 
 // UI Specific Types
+export type StateVariableType = "string" | "number" | "boolean" | "array" | "object";
+
+export interface SectionStateVariable {
+  id: string;
+  name: string;
+  type: StateVariableType;
+  defaultValue?: string | number | boolean | null;
+  description?: string;
+}
+
 export type PageSection = {
   id: string;
   name: string;
   renderMode?: "server" | "client";
   loadStrategy?: "eager" | "dynamic" | "dynamic-no-ssr";
   actions: UIEventItem[];
+  states?: SectionStateVariable[];
   description?: string;
   uiPrompt?: string;
   libraries?: string[];
@@ -68,6 +79,14 @@ export type UIEventItem = {
   uiPrompt?: string;
   libraries?: string[];
   renderMode?: "server" | "client";
+  // State Store action binding
+  storeActionBinding?: {
+    storeNodeId?: string;
+    storeName?: string;
+    actionId?: string;
+    actionName?: string;
+    actionType?: "set" | "append" | "remove" | "toggle" | "custom";
+  };
   // SSE config (when event === "sse")
   sseConfig?: {
     reconnectStrategy?: "none" | "exponential" | "linear";
@@ -144,10 +163,10 @@ export interface TestCaseItem {
   request?: {
     headers?: Record<string, string>;
     params?: Record<string, string>;
-    body?: unknown;
+    body?: JSONValue;
   };
   expectedStatus?: number;
-  expectedBody?: unknown;
+  expectedBody?: JSONValue;
 }
 
 // --- AI Adapter Types ---
@@ -233,7 +252,7 @@ export interface EndpointInputType {
   queryParams?: ParameterInputType[];
   requestBody?: { fields: ParameterInputType[]; rawJson?: string };
   responseBody?: { fields: ParameterInputType[]; rawJson?: string };
-  simulationOutput?: unknown;
+  simulationOutput?: JSONValue;
   processingSteps?: {
     id?: string;
     text: string;

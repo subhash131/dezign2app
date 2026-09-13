@@ -375,6 +375,16 @@ export const SectionBlock = ({
             {loadStrategy === "dynamic-no-ssr" ? "no-ssr" : loadStrategy}
           </button>
 
+          {/* States Count Badge */}
+          {Boolean(section.states?.length) && (
+            <span
+              className="text-[8px] font-mono px-1 py-0.2 rounded border bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/30 font-medium cursor-default"
+              title={`${section.states!.length} state variable${section.states!.length === 1 ? "" : "s"} defined (${section.states!.map((s) => s.name).join(", ")})`}
+            >
+              {section.states!.length} {section.states!.length === 1 ? "state" : "states"}
+            </span>
+          )}
+
           {/* Add Action to section */}
           <button
             type="button"

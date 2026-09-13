@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useSectionCollapseStore } from "@/lib/stores/sectionCollapseStore";
-import { PageSection, UIEventItem } from "@/types/canvas";
+import { PageSection, UIEventItem, SectionStateVariable } from "@/types/canvas";
 import { SectionPreset } from "@workspace/canvas";
 import { toast } from "sonner";
 import {
@@ -67,6 +67,7 @@ export function useSectionState({ id, nodeId }: UseSectionStateProps) {
     section?.primaryImageUrl
   );
   const [libraries, setLibraries] = useState<string[]>(section?.libraries || []);
+  const [states, setStates] = useState<SectionStateVariable[]>(section?.states || []);
 
   useEffect(() => {
     if (section) {
@@ -78,6 +79,7 @@ export function useSectionState({ id, nodeId }: UseSectionStateProps) {
       setImages(section.images || []);
       setPrimaryImageUrl(section.primaryImageUrl);
       setLibraries(section.libraries || []);
+      setStates(section.states || []);
     }
   }, [section]);
 
@@ -85,6 +87,11 @@ export function useSectionState({ id, nodeId }: UseSectionStateProps) {
     if (!parentNode) return;
     const updated = sections.map((s) => (s.id === id ? { ...s, ...changes } : s));
     updateNode(nodeId, { data: { ...parentNode.data, sections: updated } });
+  };
+
+  const handleUpdateStates = (newStates: SectionStateVariable[]) => {
+    setStates(newStates);
+    handleUpdate({ states: newStates });
   };
 
   const handleDeleteSection = () => {
@@ -257,6 +264,9 @@ export function useSectionState({ id, nodeId }: UseSectionStateProps) {
     setPrimaryImageUrl,
     libraries,
     setLibraries,
+    states,
+    setStates,
+    handleUpdateStates,
     handleUpdate,
     handleDeleteSection,
     handleAddLibrary,

@@ -6,6 +6,7 @@ export function generateRootLayout(
   projectName: string,
   pagesNavLinks?: string,
   showNav: boolean = false,
+  hasProviders: boolean = false,
 ): string {
   const navBar = showNav && pagesNavLinks && pagesNavLinks.trim().length > 0
     ? `\n        <nav className="border-b border-border bg-background/80 backdrop-blur sticky top-0 z-50 px-6 py-3">
@@ -20,7 +21,12 @@ export function generateRootLayout(
         </nav>`
     : "";
 
-  return `import type { Metadata } from "next";${showNav && pagesNavLinks ? `\nimport Link from "next/link";` : ""}
+  const providersImport = hasProviders ? `\nimport { AppProviders } from "./providers";` : "";
+  const childrenJsx = hasProviders
+    ? `<AppProviders>{children}</AppProviders>`
+    : `{children}`;
+
+  return `import type { Metadata } from "next";${showNav && pagesNavLinks ? `\nimport Link from "next/link";` : ""}${providersImport}
 import "@workspace/ui/globals.css";
 
 export const metadata: Metadata = {
@@ -36,7 +42,9 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className="bg-background text-foreground min-h-screen antialiased flex flex-col font-sans">${navBar}
-        <div className="flex-1">{children}</div>
+        <div className="flex-1">
+          ${childrenJsx}
+        </div>
       </body>
     </html>
   );

@@ -151,6 +151,8 @@ export function getNodeDimensions(node: LayoutNode): {
     case "vector_db_ref":
     case "redis-cache":
       return { width: 280, height: 80 };
+    case "state_store":
+      return { width: 240, height: 75 };
     case "end":
     case "END":
       return { width: 140, height: 60 };

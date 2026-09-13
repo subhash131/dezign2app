@@ -227,6 +227,18 @@ export const clientEventInputSchema = z.object({
   wsConfig: wsConfigSchema.optional(),
   webRtcConfig: webRtcConfigSchema.optional(),
   pollingConfig: pollingConfigSchema.optional(),
+  storeActionBinding: z
+    .object({
+      storeNodeId: z.string(),
+      actionId: z.string(),
+      storeName: z.string().optional(),
+      actionName: z.string().optional(),
+      actionType: z
+        .enum(["set", "append", "remove", "toggle", "custom"])
+        .optional(),
+      payloadExpr: z.string().optional(),
+    })
+    .optional(),
 });
 
 export const webPageEventSchema = clientEventInputSchema;
@@ -237,6 +249,20 @@ export const pageSectionSchema = z.object({
   renderMode: z.enum(["server", "client"]).optional().describe("Render mode for this component"),
   loadStrategy: z.enum(["eager", "dynamic", "dynamic-no-ssr"]).optional().describe("Loading strategy"),
   actions: z.array(webPageEventSchema).describe("Interactive actions inside this section"),
+  states: z
+    .array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        type: z.enum(["string", "number", "boolean", "array", "object"]),
+        defaultValue: z
+          .union([z.string(), z.number(), z.boolean(), z.null()])
+          .optional(),
+        description: z.string().optional(),
+      }),
+    )
+    .optional()
+    .describe("Local useState variables inside this section"),
   description: z.string().optional().describe("Functional description of what this section does"),
   uiPrompt: z.string().optional().describe("Visual styling and theme prompt for this section"),
   libraries: z.array(z.string()).optional().describe("Third-party libraries used in this section"),

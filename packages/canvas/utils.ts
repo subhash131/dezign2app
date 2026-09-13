@@ -49,6 +49,7 @@ const ALL_BACKEND_NODE_TYPES = [
   "hook",
   "hook_ref",
   "types",
+  "state_store",
 ] as const;
 
 export function isBackendNode(type: string): type is BackendNodeType {
