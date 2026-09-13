@@ -139,7 +139,16 @@ export function resolveLinkedEndpoint(
     let path = rawPath.startsWith("/") ? rawPath : `/${rawPath}`;
     path = path.replace(/\s+/g, "-");
 
-    const fullUrl = `http://localhost:${targetPort}${path}`;
+    if (targetNode.data?.techStack === "nextjs") {
+      if (!path.startsWith("/api/") && path !== "/api") {
+        path = `/api${path.startsWith("/") ? path : `/${path}`}`;
+      }
+    }
+
+    const isColocated =
+      targetNode.data?.techStack === "nextjs" &&
+      allNodes.some((n) => n.type === "webApp");
+    const fullUrl = isColocated ? path : `http://localhost:${targetPort}${path}`;
 
     const requireAuth = ep ? ep.requireAuth !== false : true;
 

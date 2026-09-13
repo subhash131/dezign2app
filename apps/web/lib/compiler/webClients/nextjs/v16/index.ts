@@ -23,6 +23,8 @@ import {
 } from "./pageFileGenerator";
 import { generateZustandStores } from "./storeGenerators";
 import { resolveAppProviders } from "./providerGenerators";
+import { isServiceAssociatedWithWebApp } from "./serviceResolver";
+import { generateNextjsRoutes } from "../../../services/nextjs/v16/routeGenerator";
 import { GlobalStoreDefinition, NodeDependencyItem } from "@workspace/canvas/types";
 
 export type { LinkedEndpointInfo, LinkedPageRefInfo };
@@ -196,9 +198,15 @@ export function compileNextjsV16WebClient(
     source: "manual" as const,
   }));
 
+  // Gather Service nodes with techStack: "nextjs" associated with this webApp
+  const associatedNextjsServiceNodes = (allNodes || []).filter((n) =>
+    isServiceAssociatedWithWebApp(n, webAppNode, allNodes, allEdges, webClientNodes),
+  );
+
   const allWebCustomDeps = [
     ...(webAppNode?.data?.customDependencies || []),
     ...webClientNodes.flatMap((p) => p.data?.customDependencies || []),
+    ...associatedNextjsServiceNodes.flatMap((s) => s.data?.customDependencies || []),
     ...extraDepsFromSectionsAndActions,
     ...storeDeps,
     ...providerDeps,
@@ -286,6 +294,29 @@ export function compileNextjsV16WebClient(
     authNode,
   });
   files.push(...pageFiles);
+
+  // 8. Colocated Next.js Service Route Handlers
+  associatedNextjsServiceNodes.forEach((svcNode) => {
+    let svcEndpoints = endpoints.filter((ep) => ep.nodeId === svcNode.id);
+    if (svcEndpoints.length === 0 && svcNode.data?.endpoints) {
+      svcEndpoints = (svcNode.data.endpoints as Endpoint[]).map((ep) => ({
+        ...ep,
+        nodeId: svcNode.id,
+      }));
+    }
+
+    if (svcEndpoints.length > 0) {
+      const svcRoutes = generateNextjsRoutes({
+        serviceName: svcNode.data?.label || "api",
+        nodeEndpoints: svcEndpoints,
+        serviceNode: svcNode,
+        allNodes,
+        allEdges,
+        hasDb,
+      });
+      files.push(...svcRoutes);
+    }
+  });
 
   // 9. Web page E2E Tests
   files.push(

@@ -34,6 +34,10 @@ CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port \${PORT}"]
 `;
   }
 
+  if (techStack === "nextjs") {
+    return generateNextjsDockerfile(folderName, port);
+  }
+
   // Node.js / Express or LangGraph (Turborepo Multi-Stage)
   return `# ==============================================================================
 # Express / Node.js Microservice Dockerfile (Turborepo Multi-Stage)
