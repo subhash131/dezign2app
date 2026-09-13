@@ -151,6 +151,7 @@ export type ConfigItemType =
   | "redis_cache"
   | "vector_db_ref"
   | "realtimeConnection"
+  | "state_store"
   | "types";
 
 export interface ActiveConfigItem {

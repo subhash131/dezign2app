@@ -46,6 +46,18 @@ export function isPathMatch(path: string, argName: string): boolean {
   return cleanPath.length > 0 && cleanPath === cleanArg;
 }
 
+function isSchemaField(
+  val: JSONValue,
+): val is JSONObject & { name: string; type?: string } {
+  return (
+    typeof val === "object" &&
+    val !== null &&
+    !Array.isArray(val) &&
+    typeof val.name === "string" &&
+    val.name.trim().length > 0
+  );
+}
+
 export function extractPathsFromObject(
   obj: JSONValue | JSONObject | undefined | null,
   prefix = "",
@@ -345,9 +357,12 @@ export function getAvailableSources(
         const errSchema = targetExtNode.data.errorResponseSchema;
         if (typeof errSchema === "object" && errSchema !== null) {
           if (Array.isArray(errSchema.fields)) {
-            errSchema.fields.forEach((f: { name?: string; type?: string }) => {
-              if (f.name && !stepPaths.some((p) => p.path === `error.${f.name}`)) {
-                stepPaths.push({ path: `error.${f.name}`, type: f.type || "string" });
+            errSchema.fields.forEach((f) => {
+              if (isSchemaField(f)) {
+                const fieldType = typeof f.type === "string" ? f.type : "string";
+                if (!stepPaths.some((p) => p.path === `error.${f.name}`)) {
+                  stepPaths.push({ path: `error.${f.name}`, type: fieldType });
+                }
               }
             });
           } else {

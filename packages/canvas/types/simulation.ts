@@ -40,7 +40,7 @@ export interface SectionStateVariable {
   id: string;
   name: string;
   type: StateVariableType;
-  defaultValue?: string | number | boolean | null;
+  defaultValue?: JSONValue;
   description?: string;
 }
 

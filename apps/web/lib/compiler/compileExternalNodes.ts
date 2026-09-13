@@ -1,5 +1,5 @@
 import { BackendNode, BackendEdge } from "@/types/canvas";
-import { CompiledFile, ReusableFunction } from "@workspace/canvas/types";
+import { CompiledFile, ReusableFunction, JSONValue, JSONObject } from "@workspace/canvas/types";
 import { toPascalCase, toVarName } from "./utils";
 import { parseRelaxedJson } from "./generators/routeGenerator/jsonInterpolation";
 
@@ -13,6 +13,12 @@ export interface CompiledExternalResult {
 }
 
 const GLOBAL_EXTERNAL_PKG = "@workspace/external-apis";
+
+function isExternalField(
+  val: JSONValue,
+): val is JSONObject & { name?: string; type?: string; required?: boolean } {
+  return typeof val === "object" && val !== null && !Array.isArray(val);
+}
 
 function mapTypeToTs(type: string): string {
   const t = (type || "string").toLowerCase();
@@ -267,16 +273,30 @@ export function generateExternalFunctionFile(node: BackendNode): CompiledFile {
     const s = node.data.responseSchema;
     if (s.fields && Array.isArray(s.fields) && s.fields.length > 0) {
       successFields = s.fields
-        .map((f: { name?: string; type?: string; required?: boolean }) => {
+        .filter(isExternalField)
+        .map((f) => {
           const opt = f.required === false ? "?" : "";
-          return `  ${f.name || "field"}${opt}: ${mapTypeToTs(f.type || "string")};`;
+          const fieldName = typeof f.name === "string" ? f.name : "field";
+          const fieldType = typeof f.type === "string" ? f.type : "string";
+          return `  ${fieldName}${opt}: ${mapTypeToTs(fieldType)};`;
         })
         .join("\n") + "\n  [key: string]: unknown;";
     } else if (!Array.isArray(s)) {
       const keys = Object.keys(s);
       if (keys.length > 0) {
         successFields = keys
-          .map((k) => `  ${k}?: ${typeof (s as Record<string, unknown>)[k] === "number" ? "number" : typeof (s as Record<string, unknown>)[k] === "boolean" ? "boolean" : typeof (s as Record<string, unknown>)[k] === "object" ? "Record<string, unknown>" : "string"};`)
+          .map((k) => {
+            const val = s[k];
+            const propType =
+              typeof val === "number"
+                ? "number"
+                : typeof val === "boolean"
+                  ? "boolean"
+                  : typeof val === "object" && val !== null
+                    ? "Record<string, unknown>"
+                    : "string";
+            return `  ${k}?: ${propType};`;
+          })
           .join("\n") + "\n  [key: string]: unknown;";
       }
     }
@@ -288,16 +308,30 @@ export function generateExternalFunctionFile(node: BackendNode): CompiledFile {
     const es = node.data.errorResponseSchema;
     if (es.fields && Array.isArray(es.fields) && es.fields.length > 0) {
       errorFields = es.fields
-        .map((f: { name?: string; type?: string; required?: boolean }) => {
+        .filter(isExternalField)
+        .map((f) => {
           const opt = f.required === false ? "?" : "";
-          return `  ${f.name || "field"}${opt}: ${mapTypeToTs(f.type || "string")};`;
+          const fieldName = typeof f.name === "string" ? f.name : "field";
+          const fieldType = typeof f.type === "string" ? f.type : "string";
+          return `  ${fieldName}${opt}: ${mapTypeToTs(fieldType)};`;
         })
         .join("\n") + "\n  [key: string]: unknown;";
     } else if (!Array.isArray(es)) {
       const keys = Object.keys(es);
       if (keys.length > 0) {
         errorFields = keys
-          .map((k) => `  ${k}?: ${typeof (es as Record<string, unknown>)[k] === "number" ? "number" : typeof (es as Record<string, unknown>)[k] === "boolean" ? "boolean" : typeof (es as Record<string, unknown>)[k] === "object" ? "Record<string, unknown>" : "string"};`)
+          .map((k) => {
+            const val = es[k];
+            const propType =
+              typeof val === "number"
+                ? "number"
+                : typeof val === "boolean"
+                  ? "boolean"
+                  : typeof val === "object" && val !== null
+                    ? "Record<string, unknown>"
+                    : "string";
+            return `  ${k}?: ${propType};`;
+          })
           .join("\n") + "\n  [key: string]: unknown;";
       }
     }
