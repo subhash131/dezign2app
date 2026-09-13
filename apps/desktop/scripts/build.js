@@ -6,6 +6,14 @@ const desktopDir = path.join(__dirname, "..");
 const args = process.argv.slice(2);
 const hostPlatform = process.platform; // 'win32', 'darwin', 'linux'
 
+const isDev =
+  args.includes("--dev") ||
+  args.includes("--development") ||
+  process.env.BUILD_ENV === "development" ||
+  process.env.APP_ENV === "development";
+
+const targetEnv = isDev ? "development" : "production";
+
 function loadEnvFile(envPath) {
   if (!fs.existsSync(envPath)) return;
   try {
@@ -28,8 +36,51 @@ function loadEnvFile(envPath) {
   } catch (e) {}
 }
 
-loadEnvFile(path.join(desktopDir, "../web/.env.production"));
-loadEnvFile(path.join(desktopDir, "../web/.env"));
+if (targetEnv === "development") {
+  loadEnvFile(path.join(desktopDir, "../web/.env"));
+
+  process.env.NEXT_PUBLIC_CONVEX_URL =
+    process.env.NEXT_PUBLIC_CONVEX_URL || "https://neighborly-setter-541.convex.cloud";
+  process.env.NEXT_PUBLIC_CONVEX_SITE_URL =
+    process.env.NEXT_PUBLIC_CONVEX_SITE_URL || "https://neighborly-setter-541.convex.site";
+  process.env.CONVEX_URL =
+    process.env.CONVEX_URL || process.env.NEXT_PUBLIC_CONVEX_URL;
+  process.env.CONVEX_SITE_URL =
+    process.env.CONVEX_SITE_URL || process.env.NEXT_PUBLIC_CONVEX_SITE_URL;
+  process.env.BETTER_AUTH_URL =
+    process.env.BETTER_AUTH_URL || "http://localhost:46500";
+  process.env.NEXT_PUBLIC_APP_URL =
+    process.env.NEXT_PUBLIC_APP_URL || "http://localhost:46500";
+  process.env.NEXT_PUBLIC_DESKTOP_AUTH_URL =
+    process.env.NEXT_PUBLIC_DESKTOP_AUTH_URL || "http://localhost:46500";
+  process.env.BETTER_AUTH_TRUSTED_ORIGINS =
+    process.env.BETTER_AUTH_TRUSTED_ORIGINS ||
+    "http://localhost:46500,http://localhost:3000,dezign2app://";
+} else {
+  loadEnvFile(path.join(desktopDir, "../web/.env.production"));
+  loadEnvFile(path.join(desktopDir, "../web/.env"));
+
+  process.env.NEXT_PUBLIC_CONVEX_URL =
+    process.env.NEXT_PUBLIC_CONVEX_URL || "https://gregarious-quail-82.convex.cloud";
+  process.env.NEXT_PUBLIC_CONVEX_SITE_URL =
+    process.env.NEXT_PUBLIC_CONVEX_SITE_URL || "https://gregarious-quail-82.convex.site";
+  process.env.CONVEX_URL =
+    process.env.CONVEX_URL || process.env.NEXT_PUBLIC_CONVEX_URL;
+  process.env.CONVEX_SITE_URL =
+    process.env.CONVEX_SITE_URL || process.env.NEXT_PUBLIC_CONVEX_SITE_URL;
+  process.env.BETTER_AUTH_URL =
+    process.env.BETTER_AUTH_URL || "https://www.dezign2app.com";
+  process.env.NEXT_PUBLIC_APP_URL =
+    process.env.NEXT_PUBLIC_APP_URL || "https://www.dezign2app.com";
+  process.env.NEXT_PUBLIC_DESKTOP_AUTH_URL =
+    process.env.NEXT_PUBLIC_DESKTOP_AUTH_URL || "https://www.dezign2app.com";
+  process.env.BETTER_AUTH_TRUSTED_ORIGINS =
+    process.env.BETTER_AUTH_TRUSTED_ORIGINS ||
+    "https://dezign2app.com,https://www.dezign2app.com,dezign2app://";
+}
+
+process.env.BUILD_ENV = targetEnv;
+process.env.APP_ENV = targetEnv;
 
 function copyDirPlain(src, dest) {
   if (!fs.existsSync(src)) return;
@@ -54,15 +105,40 @@ function stageWebResources() {
   const standaloneDir = path.join(webDir, ".next", "standalone");
   const standaloneServer = path.join(standaloneDir, "apps", "web", "server.js");
 
-  if (!fs.existsSync(standaloneServer) && !fs.existsSync(path.join(standaloneDir, "server.js"))) {
-    console.log("\n==> [Auto-Build] Next.js standalone bundle not found. Building Next.js Web runtime...");
-    execSync("pnpm --filter web build", {
+  const buildEnvStampPath = path.join(webDir, ".next-build-env.json");
+  const fallbackStampPath = path.join(webDir, ".next", "build-env.json");
+  let currentBuildEnv = null;
+  const stampFile = fs.existsSync(buildEnvStampPath) ? buildEnvStampPath : fallbackStampPath;
+  if (fs.existsSync(stampFile)) {
+    try {
+      const data = JSON.parse(fs.readFileSync(stampFile, "utf8"));
+      currentBuildEnv = data.env;
+    } catch (e) {}
+  }
+
+  const standaloneServerExists =
+    fs.existsSync(standaloneServer) || fs.existsSync(path.join(standaloneDir, "server.js"));
+  const needsRebuild =
+    !standaloneServerExists || !currentBuildEnv || currentBuildEnv !== targetEnv;
+
+  if (needsRebuild) {
+    console.log(
+      `\n==> [Auto-Build] Next.js standalone bundle requires build for ${targetEnv.toUpperCase()} (current: ${
+        currentBuildEnv || "none"
+      })...`
+    );
+    const buildCmd =
+      targetEnv === "development"
+        ? "pnpm --filter web run build:dev"
+        : "pnpm --filter web run build:prod";
+    execSync(buildCmd, {
       stdio: "inherit",
       cwd: path.join(desktopDir, "../.."),
+      env: { ...process.env, BUILD_ENV: targetEnv },
     });
   }
 
-  console.log("\n==> Staging Next.js standalone Web runtime (~50MB)...");
+  console.log(`\n==> Staging Next.js standalone Web runtime [${targetEnv.toUpperCase()}] (~50MB)...`);
 
   // Clean old build-web folder
   if (fs.existsSync(buildWebDir)) {
@@ -103,15 +179,28 @@ function stageWebResources() {
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
     const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL || process.env.CONVEX_URL || "";
+    const convexSiteUrl =
+      process.env.NEXT_PUBLIC_CONVEX_SITE_URL ||
+      process.env.CONVEX_SITE_URL ||
+      (convexUrl ? convexUrl.replace(".convex.cloud", ".convex.site") : "");
     const desktopAuthUrl = process.env.NEXT_PUBLIC_DESKTOP_AUTH_URL || "";
+    const betterAuthUrl = process.env.BETTER_AUTH_URL || appUrl || "";
+    const betterAuthTrustedOrigins =
+      process.env.BETTER_AUTH_TRUSTED_ORIGINS || "dezign2app://";
     const betterAuthSecret = process.env.BETTER_AUTH_SECRET || "";
 
     const publicSafeEnv = [
       convexUrl ? `NEXT_PUBLIC_CONVEX_URL=${convexUrl}` : null,
+      convexSiteUrl ? `NEXT_PUBLIC_CONVEX_SITE_URL=${convexSiteUrl}` : null,
+      convexUrl ? `CONVEX_URL=${convexUrl}` : null,
+      convexSiteUrl ? `CONVEX_SITE_URL=${convexSiteUrl}` : null,
       appUrl ? `NEXT_PUBLIC_APP_URL=${appUrl}` : null,
       desktopAuthUrl ? `NEXT_PUBLIC_DESKTOP_AUTH_URL=${desktopAuthUrl}` : null,
+      betterAuthUrl ? `BETTER_AUTH_URL=${betterAuthUrl}` : null,
+      betterAuthTrustedOrigins ? `BETTER_AUTH_TRUSTED_ORIGINS=${betterAuthTrustedOrigins}` : null,
       betterAuthSecret ? `BETTER_AUTH_SECRET=${betterAuthSecret}` : null,
       "NODE_ENV=production",
+      `APP_ENV=${targetEnv}`,
     ].filter(Boolean).join("\n") + "\n";
 
     for (const target of candidateTargets) {
@@ -276,6 +365,13 @@ function runElectronBuilder(builderArgs, cwd) {
 }
 
 async function run() {
+  console.log("\n================================================================");
+  console.log(`==> Dezign2App Desktop Packaging: [${targetEnv.toUpperCase()}]`);
+  console.log(`    Convex Cloud:      ${process.env.NEXT_PUBLIC_CONVEX_URL}`);
+  console.log(`    Convex Actions:    ${process.env.NEXT_PUBLIC_CONVEX_SITE_URL}`);
+  console.log(`    Auth / Portal URL: ${process.env.NEXT_PUBLIC_DESKTOP_AUTH_URL}`);
+  console.log("================================================================\n");
+
   // 1. Generate multi-resolution icons
   console.log("==> [1/3] Generating application icons...");
   execSync("node scripts/generate-icons.js", {
@@ -343,6 +439,14 @@ async function run() {
   for (const target of targets) {
     const flag = target === "dir" ? "--dir" : `--${target}`;
     const builderArgs = [flag, ...archFlags];
+
+    if (targetEnv === "development") {
+      builderArgs.push(
+        "--config.nsis.artifactName=${productName}-Setup-${version}-${arch}-dev.${ext}",
+        "--config.artifactName=${productName}-${version}-${arch}-dev.${ext}"
+      );
+    }
+
     console.log(`\n── Building target: ${target.toUpperCase()} (${builderArgs.join(" ")}) ──`);
 
     if (target === "mac" && hostPlatform !== "darwin") {
