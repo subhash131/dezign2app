@@ -7,7 +7,9 @@ import {
   RealtimeConnection,
   PipelineStep,
   RealtimeProtocol,
-} from "@workspace/canvas/types";
+  computeMediaMode,
+  resolveWebRtcCapabilitiesFromStep,
+} from "@workspace/canvas";
 import { PageInfo, LinkedRealtimeConnectionInfo } from "./types";
 import { labelToSlug, slugToComponentName } from "./slugUtils";
 import { getServicePort } from "./endpointResolver";
@@ -186,11 +188,26 @@ export function resolvePagesInfo(
               ? "API_PUSH"
               : "SSE";
 
+          const isStepRtc = deliveryProto === "WEBRTC";
+          const stepCaps = isStepRtc
+            ? resolveWebRtcCapabilitiesFromStep(step)
+            : undefined;
+
           derivedConnections.push({
             id: step.id,
             protocol: deliveryProto,
             eventName: step.clientDeliveryEventName || sourceItemName || "message",
             room: step.clientDeliveryRoom,
+            mediaMode: isStepRtc
+              ? (stepCaps ? computeMediaMode(stepCaps) : (step.clientDeliveryMediaMode || "data"))
+              : undefined,
+            enableDataChannel: stepCaps ? stepCaps.enableDataChannel : (step.clientDeliveryEnableDataChannel !== false),
+            enableMic: stepCaps ? stepCaps.enableMic : false,
+            enableSpeaker: stepCaps ? stepCaps.enableSpeaker : false,
+            enableCamera: stepCaps ? stepCaps.enableCamera : false,
+            enableScreenShare: stepCaps ? stepCaps.enableScreenShare : false,
+            enableRemoteVideo: stepCaps ? stepCaps.enableRemoteVideo : false,
+            iceServerUrl: step.clientDeliveryIceServer,
             description: sourceItemName || step.name,
             sourceServiceNodeId: srcNodeId,
             sourceServiceLabel: (srcNode?.data?.label as string) || srcNode?.type || "Service",
@@ -230,12 +247,65 @@ export function resolvePagesInfo(
       });
     }
 
-    // Merge manual and derived connections, avoiding duplicate IDs
+    // Also check embedded endpoints/consumedEvents in service nodes on canvas that may not be in top-level array
+    allNodes.forEach((n) => {
+      if (n.type === "service" && Array.isArray(n.data?.endpoints)) {
+        (n.data.endpoints as Endpoint[]).forEach((ep) => {
+          if (!endpoints?.some((e) => e.id === ep.id) && ep.pipelineSteps) {
+            checkPipelineSteps(ep.pipelineSteps as PipelineStep[], n.id, ep.name || "Endpoint", ep.id, "endpoint");
+          }
+        });
+      }
+      if (n.type === "service" && Array.isArray(n.data?.consumedEvents)) {
+        (n.data.consumedEvents as AnyMessagingResource[]).forEach((ev) => {
+          if (!events?.some((e) => e.id === ev.id) && ev.pipelineSteps) {
+            checkPipelineSteps(ev.pipelineSteps as PipelineStep[], n.id, ev.name || "Event", ev.id, "event");
+          }
+        });
+      }
+    });
+
+    // Merge manual and derived connections, avoiding duplicate IDs or duplicate service assignments
     const derivedIds = new Set(derivedConnections.map((d) => d.id));
-    const allCombined = [
-      ...derivedConnections,
-      ...rawConnections.filter((c) => !derivedIds.has(c.id)),
-    ];
+    const derivedServiceIds = new Set(
+      derivedConnections.map((d) => d.sourceServiceNodeId).filter(Boolean),
+    );
+
+    // Filter raw connections: remove any that match derived IDs OR are manual connections
+    // whose target service is already covered by an active pipeline derived connection on this page
+    const filteredRaw = rawConnections.filter((c) => {
+      if (derivedIds.has(c.id)) return false;
+      if (c.sourceServiceNodeId && derivedServiceIds.has(c.sourceServiceNodeId)) {
+        return false;
+      }
+      // Check if manual connection edge links to a service that is already covered by derived connections
+      const edgeToPage = allEdges.find(
+        (e) =>
+          e.target === node.id &&
+          (e.targetHandle === `rtc-in-${c.id}` ||
+            e.targetHandle?.endsWith(c.id) ||
+            e.targetHandle === "page-in"),
+      );
+      if (edgeToPage) {
+        const src = allNodes.find((n) => n.id === edgeToPage.source);
+        const resolvedSrcId =
+          src?.type === "service"
+            ? src.id
+            : src?.type === "page_ref"
+            ? allEdges.find((e) => e.target === src.id)?.source
+            : undefined;
+        if (resolvedSrcId && derivedServiceIds.has(resolvedSrcId)) {
+          return false;
+        }
+      }
+      // If derived connections exist and there's only one service, deduplicate manual RTC conns for the same service
+      if (derivedConnections.length > 0 && derivedServiceIds.size === 1 && c.protocol === "WEBRTC") {
+        return false;
+      }
+      return true;
+    });
+
+    const allCombined = [...derivedConnections, ...filteredRaw];
 
     const resolvedRealtime: LinkedRealtimeConnectionInfo[] = allCombined.map((conn) => {
       let serviceNode: BackendNode | undefined = undefined;
@@ -306,18 +376,73 @@ export function resolvePagesInfo(
       const port = serviceNode ? getServicePort(serviceNode) : undefined;
       let streamUrl: string | undefined = undefined;
       if (port) {
-        if (protocol === "WEBSOCKET") {
+        if (protocol === "WEBSOCKET" || protocol === "WEBRTC") {
           streamUrl = `ws://localhost:${port}/ws`;
         } else {
           streamUrl = `http://localhost:${port}/events`;
         }
       }
 
+      const isRtc = protocol === "WEBRTC";
+      const isExplicitDataMode = isRtc && conn.mediaMode === "data";
+
+      const enableDataChannel = isRtc
+        ? (conn.enableDataChannel !== undefined ? conn.enableDataChannel : true)
+        : false;
+      const enableMic = isRtc && !isExplicitDataMode
+        ? (conn.enableMic !== undefined
+            ? Boolean(conn.enableMic)
+            : conn.enableAudio !== undefined
+            ? Boolean(conn.enableAudio)
+            : Boolean(conn.mediaMode === "audio" || conn.mediaMode === "audio-video"))
+        : false;
+      const enableSpeaker = isRtc && !isExplicitDataMode
+        ? (conn.enableSpeaker !== undefined
+            ? Boolean(conn.enableSpeaker)
+            : Boolean(conn.mediaMode === "audio" || conn.mediaMode === "audio-video"))
+        : false;
+      const enableCamera = isRtc && !isExplicitDataMode
+        ? (conn.enableCamera !== undefined
+            ? Boolean(conn.enableCamera)
+            : conn.enableVideo !== undefined
+            ? Boolean(conn.enableVideo)
+            : Boolean(conn.mediaMode === "video" || conn.mediaMode === "audio-video"))
+        : false;
+      const enableScreenShare = isRtc && !isExplicitDataMode ? Boolean(conn.enableScreenShare) : false;
+      const enableRemoteVideo = isRtc && !isExplicitDataMode
+        ? (conn.enableRemoteVideo !== undefined
+            ? Boolean(conn.enableRemoteVideo)
+            : conn.enableVideo !== undefined
+            ? Boolean(conn.enableVideo)
+            : Boolean(conn.mediaMode === "video" || conn.mediaMode === "audio-video"))
+        : false;
+
+      const hasAnyAudio = Boolean(enableMic || enableSpeaker);
+      const hasAnyVideo = Boolean(enableCamera || enableScreenShare || enableRemoteVideo);
+      const computedMediaMode = isRtc
+        ? (!hasAnyAudio && !hasAnyVideo
+            ? "data"
+            : hasAnyAudio && hasAnyVideo
+            ? "audio-video"
+            : hasAnyAudio
+            ? "audio"
+            : "video")
+        : undefined;
+
       return {
         connectionId: conn.id,
         protocol,
         eventName: conn.eventName,
         room: conn.room,
+        mediaMode: computedMediaMode,
+        enableDataChannel,
+        enableMic,
+        enableSpeaker,
+        enableCamera,
+        enableScreenShare,
+        enableRemoteVideo,
+        peerRole: isRtc ? (conn.peerRole || "peer") : undefined,
+        iceServerUrl: isRtc ? conn.iceServerUrl : undefined,
         sourceServiceNodeId: serviceNode?.id || conn.sourceServiceNodeId,
         sourceServiceName: serviceNode?.data?.label || conn.sourceServiceLabel || "Service",
         sourceEventId: conn.sourceEventId,

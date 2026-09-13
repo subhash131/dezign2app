@@ -323,9 +323,37 @@ export function usePipelineSteps({
     steps,
   ]);
 
+  // Stable synchronization keys to prevent re-running connection effects on internal step property changes (e.g. checkbox toggles)
+  const redisStepsKey = useMemo(
+    () =>
+      executableSteps
+        .filter((s) => s.type === "redis_operation" && s.tableNodeId && s.tableNodeId !== "__none__")
+        .map((s) => `${s.id}:${s.tableNodeId}:${s.databaseId}`)
+        .join("|"),
+    [executableSteps],
+  );
+
+  const dbStepsKey = useMemo(
+    () =>
+      executableSteps
+        .filter((s) => s.type === "db_operation" && (s.tableNodeId || s.databaseId))
+        .map((s) => `${s.id}:${s.tableNodeId}:${s.databaseId}:${s.functionRef?.name || s.operationId}`)
+        .join("|"),
+    [executableSteps],
+  );
+
+  const pushStepsKey = useMemo(
+    () =>
+      executableSteps
+        .filter((s) => s.type === "push_to_client")
+        .map((s) => `${s.id}:${s.clientDeliveryTargetPageId}:${s.clientDeliveryPageRefNodeId}`)
+        .join("|"),
+    [executableSteps],
+  );
+
   // Auto-synchronize connected Redis cache nodes and edges for configured redis_operation steps
   useEffect(() => {
-    if (!serviceNodeId || executableSteps.length === 0) return;
+    if (!serviceNodeId) return;
     const redisSteps = executableSteps.filter(
       (s) => s.type === "redis_operation" && s.tableNodeId && s.tableNodeId !== "__none__",
     );
@@ -340,11 +368,12 @@ export function usePipelineSteps({
         consumedEventId: consumedEvent?.id,
       });
     });
-  }, [executableSteps, serviceNodeId, endpoint?.id, consumedEvent?.id]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [redisStepsKey, serviceNodeId, endpoint?.id, consumedEvent?.id]);
 
   // Auto-synchronize connected Database ref nodes and function edges for configured db_operation steps
   useEffect(() => {
-    if (!serviceNodeId || executableSteps.length === 0) return;
+    if (!serviceNodeId) return;
     const dbSteps = executableSteps.filter(
       (s) => s.type === "db_operation" && (s.tableNodeId || s.databaseId),
     );
@@ -360,11 +389,12 @@ export function usePipelineSteps({
         functionName: s.functionRef?.name || s.operationId,
       });
     });
-  }, [executableSteps, serviceNodeId, endpoint?.id, consumedEvent?.id]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dbStepsKey, serviceNodeId, endpoint?.id, consumedEvent?.id]);
 
   // Auto-synchronize connected PageRef nodes and edges for configured push_to_client steps
   useEffect(() => {
-    if (!serviceNodeId || executableSteps.length === 0) return;
+    if (!serviceNodeId) return;
     const pushSteps = executableSteps.filter((s) => s.type === "push_to_client");
     if (pushSteps.length === 0) return;
 
@@ -378,7 +408,8 @@ export function usePipelineSteps({
         stepId: s.id,
       });
     });
-  }, [executableSteps, serviceNodeId, endpoint?.id, consumedEvent?.id]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pushStepsKey, serviceNodeId, endpoint?.id, consumedEvent?.id]);
 
   const hasUnconfiguredInputs = useMemo(
     () => executableSteps.some((s) => isStepInputUnconfigured(s, allNodes)),

@@ -318,8 +318,20 @@ export interface PipelineStep {
   clientDeliveryPageRefNodeId?: string;
   /** SSE event name or WebSocket message type (e.g. "order.updated") */
   clientDeliveryEventName?: string;
-  /** WebSocket broadcast room / channel key */
+  /** WebSocket / WebRTC broadcast room / channel key */
   clientDeliveryRoom?: string;
+  /** WebRTC media streaming mode (defaults to "data") */
+  clientDeliveryMediaMode?: "data" | "audio" | "video" | "audio-video";
+  clientDeliveryEnableDataChannel?: boolean;
+  clientDeliveryEnableAudio?: boolean;
+  clientDeliveryEnableMic?: boolean;
+  clientDeliveryEnableSpeaker?: boolean;
+  clientDeliveryEnableVideo?: boolean;
+  clientDeliveryEnableCamera?: boolean;
+  clientDeliveryEnableScreenShare?: boolean;
+  clientDeliveryEnableRemoteVideo?: boolean;
+  /** Optional custom STUN/TURN server URL for WebRTC */
+  clientDeliveryIceServer?: string;
   /** API_PUSH: target webhook URL */
   clientDeliveryWebhookUrl?: string;
   /** API_PUSH: HTTP method */
@@ -415,6 +427,16 @@ export const pipelineStepSchema: z.ZodType<PipelineStep> = z.lazy(() =>
     clientDeliveryPageRefNodeId: z.string().optional(),
     clientDeliveryEventName: z.string().optional(),
     clientDeliveryRoom: z.string().optional(),
+    clientDeliveryMediaMode: z.enum(["data", "audio", "video", "audio-video"]).optional(),
+    clientDeliveryEnableDataChannel: z.boolean().optional(),
+    clientDeliveryEnableAudio: z.boolean().optional(),
+    clientDeliveryEnableMic: z.boolean().optional(),
+    clientDeliveryEnableSpeaker: z.boolean().optional(),
+    clientDeliveryEnableVideo: z.boolean().optional(),
+    clientDeliveryEnableCamera: z.boolean().optional(),
+    clientDeliveryEnableScreenShare: z.boolean().optional(),
+    clientDeliveryEnableRemoteVideo: z.boolean().optional(),
+    clientDeliveryIceServer: z.string().optional(),
     clientDeliveryWebhookUrl: z.string().optional(),
     clientDeliveryWebhookMethod: z.enum(["POST", "PUT", "PATCH"]).optional(),
     clientDeliveryFilterExpr: z.string().optional(),

@@ -607,8 +607,9 @@ export function renderPushToClientStep(
     rawLines.push(`  body: JSON.stringify(${payloadExpr}),`);
     rawLines.push(`});`);
   } else {
+    const roomParam = step.clientDeliveryRoom ? `, ${JSON.stringify(step.clientDeliveryRoom)}` : "";
     rawLines.push(`// --- Push to Client via WebRTC Data Channel ---`);
-    rawLines.push(`webrtcBroadcast(${JSON.stringify(eventName)}, ${payloadExpr});`);
+    rawLines.push(`webrtcBroadcast(${JSON.stringify(eventName)}, ${payloadExpr}${roomParam});`);
   }
 
   if (outputVariable) {

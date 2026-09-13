@@ -150,6 +150,17 @@ export interface LinkedRealtimeConnectionInfo {
   protocol: RealtimeProtocol;
   eventName?: string;
   room?: string;
+  mediaMode?: "data" | "audio" | "video" | "audio-video";
+  enableDataChannel?: boolean;
+  enableAudio?: boolean;
+  enableMic?: boolean;
+  enableSpeaker?: boolean;
+  enableVideo?: boolean;
+  enableCamera?: boolean;
+  enableScreenShare?: boolean;
+  enableRemoteVideo?: boolean;
+  peerRole?: "peer" | "initiator" | "responder";
+  iceServerUrl?: string;
   sourceServiceNodeId?: string;
   sourceServiceName?: string;
   sourceEventId?: string;

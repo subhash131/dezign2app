@@ -119,6 +119,9 @@ export interface WebSocketInboundMessage {
   room?: string;
   event?: string;
   data?: JsonValue;
+  signalType?: string;
+  signalData?: JsonValue;
+  to?: string;
 }
 
 let wssInstance: WebSocketServer | null = null;
@@ -177,6 +180,29 @@ export function initWebSocketServer(server: HttpServer): WebSocketServer {
           }
         } else if (action === "ping") {
           ws.send(JSON.stringify({ type: "pong" }));
+        } else if (action === "signal" || action === "webrtc-signal") {
+          // WebRTC signaling relay (offer, answer, candidate)
+          const targetRoom = msg.room;
+          const targetClient = msg.to;
+          const signalPayload = JSON.stringify({
+            type: "webrtc-signal",
+            from: clientId,
+            room: targetRoom,
+            signalType: msg.signalType,
+            signalData: msg.signalData || msg.data,
+          });
+
+          for (const [otherWs, otherClient] of wsClients.entries()) {
+            if (otherWs === ws || otherWs.readyState !== WebSocket.OPEN) continue;
+            if (targetClient && otherClient.id !== targetClient) continue;
+            if (targetRoom && !otherClient.rooms.has(targetRoom)) continue;
+
+            try {
+              otherWs.send(signalPayload);
+            } catch (err) {
+              logger.error(\`Failed to forward WebRTC signal from \${clientId} to \${otherClient.id}:\`, err);
+            }
+          }
         }
       } catch (err) {
         logger.warn(\`Failed to parse message from client \${clientId}:\`, err);
@@ -228,11 +254,31 @@ export function wsBroadcast(eventName: string, data: JsonValue, room?: string): 
 }
 
 /**
- * Broadcasts an event via WebRTC Data Channels.
+ * Broadcasts an event via WebRTC Data Channels / signaling relay.
+ * If room is provided, only broadcasts to clients in that room.
  */
-export function webrtcBroadcast(eventName: string, data: JsonValue): void {
-  logger.info(\`Broadcasting WebRTC event: "\${eventName}"\`, data);
+export function webrtcBroadcast(eventName: string, data: JsonValue, room?: string): void {
+  logger.info(\`Broadcasting WebRTC event: "\${eventName}"\${room ? \` to room "\${room}"\` : ""}\`, data);
+  const payloadStr = JSON.stringify({
+    type: "webrtc-data",
+    event: eventName,
+    data,
+    room,
+    timestamp: new Date().toISOString(),
+  });
+
+  for (const [ws, client] of wsClients.entries()) {
+    if (ws.readyState !== WebSocket.OPEN) continue;
+    if (room && !client.rooms.has(room)) continue;
+
+    try {
+      ws.send(payloadStr);
+    } catch (err) {
+      logger.error(\`Failed to deliver WebRTC event to client \${client.id}:\`, err);
+    }
+  }
 }
+
 `;
 
   return [

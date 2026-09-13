@@ -1,9 +1,26 @@
 "use client";
 
 import React, { useMemo } from "react";
-import { Compass, Plus, Send } from "lucide-react";
-import { BackendNode, BackendEdge, AnyMessagingResource, Endpoint } from "@workspace/canvas/types";
-import { ClientDeliveryProtocol, RealtimeConnection } from "@workspace/canvas/types";
+import { Compass, Plus } from "lucide-react";
+import {
+  BackendNode,
+  BackendEdge,
+  AnyMessagingResource,
+  Endpoint,
+  ClientDeliveryProtocol,
+  WebRtcCapabilities,
+  WebRtcMediaMode,
+  StepSchemaField,
+  StepBinding,
+} from "@workspace/canvas/types";
+import {
+  CLIENT_DELIVERY_PROTOCOL_OPTIONS,
+  PROTOCOL_OPTIONS,
+  CLIENT_DELIVERY_WEBHOOK_METHODS,
+  ClientDeliveryWebhookMethod,
+  isClientDeliveryProtocol,
+  isClientDeliveryWebhookMethod,
+} from "@workspace/canvas/constants";
 import {
   Select,
   SelectContent,
@@ -16,90 +33,22 @@ import { PipelineStepDraft, AvailableSource, ExpectedArg } from "./types";
 import { ensurePageRefConnection } from "./utils";
 import { LocalInput } from "../../backend-nodes/graph-nodes/common/LocalInput";
 import { parseSchemaJson } from "@/lib/compiler/utils";
+import {
+  sanitizeEventName,
+  computeMediaMode,
+  resolveCapabilitiesFromStep,
+  upsertDerivedConnection,
+  removeDerivedConnection,
+} from "./pushToClientUtils";
+import { WebRtcCapabilitiesEditor } from "./WebRtcCapabilitiesEditor";
+import { PushToClientPayloadMapping } from "./PushToClientPayloadMapping";
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-const PROTOCOL_OPTIONS: { value: ClientDeliveryProtocol; label: string }[] = [
-  { value: "SSE",       label: "Server-Sent Events (SSE)" },
-  { value: "WEBSOCKET", label: "WebSocket" },
-  { value: "WEBRTC",    label: "WebRTC Data Channel" },
-  { value: "API_PUSH",  label: "Outbound Webhook" },
-];
-
-/**
- * Sanitizes an event or message name to dot-notation (no spaces).
- * e.g. "Order Created" -> "order.created"
- */
-export function sanitizeEventName(raw: string): string {
-  return raw
-    .trim()
-    .toLowerCase()
-    .replace(/[\s_]+/g, ".")
-    .replace(/[^a-z0-9.-]/g, "")
-    .replace(/\.+/g, ".")
-    .replace(/^\.|\.$/g, "");
-}
-
-// ---------------------------------------------------------------------------
-// Helper — upsert / remove the derived RealtimeConnection on a WebPageNode
-// ---------------------------------------------------------------------------
-
-export function upsertDerivedConnection(
-  store: ReturnType<typeof useBackendCanvasStore.getState>,
-  targetPageId: string,
-  step: PipelineStepDraft,
-  serviceNodeId?: string,
-  sourceItemName?: string,
-  sourceItemId?: string,
-  sourceItemType?: "endpoint" | "event",
-) {
-  const page = store.nodes.find((n) => n.id === targetPageId);
-  if (!page) return;
-
-  const existing: RealtimeConnection[] = (page.data?.realtimeConnections as RealtimeConnection[]) || [];
-  const serviceNode = serviceNodeId ? store.nodes.find((n) => n.id === serviceNodeId) : undefined;
-
-  const derived: RealtimeConnection = {
-    id: step.id,
-    protocol: (step.clientDeliveryProtocol as ClientDeliveryProtocol) || "SSE",
-    eventName: step.clientDeliveryEventName || sourceItemName || "message",
-    room: step.clientDeliveryRoom,
-    description: sourceItemName || step.name || undefined,
-    sourceServiceNodeId: serviceNodeId,
-    sourceServiceLabel: serviceNode?.data?.label as string | undefined,
-    sourceEventId: sourceItemId,
-    sourceItemName,
-    sourceItemType,
-  };
-
-  const without = existing.filter((c) => c.id !== step.id);
-  store.updateNode(targetPageId, {
-    data: {
-      ...page.data,
-      label: page.data?.label || "",
-      realtimeConnections: [...without, derived],
-    },
-  });
-}
-
-export function removeDerivedConnection(
-  store: ReturnType<typeof useBackendCanvasStore.getState>,
-  oldTargetPageId: string,
-  stepId: string,
-) {
-  const page = store.nodes.find((n) => n.id === oldTargetPageId);
-  if (!page) return;
-  const existing: RealtimeConnection[] = (page.data?.realtimeConnections as RealtimeConnection[]) || [];
-  store.updateNode(oldTargetPageId, {
-    data: {
-      ...page.data,
-      label: page.data?.label || "",
-      realtimeConnections: existing.filter((c) => c.id !== stepId),
-    },
-  });
-}
+// Re-export utilities and subcomponents for backward compatibility
+export * from "./pushToClientUtils";
+export * from "./WebRtcCapabilitiesEditor";
+export * from "./PushToClientPayloadMapping";
+export { PROTOCOL_OPTIONS, CLIENT_DELIVERY_PROTOCOL_OPTIONS } from "@workspace/canvas/constants";
+export type { WebRtcCapabilities, WebRtcMediaMode } from "@workspace/canvas/types";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -133,10 +82,10 @@ export const PushToClientStepSection: React.FC<PushToClientStepSectionProps> = (
   onChange,
   children,
 }) => {
-  const storeNodes = useBackendCanvasStore((s) => s.nodes);
-  const storeEdges = useBackendCanvasStore((s) => s.edges);
-  const nodes = allNodes.length ? allNodes : storeNodes;
-  const edges = allEdges.length ? allEdges : storeEdges;
+  const fallbackNodes = useBackendCanvasStore((s) => (allNodes.length ? null : s.nodes));
+  const fallbackEdges = useBackendCanvasStore((s) => (allEdges.length ? null : s.edges));
+  const nodes = allNodes.length ? allNodes : (fallbackNodes || []);
+  const edges = allEdges.length ? allEdges : (fallbackEdges || []);
 
   const webAppNodes = useMemo(() => nodes.filter((n) => n.type === "webApp"), [nodes]);
   const allWebPageNodes = useMemo(() => nodes.filter((n) => n.type === "webPage"), [nodes]);
@@ -172,14 +121,28 @@ export const PushToClientStepSection: React.FC<PushToClientStepSectionProps> = (
     const updated = { ...step, ...patch };
     onChange(updated);
 
+    const targetPageChanged =
+      patch.clientDeliveryTargetPageId !== undefined &&
+      patch.clientDeliveryTargetPageId !== step.clientDeliveryTargetPageId;
+    const protocolChanged =
+      patch.clientDeliveryProtocol !== undefined &&
+      patch.clientDeliveryProtocol !== step.clientDeliveryProtocol;
+    const capabilitiesChanged =
+      patch.clientDeliveryEnableMic !== undefined ||
+      patch.clientDeliveryEnableSpeaker !== undefined ||
+      patch.clientDeliveryEnableCamera !== undefined ||
+      patch.clientDeliveryEnableScreenShare !== undefined ||
+      patch.clientDeliveryEnableRemoteVideo !== undefined ||
+      patch.clientDeliveryEnableDataChannel !== undefined ||
+      patch.clientDeliveryMediaMode !== undefined ||
+      patch.clientDeliveryEventName !== undefined ||
+      patch.clientDeliveryRoom !== undefined ||
+      patch.clientDeliveryIceServer !== undefined;
+
     const tgtId = patch.clientDeliveryTargetPageId ?? step.clientDeliveryTargetPageId;
-    if (tgtId) {
+    if (tgtId && (targetPageChanged || protocolChanged || capabilitiesChanged)) {
       const store = useBackendCanvasStore.getState();
-      if (
-        patch.clientDeliveryTargetPageId &&
-        patch.clientDeliveryTargetPageId !== step.clientDeliveryTargetPageId &&
-        step.clientDeliveryTargetPageId
-      ) {
+      if (targetPageChanged && step.clientDeliveryTargetPageId) {
         removeDerivedConnection(store, step.clientDeliveryTargetPageId, step.id);
       }
       const sourceItemName = endpoint
@@ -199,7 +162,7 @@ export const PushToClientStepSection: React.FC<PushToClientStepSectionProps> = (
         sourceItemType,
       );
 
-      if (serviceNodeId) {
+      if (serviceNodeId && (targetPageChanged || protocolChanged)) {
         const conn = ensurePageRefConnection({
           targetPageId: tgtId,
           pageRefNodeId: updated.clientDeliveryPageRefNodeId || step.clientDeliveryPageRefNodeId,
@@ -316,9 +279,9 @@ export const PushToClientStepSection: React.FC<PushToClientStepSectionProps> = (
 
   const handleMapAllSchemaFields = () => {
     if (incomingSchemaFields.length === 0) return;
-    const bindings = incomingSchemaFields.map((f) => ({
+    const bindings: StepBinding[] = incomingSchemaFields.map((f) => ({
       argName: f.name,
-      source: { kind: "req_body" as const, field: f.name },
+      source: { kind: "req_body", field: f.name },
     }));
     update({ inputBindings: bindings });
   };
@@ -337,7 +300,6 @@ export const PushToClientStepSection: React.FC<PushToClientStepSectionProps> = (
               const newWebAppId = val === "__all__" ? undefined : val;
               update({
                 clientDeliveryTargetWebAppId: newWebAppId,
-                // Keep targetPageId if it's in the filtered list, otherwise reset
                 ...(newWebAppId &&
                 targetPageId &&
                 !filteredWebPageNodes.some((p) => p.id === targetPageId)
@@ -430,15 +392,30 @@ export const PushToClientStepSection: React.FC<PushToClientStepSectionProps> = (
         </span>
         <Select
           value={protocol}
-          onValueChange={(val) =>
-            update({ clientDeliveryProtocol: val as ClientDeliveryProtocol })
-          }
+          onValueChange={(val) => {
+            if (!isClientDeliveryProtocol(val)) return;
+            if (val !== "WEBRTC") {
+              update({
+                clientDeliveryProtocol: val,
+                clientDeliveryMediaMode: undefined,
+                clientDeliveryEnableDataChannel: undefined,
+                clientDeliveryEnableMic: undefined,
+                clientDeliveryEnableSpeaker: undefined,
+                clientDeliveryEnableCamera: undefined,
+                clientDeliveryEnableScreenShare: undefined,
+                clientDeliveryEnableRemoteVideo: undefined,
+                clientDeliveryIceServer: undefined,
+              });
+            } else {
+              update({ clientDeliveryProtocol: val });
+            }
+          }}
         >
           <SelectTrigger className="h-7 text-xs bg-background nodrag">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {PROTOCOL_OPTIONS
+            {CLIENT_DELIVERY_PROTOCOL_OPTIONS
               .filter((opt) => Boolean(opt && opt.value && opt.value.trim()))
               .map((opt) => (
                 <SelectItem key={opt.value} value={opt.value} className="text-xs">
@@ -480,19 +457,28 @@ export const PushToClientStepSection: React.FC<PushToClientStepSectionProps> = (
         </div>
       )}
 
-      {/* WebSocket room */}
-      {protocol === "WEBSOCKET" && (
+      {/* WebSocket / WebRTC room */}
+      {(protocol === "WEBSOCKET" || protocol === "WEBRTC") && (
         <div className="flex flex-col gap-1">
           <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-            Broadcast Room / Channel
+            {protocol === "WEBRTC" ? "Signaling Room / Peer Channel" : "Broadcast Room / Channel"}
           </span>
           <LocalInput
             className="h-7 text-xs bg-background"
-            placeholder="e.g. global or room:${userId}"
+            placeholder={
+              protocol === "WEBRTC"
+                ? "e.g. room:conference or lobby"
+                : "e.g. global or room:${userId}"
+            }
             value={step.clientDeliveryRoom || ""}
             onBlur={(e) => update({ clientDeliveryRoom: e.target.value })}
           />
         </div>
+      )}
+
+      {/* WebRTC Channels & Media Capabilities */}
+      {protocol === "WEBRTC" && (
+        <WebRtcCapabilitiesEditor step={step} onCommit={update} />
       )}
 
       {/* API_PUSH */}
@@ -515,17 +501,21 @@ export const PushToClientStepSection: React.FC<PushToClientStepSectionProps> = (
             </span>
             <Select
               value={step.clientDeliveryWebhookMethod || "POST"}
-              onValueChange={(val) =>
-                update({ clientDeliveryWebhookMethod: val as "POST" | "PUT" | "PATCH" })
-              }
+              onValueChange={(val) => {
+                if (isClientDeliveryWebhookMethod(val)) {
+                  update({ clientDeliveryWebhookMethod: val });
+                }
+              }}
             >
               <SelectTrigger className="h-7 text-xs bg-background nodrag">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="POST" className="text-xs">POST</SelectItem>
-                <SelectItem value="PUT" className="text-xs">PUT</SelectItem>
-                <SelectItem value="PATCH" className="text-xs">PATCH</SelectItem>
+                {CLIENT_DELIVERY_WEBHOOK_METHODS.map((method) => (
+                  <SelectItem key={method} value={method} className="text-xs">
+                    {method}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -533,70 +523,12 @@ export const PushToClientStepSection: React.FC<PushToClientStepSectionProps> = (
       )}
 
       {/* Client Delivery Payload Mapping Guidance */}
-      <div className="flex flex-col gap-2 rounded-lg border border-border/50 bg-muted/20 p-2.5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <Send size={12} className="text-primary" />
-            <span className="text-[11px] font-semibold text-foreground/90">
-              Client Delivery Payload
-            </span>
-          </div>
-          <span className="text-[9px] text-muted-foreground/70">
-            {protocol === "SSE"
-              ? "Sent in SSE data envelope"
-              : protocol === "WEBSOCKET"
-              ? "Sent in WebSocket packet"
-              : "Sent in payload"}
-          </span>
-        </div>
-
-        <p className="text-[10px] text-muted-foreground/80 leading-relaxed">
-          Configure the payload data forwarded to the client. You can forward the entire event payload or map individual schema fields below.
-        </p>
-
-        {incomingSchemaFields.length > 0 && (
-          <div className="flex flex-col gap-1.5 pt-1.5 border-t border-border/30">
-            <div className="flex items-center justify-between gap-1 flex-wrap">
-              <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">
-                Available Schema Fields ({incomingSchemaFields.length})
-              </span>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1 text-[10px] text-primary hover:underline font-medium cursor-pointer"
-                  onClick={handleForwardWholePayload}
-                  title="Forward the entire incoming payload object without reshaping"
-                >
-                  Forward Whole Payload
-                </button>
-                <span className="text-[10px] text-muted-foreground/40">•</span>
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1 text-[10px] text-primary hover:underline font-medium cursor-pointer"
-                  onClick={handleMapAllSchemaFields}
-                  title="Map each incoming schema field to a separate argument binding"
-                >
-                  Map All Schema Fields
-                </button>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-1">
-              {incomingSchemaFields.map((f) => (
-                <span
-                  key={f.name}
-                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono bg-background border border-border/60 text-foreground/80"
-                >
-                  <span className="font-semibold text-primary">{f.name}</span>
-                  {f.type && (
-                    <span className="text-muted-foreground/60 text-[8px]">:{f.type}</span>
-                  )}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+      <PushToClientPayloadMapping
+        protocol={protocol}
+        incomingSchemaFields={incomingSchemaFields}
+        onForwardWholePayload={handleForwardWholePayload}
+        onMapAllSchemaFields={handleMapAllSchemaFields}
+      />
 
       {/* Payload / Data Input Binding (inherited from prior steps like Transformer, DB, etc.) */}
       {children}
