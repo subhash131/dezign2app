@@ -6,8 +6,18 @@ import net from "net";
 // ─────────────────────────────────────────────
 //  App Identity & Constants
 // ─────────────────────────────────────────────
-export const APP_NAME = "D2A";
-export const APP_USER_MODEL_ID = "com.dezign2app.desktop";
+function getIsDevBuild(): boolean {
+  if (!app.isPackaged) return true;
+  const name = app.getName() || "";
+  return name.toLowerCase().includes("dev") || process.env.APP_ENV === "development";
+}
+
+const isDevEnv = getIsDevBuild();
+
+export const APP_NAME = isDevEnv ? "D2A Dev" : "D2A";
+export const APP_USER_MODEL_ID = isDevEnv
+  ? "com.dezign2app.desktop.dev"
+  : "com.dezign2app.desktop";
 export const PROTOCOL_SCHEME = "dezign2app";
 
 export const DEV_SERVER_URL =

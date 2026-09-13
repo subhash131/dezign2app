@@ -422,10 +422,10 @@ async function run() {
     }
   }
 
-  // 4. On Windows, ensure any previous running instance of D2A is terminated
+  // 4. On Windows, ensure any previous running instance of D2A or D2A Dev is terminated
   if (hostPlatform === "win32") {
     try {
-      execSync('powershell -Command "Stop-Process -Name D2A -Force -ErrorAction SilentlyContinue"', {
+      execSync('powershell -Command "Stop-Process -Name D2A, \'D2A Dev\' -Force -ErrorAction SilentlyContinue"', {
         stdio: "ignore",
       });
     } catch (e) {}
@@ -442,8 +442,11 @@ async function run() {
 
     if (targetEnv === "development") {
       builderArgs.push(
-        "--config.nsis.artifactName=${productName}-Setup-${version}-${arch}-dev.${ext}",
-        "--config.artifactName=${productName}-${version}-${arch}-dev.${ext}"
+        '--config.productName="D2A Dev"',
+        '--config.appId="com.dezign2app.desktop.dev"',
+        '--config.nsis.shortcutName="D2A Dev"',
+        '--config.nsis.artifactName=${productName}-Setup-${version}-${arch}.${ext}',
+        '--config.artifactName=${productName}-${version}-${arch}.${ext}'
       );
     }
 

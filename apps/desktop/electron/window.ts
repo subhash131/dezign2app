@@ -1,6 +1,7 @@
 import { BrowserWindow, dialog, shell } from "electron";
 import path from "path";
 import {
+  APP_NAME,
   DEV_SERVER_URL,
   IS_DEV,
   DEFAULT_PORT,
@@ -61,7 +62,7 @@ export async function createMainWindow(): Promise<BrowserWindow> {
   const iconPath = getAppIcon();
 
   mainWindow = new BrowserWindow({
-    title: "Dezign2App",
+    title: APP_NAME,
     width: 1440,
     height: 900,
     minWidth: 1024,
