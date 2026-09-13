@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { Plus, Trash2, Database, Sparkles, Check, ChevronDown, ChevronRight, Layers } from "lucide-react";
-import { GlobalStoreDefinition, GlobalStoreField, GlobalStoreAction, StateVariableType } from "@workspace/canvas/types";
+import { GlobalStoreDefinition, GlobalStoreField, GlobalStoreAction, StateVariableType, JsonValue } from "@workspace/canvas/types";
 import { Input } from "@workspace/ui/components/input";
 import { Button } from "@workspace/ui/components/button";
 import { Label } from "@workspace/ui/components/label";
@@ -23,7 +23,7 @@ export interface WebAppGlobalStoresTabProps {
 const STORE_PRESETS: {
   name: string;
   description: string;
-  fields: { name: string; type: StateVariableType; defaultValue: unknown }[];
+  fields: { name: string; type: StateVariableType; defaultValue: JsonValue }[];
   actions: { name: string; actionType: "set" | "append" | "remove" | "toggle" | "custom"; targetFieldName: string }[];
 }[] = [
   {
