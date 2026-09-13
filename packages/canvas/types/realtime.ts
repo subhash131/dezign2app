@@ -69,12 +69,34 @@ export interface WebSocketClientSession {
 }
 
 /**
+ * WebRTC signaling payload types for exchanging SDP offer/answer and ICE candidates.
+ */
+export type WebRtcSignalType = "offer" | "answer" | "candidate";
+
+export interface WebRtcSignalMessage {
+  type: "webrtc-signal";
+  from?: string;
+  to?: string;
+  room?: string;
+  signalType: WebRtcSignalType;
+  signalData: JsonValue;
+}
+
+export interface WebRtcDataBroadcastMessage<T = JsonValue> {
+  type: "webrtc-data";
+  event: string;
+  data: T;
+  room?: string;
+  timestamp: string;
+}
+
+/**
  * Log entry recorded by the client-side real-time Output Log component.
  */
 export interface RealtimeTriggerLog<T = JsonValue> {
   id: string;
   eventName: string;
-  eventType: "SSE" | "WebSocket" | "TRIGGER" | "API";
+  eventType: "SSE" | "WebSocket" | "WebRTC" | "TRIGGER" | "API";
   timestamp: string;
   url: string;
   method: string;
@@ -83,3 +105,29 @@ export interface RealtimeTriggerLog<T = JsonValue> {
   data: T;
   error?: string;
 }
+
+/**
+ * WebRTC granular media and data channel capabilities.
+ */
+export interface WebRtcCapabilities {
+  enableDataChannel: boolean;
+  enableMic: boolean;
+  enableSpeaker: boolean;
+  enableCamera: boolean;
+  enableScreenShare: boolean;
+  enableRemoteVideo: boolean;
+}
+
+/**
+ * WebRTC composite media streaming modes.
+ */
+export type WebRtcMediaMode = "data" | "audio" | "video" | "audio-video";
+
+/**
+ * Protocol select option for client delivery configuration.
+ */
+export interface ClientDeliveryProtocolOption {
+  value: import("./messaging").ClientDeliveryProtocol;
+  label: string;
+}
+

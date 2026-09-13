@@ -112,12 +112,48 @@ describe("compilePushToClientStep", () => {
       clientDeliveryEventName: "chat",
     };
 
-    const imports = collectPipelineImports([sseStep, wsStep]);
+    const webrtcStep: PipelineStep = {
+      id: "step-webrtc",
+      name: "webrtcDelivery",
+      type: "push_to_client",
+      enabled: true,
+      clientDeliveryProtocol: "WEBRTC",
+      clientDeliveryEventName: "video.stream",
+    };
+
+    const imports = collectPipelineImports([sseStep, wsStep, webrtcStep]);
     const libImports = imports.get("../lib");
 
     expect(libImports).toBeDefined();
     expect(libImports?.has("sseBroadcast")).toBe(true);
     expect(libImports?.has("wsBroadcast")).toBe(true);
+    expect(libImports?.has("webrtcBroadcast")).toBe(true);
+  });
+
+  it("renders WebRTC delivery with room", () => {
+    const step: PipelineStep = {
+      id: "step-push-webrtc",
+      name: "webrtcDelivery",
+      type: "push_to_client",
+      enabled: true,
+      clientDeliveryProtocol: "WEBRTC",
+      clientDeliveryEventName: "stream.frame",
+      clientDeliveryRoom: "room:webrtc",
+      inputBindings: [
+        {
+          argName: "payload",
+          source: { kind: "req_body", field: "" },
+        },
+      ],
+    };
+
+    const lines = renderPipelineStep(step, {
+      bodyVar: "payload",
+      priorOutputs: new Map(),
+    });
+
+    const code = lines.join("\n");
+    expect(code).toContain('webrtcBroadcast("stream.frame", payload, "room:webrtc");');
   });
 
   it("generates consumer with sseBroadcast import from ../lib when push_to_client step is configured", () => {
@@ -160,6 +196,7 @@ describe("compilePushToClientStep", () => {
     expect(realtimeFile).toBeDefined();
     expect(realtimeFile?.content).toContain("export function sseBroadcast(");
     expect(realtimeFile?.content).toContain("export function wsBroadcast(");
+    expect(realtimeFile?.content).toContain("export function webrtcBroadcast(");
     expect(realtimeFile?.content).toContain("export function handleSseConnection(");
 
     expect(indexFile).toBeDefined();

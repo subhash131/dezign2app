@@ -3,6 +3,21 @@ import { BackendNodeData } from "@workspace/canvas";
 import { isAuthPage } from "../../../compileAuth";
 import { SectionMeta } from "./sectionGenerators";
 import { generateAuthPageCode } from "./authPageGenerators";
+import {
+  generatePageLoadState,
+  generatePageLoadEffect,
+  generatePageLoadSection,
+  generateJsonValueTypeDecl,
+  generateSseEffects,
+  generateWebSocketEffects,
+  generateWebRtcEffects,
+  resolveWebRtcMediaCapabilities,
+  generateMediaStateJsx,
+  generateMediaSectionJsx,
+  generateTriggerLogsState,
+  generateTriggerHandler,
+  generateTriggerLogsSection,
+} from "./page-generators";
 
 export function generatePageCode(
   pageMeta: PageInfo,
@@ -66,10 +81,8 @@ ${sectionsJsx ? `${sectionsJsx}` : `          <Link
 `;
   }
 
+  const hasPageLoad = Boolean(pageLoadFetchStatements);
   const hasAuth = Boolean(authNodeData);
-  const hasPageLoad = Boolean(
-    pageLoadFetchStatements && pageLoadFetchStatements.trim().length > 0,
-  );
 
   const sseConnections = (pageMeta.realtimeConnections || []).filter(
     (c) => c.protocol === "SSE" && c.streamUrl,
@@ -80,7 +93,14 @@ ${sectionsJsx ? `${sectionsJsx}` : `          <Link
     (c) => c.protocol === "WEBSOCKET" && c.streamUrl,
   );
   const hasWs = wsConnections.length > 0;
-  const hasRealtime = hasSse || hasWs;
+
+  const webrtcConnections = (pageMeta.realtimeConnections || []).filter(
+    (c) => c.protocol === "WEBRTC" && c.streamUrl,
+  );
+  const hasWebRtc = webrtcConnections.length > 0;
+
+  const mediaCaps = resolveWebRtcMediaCapabilities(webrtcConnections);
+  const hasRealtime = hasSse || hasWs || hasWebRtc;
   const hasLogsSection = hasApiActions || hasRealtime;
 
   const hooksList: string[] = [];
@@ -89,429 +109,44 @@ ${sectionsJsx ? `${sectionsJsx}` : `          <Link
   } else if (hasLogsSection) {
     hooksList.push("useState");
   }
+  if (mediaCaps.hasMediaStream) {
+    hooksList.push("useRef");
+  }
 
   const reactImport = hooksList.length > 0
     ? `import React, { ${hooksList.join(", ")} } from "react";`
     : `import React from "react";`;
 
-  const pageLoadStateJsx = hasPageLoad
-    ? `  const [pageLoadData, setPageLoadData] = useState<${pageLoadDataType}>(null);
-  const [pageLoadLoading, setPageLoadLoading] = useState<boolean>(false);
-  const [pageLoadError, setPageLoadError] = useState<string | null>(null);
+  // Page Load Data
+  const pageLoadStateJsx = generatePageLoadState(hasPageLoad, pageLoadDataType);
+  const pageLoadEffectJsx = generatePageLoadEffect(hasPageLoad, pageMeta, pageLoadFetchStatements);
+  const pageLoadSectionJsx = generatePageLoadSection(hasPageLoad);
+  const jsonValueTypeDecl = generateJsonValueTypeDecl(hasPageLoad);
 
-`
-    : "";
+  // Realtime Effects
+  const sseEffectsJsx = generateSseEffects(sseConnections);
+  const wsEffectsJsx = generateWebSocketEffects(wsConnections, hasAuth);
+  const webrtcEffectsJsx = generateWebRtcEffects(webrtcConnections, hasAuth);
 
-  const pageLoadEffectJsx = hasPageLoad
-    ? `  useEffect(() => {
-    async function loadPageData() {
-      ${pageLoadFetchStatements}
-    }
-    loadPageData();
-  }, []);
+  // WebRTC Media Stream
+  const mediaStateJsx = generateMediaStateJsx(mediaCaps);
+  const mediaSectionJsx = generateMediaSectionJsx(mediaCaps);
 
-`
-    : "";
+  // Trigger Actions & Output Logs
+  const triggerLogsStateJsx = generateTriggerLogsState(hasLogsSection);
+  const triggerHandlerJsx = generateTriggerHandler(hasApiActions);
+  const triggerLogsSectionJsx = generateTriggerLogsSection({
+    hasLogsSection,
+    hasSse,
+    hasWs,
+    hasWebRtc,
+    hasRealtime,
+  });
 
-  const pageLoadSectionJsx = hasPageLoad
-    ? `        {/* Section: Page Load Data */}
-        <Card className="border-border shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-            <div>
-              <CardTitle className="text-lg font-bold text-card-foreground">Page Load Data</CardTitle>
-            </div>
-            <Badge variant="secondary" className="font-mono text-xs">
-              {pageLoadLoading ? "Loading..." : pageLoadError ? "Error" : "Loaded"}
-            </Badge>
-          </CardHeader>
-          <CardContent>
-            <div className="bg-muted/50 border border-border rounded-lg p-4 font-mono text-sm text-foreground overflow-x-auto shadow-inner min-h-[120px]">
-              <pre className="whitespace-pre-wrap font-mono">
-                {pageLoadLoading
-                  ? "// Loading page data from API endpoint..."
-                  : pageLoadError
-                  ? "// Error: " + pageLoadError
-                  : pageLoadData !== null
-                  ? JSON.stringify(pageLoadData, null, 2)
-                  : "// No pageLoad data available."}
-              </pre>
-            </div>
-          </CardContent>
-        </Card>
-
-`
-    : "";
-
-  const triggerLogsStateJsx = hasLogsSection
-    ? `  const [triggerLogs, setTriggerLogs] = useState<Array<{
-    id: string;
-    eventName: string;
-    eventType: string;
-    timestamp: string;
-    url: string;
-    method: string;
-    status?: number;
-    payload?: unknown;
-    data: unknown;
-    error?: string;
-  }>>([]);
-
-`
-    : "";
-
-  let sseEffectsJsx = "";
-  if (hasSse) {
-    const sseByUrl = new Map<string, typeof sseConnections>();
-    sseConnections.forEach((conn) => {
-      const url = conn.streamUrl!;
-      if (!sseByUrl.has(url)) sseByUrl.set(url, []);
-      sseByUrl.get(url)!.push(conn);
-    });
-
-    const effectBlocks: string[] = [];
-    sseByUrl.forEach((conns, streamUrl) => {
-      const customEvents = Array.from(
-        new Set(
-          conns
-            .map((c) => c.eventName?.trim())
-            .filter((name): name is string => Boolean(name && name !== "message")),
-        ),
-      );
-
-      const customListeners = customEvents
-        .map(
-          (evtName) => `      es.addEventListener("${evtName}", (event) => {
-        let parsed: unknown = event.data;
-        try {
-          parsed = JSON.parse(event.data);
-        } catch {
-          parsed = event.data;
-        }
-        setTriggerLogs((prev) => [
-          {
-            id: Math.random().toString(36).substring(2, 9),
-            eventName: "${evtName}",
-            eventType: "SSE",
-            timestamp: new Date().toLocaleTimeString(),
-            url: "${streamUrl}",
-            method: "SSE",
-            data: parsed,
-          },
-          ...prev,
-        ]);
-      });`,
-        )
-        .join("\n");
-
-      effectBlocks.push(`  // Real-time SSE listener for ${conns[0]?.sourceServiceName || "Service"}
-  useEffect(() => {
-    let es: EventSource | null = null;
-    let isMounted = true;
-    try {
-      es = new EventSource("${streamUrl}", { withCredentials: true });
-      es.onopen = () => {
-        if (isMounted) {
-          console.log("[SSE] Connected to ${streamUrl}");
-        }
-      };
-${customListeners ? `${customListeners}\n` : ""}      es.onmessage = (event) => {
-        if (!isMounted) return;
-        let parsed: unknown = event.data;
-        try {
-          parsed = JSON.parse(event.data);
-        } catch {
-          parsed = event.data;
-        }
-        setTriggerLogs((prev) => [
-          {
-            id: Math.random().toString(36).substring(2, 9),
-            eventName: "message",
-            eventType: "SSE",
-            timestamp: new Date().toLocaleTimeString(),
-            url: "${streamUrl}",
-            method: "SSE",
-            data: parsed,
-          },
-          ...prev,
-        ]);
-      };
-      es.onerror = (_event) => {
-        if (!isMounted || es?.readyState === EventSource.CLOSED) {
-          return;
-        }
-        console.warn("[SSE] Reconnecting to stream (${streamUrl})...");
-      };
-    } catch (err) {
-      console.error("[SSE] Failed to initialize EventSource (${streamUrl}):", err);
-    }
-    return () => {
-      isMounted = false;
-      if (es) {
-        es.close();
-      }
-    };
-  }, []);`);
-    });
-
-    sseEffectsJsx = effectBlocks.join("\n\n") + "\n\n";
-  }
-
-  let wsEffectsJsx = "";
-  if (hasWs) {
-    const wsByUrl = new Map<string, typeof wsConnections>();
-    wsConnections.forEach((conn) => {
-      const url = conn.streamUrl!;
-      if (!wsByUrl.has(url)) wsByUrl.set(url, []);
-      wsByUrl.get(url)!.push(conn);
-    });
-
-    const effectBlocks: string[] = [];
-    wsByUrl.forEach((conns, streamUrl) => {
-      const rooms = Array.from(
-        new Set(
-          conns
-            .map((c) => c.room?.trim())
-            .filter((r): r is string => Boolean(r)),
-        ),
-      );
-
-      const joinStatements = rooms
-        .map((r) => `        ws?.send(JSON.stringify({ action: "join", room: "${r}" }));`)
-        .join("\n");
-
-      const leaveStatements = rooms
-        .map((r) => `        if (ws.readyState === WebSocket.OPEN) { ws.send(JSON.stringify({ action: "leave", room: "${r}" })); }`)
-        .join("\n");
-
-      effectBlocks.push(`  // Real-time WebSocket listener for ${conns[0]?.sourceServiceName || "Service"}
-  useEffect(() => {
-    let ws: WebSocket | null = null;
-    let isMounted = true;
-    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-
-    async function initWs() {
-      if (!isMounted) return;
-      try {
-        ${hasAuth ? `const rawToken = await getAuthBearerToken();
-        const token = rawToken ? rawToken.replace(/^Bearer\\s+/i, "") : null;
-        const targetUrl = token ? \`${streamUrl}?token=\${encodeURIComponent(token)}\` : "${streamUrl}";` : `const targetUrl = "${streamUrl}";`}
-        ws = new WebSocket(targetUrl);
-
-        ws.onopen = () => {
-          if (!isMounted) return;
-          console.log("[WebSocket] Connected to " + targetUrl);
-${joinStatements ? `${joinStatements}\n` : ""}        };
-
-        ws.onmessage = (event) => {
-          if (!isMounted) return;
-          let parsed: unknown = event.data;
-          try {
-            parsed = JSON.parse(event.data);
-          } catch {
-            parsed = event.data;
-          }
-
-          const parsedObj =
-            typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
-              ? (parsed as Record<string, unknown>)
-              : null;
-          const evtName =
-            parsedObj && typeof parsedObj.event === "string"
-              ? parsedObj.event
-              : parsedObj && typeof parsedObj.type === "string"
-              ? String(parsedObj.type)
-              : "message";
-          const evtData =
-            parsedObj && "data" in parsedObj && parsedObj.data !== undefined
-              ? parsedObj.data
-              : parsed;
-
-          setTriggerLogs((prev) => [
-            {
-              id: Math.random().toString(36).substring(2, 9),
-              eventName: evtName,
-              eventType: "WebSocket",
-              timestamp: new Date().toLocaleTimeString(),
-              url: "${streamUrl}",
-              method: "WS",
-              data: evtData,
-            },
-            ...prev,
-          ]);
-        };
-
-        ws.onerror = (_event) => {
-          if (!isMounted) return;
-          console.warn("[WebSocket] Error on stream (${streamUrl})");
-        };
-
-        ws.onclose = (_event) => {
-          if (!isMounted) return;
-          console.warn("[WebSocket] Connection closed (${streamUrl}). Reconnecting in 3s...");
-          reconnectTimer = setTimeout(initWs, 3000);
-        };
-      } catch (err) {
-        console.error("[WebSocket] Failed to initialize WebSocket (${streamUrl}):", err);
-        if (isMounted) {
-          reconnectTimer = setTimeout(initWs, 5000);
-        }
-      }
-    }
-
-    initWs();
-
-    return () => {
-      isMounted = false;
-      if (reconnectTimer) clearTimeout(reconnectTimer);
-      if (ws) {
-        try {
-${leaveStatements ? `${leaveStatements}\n` : ""}          ws.close();
-        } catch {}
-      }
-    };
-  }, []);`);
-    });
-
-    wsEffectsJsx = effectBlocks.join("\n\n") + "\n\n";
-  }
-
-  const triggerHandlerJsx = hasApiActions
-    ? `  const handleTriggerAction = async (
-    eventName: string,
-    eventType: string,
-    url: string,
-    method: string,
-    requireAuth?: boolean,
-    customHeaders?: Record<string, string>,
-    queryParams?: Record<string, string>,
-    requestBody?: unknown,
-  ) => {
-    const timestamp = new Date().toLocaleTimeString();
-    const logId = Math.random().toString(36).substring(2, 9);
-    try {
-      const result = await executeApiAction({
-        eventName,
-        eventType,
-        url,
-        method,
-        requireAuth,
-        customHeaders,
-        queryParams,
-        requestBody,
-      });
-
-      setTriggerLogs((prev) => [
-        {
-          id: logId,
-          eventName,
-          eventType,
-          timestamp,
-          url: result.url || result.targetUrl || "N/A",
-          method: method || "TRIGGER",
-          status: result.status,
-          payload: requestBody,
-          data: result.data,
-          error: result.error,
-        },
-        ...prev,
-      ]);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Request failed";
-      setTriggerLogs((prev) => [
-        {
-          id: logId,
-          eventName,
-          eventType,
-          timestamp,
-          url: url || "N/A",
-          method: method || "TRIGGER",
-          error: errorMessage,
-          data: null,
-        },
-        ...prev,
-      ]);
-    }
-  };
-
-`
-    : "";
-
-  const triggerLogsSectionJsx = hasLogsSection
-    ? `        {/* Section: Trigger Output Logs */}
-        <Card className="border-border shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-            <div className="flex items-center gap-3">
-              <CardTitle className="text-lg font-bold text-card-foreground">Output Log</CardTitle>
-              ${hasSse ? `<Badge variant="outline" className="text-xs flex items-center gap-1.5 font-mono text-emerald-600 dark:text-emerald-400 border-emerald-500/30 bg-emerald-500/10">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live Stream Active
-              </Badge>` : ""}
-              ${hasWs ? `<Badge variant="outline" className="text-xs flex items-center gap-1.5 font-mono text-cyan-600 dark:text-cyan-400 border-cyan-500/30 bg-cyan-500/10">
-                <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse" /> WebSocket Connected
-              </Badge>` : ""}
-            </div>
-            {triggerLogs.length > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={(e) => {
-                  e.preventDefault();
-                  setTriggerLogs([]);
-                }}
-                className="text-xs text-muted-foreground hover:text-foreground"
-              >
-                Clear logs
-              </Button>
-            )}
-          </CardHeader>
-          <CardContent>
-            {triggerLogs.length === 0 ? (
-              <div className="text-muted-foreground text-sm italic py-6 text-center border border-dashed border-border rounded-lg">
-                ${hasRealtime ? "Listening for real-time events..." : "No activity logged yet."}
-              </div>
-            ) : (
-              <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
-                {triggerLogs.map((log) => (
-                  <div key={log.id} className="bg-muted/40 border border-border rounded-lg p-4 font-mono text-xs space-y-2">
-                    <div className="flex items-center justify-between text-muted-foreground border-b border-border pb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-foreground">{log.eventName}</span>
-                        {log.eventType === "SSE" ? (
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded font-mono uppercase bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
-                            SSE
-                          </span>
-                        ) : log.eventType === "WebSocket" ? (
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded font-mono uppercase bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30">
-                            WS
-                          </span>
-                        ) : (
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded font-mono uppercase bg-primary/10 text-primary border border-primary/20">
-                            {log.method || "API"}
-                          </span>
-                        )}
-                      </div>
-                      <span>{log.timestamp}</span>
-                    </div>
-                    {log.error ? (
-                      <div className="text-destructive bg-destructive/10 p-2 rounded border border-destructive/20">
-                        Error: {log.error}
-                      </div>
-                    ) : (
-                      <pre className="text-foreground/90 bg-background/80 p-3 rounded border border-border/50 overflow-x-auto whitespace-pre-wrap">
-                        {typeof log.data === "string" ? log.data : JSON.stringify(log.data, null, 2)}
-                      </pre>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-`
-    : "";
-
-  const cardComponentsNeeded = hasPageLoad || hasLogsSection;
+  // Assemble UI Imports
+  const cardComponentsNeeded = hasPageLoad || hasLogsSection || mediaCaps.hasMediaStream;
   const uiImports: string[] = [];
-  if (hasLogsSection) {
+  if (hasLogsSection || mediaCaps.hasMediaStream) {
     uiImports.push(`import { Button } from "@workspace/ui/components/button";`);
   }
   if (hasApiActions) {
@@ -523,30 +158,20 @@ ${leaveStatements ? `${leaveStatements}\n` : ""}          ws.close();
   if (hasPageLoad || hasRealtime) {
     uiImports.push(`import { Badge } from "@workspace/ui/components/badge";`);
   }
-  if (hasAuth && (hasPageLoad || hasWs)) {
+  if (hasAuth && (hasPageLoad || hasWs || hasWebRtc)) {
     uiImports.push(`import { getAuthBearerToken } from "@/lib/auth-token";`);
   }
 
-  const needsJsonValue = hasPageLoad;
-  const jsonValueTypeDecl = needsJsonValue
-    ? `type JSONPrimitive = string | number | boolean | null;
-type JSONObject = { [key: string]: JSONValue };
-type JSONArray = JSONValue[];
-type JSONValue = JSONPrimitive | JSONObject | JSONArray;
-
-`
-    : "";
-  // Named response type declaration (e.g. interface PageLoadData {...})
   const namedTypeDecl = pageLoadDataTypeDecl ? `${pageLoadDataTypeDecl}\n\n` : "";
 
   return `"use client";
 
 ${reactImport}
 ${uiImports.join("\n")}${uiImports.length > 0 ? "\n" : ""}${allImports ? `${allImports}\n` : ""}${jsonValueTypeDecl}${namedTypeDecl}export default function ${pageMeta.componentName}() {
-${pageLoadStateJsx}${triggerLogsStateJsx}${pageLoadEffectJsx}${sseEffectsJsx}${wsEffectsJsx}${triggerHandlerJsx}  return (
+${pageLoadStateJsx}${mediaStateJsx}${triggerLogsStateJsx}${pageLoadEffectJsx}${sseEffectsJsx}${wsEffectsJsx}${webrtcEffectsJsx}${triggerHandlerJsx}  return (
     <main className="min-h-screen bg-background text-foreground p-6 md:p-10 font-sans">
       <div className="max-w-5xl mx-auto space-y-8">
-${pageLoadSectionJsx}${sectionsJsx ? `        {/* Page Sections */}\n${sectionsJsx}\n` : ""}${triggerLogsSectionJsx}      </div>
+${pageLoadSectionJsx}${mediaSectionJsx}${sectionsJsx ? `        {/* Page Sections */}\n${sectionsJsx}\n` : ""}${triggerLogsSectionJsx}      </div>
     </main>
   );
 }

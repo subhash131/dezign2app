@@ -205,4 +205,155 @@ describe("compileWebPageNodes Realtime WebSocket generation", () => {
     expect(code).toContain('?token=${encodeURIComponent(token)}');
     expect(code).toContain('ws?.send(JSON.stringify({ action: "join", room: "private:user-123" }))');
   });
+
+  it("does NOT display 'WebRTC Connected' or establish WebRTC peer connection when switched back to WebSocket", () => {
+    // WebPage previously had WebRTC configuration or residual media flags, but is now WEBSOCKET
+    const webPageNode: BackendNode = {
+      id: "node-page-chat",
+      type: "webPage",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "/chat",
+        appSlug: "chat-app",
+        realtimeConnections: [
+          // A stale manual WebRTC entry that previously pointed to the service
+          {
+            id: "rtc-stale-webrtc",
+            protocol: "WEBRTC",
+            eventName: "data-channel",
+            room: "room:lobby",
+            mediaMode: "audio-video",
+            enableMic: true,
+            enableCamera: true,
+            sourceServiceNodeId: "node-service-chat",
+            sourceServiceLabel: "ChatService",
+          },
+        ],
+      },
+    };
+
+    const serviceNode: BackendNode = {
+      id: "node-service-chat",
+      type: "service",
+      position: { x: 400, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "ChatService",
+        port: "8086",
+      },
+    };
+
+    // The active pipeline step push was switched back to WEBSOCKET
+    const events: (AnyMessagingResource & {
+      nodeId: string;
+      variant: "publish" | "consume";
+    })[] = [
+      {
+        id: "ev-chat-message",
+        name: "chatMessage",
+        nodeId: "node-service-chat",
+        variant: "consume",
+        pipelineSteps: [
+          {
+            id: "step-push-chat",
+            name: "pushChatMessage",
+            type: "push_to_client",
+            enabled: true,
+            clientDeliveryProtocol: "WEBSOCKET",
+            clientDeliveryEventName: "chat.message",
+            clientDeliveryRoom: "room:lobby",
+            clientDeliveryTargetPageId: "node-page-chat",
+          },
+        ],
+      },
+    ];
+
+    const result = compileWebPageNodes(
+      [webPageNode],
+      [],
+      events,
+      [webPageNode, serviceNode],
+      [],
+      "Test Chat App",
+    );
+
+    const pageFile = result.files.find((f) => f.filename.includes("page.tsx"));
+    expect(pageFile).toBeDefined();
+
+    const code = pageFile!.content;
+
+    // 1. Output Log MUST contain WebSocket Connected
+    expect(code).toContain("WebSocket Connected");
+
+    // 2. Output Log MUST NOT contain WebRTC Connected
+    expect(code).not.toContain("WebRTC Connected");
+
+    // 3. MUST NOT initiate RTCPeerConnection or media stream components
+    expect(code).not.toContain("RTCPeerConnection");
+    expect(code).not.toContain("initWebRtc");
+    expect(code).not.toContain("localVideoRef");
+    expect(code).not.toContain("remoteVideoRef");
+    expect(code).not.toContain("webrtc-data");
+
+    // 4. MUST initiate WebSocket
+    expect(code).toContain("new WebSocket(targetUrl)");
+    expect(code).toContain('eventType: "WebSocket"');
+  });
+
+  it("ensures manual connection with protocol WEBSOCKET and residual media flags does not render WebRTC", () => {
+    const webPageNode: BackendNode = {
+      id: "node-page-dashboard",
+      type: "webPage",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "/dashboard",
+        appSlug: "dash-app",
+        realtimeConnections: [
+          {
+            id: "rtc-dash",
+            protocol: "WEBSOCKET",
+            eventName: "dash.update",
+            // Residual fields from when it was previously WebRTC
+            mediaMode: "audio-video" as any,
+            enableMic: true,
+            enableCamera: true,
+            sourceServiceNodeId: "node-service-dash",
+            sourceServiceLabel: "DashService",
+          },
+        ],
+      },
+    };
+
+    const serviceNode: BackendNode = {
+      id: "node-service-dash",
+      type: "service",
+      position: { x: 400, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "DashService",
+        port: "8087",
+      },
+    };
+
+    const result = compileWebPageNodes(
+      [webPageNode],
+      [],
+      [],
+      [webPageNode, serviceNode],
+      [],
+      "Test Dash App",
+    );
+
+    const pageFile = result.files.find((f) => f.filename.includes("page.tsx"));
+    expect(pageFile).toBeDefined();
+
+    const code = pageFile!.content;
+
+    expect(code).toContain("WebSocket Connected");
+    expect(code).not.toContain("WebRTC Connected");
+    expect(code).not.toContain("RTCPeerConnection");
+    expect(code).not.toContain("initWebRtc");
+  });
 });

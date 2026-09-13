@@ -1,4 +1,10 @@
-import type { HandleKind, BackendNodeType, BackendEdgeType } from "./types";
+import type {
+  HandleKind,
+  BackendNodeType,
+  BackendEdgeType,
+  WebRtcCapabilities,
+  WebRtcMediaMode,
+} from "./types";
 import { CONNECTION_RULES, EDGE_TYPE_MAP } from "./graph-rules";
 import { MESSAGING_RESOURCE_TYPES, MESSAGING_NODE_TYPES, BACKEND_EDGE_TYPES } from "./constants";
 
@@ -433,4 +439,104 @@ export function sanitizeTopicName(name: string): string {
   if (!name) return "";
   const formatted = formatTopicName(name.trim());
   return formatted.replace(/\.+/g, ".").replace(/^\.+|\.+$/g, "");
+}
+
+export interface RawWebRtcStepCaps {
+  clientDeliveryEnableDataChannel?: boolean;
+  clientDeliveryEnableMic?: boolean;
+  clientDeliveryEnableSpeaker?: boolean;
+  clientDeliveryEnableCamera?: boolean;
+  clientDeliveryEnableScreenShare?: boolean;
+  clientDeliveryEnableRemoteVideo?: boolean;
+  clientDeliveryEnableAudio?: boolean;
+  clientDeliveryEnableVideo?: boolean;
+  clientDeliveryMediaMode?: WebRtcMediaMode;
+}
+
+/**
+ * Computes the aggregate WebRTC media mode based on enabled audio and video capabilities.
+ */
+export function computeMediaMode(
+  values: Pick<
+    WebRtcCapabilities,
+    "enableMic" | "enableSpeaker" | "enableCamera" | "enableScreenShare" | "enableRemoteVideo"
+  >,
+): WebRtcMediaMode {
+  const hasAnyAudio = Boolean(values.enableMic || values.enableSpeaker);
+  const hasAnyVideo = Boolean(
+    values.enableCamera || values.enableScreenShare || values.enableRemoteVideo,
+  );
+  return hasAnyAudio && hasAnyVideo
+    ? "audio-video"
+    : hasAnyAudio
+    ? "audio"
+    : hasAnyVideo
+    ? "video"
+    : "data";
+}
+
+/**
+ * Resolves discrete WebRTC capabilities from a step draft or connection, ensuring independent
+ * control with strict explicit false handling. When clientDeliveryMediaMode is 'data',
+ * all audio and video capabilities resolve strictly to false.
+ */
+export function resolveWebRtcCapabilitiesFromStep(
+  step: RawWebRtcStepCaps,
+): WebRtcCapabilities {
+  const isExplicitDataMode = step.clientDeliveryMediaMode === "data";
+
+  const enableMic = isExplicitDataMode
+    ? false
+    : step.clientDeliveryEnableMic !== undefined
+    ? Boolean(step.clientDeliveryEnableMic)
+    : step.clientDeliveryEnableAudio !== undefined
+    ? Boolean(step.clientDeliveryEnableAudio)
+    : Boolean(
+        step.clientDeliveryMediaMode === "audio" ||
+          step.clientDeliveryMediaMode === "audio-video",
+      );
+
+  const enableSpeaker = isExplicitDataMode
+    ? false
+    : step.clientDeliveryEnableSpeaker !== undefined
+    ? Boolean(step.clientDeliveryEnableSpeaker)
+    : Boolean(
+        step.clientDeliveryMediaMode === "audio" ||
+          step.clientDeliveryMediaMode === "audio-video",
+      );
+
+  const enableCamera = isExplicitDataMode
+    ? false
+    : step.clientDeliveryEnableCamera !== undefined
+    ? Boolean(step.clientDeliveryEnableCamera)
+    : step.clientDeliveryEnableVideo !== undefined
+    ? Boolean(step.clientDeliveryEnableVideo)
+    : Boolean(
+        step.clientDeliveryMediaMode === "video" ||
+          step.clientDeliveryMediaMode === "audio-video",
+      );
+
+  const enableScreenShare = isExplicitDataMode
+    ? false
+    : Boolean(step.clientDeliveryEnableScreenShare);
+
+  const enableRemoteVideo = isExplicitDataMode
+    ? false
+    : step.clientDeliveryEnableRemoteVideo !== undefined
+    ? Boolean(step.clientDeliveryEnableRemoteVideo)
+    : step.clientDeliveryEnableVideo !== undefined
+    ? Boolean(step.clientDeliveryEnableVideo)
+    : Boolean(
+        step.clientDeliveryMediaMode === "video" ||
+          step.clientDeliveryMediaMode === "audio-video",
+      );
+
+  return {
+    enableDataChannel: step.clientDeliveryEnableDataChannel !== false,
+    enableMic,
+    enableSpeaker,
+    enableCamera,
+    enableScreenShare,
+    enableRemoteVideo,
+  };
 }

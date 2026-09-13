@@ -55,8 +55,23 @@ export interface RealtimeConnection {
   protocol: RealtimeProtocol;
   /** SSE event name or WebSocket message type to listen for (e.g. "order.updated") */
   eventName?: string;
-  /** WebSocket broadcast room / channel key */
+  /** WebSocket / WebRTC broadcast room or signaling channel key */
   room?: string;
+  /** WebRTC media streaming mode (computed / legacy compatibility) */
+  mediaMode?: "data" | "audio" | "video" | "audio-video";
+  /** WebRTC granular media & data capabilities */
+  enableDataChannel?: boolean;
+  enableAudio?: boolean; // legacy alias for enableMic
+  enableMic?: boolean;
+  enableSpeaker?: boolean;
+  enableVideo?: boolean; // legacy alias for enableCamera
+  enableCamera?: boolean;
+  enableScreenShare?: boolean;
+  enableRemoteVideo?: boolean;
+  /** WebRTC peer role (defaults to "peer") */
+  peerRole?: "peer" | "initiator" | "responder";
+  /** Optional custom STUN/TURN server URL for WebRTC */
+  iceServerUrl?: string;
   /** Polling interval in ms (for POLLING protocol) */
   pollingIntervalMs?: number;
   /** Human-readable description */
