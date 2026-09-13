@@ -19,6 +19,7 @@ import { compileGrpcPackages } from "./grpc";
 import { compileTransformerHelpers } from "./compileTransformerHelpers";
 import { compileFrontendNodes } from "./compileFrontendHelpers";
 import { compileExternalNodes } from "./compileExternalNodes";
+import { isServiceAssociatedWithAnyWebApp } from "./webClients/nextjs/v16/serviceResolver";
 
 /**
  * Compiles the entire system architecture canvas into a production-ready
@@ -44,6 +45,13 @@ export function compileMonorepo(
   );
   const webPageNodes = nodes.filter(
     (n) => n.type === "webPage",
+  );
+  const webAppNodes = nodes.filter((n) => n.type === "webApp");
+
+  // Next.js API services that are associated with a WebApp get compiled directly into that WebApp
+  // rather than generating a standalone microservice application.
+  const standaloneServiceNodes = serviceNodes.filter(
+    (srvNode) => !isServiceAssociatedWithAnyWebApp(srvNode, webAppNodes, nodes, edges),
   );
 
   const servicesInfo: { id: string; name: string; folderName: string }[] = [];
@@ -73,8 +81,8 @@ export function compileMonorepo(
     return folderName;
   };
 
-  // Pre-populate servicesInfo so all packages and types are generated with consistent naming
-  serviceNodes.forEach((srvNode) => {
+  // Pre-populate servicesInfo for standalone services so all packages and types are generated with consistent naming
+  standaloneServiceNodes.forEach((srvNode) => {
     const rawName = srvNode.data?.label || srvNode.id || "Service";
     const folderName = getUniqueServiceFolder(rawName, "service");
     servicesInfo.push({
@@ -229,8 +237,8 @@ export function compileMonorepo(
   });
   const externalFunctions: ReusableFunction[] = compiledExternal.reusableFunctions ?? [];
 
-  // 5. Generate Apps: apps/<sanitizedName> for Service Nodes
-  serviceNodes.forEach((srvNode) => {
+  // 5. Generate Apps: apps/<sanitizedName> for Standalone Service Nodes
+  standaloneServiceNodes.forEach((srvNode) => {
     const srvInfo = servicesInfo.find((s) => s.id === srvNode.id);
     const folderName = srvInfo?.folderName || getUniqueServiceFolder(srvNode.data?.label || srvNode.id || "Service", "service");
 
@@ -277,8 +285,6 @@ export function compileMonorepo(
   });
 
   // 6. Generate Web Apps: apps/<appSlug> for WebApp nodes & connected WebPage nodes
-  const webAppNodes = nodes.filter((n) => n.type === "webApp");
-
   if (webAppNodes.length > 0 || webPageNodes.length > 0) {
     const appMap = new Map<string, { appName: string; appSlug: string; webAppNode?: BackendNode; pageNodes: BackendNode[] }>();
 

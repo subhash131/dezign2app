@@ -24,6 +24,12 @@ export const SERVICE_TECH_OPTIONS = [
     versions: [{ value: "0.110.x", label: "0.110.x" }],
     defaultVersion: "0.110.x",
   },
+  {
+    value: "nextjs",
+    label: "Next.js API",
+    versions: [{ value: "16.x", label: "16.x" }],
+    defaultVersion: "16.x",
+  },
 ] as const;
 
 export const WEB_CLIENT_TECH_OPTIONS = [

@@ -2,6 +2,7 @@ import { BackendNode, BackendEdge, SimulationTestCase } from "@/types/canvas";
 import { Endpoint, AnyMessagingResource, CompiledServiceResult, ReusableFunction } from "@workspace/canvas/types";
 import { compileExpressV4Service } from "./services/express/v4";
 import { compileFastAPIService } from "./services/fastapi/v0";
+import { compileNextjsV16Service } from "./services/nextjs/v16";
 import { compileDatabaseNodes } from "./compileDatabaseNodes";
 import { compileKafkaNodes, isServiceConnectedToKafka } from "./compileKafkaNodes";
 import { compileRedisNodes, isServiceConnectedToRedis } from "./compileRedisNodes";
@@ -112,6 +113,19 @@ export function compileServiceNode(
   }
 
   switch (techStack) {
+    case "nextjs":
+      return compileNextjsV16Service(
+        node,
+        nodeEndpoints,
+        nodeEvents,
+        allNodes,
+        allEdges,
+        testCases,
+        dbFunctions,
+        kafkaFunctions,
+        folderName,
+        redisFunctions,
+      );
     case "fastapi":
       return compileFastAPIService(
         node,

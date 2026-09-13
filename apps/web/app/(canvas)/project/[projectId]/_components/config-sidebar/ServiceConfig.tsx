@@ -86,15 +86,26 @@ export const ServiceConfig: React.FC<ServiceConfigProps> = ({ id, nodeId }) => {
     return other?.type === "redis_instance" || other?.type === "redis-cache" || other?.type === "redis-streams";
   });
 
-  const inferredDeps: { name: string; version: string; reason: string }[] = [
-    { name: "@workspace/types", version: "workspace:*", reason: "Shared API & Schema contracts" },
-    { name: "@workspace/logger", version: "workspace:*", reason: "Structured logging" },
-    { name: "express", version: "^4.19.2", reason: "Express microservice runtime" },
-    { name: "cors", version: "^2.8.5", reason: "CORS middleware" },
-    { name: "zod", version: "^3.24.2", reason: "Request/Response validation" },
-    { name: "dotenv", version: "^16.4.5", reason: "Environment configuration" },
-    { name: "jose", version: "^5.9.6", reason: "JWT security" },
-  ];
+  const isNextjs = techStack === "nextjs";
+
+  const inferredDeps: { name: string; version: string; reason: string }[] = isNextjs
+    ? [
+        { name: "@workspace/types", version: "workspace:*", reason: "Shared API & Schema contracts" },
+        { name: "@workspace/logger", version: "workspace:*", reason: "Structured logging" },
+        { name: "next", version: "^16.0.0", reason: "Next.js App Router framework" },
+        { name: "react", version: "^19.0.0", reason: "React runtime" },
+        { name: "react-dom", version: "^19.0.0", reason: "React DOM runtime" },
+        { name: "zod", version: "^3.24.2", reason: "Request/Response validation" },
+      ]
+    : [
+        { name: "@workspace/types", version: "workspace:*", reason: "Shared API & Schema contracts" },
+        { name: "@workspace/logger", version: "workspace:*", reason: "Structured logging" },
+        { name: "express", version: "^4.19.2", reason: "Express microservice runtime" },
+        { name: "cors", version: "^2.8.5", reason: "CORS middleware" },
+        { name: "zod", version: "^3.24.2", reason: "Request/Response validation" },
+        { name: "dotenv", version: "^16.4.5", reason: "Environment configuration" },
+        { name: "jose", version: "^5.9.6", reason: "JWT security" },
+      ];
 
   if (hasDbConnection) {
     inferredDeps.push({ name: "@workspace/db", version: "workspace:*", reason: "Connected to Database" });
@@ -105,22 +116,30 @@ export const ServiceConfig: React.FC<ServiceConfigProps> = ({ id, nodeId }) => {
   if (hasRedisConnection) {
     inferredDeps.push({ name: "@workspace/redis", version: "workspace:*", reason: "Connected to Redis Cache" });
   }
-  if (interServiceProtocol === INTER_SERVICE_PROTOCOL_GRPC) {
+  if (!isNextjs && interServiceProtocol === INTER_SERVICE_PROTOCOL_GRPC) {
     inferredDeps.push(
       { name: "@grpc/grpc-js", version: "^1.11.1", reason: "gRPC Protocol enabled" },
       { name: "@grpc/proto-loader", version: "^0.7.13", reason: "Proto file loader" }
     );
   }
 
-  const inferredDevDeps: { name: string; version: string; reason: string }[] = [
-    { name: "@workspace/typescript-config", version: "workspace:*", reason: "Workspace TS configuration" },
-    { name: "@types/express", version: "^4.17.21", reason: "Express TypeScript types" },
-    { name: "@types/cors", version: "^2.8.17", reason: "CORS types" },
-    { name: "@types/node", version: "^20.11.0", reason: "Node.js types" },
-    { name: "ts-node-dev", version: "^2.0.0", reason: "Development hot reloader" },
-    { name: "typescript", version: "^5.3.3", reason: "TypeScript compiler" },
-    { name: "vitest", version: "^1.6.0", reason: "Unit testing runner" },
-  ];
+  const inferredDevDeps: { name: string; version: string; reason: string }[] = isNextjs
+    ? [
+        { name: "@workspace/typescript-config", version: "workspace:*", reason: "Workspace TS configuration" },
+        { name: "@types/node", version: "^20.11.0", reason: "Node.js types" },
+        { name: "@types/react", version: "^19.0.0", reason: "React types" },
+        { name: "@types/react-dom", version: "^19.0.0", reason: "React DOM types" },
+        { name: "typescript", version: "^5.4.0", reason: "TypeScript compiler" },
+      ]
+    : [
+        { name: "@workspace/typescript-config", version: "workspace:*", reason: "Workspace TS configuration" },
+        { name: "@types/express", version: "^4.17.21", reason: "Express TypeScript types" },
+        { name: "@types/cors", version: "^2.8.17", reason: "CORS types" },
+        { name: "@types/node", version: "^20.11.0", reason: "Node.js types" },
+        { name: "ts-node-dev", version: "^2.0.0", reason: "Development hot reloader" },
+        { name: "typescript", version: "^5.3.3", reason: "TypeScript compiler" },
+        { name: "vitest", version: "^1.6.0", reason: "Unit testing runner" },
+      ];
 
   return (
     <div className="space-y-6">
