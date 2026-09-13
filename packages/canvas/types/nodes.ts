@@ -25,6 +25,7 @@ import type {
   CanvasPageRefNodeData,
   CanvasHookNodeData,
   CanvasHookRefNodeData,
+  CanvasStateStoreNodeData,
 } from "./web-app";
 import type {
   CanvasWorkerNodeData,
@@ -34,6 +35,7 @@ import type {
   CanvasAuthNodeData,
 } from "./infrastructure";
 import type { Parameter } from "./simulation";
+import type { JsonValue, JsonObject } from "./realtime";
 import type { CustomTypeItem, CanvasTypesNodeData } from "./custom-types";
 export type BackendNodeType =
   | "service"
@@ -77,7 +79,8 @@ export type BackendNodeType =
   | "transformer_ref"
   | "hook"
   | "hook_ref"
-  | "types";
+  | "types"
+  | "state_store";
 
 /** Core fields present on every canvas node. */
 export interface BaseNodeData {
@@ -164,13 +167,7 @@ export interface ExternalHeader extends Parameter {
   enabled?: boolean;
 }
 
-export type ExternalDataPayload =
-  | Record<string, unknown>
-  | unknown[]
-  | string
-  | number
-  | boolean
-  | null;
+export type ExternalDataPayload = JsonValue;
 
 export interface ExternalTestResult {
   status?: number;
@@ -199,8 +196,8 @@ export interface CanvasExternalNodeData extends Partial<BaseNodeData> {
   headers?: ExternalHeader[];
   bodyType?: "json" | "text" | "raw" | "none";
   bodyContent?: string;
-  responseSchema?: Record<string, unknown>;
-  errorResponseSchema?: Record<string, unknown>;
+  responseSchema?: JsonObject;
+  errorResponseSchema?: JsonObject;
   lastTestResult?: ExternalTestResult;
   authType?: "none" | "bearer" | "apiKey" | "basic" | "custom";
   authHeader?: string;
@@ -225,7 +222,6 @@ export interface CanvasExternalNodeData extends Partial<BaseNodeData> {
     name: string;
     description?: string;
   }>;
-  actions?: { id: string; name: string }[];
 }
 
 /**
@@ -257,7 +253,8 @@ export type BackendNodeData = BaseNodeData &
       CanvasTransformerRefNodeData &
       CanvasHookNodeData &
       CanvasHookRefNodeData &
-      CanvasTypesNodeData
+      CanvasTypesNodeData &
+      CanvasStateStoreNodeData
   >;
 
 export type BackendNode = {

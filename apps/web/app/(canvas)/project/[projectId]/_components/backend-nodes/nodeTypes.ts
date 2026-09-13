@@ -33,6 +33,7 @@ import {
   HookNode,
   HookRefNode,
   TypesNode,
+  StateStoreNode,
 } from "./graph-nodes";
 import { SchemaGroupNode } from "./SchemaGroupNode";
 import { WebAppGroupNode } from "./WebAppGroupNode";
@@ -82,4 +83,5 @@ export const nodeTypes = {
   hook: HookNode,
   hook_ref: HookRefNode,
   types: TypesNode,
+  state_store: StateStoreNode,
 };

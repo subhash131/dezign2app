@@ -21,6 +21,9 @@ import {
 import {
   generatePageAndComponentFiles,
 } from "./pageFileGenerator";
+import { generateZustandStores } from "./storeGenerators";
+import { resolveAppProviders } from "./providerGenerators";
+import { GlobalStoreDefinition, NodeDependencyItem } from "@workspace/canvas/types";
 
 export type { LinkedEndpointInfo, LinkedPageRefInfo };
 export { getServicePort, resolveLinkedEndpoint, resolvePageRefLink };
@@ -73,6 +76,91 @@ export function compileNextjsV16WebClient(
   // 2. Generate Route Group Layouts
   files.push(...generateRouteGroupLayouts(pagesInfo, Boolean(authNode), webAppNode));
 
+  // 2.5 Resolve State Store Nodes, Global Stores (Zustand) & App Providers (Context)
+  const appGlobalStores: GlobalStoreDefinition[] = webAppNode?.data?.globalStores || [];
+  const pageStores: GlobalStoreDefinition[] = webClientNodes.flatMap((p) => p.data?.pageStores || []);
+
+  // Gather state_store nodes associated with this webApp
+  const webClientNodeIds = new Set(webClientNodes.map((p) => p.id));
+  const associatedStateStoreNodes = (allNodes || []).filter((n) => {
+    if (n.type !== "state_store") return false;
+
+    // 1. Direct targetWebAppId matching
+    if (n.data?.targetWebAppId) {
+      return n.data.targetWebAppId === webAppNode?.id;
+    }
+
+    // 2. Direct edge to webAppNode
+    const hasWebAppEdge = (allEdges || []).some(
+      (e) =>
+        (e.source === webAppNode?.id && e.target === n.id) ||
+        (e.target === webAppNode?.id && e.source === n.id)
+    );
+    if (hasWebAppEdge) return true;
+
+    // 3. Edge to any page belonging to this webApp
+    const hasPageEdge = (allEdges || []).some(
+      (e) =>
+        (webClientNodeIds.has(e.source) && e.target === n.id) ||
+        (webClientNodeIds.has(e.target) && e.source === n.id)
+    );
+    if (hasPageEdge) return true;
+
+    // 4. Fallback: If only 1 webApp in graph, include unassigned stores
+    const allWebApps = (allNodes || []).filter((node) => node.type === "webApp");
+    if (allWebApps.length <= 1) return true;
+
+    return false;
+  });
+
+  const localStorePaths: Record<string, string> = {};
+  const graphStateStores: GlobalStoreDefinition[] = associatedStateStoreNodes.map((sn) => {
+    const d = sn.data || {};
+    const storeName = d.storeName || d.label || "App";
+    const scope = d.scope || "global";
+    const storage = d.storage || "memory";
+
+    // If local store, attempt to map to connected or target page
+    let targetPage = webClientNodes.find((p) => p.id === d.targetPageId);
+    if (!targetPage) {
+      const connectedPageEdge = (allEdges || []).find(
+        (e) =>
+          (webClientNodeIds.has(e.source) && e.target === sn.id) ||
+          (webClientNodeIds.has(e.target) && e.source === sn.id)
+      );
+      if (connectedPageEdge) {
+        const pageId = webClientNodeIds.has(connectedPageEdge.source)
+          ? connectedPageEdge.source
+          : connectedPageEdge.target;
+        targetPage = webClientNodes.find((p) => p.id === pageId);
+      }
+    }
+
+    if (scope === "local" && targetPage) {
+      const pagePath = targetPage.data?.path || targetPage.data?.route || targetPage.data?.pageSlug || "page";
+      const cleanPath = pagePath.replace(/^\/+|\/+$/g, "");
+      const baseName = storeName.replace(/Store$/i, "");
+      const hookName = `use${baseName.charAt(0).toUpperCase() + baseName.slice(1)}Store`;
+      localStorePaths[sn.id] = `app/${cleanPath}/_stores/${hookName}.ts`;
+    }
+
+    return {
+      id: sn.id,
+      name: storeName,
+      description: d.description,
+      fields: d.fields || [],
+      actions: d.actions || [],
+      storage,
+      scope,
+      targetPageId: targetPage?.id || d.targetPageId,
+    };
+  });
+
+  const allStores = [...appGlobalStores, ...pageStores, ...graphStateStores];
+  if (allStores.length > 0) {
+    files.push(...generateZustandStores(allStores, { localStorePaths }));
+  }
+
   // 3. Project Configuration Files
   const sectionAndActionLibs = webClientNodes.flatMap((p) =>
     (p.data?.sections || []).flatMap((s) => [
@@ -87,10 +175,33 @@ export function compileNextjsV16WebClient(
     source: "manual" as const,
   }));
 
+  const storeDeps = allStores.length > 0
+    ? [{ name: "zustand", version: "^5.0.0", isDev: false, source: "manual" as const }]
+    : [];
+
+  const resolvedProviders = resolveAppProviders([
+    ...sectionAndActionLibs,
+    ...(webAppNode?.data?.customDependencies || []).map((d: NodeDependencyItem) => d.name),
+    ...webClientNodes.flatMap((p) => (p.data?.customDependencies || []).map((d: NodeDependencyItem) => d.name)),
+  ]);
+
+  if (resolvedProviders.hasProviders && resolvedProviders.file) {
+    files.push(resolvedProviders.file);
+  }
+
+  const providerDeps = resolvedProviders.requiredPackages.map((pkg) => ({
+    name: pkg.name,
+    version: pkg.version,
+    isDev: false,
+    source: "manual" as const,
+  }));
+
   const allWebCustomDeps = [
     ...(webAppNode?.data?.customDependencies || []),
     ...webClientNodes.flatMap((p) => p.data?.customDependencies || []),
     ...extraDepsFromSectionsAndActions,
+    ...storeDeps,
+    ...providerDeps,
   ];
   const deduplicatedCustomDeps = allWebCustomDeps.filter(
     (dep, index, self) => index === self.findIndex((d) => d.name === dep.name)
@@ -151,7 +262,12 @@ export function compileNextjsV16WebClient(
   files.push({
     filename: "app/layout.tsx",
     language: "typescript",
-    content: generateRootLayout(projectName, navLinksHtml, showNav),
+    content: generateRootLayout(
+      projectName,
+      navLinksHtml,
+      showNav,
+      resolvedProviders.hasProviders,
+    ),
   });
 
   files.push({

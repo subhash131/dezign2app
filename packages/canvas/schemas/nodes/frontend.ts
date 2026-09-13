@@ -52,3 +52,42 @@ export const hookRefDataSchema = baseNodeDataSchema
   .passthrough();
 
 export type HookRefData = z.infer<typeof hookRefDataSchema>;
+
+export const globalStoreFieldSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  type: z.enum(["string", "number", "boolean", "array", "object"]),
+  defaultValue: z
+    .union([z.string(), z.number(), z.boolean(), z.null()])
+    .optional(),
+  description: z.string().optional(),
+});
+
+export type GlobalStoreFieldSchemaType = z.infer<typeof globalStoreFieldSchema>;
+
+export const globalStoreActionSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  targetFieldId: z.string().optional(),
+  actionType: z.enum(["set", "append", "remove", "toggle", "custom"]),
+});
+
+export type GlobalStoreActionSchemaType = z.infer<typeof globalStoreActionSchema>;
+
+export const stateStoreNodeDataSchema = baseNodeDataSchema
+  .extend({
+    storeName: z.string().optional(),
+    scope: z.enum(["global", "local"]).optional().default("global"),
+    targetWebAppId: z.string().optional(),
+    targetPageId: z.string().optional(),
+    storage: z
+      .enum(["memory", "localStorage", "sessionStorage"])
+      .optional()
+      .default("memory"),
+    fields: z.array(globalStoreFieldSchema).optional(),
+    actions: z.array(globalStoreActionSchema).optional(),
+    description: z.string().optional(),
+  })
+  .passthrough();
+
+export type StateStoreNodeData = z.infer<typeof stateStoreNodeDataSchema>;

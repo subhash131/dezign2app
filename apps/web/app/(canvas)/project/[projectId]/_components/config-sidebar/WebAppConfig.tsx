@@ -19,7 +19,9 @@ import {
   Trash,
   Package,
   Settings,
+  Database,
 } from "lucide-react";
+import { WebAppGlobalStoresTab } from "./WebAppGlobalStoresTab";
 import {
   BackendNode,
   WEB_CLIENT_TECH_OPTIONS,
@@ -218,19 +220,28 @@ export const WebAppConfig = ({
         </p>
       </div>
 
-      {/* Tabs: Settings vs Packages */}
+      {/* Tabs: Settings vs Packages vs Global Stores */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="w-full grid grid-cols-2 p-1 bg-muted/50 rounded-lg mb-4">
+        <TabsList className="w-full grid grid-cols-3 p-1 bg-muted/50 rounded-lg mb-4">
           <TabsTrigger value="settings" className="text-xs flex items-center gap-1.5 data-[state=active]:bg-background">
             <Settings className="w-3.5 h-3.5" />
-            Overview & Sections
+            Overview
           </TabsTrigger>
           <TabsTrigger value="packages" className="text-xs flex items-center gap-1.5 data-[state=active]:bg-background">
             <Package className="w-3.5 h-3.5 text-primary" />
-            Packages & Libraries
+            Packages
             {customDependencies.length > 0 && (
               <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-primary/20 text-primary font-mono font-bold">
                 {customDependencies.length}
+              </span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="stores" className="text-xs flex items-center gap-1.5 data-[state=active]:bg-background">
+            <Database className="w-3.5 h-3.5 text-indigo-500" />
+            Global Stores
+            {(data.globalStores?.length || 0) > 0 && (
+              <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-indigo-500/20 text-indigo-500 font-mono font-bold">
+                {data.globalStores!.length}
               </span>
             )}
           </TabsTrigger>
@@ -497,6 +508,14 @@ export const WebAppConfig = ({
             onUpdateDependencies={(deps) => updateData({ customDependencies: deps })}
             inferredDependencies={inferredWebDeps}
             inferredDevDependencies={inferredWebDevDeps}
+          />
+        </TabsContent>
+
+        {/* Tab 3: Global Stores (Zustand) */}
+        <TabsContent value="stores" className="pt-2">
+          <WebAppGlobalStoresTab
+            stores={data.globalStores || []}
+            onUpdateStores={(stores) => updateData({ globalStores: stores })}
           />
         </TabsContent>
       </Tabs>

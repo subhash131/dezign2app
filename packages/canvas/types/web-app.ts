@@ -1,7 +1,7 @@
-import type { UIEventItem, PageSection, Parameter, Schema } from "./simulation";
+import type { UIEventItem, PageSection, Parameter, Schema, StateVariableType } from "./simulation";
 import type { WebAppZone, ProtectionRule, PaymentsPlanConfig } from "./auth";
 import type { ClientDeliveryProtocol } from "./messaging";
-import type { RealtimeProtocol } from "./realtime";
+import type { RealtimeProtocol, JsonValue } from "./realtime";
 import type { NodeDependencyItem } from "./services";
 
 export type SectionIconName =
@@ -87,6 +87,32 @@ export interface RealtimeConnection {
   sourceItemType?: "endpoint" | "event";
 }
 
+export interface GlobalStoreField {
+  id: string;
+  name: string;
+  type: StateVariableType;
+  defaultValue?: JsonValue;
+  description?: string;
+}
+
+export interface GlobalStoreAction {
+  id: string;
+  name: string;
+  targetFieldId?: string;
+  actionType: "set" | "append" | "remove" | "toggle" | "custom";
+}
+
+export interface GlobalStoreDefinition {
+  id: string;
+  name: string;
+  description?: string;
+  fields: GlobalStoreField[];
+  actions?: GlobalStoreAction[];
+  storage?: "memory" | "localStorage" | "sessionStorage";
+  scope?: "global" | "local";
+  targetPageId?: string;
+}
+
 /** WebApp node fields (canvas type). */
 export interface CanvasWebAppNodeData {
   appSlug?: string;
@@ -113,6 +139,7 @@ export interface CanvasWebAppNodeData {
   showNav?: boolean;
   customDependencies?: NodeDependencyItem[];
   envVars?: Array<{ id: string; name: string; description?: string }>;
+  globalStores?: GlobalStoreDefinition[];
 }
 
 /** Web Page node fields (canvas type). */
@@ -144,6 +171,7 @@ export interface CanvasWebPageNodeData {
   /** Real-time push connections (SSE, WebSocket, WebRTC, Polling) for this page */
   realtimeConnections?: RealtimeConnection[];
   customDependencies?: NodeDependencyItem[];
+  pageStores?: GlobalStoreDefinition[];
 }
 
 /** Payments node fields (canvas type). */
@@ -186,4 +214,15 @@ export interface CanvasHookRefNodeData {
   targetWebAppId?: string;
   targetPageId?: string;
   targetPageIds?: string[];
+}
+
+/** State Store node fields for canvas graph view (modeled after TransformerNode). */
+export interface CanvasStateStoreNodeData {
+  storeName?: string;
+  scope?: "global" | "local";
+  storage?: "memory" | "localStorage" | "sessionStorage";
+  targetWebAppId?: string;
+  targetPageId?: string;
+  fields?: GlobalStoreField[];
+  actions?: GlobalStoreAction[];
 }

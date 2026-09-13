@@ -7,4 +7,5 @@ export * from "./SectionUiDesignTab";
 export * from "./SectionPresetConfirmDialog";
 export * from "./SectionTabsNav";
 export * from "./SectionNotFoundState";
+export * from "./SectionStateTab";
 export * from "./hooks";

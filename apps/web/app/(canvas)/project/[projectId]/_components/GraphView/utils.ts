@@ -261,5 +261,22 @@ export function createGraphNodeData(
     };
   }
 
+  if (type === "state_store") {
+    const existingStores = existingNodes.filter((n) => n.type === "state_store");
+    const count = existingStores.length;
+    const defaultLabel = label || `AppStore${count > 0 ? count + 1 : ""}`;
+    return {
+      ...baseData,
+      label: defaultLabel,
+      storeName: defaultLabel,
+      scope: "global",
+      storage: "memory",
+      fields: [
+        { id: crypto.randomUUID(), name: "value", type: "string", defaultValue: "" },
+      ],
+      actions: [],
+    };
+  }
+
   return baseData;
 }

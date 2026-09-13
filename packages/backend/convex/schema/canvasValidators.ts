@@ -39,6 +39,7 @@ import {
   hookNodeDataSchema,
   hookRefDataSchema,
   typesNodeDataSchema,
+  stateStoreNodeDataSchema,
   identityProviderSchema,
   publishedEventSchema,
   consumedEventSchema,
@@ -401,6 +402,24 @@ export const webPageEventConvexValidator = v.object({
   wsConfig: v.optional(wsConfigConvexValidator),
   webRtcConfig: v.optional(webRtcConfigConvexValidator),
   pollingConfig: v.optional(pollingConfigConvexValidator),
+  storeActionBinding: v.optional(
+    v.object({
+      storeNodeId: v.string(),
+      actionId: v.string(),
+      storeName: v.optional(v.string()),
+      actionName: v.optional(v.string()),
+      actionType: v.optional(
+        v.union(
+          v.literal("set"),
+          v.literal("append"),
+          v.literal("remove"),
+          v.literal("toggle"),
+          v.literal("custom"),
+        ),
+      ),
+      payloadExpr: v.optional(v.string()),
+    }),
+  ),
 });
 
 // Page Section Validator
@@ -412,6 +431,25 @@ export const pageSectionConvexValidator = v.object({
     v.union(v.literal("eager"), v.literal("dynamic"), v.literal("dynamic-no-ssr")),
   ),
   actions: v.array(webPageEventConvexValidator),
+  states: v.optional(
+    v.array(
+      v.object({
+        id: v.string(),
+        name: v.string(),
+        type: v.union(
+          v.literal("string"),
+          v.literal("number"),
+          v.literal("boolean"),
+          v.literal("array"),
+          v.literal("object"),
+        ),
+        defaultValue: v.optional(
+          v.union(v.string(), v.number(), v.boolean(), v.null()),
+        ),
+        description: v.optional(v.string()),
+      }),
+    ),
+  ),
   description: v.optional(v.string()),
   uiPrompt: v.optional(v.string()),
   libraries: v.optional(v.array(v.string())),
@@ -579,6 +617,69 @@ export const langgraphConvexDataValidator = v.object({
   endNodes: v.optional(v.array(v.any())),
 });
 
+// State Store Node Data Validator
+export const stateStoreConvexDataValidator = v.object({
+  label: v.optional(v.string()),
+  storeName: v.optional(v.string()),
+  scope: v.optional(v.union(v.literal("global"), v.literal("local"))),
+  targetWebAppId: v.optional(v.string()),
+  targetPageId: v.optional(v.string()),
+  storage: v.optional(
+    v.union(
+      v.literal("memory"),
+      v.literal("localStorage"),
+      v.literal("sessionStorage"),
+    ),
+  ),
+  fields: v.optional(
+    v.array(
+      v.object({
+        id: v.string(),
+        name: v.string(),
+        type: v.union(
+          v.literal("string"),
+          v.literal("number"),
+          v.literal("boolean"),
+          v.literal("array"),
+          v.literal("object"),
+        ),
+        defaultValue: v.optional(
+          v.union(v.string(), v.number(), v.boolean(), v.null()),
+        ),
+        description: v.optional(v.string()),
+      }),
+    ),
+  ),
+  actions: v.optional(
+    v.array(
+      v.object({
+        id: v.string(),
+        name: v.string(),
+        targetFieldId: v.optional(v.string()),
+        actionType: v.union(
+          v.literal("set"),
+          v.literal("append"),
+          v.literal("remove"),
+          v.literal("toggle"),
+          v.literal("custom"),
+        ),
+      }),
+    ),
+  ),
+  description: v.optional(v.string()),
+  color: v.optional(v.string()),
+  parentId: v.optional(v.string()),
+  position: v.optional(v.object({ x: v.number(), y: v.number() })),
+  style: v.optional(
+    v.record(
+      v.string(),
+      v.union(v.string(), v.number(), v.boolean(), v.null()),
+    ),
+  ),
+  width: v.optional(v.number()),
+  height: v.optional(v.number()),
+});
+
 // Node Data Validator
 // Using zodToConvex & explicit validators to keep database schemas in sync
 export const backendNodeDataValidator = v.union(
@@ -616,6 +717,8 @@ export const backendNodeDataValidator = v.union(
   zodToConvex(hookNodeDataSchema),
   zodToConvex(hookRefDataSchema),
   zodToConvex(typesNodeDataSchema),
+  stateStoreConvexDataValidator,
+  zodToConvex(stateStoreNodeDataSchema),
   // Fallback for partial updates (label is always present on real nodes)
   v.object({
     label: v.string(),

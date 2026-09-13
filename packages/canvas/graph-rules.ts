@@ -91,7 +91,7 @@ export const CONNECTION_RULES: Record<HandleKind, HandleKind[]> = {
   "auth-in": [],
   "injects-plugin-out": ["payments-plugin-in", "auth-in"],
   "payments-plugin-in": [],
-  "page-out": ["page-section-in", "endpoint-in", "page-in", "page-ref-in", "hook-in", "component-in"],
+  "page-out": ["page-section-in", "endpoint-in", "page-in", "page-ref-in", "hook-in", "component-in", "store-in"],
   "page-in": [],
   "page-section-in": ["page-in", "endpoint-in", "page-out", "hook-in", "component-in"],
   "transformer-in": [],
@@ -121,6 +121,14 @@ export const CONNECTION_RULES: Record<HandleKind, HandleKind[]> = {
     "page-in",
     "type-in",
     "page-section-in",
+  ],
+  "store-in": [],
+  "store-out": [
+    "page-in",
+    "page-section-in",
+    "component-in",
+    "hook-in",
+    "store-in",
   ],
   unknown: [],
 };
@@ -182,6 +190,13 @@ export const EDGE_TYPE_MAP: Record<string, string> = {
   "type-out→page-in": "reference",
   "type-out→type-in": "type-reference",
   "type-out→page-section-in": "type-reference",
+  // State Store wiring edges
+  "page-out→store-in": "connection",
+  "store-out→page-in": "connection",
+  "store-out→page-section-in": "connection",
+  "store-out→component-in": "connection",
+  "store-out→hook-in": "reference",
+  "store-out→store-in": "reference",
 };
 
 // NOTE: "sse", "websocket", "webrtc", "polling" have been moved to the
