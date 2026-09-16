@@ -274,7 +274,11 @@ export function TerminalPanelHeader({
           variant="ghost"
           size="sm"
           onClick={onToggleMaximize}
-          title={isMaximized ? "Restore Panel Size" : "Maximize Panel Size"}
+          title={
+            isMaximized
+              ? "Restore Panel Size (or double-click top border)"
+              : "Maximize Panel Size (or double-click top border)"
+          }
           className="h-6 px-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800"
         >
           {isMaximized ? (

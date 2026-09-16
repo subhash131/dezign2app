@@ -115,7 +115,11 @@ export const useSidebarStore = create<SidebarState>()(
       setTerminalHeight: (height) =>
         set((state) => {
           const val = typeof height === "function" ? height(state.terminalHeight) : height;
-          return { terminalHeight: Math.max(140, Math.min(800, val)) };
+          const maxH =
+            typeof window !== "undefined"
+              ? Math.floor(window.innerHeight * 0.8)
+              : 650;
+          return { terminalHeight: Math.max(140, Math.min(maxH, val)) };
         }),
     }),
     {

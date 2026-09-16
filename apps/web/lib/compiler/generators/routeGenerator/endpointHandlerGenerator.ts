@@ -228,7 +228,7 @@ export function generateEndpointRouteHandler(
   const hasPipelineSteps = Array.isArray(pipelineSteps) && pipelineSteps.length > 0;
 
   if (hasPipelineSteps) {
-    const pipelineLines = renderPipeline(pipelineSteps, payloadVar);
+    const pipelineLines = renderPipeline(pipelineSteps, payloadVar, allNodes);
     pipelineLines.forEach((line) => {
       routeHandlerCode += `    ${line}\n`;
     });

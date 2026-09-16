@@ -511,7 +511,13 @@ export function isStepInputUnconfigured(
   allNodes: BackendNode[] = [],
 ): boolean {
   if (step.enabled === false) return false;
-  if (step.type === "return_response") return false;
+  if (step.type === "return_response") {
+    const bindings = step.inputBindings || [];
+    if (bindings.some((b) => !isBindingSourceConfigured(b))) {
+      return true;
+    }
+    return false;
+  }
 
   // Recursively check nested steps in control flow branches
   const nested = collectNestedSteps(step);

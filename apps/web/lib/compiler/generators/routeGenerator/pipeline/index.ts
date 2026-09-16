@@ -1,3 +1,4 @@
+import { BackendNode } from "@/types/canvas";
 import { PipelineStep } from "@workspace/canvas/types";
 import { PipelineRenderContext } from "./types";
 import {
@@ -103,6 +104,7 @@ export function renderPipelineNested(
     lines.push(...stepLines);
     if (step.outputVariable && step.id) {
       ctx.priorOutputs.set(step.id, step.outputVariable);
+      ctx.priorSteps?.set(step.id, step);
     }
   }
   return lines;
@@ -121,10 +123,13 @@ export function renderPipelineNested(
 export function renderPipeline(
   steps: PipelineStep[],
   bodyVar = "body",
+  allNodes: BackendNode[] = [],
 ): string[] {
   const ctx: PipelineRenderContext = {
     priorOutputs: new Map(),
+    priorSteps: new Map(),
     bodyVar,
+    allNodes,
   };
 
   const allLines: string[] = [];
@@ -140,8 +145,10 @@ export function renderPipeline(
     // Register this step's output so subsequent steps can reference it
     if (step.outputVariable && step.id) {
       ctx.priorOutputs.set(step.id, step.outputVariable);
+      ctx.priorSteps?.set(step.id, step);
     }
   }
+
 
   return allLines;
 }

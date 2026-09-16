@@ -1,6 +1,6 @@
 import { BackendNode } from "@/types/canvas";
 import { Endpoint } from "@workspace/canvas/types";
-import { toPascalCase } from "../../utils";
+import { toPascalCase, toSingular } from "../../utils";
 import {
   SchemaItem,
   schemaToTsInterface,
@@ -10,6 +10,184 @@ import {
   buildResponseInterfaceBody,
 } from "../routeGenerator/endpointTypeClassifier";
 import { ResponseFieldItem, ResponseInterfaceResult } from "./types";
+
+function inferRedisStepType(
+  step: {
+    type?: string;
+    name?: string;
+    functionRef?: { name?: string; importPath?: string };
+    operation?: string;
+    redisNodeId?: string;
+    tableNodeId?: string;
+    databaseId?: string;
+    cacheMiss?: {
+      enabled?: boolean;
+      action?: string;
+      functionRef?: { name?: string; importPath?: string };
+    };
+  },
+  nodes: BackendNode[],
+  entityImports: Set<string>,
+  field?: string,
+): string {
+  const redisNodeId = step.redisNodeId || step.tableNodeId || step.databaseId;
+  const redisNode = redisNodeId
+    ? nodes.find((n) => n.id === redisNodeId)
+    : nodes.find(
+        (n) =>
+          n.type === "redis_schema" ||
+          n.type === "redis-cache" ||
+          n.type === "redis_instance" ||
+          n.data?.redisDataStructure ||
+          n.data?.dbType === "redis",
+      );
+  const rawName = redisNode?.data?.label || redisNode?.data?.tableName || "Item";
+  const pascalName = toPascalCase(rawName);
+  const itemType = `${pascalName}Item`;
+  const fnName = (
+    step.functionRef?.name ||
+    step.operation ||
+    step.name ||
+    ""
+  ).toLowerCase();
+
+  // If a specific nested field was selected (e.g., sender, message)
+  if (field && field.trim()) {
+    const trimmedField = field.trim();
+    if (trimmedField === "message") return "string | undefined";
+    if (trimmedField === "success") return "boolean | undefined";
+
+    // 1. Check columns on redisNode
+    const col = redisNode?.data?.columns?.find(
+      (c: { name?: string }) => c.name?.toLowerCase() === trimmedField.toLowerCase(),
+    );
+    if (col) {
+      const colType = (col.type || "string").toLowerCase();
+      let tsType = "string";
+      if (["integer", "int", "number", "float", "double", "real"].includes(colType)) {
+        tsType = "number";
+      } else if (["boolean", "bool"].includes(colType)) {
+        tsType = "boolean";
+      }
+      return `${tsType} | null | undefined`;
+    }
+
+    // 2. Check fallback DB entity columns
+    if (step.cacheMiss?.enabled && step.cacheMiss.action === "fallback_db") {
+      const dbFnName = step.cacheMiss.functionRef?.name || "";
+      const dbEntityNode =
+        nodes.find(
+          (n) =>
+            (n.type === "entity" || n.type === "database") &&
+            (dbFnName.toLowerCase().includes((n.data?.label || "").toLowerCase()) ||
+              (n.data?.label && dbFnName.toLowerCase().includes(toSingular(n.data.label).toLowerCase())) ||
+              (n.data?.tableName && dbFnName.toLowerCase().includes(n.data.tableName.toLowerCase())) ||
+              (n.data?.tableName && dbFnName.toLowerCase().includes(toSingular(n.data.tableName).toLowerCase()))),
+        ) || nodes.find((n) => n.type === "entity");
+
+      const dbCol = dbEntityNode?.data?.columns?.find(
+        (c: { name?: string }) => c.name?.toLowerCase() === trimmedField.toLowerCase(),
+      );
+      if (dbCol) {
+        const colType = (dbCol.type || "string").toLowerCase();
+        let tsType = "string";
+        if (["integer", "int", "number", "float", "double", "real"].includes(colType)) {
+          tsType = "number";
+        } else if (["boolean", "bool"].includes(colType)) {
+          tsType = "boolean";
+        }
+        return `${tsType} | null | undefined`;
+      }
+    }
+
+    return "string | number | boolean | null | undefined";
+  }
+
+  // Entire step output is selected
+  if (
+    fnName.includes("recent") ||
+    fnName.includes("all") ||
+    fnName.includes("list") ||
+    fnName.includes("range")
+  ) {
+    if (itemType) entityImports.add(itemType);
+    return `${itemType}[]`;
+  }
+  if (
+    fnName.includes("length") ||
+    fnName.includes("len") ||
+    fnName.includes("append") ||
+    fnName.includes("push") ||
+    fnName.includes("count")
+  ) {
+    return "number";
+  }
+  if (
+    fnName.includes("delete") ||
+    fnName.includes("del") ||
+    fnName.includes("exist")
+  ) {
+    return "boolean";
+  }
+
+  // Single / get / pop operations:
+  const types: string[] = [];
+  if (pascalName) {
+    entityImports.add(pascalName);
+    types.push(pascalName);
+  }
+  if (itemType && itemType !== pascalName) {
+    entityImports.add(itemType);
+    types.push(itemType);
+  }
+
+  // If cache-aside DB fallback is configured, include the DB row type
+  if (
+    step.cacheMiss?.enabled &&
+    step.cacheMiss.action === "fallback_db" &&
+    step.cacheMiss.functionRef?.name
+  ) {
+    const dbFnName = step.cacheMiss.functionRef.name;
+    const dbEntityNode = nodes.find(
+      (n) =>
+        (n.type === "entity" || n.type === "database") &&
+        (dbFnName.toLowerCase().includes((n.data?.label || "").toLowerCase()) ||
+          (n.data?.label && dbFnName.toLowerCase().includes(toSingular(n.data.label).toLowerCase())) ||
+          (n.data?.tableName && dbFnName.toLowerCase().includes(n.data.tableName.toLowerCase())) ||
+          (n.data?.tableName && dbFnName.toLowerCase().includes(toSingular(n.data.tableName).toLowerCase()))),
+    );
+    const rawDbName =
+      dbEntityNode?.data?.label ||
+      dbEntityNode?.data?.tableName ||
+      dbEntityNode?.data?.tableRef;
+    if (rawDbName) {
+      const pascalDb = toPascalCase(rawDbName);
+      const dbRowType = `${pascalDb}Row`;
+      entityImports.add(dbRowType);
+      types.push(dbRowType);
+
+      const singularDb = toPascalCase(toSingular(rawDbName));
+      if (singularDb && singularDb !== pascalDb) {
+        const singularRowType = `${singularDb}Row`;
+        entityImports.add(singularRowType);
+        types.push(singularRowType);
+      }
+    } else {
+      const cleaned = dbFnName
+        .replace(/^(find|get|select)/i, "")
+        .replace(/(ById|By.*)$/i, "");
+      if (cleaned) {
+        const pascalDb = toPascalCase(cleaned);
+        const dbRowType = `${pascalDb}Row`;
+        entityImports.add(dbRowType);
+        types.push(dbRowType);
+      }
+    }
+  }
+
+  const uniqueTypes = [...new Set(types)];
+  return uniqueTypes.length > 0 ? `${uniqueTypes.join(" | ")} | null` : `${itemType} | null`;
+}
 
 export function inferBindingType(
   binding: {
@@ -82,34 +260,7 @@ export function inferBindingType(
         return "Record<string, string | number | boolean | null>";
       }
       if (step.type === "redis_operation") {
-        const redisNodeId =
-          (step as { redisNodeId?: string; tableNodeId?: string; databaseId?: string }).redisNodeId ||
-          (step as { redisNodeId?: string; tableNodeId?: string; databaseId?: string }).tableNodeId ||
-          (step as { redisNodeId?: string; tableNodeId?: string; databaseId?: string }).databaseId;
-        const redisNode = redisNodeId
-          ? nodes.find((n) => n.id === redisNodeId)
-          : nodes.find((n) => n.type === "redis_schema" || n.type === "redis-cache" || n.type === "redis_instance" || n.data?.redisDataStructure || n.data?.dbType === "redis");
-        const rawName = redisNode?.data?.label || redisNode?.data?.tableName || "Item";
-        const pascalName = toPascalCase(rawName);
-        const itemType = `${pascalName}Item`;
-        const fnName = (step.functionRef?.name || (step as { operation?: string }).operation || step.name || "").toLowerCase();
-
-        if (fnName.includes("recent") || fnName.includes("all") || fnName.includes("list") || fnName.includes("range")) {
-          if (itemType) entityImports.add(itemType);
-          return `${itemType}[]`;
-        }
-        if (fnName.includes("get") || fnName.includes("pop")) {
-          if (itemType) entityImports.add(itemType);
-          return `${itemType} | null`;
-        }
-        if (fnName.includes("length") || fnName.includes("len") || fnName.includes("append") || fnName.includes("push") || fnName.includes("count")) {
-          return "number";
-        }
-        if (fnName.includes("delete") || fnName.includes("del") || fnName.includes("exist")) {
-          return "boolean";
-        }
-        if (itemType) entityImports.add(itemType);
-        return `${itemType} | null`;
+        return inferRedisStepType(step, nodes, entityImports, source.field);
       }
       if (step.type === "transform") {
         const transformerId = (step as { transformerNodeId?: string }).transformerNodeId;
@@ -359,32 +510,7 @@ export function generateResponseInterface(
         lastDataType = op === "find_all" || op === "query" ? `${pascalEntity}[]` : pascalEntity;
       }
     } else if (lastStep?.type === "redis_operation") {
-      const redisNodeId =
-        (lastStep as { redisNodeId?: string; tableNodeId?: string; databaseId?: string }).redisNodeId ||
-        (lastStep as { redisNodeId?: string; tableNodeId?: string; databaseId?: string }).tableNodeId ||
-        (lastStep as { redisNodeId?: string; tableNodeId?: string; databaseId?: string }).databaseId;
-      const redisNode = redisNodeId
-        ? nodes.find((n) => n.id === redisNodeId)
-        : nodes.find((n) => n.type === "redis_schema" || n.type === "redis-cache" || n.type === "redis_instance" || n.data?.redisDataStructure || n.data?.dbType === "redis");
-      const rawName = redisNode?.data?.label || redisNode?.data?.tableName || "Item";
-      const pascalName = toPascalCase(rawName);
-      const itemType = `${pascalName}Item`;
-      const fnName = (lastStep.functionRef?.name || (lastStep as { operation?: string }).operation || lastStep.name || "").toLowerCase();
-
-      if (fnName.includes("recent") || fnName.includes("all") || fnName.includes("list") || fnName.includes("range")) {
-        if (itemType) entityImports.add(itemType);
-        lastDataType = `${itemType}[]`;
-      } else if (fnName.includes("get") || fnName.includes("pop")) {
-        if (itemType) entityImports.add(itemType);
-        lastDataType = `${itemType} | null`;
-      } else if (fnName.includes("length") || fnName.includes("len") || fnName.includes("append") || fnName.includes("push") || fnName.includes("count")) {
-        lastDataType = "number";
-      } else if (fnName.includes("delete") || fnName.includes("del") || fnName.includes("exist")) {
-        lastDataType = "boolean";
-      } else {
-        if (itemType) entityImports.add(itemType);
-        lastDataType = itemType;
-      }
+      lastDataType = inferRedisStepType(lastStep, nodes, entityImports);
     } else if (lastStep?.type === "transform") {
       const transformerId = (lastStep as { transformerNodeId?: string }).transformerNodeId;
       const fnName = lastStep.functionRef?.name;

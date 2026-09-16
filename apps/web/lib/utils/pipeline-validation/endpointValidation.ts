@@ -33,11 +33,54 @@ export function isEndpointPipelineUnconfigured(
   const steps = endpointOrConsumer.pipelineSteps || [];
 
   // Check 1: Are there any existing steps in the pipeline with unconfigured inputs?
-  const hasUnconfiguredStep = steps
-    .filter((s) => s.type !== "return_response")
-    .some((s) => isStepInputUnconfigured(s, allNodes));
+  const hasUnconfiguredStep = steps.some((s) => isStepInputUnconfigured(s, allNodes));
 
   if (hasUnconfiguredStep) return true;
+
+  // Check 1b: Are all step_output and req_body variable mappings referencing valid sources?
+  const stepIdsSoFar = new Set<string>();
+  const reqBodyFieldNames = new Set(
+    (endpointOrConsumer.requestBody?.fields || [])
+      .map((f: { name?: string }) => f.name?.toLowerCase())
+      .filter(Boolean),
+  );
+  const hasRequestBodyFields = reqBodyFieldNames.size > 0;
+
+  for (const s of steps) {
+    if (s.enabled === false) continue;
+
+    const allStepBindings = [
+      ...(s.inputBindings || []),
+      ...(s.cacheMiss?.enabled ? s.cacheMiss.inputBindings || [] : []),
+    ];
+
+    for (const b of allStepBindings) {
+      const src = b.source;
+      if (!src) continue;
+
+      // Ensure step_output references an existing prior step in the pipeline
+      if (src.kind === "step_output" && src.stepId) {
+        if (
+          src.stepId !== "__catch_error__" &&
+          !src.stepId.startsWith("__iterator__") &&
+          !stepIdsSoFar.has(src.stepId)
+        ) {
+          return true;
+        }
+      }
+
+      // Ensure req_body references a valid field when fields are defined
+      if (src.kind === "req_body" && src.field && hasRequestBodyFields) {
+        if (!reqBodyFieldNames.has(src.field.trim().toLowerCase())) {
+          return true;
+        }
+      }
+    }
+
+    if (s.id) {
+      stepIdsSoFar.add(s.id);
+    }
+  }
 
   // Check 1b: Are there external_call steps calling external endpoints that lack an output schema or Base URL?
   const hasUnconfiguredExternalCall = steps

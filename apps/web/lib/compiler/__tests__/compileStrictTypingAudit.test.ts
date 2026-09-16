@@ -185,4 +185,166 @@ describe("compileStrictTypingAudit - Verifying strict typing across generated mo
       expect(a.content).not.toContain("requestBody?: unknown");
     }
   });
+
+  it("compiles clean TypeScript for redis step with cache-aside DB fallback when selected as response item or nested field", () => {
+    const serviceNode: BackendNode = {
+      id: "node-conversation",
+      type: "service",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "Conversation",
+        port: "8082",
+      },
+    };
+
+    const redisNode: BackendNode = {
+      id: "node-redis-conv",
+      type: "redis_schema",
+      position: { x: 200, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "Conversation",
+        tableName: "conversation",
+        redisDataStructure: "json",
+        jsonRootType: "array",
+        columns: [
+          { name: "id", type: "string", isPrimaryKey: true },
+          { name: "sender", type: "string" },
+          { name: "message", type: "string" },
+        ],
+      },
+    };
+
+    const dbNode: BackendNode = {
+      id: "node-db",
+      type: "database",
+      position: { x: 0, y: 300 },
+      fractionalIndex: "a2",
+      data: {
+        label: "DB",
+        dbEngine: "sqlite",
+      },
+    };
+
+    const entityNode: BackendNode = {
+      id: "node-entity-conversations",
+      type: "entity",
+      position: { x: 0, y: 450 },
+      fractionalIndex: "a3",
+      data: {
+        label: "conversations",
+        databaseId: "node-db",
+        columns: [
+          { name: "id", type: "string", isPrimaryKey: true },
+          { name: "title", type: "string" },
+        ],
+      },
+    };
+
+    const edges: BackendEdge[] = [
+      { id: "e1", source: "node-conversation", target: "node-redis-conv", type: "connection", fractionalIndex: "e1" },
+      { id: "e2", source: "node-conversation", target: "node-db", type: "connection", fractionalIndex: "e2" },
+      { id: "e3", source: "node-db", target: "node-entity-conversations", type: "connection", fractionalIndex: "e3" },
+    ];
+
+    const convEndpoint: Endpoint & { nodeId: string } = {
+      id: "ep-get-conversations",
+      nodeId: "node-conversation",
+      name: "/get-conversations",
+      type: "GET",
+      summary: "Get conversations",
+      requestBody: {
+        id: "rb-1",
+        fields: [{ id: "f1", name: "conversation_id", type: "string", required: true }],
+      },
+      pipelineSteps: [
+        {
+          id: "step-1",
+          name: "getConversation",
+          type: "redis_operation",
+          enabled: true,
+          outputVariable: "getConversationResult",
+          functionRef: {
+            name: "getConversation",
+            importPath: "@workspace/redis",
+          },
+          inputBindings: [
+            { argName: "key", source: { kind: "req_body", field: "conversation_id" } },
+          ],
+          cacheMiss: {
+            enabled: true,
+            action: "fallback_db",
+            functionRef: {
+              name: "findConversationById",
+              importPath: "@workspace/db",
+            },
+            inputBindings: [
+              { argName: "id", source: { kind: "req_body", field: "conversation_id" } },
+            ],
+            writeBackToCache: true,
+          },
+        },
+        {
+          id: "step-2",
+          name: "returnResponse",
+          type: "return_response",
+          enabled: true,
+          inputBindings: [
+            {
+              argName: "data",
+              source: { kind: "step_output", stepId: "step-1" },
+            },
+            {
+              argName: "sender",
+              source: { kind: "step_output", stepId: "step-1", field: "sender" },
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = compileMonorepo(
+      [serviceNode, redisNode, dbNode, entityNode],
+      [convEndpoint],
+      [],
+      edges,
+      [],
+      "TestCacheAsideStrictApp",
+    );
+
+    const routeFile = result.files.find((f) =>
+      f.filename.includes("apps/conversation/src/routes/getGetConversations.ts"),
+    );
+    expect(routeFile).toBeDefined();
+
+    // 1. Verify 404 guard narrows getConversationResult after cache-miss fallback
+    expect(routeFile?.content).toContain("if (getConversationResult === null || getConversationResult === undefined) {");
+    expect(routeFile?.content).toContain('return res.status(404).json({ error: "Record not found" });');
+
+    // 2. Verify safe field access for sender without as any, without unknown, and without TS2339
+    expect(routeFile?.content).toContain(
+      "sender: (Array.isArray(getConversationResult) ? getConversationResult[0]?.sender : (getConversationResult as { sender?: string })?.sender)",
+    );
+    expect(routeFile?.content).not.toContain("as any");
+    expect(routeFile?.content).not.toContain("sender?: unknown");
+
+    // 3. Verify response type in packages/types exports union of Redis and DB fallback row types
+    const typeFile = result.files.find((f) =>
+      f.filename.includes("packages/types/src/conversation/getGetConversations.ts"),
+    );
+    expect(typeFile).toBeDefined();
+    expect(typeFile?.content).toContain("Conversation");
+    expect(typeFile?.content).toContain("ConversationsRow");
+    expect(typeFile?.content).toContain("sender: string | null | undefined;");
+
+    // 4. Verify entities export the referenced types
+    const entitiesFile = result.files.find((f) =>
+      f.filename.includes("packages/types/src/entities/index.ts"),
+    );
+    expect(entitiesFile).toBeDefined();
+    expect(entitiesFile?.content).toContain("export interface ConversationsRow");
+    expect(entitiesFile?.content).toContain("export interface Conversation");
+  });
 });
+

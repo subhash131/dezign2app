@@ -235,26 +235,61 @@ export function TerminalPanel({
 
   return (
     <Resizable
-      size={{ width: "100%", height: isMaximized ? "85%" : terminalHeight }}
+      size={{ width: "100%", height: isMaximized ? "80vh" : terminalHeight }}
       onResizeStop={(e, direction, ref, d) => {
-        setTerminalHeight((prev) => {
-          const next = Math.max(100, Math.min(700, prev + d.height));
-          try {
-            const key = projectId
-              ? `compiler_terminal_height_${projectId}`
-              : "compiler_terminal_height";
-            localStorage.setItem(key, String(next));
-          } catch (err) {}
-          return next;
-        });
+        if (isMaximized) {
+          setIsMaximized(false);
+        }
+        const maxAllowed =
+          typeof window !== "undefined"
+            ? Math.floor(window.innerHeight * 0.8)
+            : 650;
+        const next = Math.max(100, Math.min(maxAllowed, ref.offsetHeight));
+        setTerminalHeight(next);
+        try {
+          const key = projectId
+            ? `compiler_terminal_height_${projectId}`
+            : "compiler_terminal_height";
+          localStorage.setItem(key, String(next));
+        } catch (err) {}
       }}
       minHeight={100}
-      maxHeight={700}
-      enable={{ top: !isMaximized }}
-      handleClasses={{
-        top: "h-1 bg-border/50 hover:bg-primary cursor-row-resize transition-colors z-30",
+      maxHeight="80vh"
+      enable={{ top: true }}
+      handleComponent={{
+        top: (
+          <div
+            className="w-full h-full flex items-center justify-center relative pointer-events-auto select-none"
+            title="Drag to resize terminal · Double-click to toggle maximize"
+            onDoubleClick={(e) => {
+              e.stopPropagation();
+              setIsMaximized((prev) => !prev);
+            }}
+          >
+            {/* Full-width interactive accent line */}
+            <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[2px] bg-border/60 group-hover:bg-primary group-hover:shadow-[0_0_8px_rgba(56,189,248,0.5)] transition-all" />
+
+            {/* Centered pill handle with visible grip indicator */}
+            <div className="relative z-10 flex items-center gap-1.5 px-3 py-[2px] rounded-full bg-[#161b22] border border-border/80 group-hover:border-primary/60 group-hover:bg-[#1a2230] shadow-md transition-all group-hover:scale-105">
+              <div className="w-1.5 h-1.5 rounded-full bg-slate-400/80 group-hover:bg-primary transition-colors" />
+              <div className="w-6 h-1 rounded-full bg-slate-400/80 group-hover:bg-primary transition-colors" />
+              <div className="w-1.5 h-1.5 rounded-full bg-slate-400/80 group-hover:bg-primary transition-colors" />
+            </div>
+          </div>
+        ),
       }}
-      className="border-t border-border/50 flex flex-col shrink-0 font-sans text-xs select-none bg-[#090d13] relative overflow-hidden z-20"
+      handleStyles={{
+        top: {
+          top: "-5px",
+          height: "10px",
+          zIndex: 40,
+          cursor: "row-resize",
+        },
+      }}
+      handleClasses={{
+        top: "group transition-colors",
+      }}
+      className="border-t border-border/50 flex flex-col shrink-0 font-sans text-xs select-none bg-[#090d13] relative overflow-visible z-20"
     >
       {/* VS Code Bottom Panel Header */}
       <TerminalPanelHeader

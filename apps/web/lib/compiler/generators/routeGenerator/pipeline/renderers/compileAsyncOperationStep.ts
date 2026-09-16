@@ -165,6 +165,12 @@ export function renderAsyncOperationStep(
     }
 
     rawLines.push(`}`);
+
+    if (action === "fallback_db") {
+      rawLines.push(`if (${outputVariable} === null || ${outputVariable} === undefined) {`);
+      rawLines.push(`  return res.status(${statusCode}).json({ error: "${errorMessage}" });`);
+      rawLines.push(`}`);
+    }
   }
 
   // DB reads by ID get a 404 guard
@@ -178,5 +184,24 @@ export function renderAsyncOperationStep(
     rawLines.push(`}`);
   }
 
+  // Direct Redis get operations without cache miss get a 404 guard (excluding list/array operations)
+  const isListOp =
+    fnName.toLowerCase().includes("recent") ||
+    fnName.toLowerCase().includes("all") ||
+    fnName.toLowerCase().includes("list") ||
+    fnName.toLowerCase().includes("range");
+  if (
+    isRedisOp &&
+    !step.cacheMiss?.enabled &&
+    !isListOp &&
+    (fnName.toLowerCase().startsWith("get") ||
+      fnName.toLowerCase().startsWith("find"))
+  ) {
+    rawLines.push(`if (${outputVariable} === undefined || ${outputVariable} === null) {`);
+    rawLines.push(`  return res.status(404).json({ error: "Not found" });`);
+    rawLines.push(`}`);
+  }
+
   return rawLines;
 }
+
