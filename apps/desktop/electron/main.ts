@@ -13,6 +13,7 @@ import { stopNextServer } from "./services/nextServer";
 import { cleanupAllTerminals } from "./services/terminal";
 import { stopDockerProcess } from "./services/docker";
 import { stopDevProcess } from "./services/devRunner";
+import { initAutoUpdater } from "./services/updater";
 
 // ─────────────────────────────────────────────
 //  Process Helper Functions (for Local Dev Isolation)
@@ -189,6 +190,7 @@ app.whenReady().then(async () => {
   registerIpcHandlers();
   await createMainWindow();
   handleInitialDeepLink();
+  initAutoUpdater();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
