@@ -2,7 +2,11 @@
   "name": "desktop",
   "version": "0.0.1",
   "private": true,
-  "author": "Dezign2App Team",
+  "author": {
+    "name": "Dezign2App Team",
+    "email": "founder@dezign2app.com"
+  },
+  "homepage": "https://www.dezign2app.com",
   "description": "D2A",
   "main": "dist-electron/main.js",
   "scripts": {
@@ -125,6 +129,7 @@
       "category": "public.app-category.developer-tools"
     },
     "linux": {
+      "maintainer": "Dezign2App Team <founder@dezign2app.com>",
       "target": [
         {
           "target": "AppImage",

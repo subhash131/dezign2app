@@ -2,6 +2,11 @@
   "name": "dezign2app",
   "version": "0.0.1",
   "private": true,
+  "author": {
+    "name": "Dezign2App Team",
+    "email": "founder@dezign2app.com"
+  },
+  "homepage": "https://www.dezign2app.com",
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",
