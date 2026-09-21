@@ -11,7 +11,7 @@ import { convex } from "@convex-dev/better-auth/plugins";
 import { organization, bearer } from "better-auth/plugins";
 import type { GenericDataModel } from "convex/server";
 
-import { mutation } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 
 export const betterAuthComponentClient = createClient<
   GenericDataModel,
@@ -25,7 +25,7 @@ export const betterAuthComponentClient = createClient<
 export const cleanStaleJwks = mutation({
   args: {},
   handler: async (ctx) => {
-    await ctx.runMutation(components.betterAuth.adapter.deleteMany, {
+    const res = await ctx.runMutation(components.betterAuth.adapter.deleteMany, {
       input: {
         model: "jwks",
         where: [],
@@ -35,7 +35,22 @@ export const cleanStaleJwks = mutation({
         cursor: null,
       },
     });
-    return { success: true, message: "Cleared stale JWKS" };
+    return { success: true, message: "Cleared stale JWKS", result: res };
+  },
+});
+
+export const listJwks = query({
+  args: {},
+  handler: async (ctx) => {
+    const res = await ctx.runQuery(components.betterAuth.adapter.findMany, {
+      model: "jwks",
+      where: [],
+      paginationOpts: {
+        numItems: 100,
+        cursor: null,
+      },
+    });
+    return res;
   },
 });
 
