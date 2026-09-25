@@ -2,6 +2,7 @@ import {
   DEFAULT_PUBLISH_TRIGGER_CONDITION,
   DEFAULT_PUBLISHED_EVENT_DEFAULTS,
 } from "@workspace/canvas";
+import { PipelineStep, PipelineStepInputSource } from "@workspace/canvas/types";
 import { toFolderName, toPascalCase } from "@/lib/compiler/utils";
 import { ConnectionContext } from "../types";
 import { isMessagingResourceType, MESSAGING_NODE_TYPES } from "../utils";
@@ -67,20 +68,23 @@ export function handleEndpointConnect({
       ? rawResourceType
       : undefined;
 
-    // Derive a human-readable publisher name
+    // Derive a human-readable publisher/writer name
     const endpointLabel =
       endpoint.name || `${endpoint.type ?? "endpoint"} publisher`;
-    const topicNode = targetNode.data as {
-      topics?: { id: string; name: string }[];
-    };
-    const topicName = messagingResourceId
-      ? topicNode.topics?.find((t) => t.id === messagingResourceId)?.name ?? ""
-      : "";
-    const publisherName = topicName
-      ? `Publish ${topicName}`
-      : `${endpointLabel} publisher`;
+    const isStorageTarget =
+      targetNode.type === "storage" || resolvedResourceType === "buckets";
+    const bucketList = targetNode.data.buckets || [];
+    const topicList = targetNode.data.topics || [];
+    const topicName = isStorageTarget
+      ? (bucketList.find((b) => b.id === messagingResourceId)?.name ?? "")
+      : (messagingResourceId
+          ? topicList.find((t) => t.id === messagingResourceId)?.name ?? ""
+          : "");
+    const publisherName = isStorageTarget
+      ? (topicName ? `Upload to ${topicName}` : `${endpointLabel} storage writer`)
+      : (topicName ? `Publish ${topicName}` : `${endpointLabel} publisher`);
 
-    // Build the new publisher
+    // Build the new publisher / writer resource
     const newEventId = `pub-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const newPublisher = {
       id: newEventId,
@@ -92,10 +96,79 @@ export function handleEndpointConnect({
       ...(resolvedResourceType ? { resourceType: resolvedResourceType } : {}),
     };
 
-    // Auto-add Kafka / Messaging publish step to pipelineSteps
+    // Auto-add Storage / Messaging publish step to pipelineSteps
     const existingSteps = endpoint.pipelineSteps ?? [];
-    const rawLabel = targetNode.data?.label || "kafka";
-    const packageFolder = toFolderName(rawLabel) || "kafka";
+    const rawLabel = targetNode.data?.label || (isStorageTarget ? "storage" : "kafka");
+    const packageFolder = toFolderName(rawLabel) || (isStorageTarget ? "storage" : "kafka");
+
+    if (isStorageTarget) {
+      const storageFnName = topicName
+        ? `uploadTo${toPascalCase(topicName)}`
+        : "uploadToStorage";
+      const hasMatchingStorageStep = existingSteps.some(
+        (s) =>
+          s.brokerNodeId === targetNode.id ||
+          s.messagingResourceId === messagingResourceId ||
+          s.name === publisherName,
+      );
+
+      let nextPipelineSteps = existingSteps;
+      if (!hasMatchingStorageStep) {
+        const newStorageStep: PipelineStep = {
+          id: `step-storage-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          name: publisherName,
+          type: "custom_code",
+          enabled: true,
+          outputVariable: "storageUploadResult",
+          functionRef: {
+            name: storageFnName,
+            importPath: `@workspace/${packageFolder}/client`,
+          },
+          inputBindings: [
+            {
+              argName: "file",
+              source: { kind: "req_body", field: "file" },
+            },
+            {
+              argName: "bucket",
+              source: { kind: "inline", value: topicName || "default-bucket" },
+            },
+          ],
+          brokerNodeId: targetNode.id,
+          messagingResourceId,
+        };
+
+        const returnIdx = existingSteps.findIndex(
+          (s) => s.type === "return_response",
+        );
+        if (returnIdx !== -1) {
+          nextPipelineSteps = [
+            ...existingSteps.slice(0, returnIdx),
+            newStorageStep,
+            ...existingSteps.slice(returnIdx),
+          ];
+        } else {
+          nextPipelineSteps = [...existingSteps, newStorageStep];
+        }
+      }
+
+      const directEdgeId = newEdge.id;
+      get().updateEndpoint(endpointId, {
+        publishedEvents: [...(endpoint.publishedEvents ?? []), newPublisher],
+        pipelineSteps: nextPipelineSteps,
+      });
+
+      set((state) => ({
+        edges: state.edges.filter((e) => e.id !== directEdgeId),
+        pendingEdgeUpserts: state.pendingEdgeUpserts.filter(
+          (e) => e.id !== directEdgeId,
+        ),
+        pendingEdgeRemovals: [...state.pendingEdgeRemovals, directEdgeId],
+      }));
+
+      return true;
+    }
+
     const fnName = topicName
       ? `publish${toPascalCase(topicName)}`
       : "publishKafkaEvent";
@@ -108,18 +181,18 @@ export function handleEndpointConnect({
           s.messagingResourceId === messagingResourceId),
     );
 
-    const targetTopic = topicNode.topics?.find(
-      (t: any) => t.id === messagingResourceId || t.name === messagingResourceId,
+    const targetTopic = topicList.find(
+      (t) => t.id === messagingResourceId || t.name === messagingResourceId,
     );
-    const targetTopicSchema = (targetTopic as any)?.payloadSchema;
-    const schemaFields: Array<{ name?: string }> = targetTopicSchema?.fields || [];
+    const targetTopicSchema = targetTopic?.payloadSchema;
+    const schemaFields = targetTopicSchema?.fields || [];
 
-    const defaultBindings: Array<{ argName: string; source: { kind: any; field?: string; value?: string } }> = [];
+    const defaultBindings: Array<{ argName: string; source: PipelineStepInputSource }> = [];
     if (!topicName) {
       defaultBindings.push({
         argName: "topic",
         source: {
-          kind: "inline" as const,
+          kind: "inline",
           value: "default-topic",
         },
       });
@@ -134,7 +207,7 @@ export function handleEndpointConnect({
           defaultBindings.push({
             argName: f.name,
             source: {
-              kind: "req_body" as const,
+              kind: "req_body",
               field: reqBodyMatch?.name ? reqBodyMatch.name : f.name,
             },
           });
@@ -143,17 +216,17 @@ export function handleEndpointConnect({
     } else {
       defaultBindings.push({
         argName: "payload",
-        source: { kind: "req_body" as const, field: "" },
+        source: { kind: "req_body", field: "" },
       });
     }
 
     let nextPipelineSteps = existingSteps;
     if (!hasMatchingStep) {
       const outputVar = `kafkaPublishResult`;
-      const newKafkaStep = {
+      const newKafkaStep: PipelineStep = {
         id: `step-kafka-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         name: publisherName || `Publish to ${topicName || "Kafka"}`,
-        type: "kafka_publish" as const,
+        type: "kafka_publish",
         enabled: true,
         outputVariable: outputVar,
         functionRef: {

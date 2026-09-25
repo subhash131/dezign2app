@@ -208,6 +208,38 @@ export type AnyMessagingResource = {
   storageTypeOther?: string;
   storedDataTypes?: string[];
   storedDataTypesOther?: string;
+  accessPolicy?: string;
+  allowedOperations?: string[];
+  maxFileSize?: string;
+  allowedMimeTypes?: string;
+  allowedExtensions?: string;
+  enablePresignedUrls?: boolean;
+  presignedUrlTtl?: string;
+  enableDirectUpload?: boolean;
+  enableCors?: boolean;
+  corsOrigins?: string;
+  corsMethods?: string[];
+  corsHeaders?: string;
+  corsMaxAge?: string;
+  enableCdn?: boolean;
+  cdnDomain?: string;
+  cdnCacheControl?: string;
+  storageClass?: string;
+  region?: string;
+  endpointUrl?: string;
+  accessKeyIdEnv?: string;
+  secretAccessKeyEnv?: string;
+  sessionTokenEnv?: string;
+  roleArn?: string;
+  forcePathStyle?: boolean;
+  versioning?: string;
+  encryption?: string;
+  kmsKeyId?: string;
+  lifecycleExpirationDays?: string;
+  lifecycleGlacierDays?: string;
+  eventTriggers?: string[];
+  eventPrefixFilter?: string;
+  eventSuffixFilter?: string;
 
   // Cache specific fields
   ttl?: string;

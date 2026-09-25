@@ -198,6 +198,21 @@ export function classifyHandle(
     return direction === "in" ? "resource-def-in" : "resource-def-out";
   }
 
+  if (
+    id === "storage-target" ||
+    id.startsWith("storage-target") ||
+    id === "storage-in"
+  ) {
+    return "resource-def-in";
+  }
+  if (
+    id === "storage-source" ||
+    id.startsWith("storage-source") ||
+    id === "storage-out"
+  ) {
+    return "resource-def-out";
+  }
+
   if (id === "auth-out" || id.startsWith("auth-out")) return "auth-out";
   if (id === "auth-in" || id.startsWith("auth-in")) return "auth-in";
   if (id === "injects-plugin-out" || id.startsWith("injects-plugin-out"))
