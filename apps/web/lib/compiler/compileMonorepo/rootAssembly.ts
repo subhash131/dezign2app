@@ -36,6 +36,7 @@ export interface RootAssemblyParams {
   hasDb: boolean;
   redisFolder: string;
   redisPackageFolder?: string;
+  hasStorage?: boolean;
 }
 
 /**
@@ -64,6 +65,7 @@ export function assembleRoot(params: RootAssemblyParams): CompiledFile[] {
     hasDb,
     redisFolder,
     redisPackageFolder,
+    hasStorage,
   } = params;
 
   const assembled: CompiledFile[] = [];
@@ -107,6 +109,7 @@ export function assembleRoot(params: RootAssemblyParams): CompiledFile[] {
       hasDb,
       redisFolder,
       redisPackageFolder,
+      hasStorage,
     ),
   );
 

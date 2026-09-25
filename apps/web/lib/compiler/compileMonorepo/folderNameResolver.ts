@@ -27,11 +27,20 @@ export interface FolderNameResolvers {
    */
   getUniqueWebAppFolder: (slug: string, defaultName: string) => string;
 
+  /**
+   * Returns a unique kebab-case folder name for a storage package.
+   * Appends `-2`, `-3`, … when the base slug already exists.
+   */
+  getUniqueStorageFolder: (label: string, defaultName: string) => string;
+
   /** All service / langgraph folder entries registered so far. */
   servicesInfo: FolderEntry[];
 
   /** All web-app client folder entries registered so far. */
   webClientsInfo: FolderEntry[];
+
+  /** All storage folder entries registered so far. */
+  storageInfo: FolderEntry[];
 }
 
 /**
@@ -52,6 +61,7 @@ export interface FolderNameResolvers {
 export function createFolderNameResolvers(): FolderNameResolvers {
   const servicesInfo: FolderEntry[] = [];
   const webClientsInfo: FolderEntry[] = [];
+  const storageInfo: FolderEntry[] = [];
 
   /**
    * Converts a label into a kebab-case base slug and appends a numeric
@@ -95,10 +105,33 @@ export function createFolderNameResolvers(): FolderNameResolvers {
     return folderName;
   }
 
+  /**
+   * Converts a storage label into a kebab-case base and appends a numeric suffix
+   * until the name is unique within `storageInfo`.
+   */
+  function getUniqueStorageFolder(label: string, defaultName: string): string {
+    const base =
+      (label || defaultName)
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "") || defaultName;
+
+    let folderName = base;
+    let counter = 1;
+    // ✦ dedup loop — increments suffix until folderName is unique
+    while (storageInfo.some((s) => s.folderName === folderName)) {
+      counter++;
+      folderName = `${base}-${counter}`;
+    }
+    return folderName;
+  }
+
   return {
     getUniqueServiceFolder,
     getUniqueWebAppFolder,
+    getUniqueStorageFolder,
     servicesInfo,
     webClientsInfo,
+    storageInfo,
   };
 }

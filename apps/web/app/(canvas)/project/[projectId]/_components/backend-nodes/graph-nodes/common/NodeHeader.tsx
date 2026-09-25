@@ -169,13 +169,11 @@ export const NodeHeader = ({
         }
       }
     } else {
-      const isStorage = nodeType === "database" || nodeType === "redis_instance";
+      // Disallow duplicate node names across the canvas (case-insensitive)
       isDuplicate = allNodes.some(
         (n) =>
           n.id !== id &&
-          (isStorage
-            ? n.type === "database" || n.type === "redis_instance"
-            : n.type === nodeType || (nodeType === "service" && n.type === "service")) &&
+          n.type !== "webPage" &&
           (n.data?.label || "").trim().toLowerCase() === finalLabel.toLowerCase(),
       );
     }
