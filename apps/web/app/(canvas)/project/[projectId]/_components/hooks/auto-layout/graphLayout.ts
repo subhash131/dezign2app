@@ -88,7 +88,10 @@ export function performGraphLayout({
       sourceNode?.type === "storage" &&
       (targetNode?.type === "storage_operation_ref" ||
         targetNode?.type === "storage_ref" ||
-        targetNode?.type === "bucket_ref")
+        targetNode?.type === "bucket_ref" ||
+        targetNode?.type === "storage_bucket_ref" ||
+        targetNode?.type === "StorageBucketRefNode" ||
+        targetNode?.type === "StorageOperationRefNode")
     ) {
       return false;
     }
@@ -504,6 +507,72 @@ export function performGraphLayout({
     isHorizontal,
     stackedZonesList,
   });
+
+  // 6.695. Final safety overlap resolution pass for all positioned nodes
+  const resolveAllNodeOverlaps = () => {
+    const padding = 30;
+    const maxIters = 25;
+    let hasOverlaps = true;
+    let iter = 0;
+
+    while (hasOverlaps && iter < maxIters) {
+      hasOverlaps = false;
+      iter++;
+
+      for (let i = 0; i < graphNodes.length; i++) {
+        const nodeA = graphNodes[i]!;
+        const posA = positionsMap.get(nodeA.id);
+        if (!posA) continue;
+        const dimA = getNodeDimensions(nodeA);
+
+        for (let j = i + 1; j < graphNodes.length; j++) {
+          const nodeB = graphNodes[j]!;
+          const posB = positionsMap.get(nodeB.id);
+          if (!posB) continue;
+
+          // Skip pages that belong to the same hand-of-cards stack
+          const leadA =
+            secondaryToLeadPageMap.get(nodeA.id) ??
+            (stackedZonesList.some((z) => z.leadPage.id === nodeA.id)
+              ? nodeA.id
+              : null);
+          const leadB =
+            secondaryToLeadPageMap.get(nodeB.id) ??
+            (stackedZonesList.some((z) => z.leadPage.id === nodeB.id)
+              ? nodeB.id
+              : null);
+          if (leadA && leadB && leadA === leadB) continue;
+
+          const dimB = getNodeDimensions(nodeB);
+
+          const overlapX =
+            Math.min(posA.x + dimA.width + padding, posB.x + dimB.width + padding) -
+            Math.max(posA.x, posB.x);
+          const overlapY =
+            Math.min(posA.y + dimA.height + padding, posB.y + dimB.height + padding) -
+            Math.max(posA.y, posB.y);
+
+          if (overlapX > 0 && overlapY > 0) {
+            hasOverlaps = true;
+            if (isHorizontal) {
+              if (posA.y <= posB.y) {
+                positionsMap.set(nodeB.id, { x: posB.x, y: posB.y + overlapY });
+              } else {
+                positionsMap.set(nodeA.id, { x: posA.x, y: posA.y + overlapY });
+              }
+            } else {
+              if (posA.x <= posB.x) {
+                positionsMap.set(nodeB.id, { x: posB.x + overlapX, y: posB.y });
+              } else {
+                positionsMap.set(nodeA.id, { x: posA.x + overlapX, y: posA.y });
+              }
+            }
+          }
+        }
+      }
+    }
+  };
+  resolveAllNodeOverlaps();
 
   // 6.7. Enforce positive canvas origin margin (minX >= 60, minY >= 60)
   let globalMinX = Infinity;

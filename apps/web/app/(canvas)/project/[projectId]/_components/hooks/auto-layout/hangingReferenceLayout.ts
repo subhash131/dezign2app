@@ -15,9 +15,6 @@ export const REFERENCE_NODE_TYPES = new Set<string>([
   "db_ref",
   "redis-cache",
   "vector_db_ref",
-  "storage_operation_ref",
-  "storage_ref",
-  "bucket_ref",
   "langgraph",
   "langgraph_agent",
   "langgraph_node",
@@ -177,18 +174,12 @@ export function layoutHangingReferenceNodes({
           if (type === "redis-cache") return 2;
           if (type === "vector_db_ref") return 3;
           if (
-            type === "storage_operation_ref" ||
-            type === "storage_ref" ||
-            type === "bucket_ref"
-          )
-            return 4;
-          if (
             type === "langgraph" ||
             type === "langgraph_agent" ||
             type === "langgraph_node"
           )
-            return 5;
-          return 6;
+            return 4;
+          return 5;
         };
 
         const pA = typePriority(a.node.type);
@@ -256,18 +247,12 @@ export function layoutHangingReferenceNodes({
           if (type === "redis-cache") return 2;
           if (type === "vector_db_ref") return 3;
           if (
-            type === "storage_operation_ref" ||
-            type === "storage_ref" ||
-            type === "bucket_ref"
-          )
-            return 4;
-          if (
             type === "langgraph" ||
             type === "langgraph_agent" ||
             type === "langgraph_node"
           )
-            return 5;
-          return 6;
+            return 4;
+          return 5;
         };
         return typePriority(a.node.type) - typePriority(b.node.type);
       });

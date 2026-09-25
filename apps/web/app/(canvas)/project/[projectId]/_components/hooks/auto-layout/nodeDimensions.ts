@@ -160,10 +160,24 @@ export function getNodeDimensions(node: LayoutNode): {
     case "db_ref":
     case "vector_db_ref":
     case "redis-cache":
+      return { width: 280, height: 80 };
     case "storage_operation_ref":
     case "storage_ref":
     case "bucket_ref":
-      return { width: 280, height: 80 };
+    case "storage_bucket_ref":
+    case "StorageBucketRefNode":
+    case "StorageOperationRefNode": {
+      const ops = Array.isArray(node.data?.storageOperations)
+        ? node.data.storageOperations
+        : [];
+      const estHeight = Math.max(80, 70 + ops.length * 40);
+      return { width: 280, height: estHeight };
+    }
+    case "storage": {
+      const buckets = Array.isArray(node.data?.buckets) ? node.data.buckets : [];
+      const estHeight = Math.max(160, 140 + buckets.length * 36);
+      return { width: 300, height: estHeight };
+    }
     case "state_store": {
       const data = getLayoutNodeData(node);
       const fields = Array.isArray(data?.fields) ? data.fields : [];
@@ -363,6 +377,10 @@ export function getHandleYRatio(
     return Math.min(0.95, Math.max(0.05, 18 / height));
   }
   if (handleId === "auth-in") {
+    const { height } = getNodeDimensions(node);
+    return Math.min(0.95, Math.max(0.05, 18 / height));
+  }
+  if (handleId === "storage-ref-header" || handleId === "storage-ref-header-out") {
     const { height } = getNodeDimensions(node);
     return Math.min(0.95, Math.max(0.05, 18 / height));
   }

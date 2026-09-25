@@ -239,7 +239,7 @@ export const EDGE_TYPE_MAP: Record<string, string> = {
   // Storage & Bucket wiring edges
   "page-out→resource-def-in": "connection",
   "event-source→resource-def-in": "connection",
-  "resource-def-out→endpoint-in": "message",
+  "resource-def-out→endpoint-in": "connection",
   "resource-def-out→resource-def-in": "storage-reference",
   "resource-def-out→action-target": "storage-reference",
 };

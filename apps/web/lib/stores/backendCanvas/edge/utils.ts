@@ -31,8 +31,20 @@ export function validateDatabaseEngine(
       console.warn(
         "Cannot connect Redis instance to SQL table or SQL database to Redis schema",
       );
-      return false;
     }
   }
   return true;
+}
+
+export const STORAGE_REF_NODE_TYPES = new Set([
+  "StorageBucketRefNode",
+  "storage_bucket_ref",
+  "bucket_ref",
+  "storage_operation_ref",
+  "storage_ref",
+  "StorageOperationRefNode",
+]);
+
+export function isStorageRefNode(type?: string): boolean {
+  return Boolean(type && STORAGE_REF_NODE_TYPES.has(type));
 }

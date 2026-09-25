@@ -1,13 +1,6 @@
 import { ConnectionContext } from "../types";
 
-const STORAGE_REF_NODE_TYPES = new Set([
-  "StorageBucketRefNode",
-  "storage_bucket_ref",
-  "bucket_ref",
-  "storage_operation_ref",
-  "storage_ref",
-  "StorageOperationRefNode",
-]);
+import { STORAGE_REF_NODE_TYPES } from "../utils";
 
 /**
  * Handles storage connections:
@@ -27,15 +20,28 @@ export function handleStorageConnect({
       !connection.targetHandle ||
       connection.targetHandle.startsWith("storage-ref-header"));
 
-  if (!isStorageToRef) {
+  const isRefToStorage =
+    STORAGE_REF_NODE_TYPES.has(sourceNode.type) &&
+    targetNode.type === "storage" &&
+    (connection.sourceHandle === "storage-ref-header" ||
+      connection.sourceHandle === "storage-ref-header-out" ||
+      !connection.sourceHandle ||
+      connection.sourceHandle.startsWith("storage-ref-header"));
+
+  if (!isStorageToRef && !isRefToStorage) {
     return;
   }
 
-  const rawHandle = connection.sourceHandle || "";
-  const bucketMatch = rawHandle.match(/^(?:buckets?):out:(.+)$/);
-  const rawBucketId = bucketMatch ? bucketMatch[1] : undefined;
+  const storageNode = isStorageToRef ? sourceNode : targetNode;
+  const refNode = isStorageToRef ? targetNode : sourceNode;
+  const rawHandle =
+    (isStorageToRef ? connection.sourceHandle : connection.targetHandle) || "";
+  const bucketMatch =
+    rawHandle.match(/^(?:buckets?):(out|in):(.+)$/) ||
+    rawHandle.match(/^(?:buckets?):out:(.+)$/);
+  const rawBucketId = bucketMatch ? bucketMatch[2] || bucketMatch[1] : undefined;
 
-  const buckets = sourceNode.data?.buckets || [];
+  const buckets = storageNode.data?.buckets || [];
   const matchedBucket = rawBucketId
     ? buckets.find((b) => b.id === rawBucketId || b.name === rawBucketId)
     : buckets[0];
@@ -45,17 +51,17 @@ export function handleStorageConnect({
   const resolvedBucketId =
     matchedBucket?.id || rawBucketId || resolvedBucketName;
 
-  get().updateNode(targetNode.id, {
+  get().updateNode(refNode.id, {
     data: {
-      ...targetNode.data,
-      storageNodeId: sourceNode.id,
+      ...refNode.data,
+      storageNodeId: storageNode.id,
       bucketId: resolvedBucketId,
       bucketName: resolvedBucketName,
       storageProvider:
-        sourceNode.data?.storageProvider ||
-        targetNode.data?.storageProvider ||
+        storageNode.data?.storageProvider ||
+        refNode.data?.storageProvider ||
         "s3",
-      label: targetNode.data?.label || resolvedBucketName,
+      label: refNode.data?.label || resolvedBucketName,
     },
   });
 }

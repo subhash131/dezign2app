@@ -15,6 +15,7 @@ import { StepRow } from "./StepRow";
 import { ReturnResponseStepRow } from "./ReturnResponseStepRow";
 import { AddStepToolbar } from "./AddStepToolbar";
 import { usePipelineSteps } from "./usePipelineSteps";
+import { createPresignedUrlExtraSource } from "./utils";
 
 export interface PipelineStepEditorProps {
   steps: PipelineStepDraft[];
@@ -75,6 +76,28 @@ export const PipelineStepEditor: React.FC<PipelineStepEditorProps> = ({
     return map;
   }, [executableSteps]);
 
+  const presignSourcesMap = React.useMemo(() => {
+    const map = new Map<number, AvailableSource[]>();
+    for (let i = 0; i < executableSteps.length; i++) {
+      const prior = executableSteps.slice(0, i);
+      const presignSources: AvailableSource[] = prior
+        .filter(
+          (s) =>
+            s.type === "storage_operation" &&
+            ((s.operationId && s.operationId.toLowerCase().includes("presign")) ||
+              (s.functionRef?.name && s.functionRef.name.toLowerCase().includes("presign"))),
+        )
+        .map((s) => {
+          const isDownload =
+            (s.operationId && s.operationId.toLowerCase().includes("download")) ||
+            (s.functionRef?.name && s.functionRef.name.toLowerCase().includes("download"));
+          return createPresignedUrlExtraSource(s, isDownload ? "download" : "upload");
+        });
+      map.set(i, presignSources);
+    }
+    return map;
+  }, [executableSteps]);
+
   return (
     <div className="flex flex-col gap-3">
       {hasUnconfiguredInputs && !isNested && (
@@ -123,7 +146,7 @@ export const PipelineStepEditor: React.FC<PipelineStepEditorProps> = ({
                     allEdges={allEdges}
                     serviceNodeId={serviceNodeId}
                     depth={depth}
-                    extraSources={extraSources}
+                    extraSources={[...extraSources, ...(presignSourcesMap.get(i) || [])]}
                     onChange={(updated) => updateStep(i, updated)}
                     onDelete={() => deleteStep(i)}
                     isFirst={i === 0}
