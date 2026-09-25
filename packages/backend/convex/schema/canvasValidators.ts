@@ -337,6 +337,10 @@ export const backendEdgeDataValidator = v.object({
   isStoreActionBinding: v.optional(v.boolean()),
   isStoreAction: v.optional(v.boolean()),
   actionName: v.optional(v.string()),
+  actionType: v.optional(v.string()),
+  bindingId: v.optional(v.string()),
+  targetFieldId: v.optional(v.string()),
+  targetFieldName: v.optional(v.string()),
   // --- Identity Connection Fields ---
   protocol: v.optional(v.string()),
   grantType: v.optional(v.string()),

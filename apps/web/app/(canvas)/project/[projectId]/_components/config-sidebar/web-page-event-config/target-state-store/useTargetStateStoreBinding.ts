@@ -3,7 +3,6 @@
 import { useMemo, useCallback } from "react";
 import { BackendNode, UIEventItem, Endpoint, Schema, StoreActionBinding, StoreActionType } from "@/types/canvas";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
-import { toPascalCase } from "./types";
 import { toast } from "sonner";
 
 export interface UseTargetStateStoreBindingParams {
@@ -129,7 +128,7 @@ export function useTargetStateStoreBinding({
       }> = [];
 
       targetBindings.forEach((b) => {
-        if (!b.storeNodeId) return;
+        if (!b.storeNodeId || !b.actionId) return;
         const sourceHandle = getStoreSourceHandle(b);
         const edgeId = `edge-store-action-${b.id}-${nodeId}-${actionId}`;
         desiredEdges.push({
@@ -194,8 +193,11 @@ export function useTargetStateStoreBinding({
 
   const notifyBindings = useCallback(
     (newBindings: StoreActionBinding[]) => {
-      onUpdateStoreBindings?.(newBindings);
-      onUpdateStoreBinding?.(newBindings[0] || undefined);
+      if (onUpdateStoreBindings) {
+        onUpdateStoreBindings(newBindings);
+      } else if (onUpdateStoreBinding) {
+        onUpdateStoreBinding(newBindings[0] || undefined);
+      }
       syncCanvasEdges(newBindings);
     },
     [onUpdateStoreBindings, onUpdateStoreBinding, syncCanvasEdges],
@@ -207,50 +209,21 @@ export function useTargetStateStoreBinding({
       return;
     }
 
-    const defaultStore = stateStoreNodes[0]!;
-    const storeName = defaultStore.data?.storeName || defaultStore.data?.label || "App";
-    const storeFields = defaultStore.data?.fields || [];
-    const storeActions = defaultStore.data?.actions || [];
-
-    let defaultActionId: string;
-    let defaultActionName: string;
-    let defaultActionType: StoreActionType;
-    let defaultTargetFieldId: string | undefined = undefined;
-    let defaultTargetFieldName: string | undefined = undefined;
-
-    if (storeFields.length > 0) {
-      const firstField = storeFields[0]!;
-      defaultActionId = `setter-${firstField.id}`;
-      defaultActionName = `set${toPascalCase(firstField.name)}`;
-      defaultActionType = "set";
-      defaultTargetFieldId = firstField.id;
-      defaultTargetFieldName = firstField.name;
-    } else if (storeActions.length > 0) {
-      const firstAct = storeActions[0]!;
-      defaultActionId = firstAct.id;
-      defaultActionName = firstAct.name;
-      defaultActionType = firstAct.actionType || "custom";
-    } else {
-      defaultActionId = "builtin-reset";
-      defaultActionName = "reset";
-      defaultActionType = "reset";
-    }
-
     const newBinding: StoreActionBinding = {
       id: `bnd-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      storeNodeId: defaultStore.id,
-      storeName,
-      actionId: defaultActionId,
-      actionName: defaultActionName,
-      actionType: defaultActionType,
-      targetFieldId: defaultTargetFieldId,
-      targetFieldName: defaultTargetFieldName,
+      storeNodeId: undefined,
+      storeName: undefined,
+      actionId: undefined,
+      actionName: undefined,
+      actionType: undefined,
+      targetFieldId: undefined,
+      targetFieldName: undefined,
       updateSource: isEndpointConnected ? "response" : "payload",
     };
 
     const next = [...normalizedBindings, newBinding];
     notifyBindings(next);
-  }, [stateStoreNodes, normalizedBindings, isEndpointConnected, notifyBindings]);
+  }, [stateStoreNodes.length, isEndpointConnected, normalizedBindings, notifyBindings]);
 
   const handleRemoveManipulation = useCallback(
     (index: number) => {

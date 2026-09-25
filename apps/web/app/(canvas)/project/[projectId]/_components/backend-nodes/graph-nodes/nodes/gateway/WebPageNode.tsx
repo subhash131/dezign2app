@@ -26,7 +26,7 @@ import {
 } from "../../common";
 import { Textarea } from "@workspace/ui/components/textarea";
 import { parsePageRoute, normalizePageRoute, arePageRoutesEqual, WebAppZone } from "@workspace/canvas";
-import { RealtimeConnection, ClientDeliveryProtocol, Endpoint, PageStateObject, PageSection } from "@workspace/canvas/types";
+import { RealtimeConnection, ClientDeliveryProtocol, Endpoint, PageStateObject, PageSection, StoreActionBinding } from "@workspace/canvas/types";
 import { SectionList, RealtimeConnectionList, useZoneHandLayout } from "./web-page";
 import { NodeDeletionDialog } from "@/app/(canvas)/project/[projectId]/_components/NodeDeletionDialog";
 
@@ -39,6 +39,7 @@ export const WebPageNode = ({
   const setActiveConfigItem = useBackendCanvasStore((s) => s.setActiveConfigItem);
   const nodes = useBackendCanvasStore((s) => s.nodes);
   const edges = useBackendCanvasStore((s) => s.edges);
+  const addEdge = useBackendCanvasStore((s) => s.addEdge);
   const endpoints = useBackendCanvasStore((s) => s.endpoints);
   const simulation = useSimulationNodeState(id);
   const borderClass = getSimulationNodeBorderClass(
@@ -91,6 +92,100 @@ export const WebPageNode = ({
       }
     }
   }, [data?.stateObjects, data?.sections, id, updateNode]);
+
+  // Auto-sync canvas edges from state store operations to WebPageNode actions when configured
+  React.useEffect(() => {
+    if (!data?.sections || data.sections.length === 0) return;
+
+    data.sections.forEach((sec) => {
+      (sec.actions || []).forEach((act) => {
+        const bindings: StoreActionBinding[] =
+          Array.isArray(act.storeActionBindings) && act.storeActionBindings.length > 0
+            ? act.storeActionBindings
+            : act.storeActionBinding
+            ? [act.storeActionBinding]
+            : [];
+
+        if (bindings.length === 0) return;
+
+        const isPageLoad = act.event === "pageLoad" || act.name === "pageLoad";
+        const isSse = act.event === "sse" || act.event === "sseMessage";
+        const isWebsocket = act.event === "websocket" || act.event === "ws" || act.event === "websocketMessage";
+        const isWebrtc = act.event === "webrtc";
+        const targetHandle = isPageLoad
+          ? `pageload-in-${act.id}`
+          : isSse
+          ? `sse-in-${act.id}`
+          : isWebsocket
+          ? `websocket-in-${act.id}`
+          : isWebrtc
+          ? `webrtc-in-${act.id}`
+          : `event-in-${act.id}`;
+
+        bindings.forEach((b) => {
+          if (!b.storeNodeId && !b.storeName) return;
+          if (!b.actionId && !b.actionType) return;
+
+          let storeNode = nodes.find((n) => n.id === b.storeNodeId && n.type === "state_store");
+          if (!storeNode && b.storeName) {
+            storeNode = nodes.find(
+              (n) => n.type === "state_store" && (n.data?.storeName === b.storeName || n.data?.label === b.storeName),
+            );
+          }
+          if (!storeNode) return;
+
+          const actId = b.actionId || "";
+          let sourceHandle = "mutate-out";
+          if (actId.startsWith("setter-")) {
+            const fId = b.targetFieldId || actId.replace("setter-", "");
+            sourceHandle = `setter-out-${fId}`;
+          } else if (actId.startsWith("append-")) {
+            const fId = b.targetFieldId || actId.replace("append-", "");
+            sourceHandle = `append-out-${fId}`;
+          } else if (actId.startsWith("pop-")) {
+            const fId = b.targetFieldId || actId.replace("pop-", "");
+            sourceHandle = `pop-out-${fId}`;
+          } else if (b.actionType === "populate" || actId === "builtin-populate" || actId === "populate") {
+            sourceHandle = "populate-out";
+          } else if (b.actionType === "reset" || actId === "builtin-reset" || actId === "reset") {
+            sourceHandle = "reset-out";
+          } else if (actId && !actId.startsWith("builtin-")) {
+            sourceHandle = `store-action-out-${actId}`;
+          }
+
+          const edgeExists = edges.some(
+            (e) =>
+              e.source === storeNode!.id &&
+              e.target === id &&
+              (e.sourceHandle === sourceHandle || (sourceHandle === "mutate-out" && e.sourceHandle?.startsWith("setter-out-"))) &&
+              (e.targetHandle === targetHandle || e.targetHandle === `events-${act.id}` || e.targetHandle?.endsWith(`-${act.id}`)),
+          );
+
+          if (!edgeExists) {
+            const edgeId = `edge-store-action-${b.id || act.id}-${id}-${act.id}`;
+            addEdge({
+              id: edgeId,
+              source: storeNode.id,
+              target: id,
+              sourceHandle,
+              targetHandle,
+              type: "connection",
+              data: {
+                isStoreAction: true,
+                isStoreActionBinding: true,
+                bindingId: b.id,
+                storeName: storeNode.data?.storeName || storeNode.data?.label || b.storeName || "Store",
+                actionName: b.actionName || b.actionType || "action",
+                actionType: b.actionType,
+                targetFieldId: b.targetFieldId,
+                targetFieldName: b.targetFieldName,
+              },
+            });
+          }
+        });
+      });
+    });
+  }, [data?.sections, id, nodes, edges, addEdge]);
 
   const {
     cardIndex,

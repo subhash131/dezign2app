@@ -85,6 +85,11 @@ export const SectionStateTab: React.FC<SectionStateTabProps> = ({
       if (act.storeActionBinding?.storeNodeId) {
         ids.add(act.storeActionBinding.storeNodeId);
       }
+      if (Array.isArray(act.storeActionBindings)) {
+        act.storeActionBindings.forEach((b: any) => {
+          if (b?.storeNodeId) ids.add(b.storeNodeId);
+        });
+      }
     });
 
     return ids;

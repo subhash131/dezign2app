@@ -11,12 +11,12 @@ import {
 import { Label } from "@workspace/ui/components/label";
 import { Badge } from "@workspace/ui/components/badge";
 import { Input } from "@workspace/ui/components/input";
-import { Endpoint } from "@/types/canvas";
-import { Zap, Sliders, Globe, Layers, Sparkles, Info } from "lucide-react";
+import { Sliders, Globe, Layers, Sparkles, Info, Zap } from "lucide-react";
 import { AvailablePath } from "../../pipeline-step-editor/types";
 import { SmartPathInput } from "../../pipeline-step-editor/SmartPathInput";
 import { SourceKind } from "./types";
 import { StoreActionSelectorField } from "./StoreActionSelector";
+import { Endpoint } from "@workspace/canvas";
 
 export interface CustomActionParam {
   id: string;
@@ -78,18 +78,6 @@ export const StoreArgumentMapping: React.FC<StoreArgumentMappingProps> = ({
 
   return (
     <div className="flex flex-col gap-3">
-      {targetField && (
-        <div className="flex items-center justify-between text-xs py-1.5 px-2.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-700 dark:text-indigo-300">
-          <div className="flex items-center gap-1.5 font-mono text-xs font-semibold">
-            <Zap size={12} className="text-indigo-500" />
-            <span>{boundActionName}(value)</span>
-          </div>
-          <span className="text-[10px] text-muted-foreground font-mono">
-            mutates state.{targetField.name} ({targetField.type})
-          </span>
-        </div>
-      )}
-
       {/* Multi-parameter Mapping for custom actions with multiple params */}
       {customActionParameters.length > 1 && (
         <div className="flex flex-col gap-2.5 p-3 rounded-lg border border-border/50 bg-muted/20">

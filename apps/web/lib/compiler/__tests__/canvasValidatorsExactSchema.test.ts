@@ -723,6 +723,37 @@ describe("Convex canvasValidators exact schema", () => {
     expect(storeActionBindingConvexValidator.fields.actionType).toBeDefined();
     expect(storeActionBindingConvexValidator.fields.parameterMappings).toBeDefined();
   });
+
+  it("validates store action edge data with actionType, bindingId, targetFieldId, targetFieldName in Convex & Zod schemas", async () => {
+    const { edgeDataSchema } = await import("@workspace/canvas/schemas");
+    const { backendEdgeDataValidator } = await import(
+      "../../../../../packages/backend/convex/schema/canvasValidators"
+    );
+
+    // Exact edge data reported in user's Convex upsertBackendEdge error
+    const edgeData = {
+      actionName: "setMessages",
+      actionType: "set",
+      bindingId: "bnd-1790334765666-a6ds",
+      isStoreAction: true,
+      isStoreActionBinding: true,
+      storeName: "conversationStore",
+      targetFieldId: "00ab7b6a-54d0-4424-a9f7-4df83fefcf6a",
+      targetFieldName: "messages",
+    };
+
+    const parsedEdge = edgeDataSchema.safeParse(edgeData);
+    expect(parsedEdge.success).toBe(true);
+
+    // Verify convex validator fields
+    expect(backendEdgeDataValidator.fields.actionName).toBeDefined();
+    expect(backendEdgeDataValidator.fields.actionType).toBeDefined();
+    expect(backendEdgeDataValidator.fields.bindingId).toBeDefined();
+    expect(backendEdgeDataValidator.fields.targetFieldId).toBeDefined();
+    expect(backendEdgeDataValidator.fields.targetFieldName).toBeDefined();
+    expect(backendEdgeDataValidator.fields.isStoreAction).toBeDefined();
+    expect(backendEdgeDataValidator.fields.isStoreActionBinding).toBeDefined();
+  });
 });
 
 

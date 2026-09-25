@@ -46,8 +46,6 @@ export const StoreActionSelector: React.FC<StoreActionSelectorProps> = ({
   customActions,
   onActionChange,
 }) => {
-  const defaultValue = actionId || (fields.length > 0 ? `setter-${fields[0]!.id}` : "builtin-reset");
-
   return (
     <div className="flex flex-col gap-2">
       <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
@@ -55,7 +53,7 @@ export const StoreActionSelector: React.FC<StoreActionSelectorProps> = ({
         Store Mutation / Action to Call
       </Label>
       <Select
-        value={defaultValue}
+        value={actionId || ""}
         onValueChange={onActionChange}
       >
         <SelectTrigger className="h-9 text-xs bg-background font-mono">

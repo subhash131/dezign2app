@@ -24,6 +24,10 @@ export const edgeDataSchema = z.object({
   isStoreActionBinding: z.boolean().optional(),
   isStoreAction: z.boolean().optional(),
   actionName: z.string().optional(),
+  actionType: z.string().optional(),
+  bindingId: z.string().optional(),
+  targetFieldId: z.string().optional(),
+  targetFieldName: z.string().optional(),
   // --- Identity Connection Fields ---
   protocol: z.string().optional(),
   grantType: z.string().optional(),

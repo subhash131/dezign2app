@@ -81,45 +81,18 @@ export const StoreManipulationCard: React.FC<StoreManipulationCardProps> = ({
     if (!sn) return;
 
     const storeName = sn.data?.storeName || sn.data?.label || "App";
-    const storeFields = sn.data?.fields || [];
-    const storeActions = sn.data?.actions || [];
 
-    let defaultActionId: string;
-    let defaultActionName: string;
-    let defaultActionType: StoreActionType;
-    let defaultTargetFieldId: string | undefined = undefined;
-    let defaultTargetFieldName: string | undefined = undefined;
-
-    if (storeFields.length > 0) {
-      const firstField = storeFields[0]!;
-      defaultActionId = `setter-${firstField.id}`;
-      defaultActionName = `set${toPascalCase(firstField.name)}`;
-      defaultActionType = "set";
-      defaultTargetFieldId = firstField.id;
-      defaultTargetFieldName = firstField.name;
-    } else if (storeActions.length > 0) {
-      const firstAct = storeActions[0]!;
-      defaultActionId = firstAct.id;
-      defaultActionName = firstAct.name;
-      defaultActionType = firstAct.actionType || "custom";
-    } else {
-      defaultActionId = "builtin-reset";
-      defaultActionName = "reset";
-      defaultActionType = "reset";
-    }
-
-    const defaultSource = isEndpointConnected ? "response" : "payload";
-
+    // Keep action blank/unconfigured until explicitly chosen in StoreActionSelector
     onUpdateBinding({
       ...binding,
       storeNodeId: storeId,
       storeName,
-      actionId: defaultActionId,
-      actionName: defaultActionName,
-      actionType: defaultActionType,
-      targetFieldId: defaultTargetFieldId,
-      targetFieldName: defaultTargetFieldName,
-      updateSource: defaultSource,
+      actionId: undefined,
+      actionName: undefined,
+      actionType: undefined,
+      targetFieldId: undefined,
+      targetFieldName: undefined,
+      updateSource: isEndpointConnected ? "response" : "payload",
     });
   };
 
@@ -404,8 +377,13 @@ export const StoreManipulationCard: React.FC<StoreManipulationCardProps> = ({
           </Badge>
           <div className="flex items-center gap-1.5 truncate text-xs font-medium">
             <Database size={12} className="text-indigo-500 shrink-0" />
-            <span className="font-semibold text-foreground truncate">
-              {binding.storeName || "Unassigned Store"}
+            <span
+              className={cn(
+                "font-semibold truncate",
+                !binding.storeName && "text-muted-foreground italic font-normal",
+              )}
+            >
+              {binding.storeName || "Unconfigured Store"}
             </span>
             {binding.actionName && (
               <>
@@ -479,69 +457,73 @@ export const StoreManipulationCard: React.FC<StoreManipulationCardProps> = ({
                 onActionChange={handleActionChange}
               />
 
-              {/* Data Argument or Populate Mapping */}
-              {isPopulateAction ? (
-                <StorePopulateMapping
-                  fields={fields}
-                  parameterMappings={binding.parameterMappings}
-                  isEndpointConnected={isEndpointConnected}
-                  connectedEndpoint={connectedEndpoint}
-                  connectedEndpointName={connectedEndpointName}
-                  actionName={actionName}
-                  selectedSourceKind={selectedSourceKind}
-                  currentSuggestedPaths={currentSuggestedPaths}
-                  onSourceKindChange={handleSourceKindChange}
-                  onFieldMappingChange={handleFieldMappingChange}
-                  onAutoMatchPopulate={handleAutoMatchPopulate}
-                />
-              ) : (
-                <StoreArgumentMapping
-                  isResetAction={isResetAction}
-                  targetField={targetField}
-                  customActionParameters={customActionParameters}
-                  actionName={actionName}
-                  storeName={binding.storeName}
-                  boundActionName={binding.actionName}
-                  parameterMappings={binding.parameterMappings}
-                  onUpdateParameterMapping={(paramName, p) => {
-                    onUpdateBinding({
-                      ...binding,
-                      parameterMappings: {
-                        ...(binding.parameterMappings || {}),
-                        [paramName]: p,
-                      },
-                    });
-                  }}
-                  selectedSourceKind={selectedSourceKind}
-                  onSourceKindChange={handleSourceKindChange}
-                  isEndpointConnected={isEndpointConnected}
-                  connectedEndpoint={connectedEndpoint}
-                  connectedEndpointName={connectedEndpointName}
-                  valuePath={binding.valuePath}
-                  onPathChange={handlePathChange}
-                  customValue={binding.customValue}
-                  onCustomValueChange={handleCustomValueChange}
-                  currentSuggestedPaths={currentSuggestedPaths}
-                />
-              )}
+              {/* Data Argument or Populate Mapping & Live Preview Card (shown once an action is selected) */}
+              {binding.actionId ? (
+                <>
+                  {isPopulateAction ? (
+                    <StorePopulateMapping
+                      fields={fields}
+                      parameterMappings={binding.parameterMappings}
+                      isEndpointConnected={isEndpointConnected}
+                      connectedEndpoint={connectedEndpoint}
+                      connectedEndpointName={connectedEndpointName}
+                      actionName={actionName}
+                      selectedSourceKind={selectedSourceKind}
+                      currentSuggestedPaths={currentSuggestedPaths}
+                      onSourceKindChange={handleSourceKindChange}
+                      onFieldMappingChange={handleFieldMappingChange}
+                      onAutoMatchPopulate={handleAutoMatchPopulate}
+                    />
+                  ) : (
+                    <StoreArgumentMapping
+                      isResetAction={isResetAction}
+                      targetField={targetField}
+                      customActionParameters={customActionParameters}
+                      actionName={actionName}
+                      storeName={binding.storeName}
+                      boundActionName={binding.actionName}
+                      parameterMappings={binding.parameterMappings}
+                      onUpdateParameterMapping={(paramName, p) => {
+                        onUpdateBinding({
+                          ...binding,
+                          parameterMappings: {
+                            ...(binding.parameterMappings || {}),
+                            [paramName]: p,
+                          },
+                        });
+                      }}
+                      selectedSourceKind={selectedSourceKind}
+                      onSourceKindChange={handleSourceKindChange}
+                      isEndpointConnected={isEndpointConnected}
+                      connectedEndpoint={connectedEndpoint}
+                      connectedEndpointName={connectedEndpointName}
+                      valuePath={binding.valuePath}
+                      onPathChange={handlePathChange}
+                      customValue={binding.customValue}
+                      onCustomValueChange={handleCustomValueChange}
+                      currentSuggestedPaths={currentSuggestedPaths}
+                    />
+                  )}
 
-              {/* Live Preview Card */}
-              <StoreCallPreviewCard
-                storeName={binding.storeName || "App"}
-                actionName={binding.actionName || "action"}
-                actionType={binding.actionType}
-                targetFieldName={binding.targetFieldName}
-                updateSource={binding.updateSource}
-                valuePath={binding.valuePath}
-                customValue={binding.customValue}
-                parameterMappings={binding.parameterMappings}
-                sourceKind={selectedSourceKind === "endpoint" ? "response" : "payload"}
-                subtitle={
-                  selectedSourceKind === "endpoint"
-                    ? `Executes on ${connectedEndpointName || "API"} response`
-                    : `Executes on ${actionName || "event"} trigger`
-                }
-              />
+                  {/* Live Preview Card */}
+                  <StoreCallPreviewCard
+                    storeName={binding.storeName || "App"}
+                    actionName={binding.actionName || "action"}
+                    actionType={binding.actionType}
+                    targetFieldName={binding.targetFieldName}
+                    updateSource={binding.updateSource}
+                    valuePath={binding.valuePath}
+                    customValue={binding.customValue}
+                    parameterMappings={binding.parameterMappings}
+                    sourceKind={selectedSourceKind === "endpoint" ? "response" : "payload"}
+                    subtitle={
+                      selectedSourceKind === "endpoint"
+                        ? `Executes on ${connectedEndpointName || "API"} response`
+                        : `Executes on ${actionName || "event"} trigger`
+                    }
+                  />
+                </>
+              ) : null}
             </div>
           )}
         </div>

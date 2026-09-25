@@ -6,6 +6,7 @@ import {
   PageSection,
   PageStateObject,
   RealtimeConnection,
+  StoreActionBinding,
   StoreActionType,
   UIEventItem,
 } from "@/types/canvas";
@@ -479,11 +480,11 @@ export function handleFrontendConnect({
           if (popAction) {
             actionId = popAction.id;
             actionName = popAction.name;
-            actionType = popAction.actionType || "remove";
+            actionType = popAction.actionType || "pop";
           } else {
             actionId = `pop-${fId}`;
             actionName = defaultPopName;
-            actionType = "remove";
+            actionType = "pop";
           }
         }
       } else if (storeHandle.startsWith("store-field-in-") || storeHandle.startsWith("store-field-out-")) {
@@ -505,23 +506,38 @@ export function handleFrontendConnect({
         const sections: PageSection[] = webPageNode.data?.sections || [];
         let updatedActionName = "";
 
+        const newBindingId = `bnd-${actionIdToBind}-${Date.now()}`;
+        const newBinding: StoreActionBinding = {
+          id: newBindingId,
+          storeNodeId: storeNode.id,
+          storeName,
+          actionId,
+          actionName,
+          actionType,
+          targetFieldId,
+          targetFieldName,
+          updateSource: "response",
+        };
+
         const updatedSections: PageSection[] = sections.map((sec: PageSection): PageSection => ({
           ...sec,
           actions: (sec.actions || []).map((act: UIEventItem): UIEventItem => {
             if (act.id === actionIdToBind) {
               updatedActionName = act.name || "Action";
+              const existingBindings =
+                Array.isArray(act.storeActionBindings) && act.storeActionBindings.length > 0
+                  ? act.storeActionBindings
+                  : act.storeActionBinding
+                  ? [act.storeActionBinding]
+                  : [];
+              const exists = existingBindings.some(
+                (b) => b.storeNodeId === storeNode.id && b.actionName === actionName && b.targetFieldId === targetFieldId,
+              );
+              const nextBindings = exists ? existingBindings : [...existingBindings, newBinding];
               return {
                 ...act,
-                storeActionBinding: {
-                  storeNodeId: storeNode.id,
-                  storeName,
-                  actionId,
-                  actionName,
-                  actionType,
-                  targetFieldId,
-                  targetFieldName,
-                  updateSource: "response",
-                },
+                storeActionBinding: newBinding,
+                storeActionBindings: nextBindings,
               };
             }
             return act;
@@ -546,7 +562,7 @@ export function handleFrontendConnect({
             ? "reset-out"
             : actionType === "append" && targetFieldId
             ? `append-out-${targetFieldId}`
-            : actionType === "remove" && targetFieldId
+            : (actionType === "pop" || actionType === "remove") && targetFieldId
             ? `pop-out-${targetFieldId}`
             : targetFieldId
             ? `setter-out-${targetFieldId}`
@@ -567,8 +583,12 @@ export function handleFrontendConnect({
                   ...e.data,
                   isStoreAction: true,
                   isStoreActionBinding: true,
+                  bindingId: newBindingId,
                   storeName,
                   actionName,
+                  actionType,
+                  targetFieldId,
+                  targetFieldName,
                 },
               }
             : e,
@@ -584,21 +604,36 @@ export function handleFrontendConnect({
         const rtcList: RealtimeConnection[] = webPageNode.data?.realtimeConnections || [];
         let updatedConnName = "";
 
+        const newBindingId = `bnd-rtc-${connIdToBind}-${Date.now()}`;
+        const newBinding: StoreActionBinding = {
+          id: newBindingId,
+          storeNodeId: storeNode.id,
+          storeName,
+          actionId,
+          actionName,
+          actionType,
+          targetFieldId,
+          targetFieldName,
+          updateSource: "full_message",
+        };
+
         const updatedRtcList: RealtimeConnection[] = rtcList.map((c: RealtimeConnection): RealtimeConnection => {
           if (c.id === connIdToBind) {
             updatedConnName = c.eventName || c.description || "Realtime connection";
+            const existingBindings =
+              Array.isArray(c.storeActionBindings) && c.storeActionBindings.length > 0
+                ? c.storeActionBindings
+                : c.storeActionBinding
+                ? [c.storeActionBinding]
+                : [];
+            const exists = existingBindings.some(
+              (b) => b.storeNodeId === storeNode.id && b.actionName === actionName && b.targetFieldId === targetFieldId,
+            );
+            const nextBindings = exists ? existingBindings : [...existingBindings, newBinding];
             return {
               ...c,
-              storeActionBinding: {
-                storeNodeId: storeNode.id,
-                storeName,
-                actionId,
-                actionName,
-                actionType,
-                targetFieldId,
-                targetFieldName,
-                updateSource: "full_message",
-              },
+              storeActionBinding: newBinding,
+              storeActionBindings: nextBindings,
             };
           }
           return c;
@@ -618,9 +653,14 @@ export function handleFrontendConnect({
                 ...e,
                 data: {
                   ...e.data,
+                  isStoreAction: true,
                   isStoreActionBinding: true,
+                  bindingId: newBindingId,
                   storeName,
                   actionName,
+                  actionType,
+                  targetFieldId,
+                  targetFieldName,
                 },
               }
             : e,
