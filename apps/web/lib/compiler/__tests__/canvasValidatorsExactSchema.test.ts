@@ -754,6 +754,51 @@ describe("Convex canvasValidators exact schema", () => {
     expect(backendEdgeDataValidator.fields.isStoreAction).toBeDefined();
     expect(backendEdgeDataValidator.fields.isStoreActionBinding).toBeDefined();
   });
+
+  it("validates StorageBucketRefNode data schema with storageOperations, bucketId, and storageNodeId in Convex & Zod schemas", async () => {
+    const {
+      storageOperationRefDataSchema,
+      storageBucketRefDataSchema,
+    } = await import("@workspace/canvas/schemas");
+    const {
+      backendStorageBucketRefDataValidator,
+      backendStorageOperationRefDataValidator,
+      backendNodeDataValidator,
+    } = await import(
+      "../../../../../packages/backend/convex/schema/canvasValidators"
+    );
+
+    const refNodeData = {
+      label: "user-avatars",
+      storageNodeId: "storage-node-1",
+      storageProvider: "s3",
+      bucketId: "user-avatars",
+      bucketName: "user-avatars",
+      storageOperations: [
+        {
+          id: "uploadObject",
+          name: "uploadObject",
+          kind: "upload" as const,
+          label: "Upload File",
+          enabled: true,
+        },
+      ],
+    };
+
+    const parsedOpRef = storageOperationRefDataSchema.safeParse(refNodeData);
+    expect(parsedOpRef.success).toBe(true);
+
+    const parsedBucketRef = storageBucketRefDataSchema.safeParse(refNodeData);
+    expect(parsedBucketRef.success).toBe(true);
+
+    // Verify convex validators are defined and match
+    expect(backendStorageBucketRefDataValidator).toBeDefined();
+    expect(backendStorageOperationRefDataValidator).toBeDefined();
+    expect(backendStorageBucketRefDataValidator.fields.bucketId).toBeDefined();
+    expect(backendStorageBucketRefDataValidator.fields.storageNodeId).toBeDefined();
+    expect(backendStorageBucketRefDataValidator.fields.storageOperations).toBeDefined();
+    expect(backendNodeDataValidator.members.length).toBeGreaterThan(10);
+  });
 });
 
 

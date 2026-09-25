@@ -27,6 +27,12 @@ const ALL_BACKEND_NODE_TYPES = [
   "group",
   "db_ref",
   "storage",
+  "storage_operation_ref",
+  "storage_ref",
+  "bucket_ref",
+  "storage_bucket_ref",
+  "StorageBucketRefNode",
+  "StorageOperationRefNode",
   "worker",
   "serverless",
   "search_index",
@@ -184,12 +190,38 @@ export function classifyHandle(
   if (id.startsWith("consumedEvents-out-")) return "consumed-event-out";
 
   const resourceMatchRegex = new RegExp(
-    `^(${MESSAGING_RESOURCE_TYPES.join("|")}):(in|out):(.+)$`,
+    `^(${[...MESSAGING_RESOURCE_TYPES, "bucket", "topic", "stream", "queue", "channel", "cache"].join("|")}):(in|out):(.+)$`,
   );
   const resourceMatch = id.match(resourceMatchRegex);
   if (resourceMatch) {
     const direction = resourceMatch[2];
     return direction === "in" ? "resource-def-in" : "resource-def-out";
+  }
+
+  if (
+    id === "storage-ref-header" ||
+    id.startsWith("storage-ref-header")
+  ) {
+    return "resource-def-in";
+  }
+
+  if (
+    nodeType === "storage_operation_ref" ||
+    nodeType === "storage_ref" ||
+    nodeType === "bucket_ref" ||
+    nodeType === "storage_bucket_ref" ||
+    nodeType === "StorageBucketRefNode" ||
+    nodeType === "StorageOperationRefNode"
+  ) {
+    if (id === "storage-ref-header" || id.startsWith("storage-ref-header")) {
+      return "resource-def-in";
+    }
+    if (id.startsWith("func-") || handleDirection === "target") {
+      return "action-target";
+    }
+    if (handleDirection === "source") {
+      return "resource-def-out";
+    }
   }
 
   if (

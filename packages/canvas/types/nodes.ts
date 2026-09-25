@@ -57,6 +57,9 @@ export type BackendNodeType =
   | "storage_operation_ref"
   | "storage_ref"
   | "bucket_ref"
+  | "storage_bucket_ref"
+  | "StorageBucketRefNode"
+  | "StorageOperationRefNode"
   // Redis Dedicated Schema View Nodes
   | "redis_instance"
   | "redis_schema"
@@ -227,10 +230,12 @@ export type {
   StorageOperationBadge,
   StorageOperationFunction,
   CanvasStorageOperationRefNodeData,
+  CanvasStorageBucketRefNodeData,
 } from "./storage";
 import type {
   StorageOperationFunction,
   CanvasStorageOperationRefNodeData,
+  CanvasStorageBucketRefNodeData,
 } from "./storage";
 
 export interface CanvasStorageNodeData {

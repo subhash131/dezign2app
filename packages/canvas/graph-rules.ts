@@ -49,6 +49,7 @@ export const CONNECTION_RULES: Record<HandleKind, HandleKind[]> = {
     "langgraph-in",
     "hook-in",
     "page-ref-in",
+    "action-target",
   ],
   "resource-def-in": [],
   "resource-def-out": [
@@ -58,6 +59,8 @@ export const CONNECTION_RULES: Record<HandleKind, HandleKind[]> = {
     "websocket-in",
     "hook-in",
     "endpoint-in",
+    "resource-def-in",
+    "action-target",
   ],
   "entity-column-source": ["entity-column-target"],
   "entity-column-target": [],
@@ -102,7 +105,7 @@ export const CONNECTION_RULES: Record<HandleKind, HandleKind[]> = {
   "auth-in": [],
   "injects-plugin-out": ["payments-plugin-in", "auth-in"],
   "payments-plugin-in": [],
-  "page-out": ["page-section-in", "endpoint-in", "page-in", "page-ref-in", "hook-in", "component-in", "store-in", "resource-def-in"],
+  "page-out": ["page-section-in", "endpoint-in", "page-in", "page-ref-in", "hook-in", "component-in", "store-in", "resource-def-in", "action-target"],
   "page-in": [],
   "page-section-in": ["page-in", "endpoint-in", "page-out", "hook-in", "component-in"],
   "transformer-in": [],
@@ -237,6 +240,8 @@ export const EDGE_TYPE_MAP: Record<string, string> = {
   "page-out→resource-def-in": "connection",
   "event-source→resource-def-in": "connection",
   "resource-def-out→endpoint-in": "message",
+  "resource-def-out→resource-def-in": "storage-reference",
+  "resource-def-out→action-target": "storage-reference",
 };
 
 // NOTE: "sse", "websocket", "webrtc", "polling" have been moved to the

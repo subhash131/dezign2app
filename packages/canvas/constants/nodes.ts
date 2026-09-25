@@ -17,6 +17,10 @@ export const BACKEND_NODE_DB_REF = "db_ref" as const;
 export const BACKEND_NODE_STORAGE = "storage" as const;
 export const BACKEND_NODE_STORAGE_OPERATION_REF = "storage_operation_ref" as const;
 export const BACKEND_NODE_STORAGE_REF = "storage_ref" as const;
+export const BACKEND_NODE_BUCKET_REF = "bucket_ref" as const;
+export const BACKEND_NODE_STORAGE_BUCKET_REF = "storage_bucket_ref" as const;
+export const BACKEND_NODE_STORAGE_BUCKET_REF_NODE = "StorageBucketRefNode" as const;
+export const BACKEND_NODE_STORAGE_OPERATION_REF_NODE = "StorageOperationRefNode" as const;
 export const BACKEND_NODE_WORKER = "worker" as const;
 export const BACKEND_NODE_SERVERLESS = "serverless" as const;
 export const BACKEND_NODE_SEARCH_INDEX = "search_index" as const;
@@ -49,6 +53,12 @@ export const NODE_TYPE_TO_RESOURCE_KIND: Record<string, string | undefined> = {
   pubsub: "generic-pubsub",
   eventstream: "generic-eventstream",
   storage: "storage",
+  storage_operation_ref: "storage",
+  storage_ref: "storage",
+  bucket_ref: "storage",
+  storage_bucket_ref: "storage",
+  StorageBucketRefNode: "storage",
+  StorageOperationRefNode: "storage",
   worker: "worker",
   serverless: "serverless",
   search_index: "search_index",
@@ -84,6 +94,10 @@ export const BACKEND_NODE_TYPES = {
   STORAGE: BACKEND_NODE_STORAGE,
   STORAGE_OPERATION_REF: BACKEND_NODE_STORAGE_OPERATION_REF,
   STORAGE_REF: BACKEND_NODE_STORAGE_REF,
+  BUCKET_REF: BACKEND_NODE_BUCKET_REF,
+  STORAGE_BUCKET_REF: BACKEND_NODE_STORAGE_BUCKET_REF,
+  STORAGE_BUCKET_REF_NODE: BACKEND_NODE_STORAGE_BUCKET_REF_NODE,
+  STORAGE_OPERATION_REF_NODE: BACKEND_NODE_STORAGE_OPERATION_REF_NODE,
   WORKER: BACKEND_NODE_WORKER,
   SERVERLESS: BACKEND_NODE_SERVERLESS,
   SEARCH_INDEX: BACKEND_NODE_SEARCH_INDEX,
