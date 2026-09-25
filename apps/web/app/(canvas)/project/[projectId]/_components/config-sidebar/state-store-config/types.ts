@@ -323,6 +323,14 @@ export function applyManipulator({
 
     // If custom code is provided on ANY manipulator, execute it directly in a rich runtime scope
     if (manipulator.code && manipulator.code.trim()) {
+      let trimmedCode = manipulator.code.trim();
+
+      // If code starts with an action property label e.g. "login: ...", strip the leading "actionName:"
+      const labelMatch = trimmedCode.match(/^[a-zA-Z_$][a-zA-Z0-9_$]*\s*:\s*([\s\S]+)$/);
+      if (labelMatch && labelMatch[1]) {
+        trimmedCode = labelMatch[1].trim();
+      }
+
       const setFn = (updater: StoreState | ((prev: StoreState) => StoreState)) => {
         const patch = typeof updater === "function" ? updater(nextState) : updater;
         if (patch && typeof patch === "object") {
@@ -343,22 +351,28 @@ export function applyManipulator({
         }
       });
 
-      // If action has declared parameters (e.g. item, qty, id)
+      const argValues: (JsonValue | undefined)[] = [];
+
+      // If action has declared parameters (e.g. item, qty, id, name)
       if (manipulator.parameters && manipulator.parameters.length > 0) {
         manipulator.parameters.forEach((param, idx) => {
+          let val: JsonValue | undefined = undefined;
+          if (isJsonObject(payload) && param.name in payload) {
+            val = payload[param.name];
+          } else if (Array.isArray(payload) && idx < payload.length) {
+            val = payload[idx];
+          } else if (manipulator.parameters?.length === 1) {
+            val = payload;
+          }
+          argValues.push(val);
+
           if (!scopeKeys.includes(param.name)) {
             scopeKeys.push(param.name);
-            let val: JsonValue | undefined = undefined;
-            if (isJsonObject(payload) && param.name in payload) {
-              val = payload[param.name];
-            } else if (Array.isArray(payload) && idx < payload.length) {
-              val = payload[idx];
-            } else if (manipulator.parameters?.length === 1) {
-              val = payload;
-            }
             scopeValues.push(val);
           }
         });
+      } else {
+        argValues.push(payload);
       }
 
       // If payload is an object, unpack its top-level keys into scope so code can access them directly
@@ -371,8 +385,33 @@ export function applyManipulator({
         });
       }
 
-      const runner = new Function(...scopeKeys, manipulator.code);
-      runner(...scopeValues);
+      // Detect if code is an arrow function or function expression e.g. (name) => set(...) or function(...)
+      const isArrowOrFunc =
+        /^(\([^)]*\)|[a-zA-Z_$][a-zA-Z0-9_$]*)\s*=>/.test(trimmedCode) ||
+        /^function\s*\(/.test(trimmedCode);
+
+      if (isArrowOrFunc) {
+        const fnEvaluator = new Function(...scopeKeys, `return (${trimmedCode})`);
+        const fn = fnEvaluator(...scopeValues);
+        if (typeof fn === "function") {
+          const res = fn(...argValues);
+          if (res && typeof res === "object") {
+            nextState = { ...nextState, ...res };
+          }
+        }
+      } else {
+        const runner = new Function(...scopeKeys, trimmedCode);
+        const res = runner(...scopeValues);
+        if (typeof res === "function") {
+          const fnRes = res(...argValues);
+          if (fnRes && typeof fnRes === "object") {
+            nextState = { ...nextState, ...fnRes };
+          }
+        } else if (res && typeof res === "object") {
+          nextState = { ...nextState, ...res };
+        }
+      }
+
       return { newState: nextState };
     }
 
@@ -391,7 +430,19 @@ export function applyManipulator({
 
     switch (manipulator.actionType) {
       case "set": {
-        const valToSet = payload !== undefined ? payload : currentState[targetName];
+        let valToSet = payload !== undefined ? payload : currentState[targetName];
+        if (isJsonObject(payload)) {
+          if (
+            manipulator.parameters &&
+            manipulator.parameters.length === 1 &&
+            manipulator.parameters[0]?.name &&
+            manipulator.parameters[0].name in payload
+          ) {
+            valToSet = payload[manipulator.parameters[0].name];
+          } else if (targetName in payload) {
+            valToSet = payload[targetName];
+          }
+        }
         if (valToSet !== undefined) {
           nextState[targetName] = valToSet;
         }
@@ -403,7 +454,8 @@ export function applyManipulator({
         let itemToAppend: JsonValue = payload !== undefined ? payload : null;
         if (
           isJsonObject(payload) &&
-          manipulator.parameters?.length === 1 &&
+          manipulator.parameters &&
+          manipulator.parameters.length === 1 &&
           manipulator.parameters[0]?.name &&
           manipulator.parameters[0].name in payload
         ) {
@@ -421,9 +473,18 @@ export function applyManipulator({
         if (Array.isArray(currentArr)) {
           let removeIdOrIdx: JsonValue | undefined = payload;
           if (isJsonObject(payload)) {
-            const candidate = payload.id !== undefined ? payload.id : payload.index;
-            if (candidate !== undefined) {
-              removeIdOrIdx = candidate;
+            if (
+              manipulator.parameters &&
+              manipulator.parameters.length === 1 &&
+              manipulator.parameters[0]?.name &&
+              manipulator.parameters[0].name in payload
+            ) {
+              removeIdOrIdx = payload[manipulator.parameters[0].name];
+            } else {
+              const candidate = payload.id !== undefined ? payload.id : payload.index;
+              if (candidate !== undefined) {
+                removeIdOrIdx = candidate;
+              }
             }
           }
           nextState[targetName] = currentArr.filter((it, idx) => {
@@ -443,8 +504,17 @@ export function applyManipulator({
       }
       case "increment": {
         let rawNum: JsonValue | undefined = payload;
-        if (isJsonObject(payload) && "amount" in payload) {
-          rawNum = payload.amount;
+        if (isJsonObject(payload)) {
+          if (
+            manipulator.parameters &&
+               manipulator.parameters.length === 1 &&
+            manipulator.parameters[0]?.name &&
+            manipulator.parameters[0].name in payload
+          ) {
+            rawNum = payload[manipulator.parameters[0].name];
+          } else if ("amount" in payload) {
+            rawNum = payload.amount;
+          }
         }
         const amt =
           typeof rawNum === "number"
@@ -506,4 +576,199 @@ export interface TestHistoryEntry {
   beforeState: StoreState;
   afterState: StoreState;
   error?: string;
+}
+
+export function generateActionCodePreview({
+  name,
+  actionType = "set",
+  targetFieldName,
+  parameters = [],
+  code,
+  field,
+}: {
+  name: string;
+  actionType?: GlobalStoreAction["actionType"];
+  targetFieldName?: string;
+  parameters?: Parameter[];
+  code?: string;
+  field?: GlobalStoreField;
+}): string {
+  const safeName = (name || "action").trim() || "action";
+  const paramsList =
+    parameters && parameters.length > 0
+      ? parameters.map((p) => p.name.trim() || "arg").join(", ")
+      : actionType === "reset" || actionType === "toggle"
+      ? ""
+      : "payload";
+
+  // If custom code is provided
+  if (code && code.trim()) {
+    const trimmed = code.trim();
+    if (trimmed.startsWith("set(") && !trimmed.includes("\n")) {
+      return `${safeName}: (${paramsList}) => ${trimmed}`;
+    }
+    const indented = trimmed
+      .split("\n")
+      .map((l) => `  ${l}`)
+      .join("\n");
+    return `${safeName}: (${paramsList}) => {\n${indented}\n}`;
+  }
+
+  const target = targetFieldName || field?.name || "value";
+
+  switch (actionType) {
+    case "set":
+      return `${safeName}: (${paramsList || "value"}) => set({ ${target}: ${paramsList || "value"} })`;
+    case "toggle":
+      return `${safeName}: () => set((state) => ({ ${target}: !state.${target} }))`;
+    case "increment": {
+      const arg =
+        parameters && parameters.length > 0 && parameters[0]?.name
+          ? parameters[0].name
+          : "amount";
+      return `${safeName}: (${arg} = 1) => set((state) => ({\n  ${target}: (Number(state.${target}) || 0) + ${arg}\n}))`;
+    }
+    case "append": {
+      const arg =
+        parameters && parameters.length > 0 && parameters[0]?.name
+          ? parameters[0].name
+          : "item";
+      return `${safeName}: (${arg}) => set((state) => ({\n  ${target}: [...(Array.isArray(state.${target}) ? state.${target} : []), ${arg}]\n}))`;
+    }
+    case "remove": {
+      const arg =
+        parameters && parameters.length > 0 && parameters[0]?.name
+          ? parameters[0].name
+          : "idOrIndex";
+      return `${safeName}: (${arg}) => set((state) => ({\n  ${target}: Array.isArray(state.${target})\n    ? state.${target}.filter((item, idx) =>\n        typeof item === "object" && item !== null && "id" in item ? item.id !== ${arg} : idx !== ${arg}\n      )\n    : []\n}))`;
+    }
+    case "populate":
+      return `${safeName}: (${paramsList || "data"}) => set((state) => ({ ...state, ...(${paramsList || "data"} || {}) }))`;
+    case "reset":
+      return `${safeName}: () => set(initialState)`;
+    case "custom":
+    default: {
+      const firstArg = paramsList ? (paramsList.split(",")[0]?.trim() || "payload") : "payload";
+      return `${safeName}: (${paramsList}) => {\n  // Custom mutation logic\n  set({ ${target}: ${firstArg} });\n}`;
+    }
+  }
+}
+
+export function getDefaultTemplateForAction({
+  actionType,
+  targetFieldName,
+  parameters = [],
+  field,
+}: {
+  actionType?: GlobalStoreAction["actionType"];
+  targetFieldName?: string;
+  parameters?: Parameter[];
+  field?: GlobalStoreField;
+}): string {
+  const target = targetFieldName || field?.name || "field";
+  const firstParam =
+    parameters && parameters.length > 0 && parameters[0]?.name
+      ? parameters[0].name
+      : "payload";
+
+  switch (actionType) {
+    case "set":
+      return `// Set field directly\nset({ ${target}: ${firstParam} });`;
+    case "toggle":
+      return `// Toggle boolean field\nset((state) => ({ ${target}: !state.${target} }));`;
+    case "increment":
+      return `// Increment numeric field safely\nset((state) => ({\n  ${target}: (Number(state.${target}) || 0) + (Number(${firstParam}) || 1)\n}));`;
+    case "append":
+      return `// Append item to array safely\nset((state) => ({\n  ${target}: [...(Array.isArray(state.${target}) ? state.${target} : []), ${firstParam}]\n}));`;
+    case "remove":
+      return `// Filter out item by id or index\nset((state) => ({\n  ${target}: Array.isArray(state.${target})\n    ? state.${target}.filter((item, idx) =>\n        typeof item === "object" && item !== null && "id" in item\n          ? item.id !== ${firstParam}\n          : idx !== ${firstParam}\n      )\n    : []\n}));`;
+    case "populate":
+      return `// Bulk-hydrate store state\nif (${firstParam} && typeof ${firstParam} === "object") {\n  set((state) => ({ ...state, ...${firstParam} }));\n}`;
+    case "reset":
+      return `// Reset store back to initial defaults\nset(initialState);`;
+    case "custom":
+    default:
+      return `// Access state with get(), update with set((state) => ({ ... }))\nconst current = get();\nset((state) => ({\n  ...state,\n  ${target}: ${firstParam}\n}));`;
+  }
+}
+
+export interface ActionValidation {
+  errors: string[];
+  warnings: string[];
+}
+
+export function validateStoreAction({
+  action,
+  allActions,
+  fields,
+}: {
+  action: GlobalStoreAction;
+  allActions: GlobalStoreAction[];
+  fields: GlobalStoreField[];
+}): ActionValidation {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  const name = action.name?.trim();
+  if (!name) {
+    errors.push("Action name is required");
+  } else {
+    if (!/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(name)) {
+      errors.push("Action name must be alphanumeric with no spaces");
+    }
+
+    const duplicates = allActions.filter(
+      (a) => a.id !== action.id && a.name?.trim().toLowerCase() === name.toLowerCase(),
+    );
+    if (duplicates.length > 0) {
+      errors.push(`Action "${name}" is duplicated in this store`);
+    }
+
+    const lower = name.toLowerCase();
+    const isBuiltinCollision = lower === "populate" || lower === "reset" || lower === "load";
+    const setterCollision = fields.some(
+      (f) => lower === `set${f.name.toLowerCase()}`,
+    );
+    if (!action.defaultManipulatorType && (isBuiltinCollision || setterCollision)) {
+      warnings.push(`"${name}" collides with a default manipulator name.`);
+    }
+  }
+
+  if (action.parameters && action.parameters.length > 0) {
+    const paramNames = new Set<string>();
+    const reservedWords = new Set([
+      "set",
+      "get",
+      "initialState",
+      "state",
+      "function",
+      "var",
+      "let",
+      "const",
+      "return",
+    ]);
+    action.parameters.forEach((p, idx) => {
+      const pName = p.name?.trim();
+      if (!pName) {
+        errors.push(`Arg #${idx + 1} name is empty`);
+      } else {
+        if (!/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(pName)) {
+          errors.push(`Arg "${pName}" has invalid identifier characters`);
+        }
+        if (reservedWords.has(pName)) {
+          errors.push(`Arg "${pName}" conflicts with store scope reserved word`);
+        }
+        if (paramNames.has(pName.toLowerCase())) {
+          errors.push(`Duplicate argument name "${pName}"`);
+        }
+        paramNames.add(pName.toLowerCase());
+      }
+    });
+  }
+
+  if (action.actionType === "custom" && (!action.code || !action.code.trim())) {
+    warnings.push("Custom action has no implementation code yet");
+  }
+
+  return { errors, warnings };
 }

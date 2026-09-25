@@ -85,7 +85,15 @@ export const useSectionCollapseStore = create<SectionCollapseStore>()(
     }),
     {
       name: "dezign2app_webpage_section_collapse_state_v1",
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() =>
+        typeof window !== "undefined" && typeof window.localStorage?.setItem === "function"
+          ? window.localStorage
+          : {
+              getItem: () => null,
+              setItem: () => {},
+              removeItem: () => {},
+            },
+      ),
     },
   ),
 );

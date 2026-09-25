@@ -571,6 +571,21 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
     return duplicates;
   }, [fields]);
 
+  const duplicateActionNames = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const a of actions) {
+      const key = a.name?.trim().toLowerCase();
+      if (key) {
+        counts.set(key, (counts.get(key) || 0) + 1);
+      }
+    }
+    const duplicates = new Set<string>();
+    for (const [key, count] of counts.entries()) {
+      if (count > 1) duplicates.add(key);
+    }
+    return duplicates;
+  }, [actions]);
+
   return (
     <div
       className={cn(
@@ -626,6 +641,18 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
             <span className="font-semibold text-xs">Duplicate State Field Names</span>
             <span className="text-[11px] text-destructive/90">
               {duplicateFieldNames.size} duplicate field {duplicateFieldNames.size === 1 ? "name" : "names"} detected ({Array.from(duplicateFieldNames).join(", ")}). Field names must be unique within this store.
+            </span>
+          </div>
+        </div>
+      )}
+
+      {duplicateActionNames.size > 0 && (
+        <div className="flex items-start gap-2.5 p-2.5 rounded-lg bg-destructive/15 border border-destructive/40 text-destructive text-xs">
+          <AlertCircle size={15} className="shrink-0 mt-0.5" />
+          <div className="flex flex-col gap-0.5">
+            <span className="font-semibold text-xs">Duplicate Store Action Names</span>
+            <span className="text-[11px] text-destructive/90">
+              {duplicateActionNames.size} duplicate action {duplicateActionNames.size === 1 ? "name" : "names"} detected ({Array.from(duplicateActionNames).join(", ")}). Each action name in this store must be unique.
             </span>
           </div>
         </div>

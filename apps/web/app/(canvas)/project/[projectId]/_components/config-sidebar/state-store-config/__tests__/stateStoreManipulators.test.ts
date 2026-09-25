@@ -4,6 +4,9 @@ import {
   applyManipulator,
   StateManipulator,
   isJsonObject,
+  generateActionCodePreview,
+  getDefaultTemplateForAction,
+  validateStoreAction,
 } from "../types";
 import type {
   GlobalStoreField,
@@ -295,4 +298,84 @@ describe("stateStoreManipulators", () => {
     expect(isJsonObject(42)).toBe(false);
     expect(isJsonObject(true)).toBe(false);
   });
+
+  describe("Zustand Action Code Generation & Validation", () => {
+    it("generates correct Zustand action preview for set, toggle, increment, and append", () => {
+      const setCode = generateActionCodePreview({
+        name: "setUsername",
+        actionType: "set",
+        targetFieldName: "username",
+        parameters: [{ id: "p1", name: "name", type: "string", required: true }],
+      });
+      expect(setCode).toContain("setUsername: (name) => set({ username: name })");
+
+      const toggleCode = generateActionCodePreview({
+        name: "toggleTheme",
+        actionType: "toggle",
+        targetFieldName: "theme",
+      });
+      expect(toggleCode).toContain("toggleTheme: () => set((state) => ({ theme: !state.theme }))");
+
+      const incCode = generateActionCodePreview({
+        name: "incrementPosts",
+        actionType: "increment",
+        targetFieldName: "posts",
+        parameters: [{ id: "p1", name: "count", type: "number", required: true }],
+      });
+      expect(incCode).toContain("incrementPosts: (count = 1) => set((state) => ({");
+      expect(incCode).toContain("posts: (Number(state.posts) || 0) + count");
+
+      const appendCode = generateActionCodePreview({
+        name: "appendConversations",
+        actionType: "append",
+        targetFieldName: "conversations",
+        parameters: [{ id: "p1", name: "item", type: "object", required: true }],
+      });
+      expect(appendCode).toContain("appendConversations: (item) => set((state) => ({");
+      expect(appendCode).toContain("conversations: [...(Array.isArray(state.conversations) ? state.conversations : []), item]");
+    });
+
+    it("generates default templates accurately", () => {
+      const template = getDefaultTemplateForAction({
+        actionType: "append",
+        targetFieldName: "items",
+        parameters: [{ id: "p1", name: "newItem", type: "object", required: true }],
+      });
+      expect(template).toContain("items: [...(Array.isArray(state.items) ? state.items : []), newItem]");
+    });
+
+    it("validates actions and flags duplicate names and reserved words", () => {
+      const existing: GlobalStoreAction[] = [
+        { id: "a1", name: "login", actionType: "set" },
+      ];
+
+      const validRes = validateStoreAction({
+        action: { id: "a2", name: "logout", actionType: "reset" },
+        allActions: existing,
+        fields: sampleFields,
+      });
+      expect(validRes.errors).toHaveLength(0);
+
+      const dupRes = validateStoreAction({
+        action: { id: "a3", name: "login", actionType: "set" },
+        allActions: existing,
+        fields: sampleFields,
+      });
+      expect(dupRes.errors.length).toBeGreaterThan(0);
+      expect(dupRes.errors[0]).toContain('Action "login" is duplicated');
+
+      const reservedRes = validateStoreAction({
+        action: {
+          id: "a4",
+          name: "customUpdate",
+          actionType: "custom",
+          parameters: [{ id: "p1", name: "set", type: "any", required: true }],
+        },
+        allActions: existing,
+        fields: sampleFields,
+      });
+      expect(reservedRes.errors.some((e) => e.includes("conflicts with store scope"))).toBe(true);
+    });
+  });
 });
+

@@ -6,5 +6,6 @@ export * from "./FunctionTypeEditor";
 export * from "./PropertiesEditor";
 export * from "./TypePreviewSection";
 export * from "./PackageTypesBanner";
+export * from "./EntityDerivedTypeBanner";
 export * from "./TypeNavigatorBar";
 export * from "./TypeEditorForm";

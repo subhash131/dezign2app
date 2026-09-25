@@ -17,6 +17,7 @@ import {
 import {
   TypesNodeHeader,
   TypesNodeInstallBanner,
+  TypesNodeEntityWarningBanner,
   TypesNodeList,
 } from "./types-node";
 
@@ -215,6 +216,57 @@ export const TypesNode = ({
   const isInstalled = data.isInstalled !== false;
   const hasInstallError = isPackageNode && (!isInstalled || Boolean(data.installError));
 
+  const allNodes = useBackendCanvasStore((s) => s.nodes);
+
+  // Check if this TypesNode is derived from an EntityNode
+  const isEntityDerived = Boolean(
+    data.sourceEntityId ||
+      data.types?.some((t) => t.id.startsWith("type-entity-")),
+  );
+
+  const sourceEntityId =
+    data.sourceEntityId ||
+    data.types?.find((t) => t.id.startsWith("type-entity-"))?.id.replace("type-entity-", "");
+
+  const sourceEntityNode = useMemo(() => {
+    if (!sourceEntityId) return undefined;
+    return allNodes.find((n) => n.id === sourceEntityId && n.type === "entity");
+  }, [allNodes, sourceEntityId]);
+
+  const sourceEntityName =
+    data.sourceEntityName ||
+    sourceEntityNode?.data?.tableName ||
+    sourceEntityNode?.data?.label ||
+    "Entity";
+
+  // Calculate downstream affected nodes (direct outgoing edges from this node)
+  const downstreamAffectedNodes = useMemo(() => {
+    if (!isEntityDerived) return [];
+    const directOutgoingEdges = edges.filter(
+      (e) => e.source === id && e.target !== id,
+    );
+    const targetIds = new Set(directOutgoingEdges.map((e) => e.target));
+    return allNodes
+      .filter((n) => targetIds.has(n.id))
+      .map((n) => ({
+        id: n.id,
+        name: n.data?.label || n.id,
+        type: n.type,
+      }));
+  }, [edges, id, allNodes, isEntityDerived]);
+
+  const [isBannerDismissed, setIsBannerDismissed] = useState(false);
+
+  const handleViewEntity = () => {
+    if (sourceEntityId) {
+      setActiveConfigItem({
+        id: sourceEntityId,
+        nodeId: sourceEntityId,
+        type: "entityFunctions",
+      });
+    }
+  };
+
   return (
     <div
       className={cn(
@@ -282,6 +334,18 @@ export const TypesNode = ({
           installError={data.installError}
           isRefreshing={isRefreshing}
           onRefresh={handleRefresh}
+        />
+      )}
+
+      {/* Entity-derived Schema Warning Banner */}
+      {isEntityDerived && !isBannerDismissed && (
+        <TypesNodeEntityWarningBanner
+          sourceEntityName={sourceEntityName}
+          sourceEntityId={sourceEntityId}
+          affectedNodes={downstreamAffectedNodes}
+          updatedAt={data.entityUpdatedAt}
+          onViewEntity={sourceEntityId ? handleViewEntity : undefined}
+          onDismiss={() => setIsBannerDismissed(true)}
         />
       )}
 

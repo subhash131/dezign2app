@@ -53,5 +53,14 @@ export interface CanvasTypesNodeData {
   isReadOnly?: boolean;
   /** ID of the EntityNode this TypesNode was auto-generated from. Used for idempotent refresh. */
   sourceEntityId?: string;
+  sourceEntityName?: string;
+  entityUpdatedAt?: number;
+  entitySyncWarning?: {
+    entityId: string;
+    entityName: string;
+    updatedAt: number;
+    affectedNodes: { id: string; name: string; type: string }[];
+    dismissed?: boolean;
+  };
 }
 

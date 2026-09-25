@@ -6,6 +6,7 @@ import { Button } from "@workspace/ui/components/button";
 import { Plus } from "lucide-react";
 import {
   PackageNodeTopBanner,
+  EntityDerivedTypeBanner,
   TypeNavigatorBar,
   TypeEditorForm,
 } from "./types-config";
@@ -35,6 +36,26 @@ export const TypesConfig: React.FC<TypesConfigProps> = ({
   const packageVersion = data?.packageVersion;
   const isInstalled = data?.isInstalled !== false;
   const installError = data?.installError;
+
+  const edges = useBackendCanvasStore((s) => s.edges);
+  const isEntityDerived = Boolean(
+    data?.sourceEntityId ||
+      data?.types?.some((t) => t.id.startsWith("type-entity-")),
+  );
+  const sourceEntityId =
+    data?.sourceEntityId ||
+    data?.types?.find((t) => t.id.startsWith("type-entity-"))?.id.replace("type-entity-", "");
+
+  const affectedDownstreamCount = useMemo(() => {
+    const targetId = nodeId || id;
+    if (!targetId) return 0;
+    return edges.filter((e) => e.source === targetId && e.target !== targetId).length;
+  }, [edges, nodeId, id]);
+
+  const sourceEntityName =
+    data?.sourceEntityName ||
+    allNodes.find((n) => n.id === sourceEntityId)?.data?.label ||
+    "Entity";
 
   const types: CustomTypeItem[] = useMemo(
     () => (data && Array.isArray(data.types) ? data.types : []),
@@ -155,6 +176,16 @@ export const TypesConfig: React.FC<TypesConfigProps> = ({
           packageVersion={packageVersion}
           isInstalled={isInstalled}
           installError={installError}
+        />
+      )}
+
+      {/* Entity Derived Banner if this is an Entity-derived Types Node */}
+      {isEntityDerived && sourceEntityId && (
+        <EntityDerivedTypeBanner
+          nodeId={nodeId || id}
+          sourceEntityId={sourceEntityId}
+          sourceEntityName={sourceEntityName}
+          affectedNodesCount={affectedDownstreamCount}
         />
       )}
 
