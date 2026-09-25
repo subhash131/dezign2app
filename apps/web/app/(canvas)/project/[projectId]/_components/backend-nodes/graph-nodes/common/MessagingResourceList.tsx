@@ -36,6 +36,7 @@ export interface MessagingResourceRowProps {
   editingName: string;
   variant?: "definition" | "publish" | "consume";
   resourceType: string;
+  hideLeftHandle?: boolean;
 }
 
 export const MessagingResourceRow = ({
@@ -53,6 +54,7 @@ export const MessagingResourceRow = ({
   editingName,
   variant,
   resourceType,
+  hideLeftHandle,
 }: MessagingResourceRowProps) => {
   const setActiveConfigItem = useBackendCanvasStore(
     (s) => s.setActiveConfigItem,
@@ -216,13 +218,15 @@ export const MessagingResourceRow = ({
       )}
       {variant === "definition" && resourceType && (
         <>
-          <Handle
-            type="target"
-            position={Position.Left}
-            id={`${resourceType}:in:${item.id}`}
-            className="w-2 h-2 -left-1"
-            style={{ top: "15px" }}
-          />
+          {!hideLeftHandle && (
+            <Handle
+              type="target"
+              position={Position.Left}
+              id={`${resourceType}:in:${item.id}`}
+              className="w-2 h-2 -left-1"
+              style={{ top: "15px" }}
+            />
+          )}
           <Handle
             type="source"
             position={Position.Right}
@@ -443,6 +447,7 @@ export const MessagingResourceList = <
   handleType,
   handlePosition,
   asCard,
+  hideLeftHandle,
 }: {
   nodeId: string;
   title: string;
@@ -458,6 +463,7 @@ export const MessagingResourceList = <
   handleType?: "source" | "target";
   handlePosition?: "left" | "right" | "top" | "bottom";
   asCard?: boolean;
+  hideLeftHandle?: boolean;
 }) => {
   const setActiveConfigItem = useBackendCanvasStore(
     (s) => s.setActiveConfigItem,
@@ -575,6 +581,7 @@ export const MessagingResourceList = <
               variant={variant}
               resourceType={resourceType}
               field={field}
+              hideLeftHandle={hideLeftHandle}
             />
           ))}
         </div>
@@ -610,6 +617,7 @@ export const MessagingResourceList = <
             variant={variant}
             resourceType={resourceType}
             field={field}
+            hideLeftHandle={hideLeftHandle}
           />
         ))}
       </div>

@@ -143,6 +143,32 @@ export function isNodePipelineUnconfigured(
     }
   }
 
+  // C2) Storage Operation Reference Node
+  if (
+    targetNode.type === "storage_operation_ref" ||
+    targetNode.type === "storage_ref" ||
+    targetNode.type === "bucket_ref"
+  ) {
+    const storageNodeId = targetNode.data?.storageNodeId || targetNode.id;
+    const bucketId = targetNode.data?.bucketId || targetNode.data?.bucketName;
+
+    const relevantStorageSteps = allSteps.filter(
+      (s) =>
+        s.enabled !== false &&
+        s.type === "storage_operation" &&
+        (s.storageNodeId === nodeId ||
+          s.storageNodeId === storageNodeId ||
+          s.brokerNodeId === storageNodeId) &&
+        (!bucketId || s.bucketId === bucketId),
+    );
+
+    if (
+      relevantStorageSteps.some((step) => isStepInputUnconfigured(step, allNodes))
+    ) {
+      return true;
+    }
+  }
+
   // D) Transformer Node or Transformer Ref Node
   if (
     targetNode.type === "transformer" ||

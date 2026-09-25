@@ -97,7 +97,7 @@ export type StorageDialogTab = "configure" | "preview" | "test";
 export interface StorageOperationDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  operation: StorageOperationFunction | null;
+  operation?: StorageOperationFunction | null;
   isNew?: boolean;
   storageNode: StorageNodeRef;
   onSave: (op: StorageOperationFunction) => void;

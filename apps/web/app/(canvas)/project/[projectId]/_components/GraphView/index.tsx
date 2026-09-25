@@ -17,6 +17,7 @@ import {
   MessagingEdge,
   IdentityConnectionEdge,
   TransformerReferenceEdge,
+  StorageReferenceEdge,
   TypeReferenceEdge,
 } from "../backend-nodes/CustomEdges";
 import { isValidConnection, WebAppZone } from "@workspace/canvas";
@@ -32,6 +33,7 @@ const edgeTypes = {
   message: MessagingEdge,
   "identity-connection": IdentityConnectionEdge,
   "transformer-reference": TransformerReferenceEdge,
+  "storage-reference": StorageReferenceEdge,
   "type-reference": TypeReferenceEdge,
   reference: TransformerReferenceEdge,
 };

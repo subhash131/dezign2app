@@ -39,6 +39,7 @@ import { TypesConfig } from "./config-sidebar/TypesConfig";
 import { WebPageRealtimeConnectionConfig } from "./config-sidebar/WebPageRealtimeConnectionConfig";
 import { StateStoreConfig } from "./config-sidebar/StateStoreConfig";
 import { StorageNodeConfig } from "./config-sidebar/StorageNodeConfig";
+import { StorageOperationRefConfig } from "./config-sidebar/StorageOperationRefConfig";
 
 export const ConfigSidebar = () => {
   const activeConfigItem = useBackendCanvasStore((s) => s.activeConfigItem);
@@ -275,6 +276,10 @@ export const ConfigSidebar = () => {
             <WebPageRealtimeConnectionConfig id={id} nodeId={nodeId} />
           ) : type === "storage" ? (
             <StorageNodeConfig id={id} nodeId={nodeId} />
+          ) : type === "storage_ref" ||
+            type === "storage_operation_ref" ||
+            type === "bucket_ref" ? (
+            <StorageOperationRefConfig id={id} nodeId={nodeId} />
           ) : (
             <EventConfig id={id} nodeId={nodeId} />
           )}

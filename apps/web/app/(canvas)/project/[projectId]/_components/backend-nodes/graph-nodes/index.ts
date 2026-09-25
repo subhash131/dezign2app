@@ -29,6 +29,10 @@ export { MessagingNode } from "./nodes/messaging/MessagingNode";
 export { DatabaseTableRefNode } from "./nodes/database/DatabaseTableRefNode";
 export { RedisCacheNode } from "./nodes/database/RedisCacheNode";
 export { StorageNode } from "./nodes/database/StorageNode";
+export {
+  StorageOperationRefNode,
+  StorageBucketRefNode,
+} from "./nodes/database/StorageOperationRefNode";
 export { VectorDBRefNode } from "./nodes/database/VectorDBRefNode";
 export { SearchIndexNode } from "./nodes/database/SearchIndexNode";
 

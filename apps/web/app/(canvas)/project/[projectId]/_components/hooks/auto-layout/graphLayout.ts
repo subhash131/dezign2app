@@ -67,6 +67,7 @@ export function performGraphLayout({
       e.type === "database-connection" ||
       e.type === "foreign-key" ||
       e.type === "transformer-reference" ||
+      e.type === "storage-reference" ||
       e.type === "reference" ||
       e.type === "type-reference"
     ) {
@@ -80,6 +81,14 @@ export function performGraphLayout({
     if (
       sourceNode?.type === "transformer" &&
       targetNode?.type === "transformer_ref"
+    ) {
+      return false;
+    }
+    if (
+      sourceNode?.type === "storage" &&
+      (targetNode?.type === "storage_operation_ref" ||
+        targetNode?.type === "storage_ref" ||
+        targetNode?.type === "bucket_ref")
     ) {
       return false;
     }

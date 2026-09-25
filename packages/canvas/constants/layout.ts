@@ -17,6 +17,8 @@ export const HEAD_NODE_TYPES = new Set<string>([
   "langgraph_memory",
   "db_ref",
   "vector_db_ref",
+  "storage_operation_ref",
+  "storage_ref",
 ]);
 
 export const TARGET_NODE_TYPES = new Set<string>([

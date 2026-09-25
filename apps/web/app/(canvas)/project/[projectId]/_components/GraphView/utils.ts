@@ -206,6 +206,18 @@ export function createGraphNodeData(
     };
   }
 
+  if (
+    type === "storage_operation_ref" ||
+    type === "storage_ref" ||
+    type === "bucket_ref"
+  ) {
+    return {
+      ...baseData,
+      label: label || "Bucket Ref",
+      storageOperations: [],
+    };
+  }
+
   if (type === "worker") {
     return {
       ...baseData,

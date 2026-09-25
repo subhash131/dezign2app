@@ -579,6 +579,18 @@ function isPushToClientStepUnconfigured(
   return false;
 }
 
+function isStorageOperationStepUnconfigured(
+  step: PipelineStepDraft,
+  bindings: StepBinding[],
+): boolean {
+  if (!step.storageNodeId && !step.brokerNodeId) return true;
+  if (!step.bucketId) return true;
+  if (bindings.some((b) => !isBindingSourceConfigured(b))) {
+    return true;
+  }
+  return false;
+}
+
 // ─── Master Step Input Validator ─────────────────────────────────────────────
 
 /**
@@ -609,6 +621,10 @@ export function isStepInputUnconfigured(
 
   if (step.type === "redis_operation") {
     return isRedisOperationStepUnconfigured(step, bindings);
+  }
+
+  if (step.type === "storage_operation") {
+    return isStorageOperationStepUnconfigured(step, bindings);
   }
 
   if (step.type === "kafka_publish") {

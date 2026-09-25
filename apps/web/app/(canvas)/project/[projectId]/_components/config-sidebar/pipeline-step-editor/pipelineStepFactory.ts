@@ -12,6 +12,7 @@ import {
   generateId,
   ensureDatabaseRefConnection,
   ensurePageRefConnection,
+  ensureStorageOperationRefConnection,
 } from "./utils";
 import { upsertDerivedConnection } from "./PushToClientStepSection";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -230,10 +231,19 @@ export function createDefaultStepDraft({
     const varName = defaultOp?.kind === "presign_upload" ? "uploadUrl" : defaultVar;
     const nextBindings = computeStorageOpBindings(defaultOp, [], firstBucket);
 
+    const connectionResult = ensureStorageOperationRefConnection({
+      storageNodeId: targetStorageId,
+      bucketId: firstBucket,
+      serviceNodeId,
+      endpointId: endpoint?.id,
+      consumedEventId: consumedEvent?.id,
+      functionName: defaultOp?.name || "getUploadPresignedUrl",
+    });
+
     initialFields = {
       name: defaultOp?.label || "Storage Operation",
-      storageNodeId: targetStorageId,
-      brokerNodeId: targetStorageId,
+      storageNodeId: targetStorageId || connectionResult?.storageRefNodeId,
+      brokerNodeId: targetStorageId || connectionResult?.storageRefNodeId,
       bucketId: firstBucket,
       operationId: defaultOp?.id,
       outputVariable: varName,

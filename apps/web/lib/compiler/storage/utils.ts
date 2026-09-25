@@ -100,6 +100,20 @@ export function isServiceConnectedToStorage(
       }
     }
 
+    // Check if target is a storage_operation_ref node referencing one of the storage nodes
+    if (isSourceService) {
+      const targetNode = allNodes.find((n) => n.id === edge.target);
+      if (
+        (targetNode?.type === "storage_operation_ref" ||
+          targetNode?.type === "storage_ref" ||
+          targetNode?.type === "bucket_ref") &&
+        targetNode.data?.storageNodeId &&
+        storageNodeIds.has(targetNode.data.storageNodeId)
+      ) {
+        return true;
+      }
+    }
+
     return false;
   });
 

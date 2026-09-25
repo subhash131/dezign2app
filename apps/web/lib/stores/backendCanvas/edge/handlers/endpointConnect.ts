@@ -4,6 +4,10 @@ import {
 } from "@workspace/canvas";
 import { PipelineStep, PipelineStepInputSource } from "@workspace/canvas/types";
 import { toFolderName, toPascalCase } from "@/lib/compiler/utils";
+import {
+  getStorageOperations,
+  computeStorageOpBindings,
+} from "@/lib/utils/storageOperationsHelper";
 import { ConnectionContext } from "../types";
 import { isMessagingResourceType, MESSAGING_NODE_TYPES } from "../utils";
 
@@ -45,6 +49,76 @@ export function handleEndpointConnect({
         get().updateEndpoint(endpointId, {
           databaseNodeIds: newDbIds,
           databaseNodeId: newDbIds[0] || "none",
+        });
+      }
+    }
+  }
+
+  // 1b. Endpoint → Storage Operation Ref node
+  if (
+    targetNode.type === "storage_operation_ref" ||
+    targetNode.type === "storage_ref" ||
+    targetNode.type === "bucket_ref"
+  ) {
+    const endpoint = get().endpoints.find((e) => e.id === endpointId);
+    if (endpoint) {
+      const targetHandle = connection.targetHandle || "";
+      const fnName = targetHandle.startsWith("func-")
+        ? targetHandle.replace("func-", "")
+        : "uploadObject";
+      const storageNodeId = targetNode.data?.storageNodeId;
+      const bucketName =
+        targetNode.data?.bucketId ||
+        targetNode.data?.bucketName ||
+        "default-bucket";
+      const existingSteps = endpoint.pipelineSteps ?? [];
+      const hasMatchingStep = existingSteps.some(
+        (s) =>
+          s.type === "storage_operation" &&
+          (s.functionRef?.name === fnName || s.operationId === fnName) &&
+          (s.storageNodeId === storageNodeId || s.bucketId === bucketName),
+      );
+
+      if (!hasMatchingStep) {
+        const storageNode = get().nodes.find((n) => n.id === storageNodeId);
+        const ops = getStorageOperations(storageNode);
+        const op =
+          ops.find((o) => o.name === fnName || o.id === fnName) || ops[0];
+        const rawLabel = storageNode?.data?.label || "storage";
+        const packageFolder = toFolderName(rawLabel) || "storage";
+        const nextBindings = computeStorageOpBindings(op, [], bucketName);
+        const newStep: PipelineStep = {
+          id: `step-storage-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          name: op?.label || op?.name || "Storage Operation",
+          type: "storage_operation",
+          enabled: true,
+          outputVariable:
+            op?.kind === "presign_upload" ? "uploadUrl" : "storageResult",
+          storageNodeId,
+          brokerNodeId: storageNodeId,
+          bucketId: bucketName,
+          operationId: op?.id,
+          functionRef: {
+            name: op?.name || fnName,
+            importPath: `@workspace/${packageFolder}/operations`,
+            signature: op?.signature,
+          },
+          inputBindings: nextBindings,
+        };
+        const returnIdx = existingSteps.findIndex(
+          (s) => s.type === "return_response",
+        );
+        const nextPipelineSteps =
+          returnIdx !== -1
+            ? [
+                ...existingSteps.slice(0, returnIdx),
+                newStep,
+                ...existingSteps.slice(returnIdx),
+              ]
+            : [...existingSteps, newStep];
+
+        get().updateEndpoint(endpointId, {
+          pipelineSteps: nextPipelineSteps,
         });
       }
     }

@@ -126,3 +126,20 @@ export const dbRefDataSchema = baseNodeDataSchema
   .strict();
 
 export const dbRefDataInputSchema = dbRefDataSchema;
+
+export const storageOperationRefDataSchema = baseNodeDataSchema
+  .extend({
+    description: z.string().optional(),
+    storageNodeId: z.string().optional(),
+    storageProvider: z.string().optional(),
+    bucketId: z.string().optional(),
+    bucketName: z.string().optional(),
+    operationId: z.string().optional(),
+    targetServiceId: z.string().optional(),
+    serviceNodeId: z.string().optional(),
+    graphPosition: z.object({ x: z.number(), y: z.number() }).optional(),
+  })
+  .strict();
+
+export const storageOperationRefDataInputSchema = storageOperationRefDataSchema;
+

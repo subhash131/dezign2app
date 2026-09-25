@@ -55,7 +55,7 @@ describe("StorageNode component", () => {
     },
   };
 
-  it("renders node-level handles for ingress and egress", () => {
+  it("does not render header handles (storage-target and storage-source have been removed)", () => {
     render(
       <StorageNode
         id={mockNode.id}
@@ -64,15 +64,9 @@ describe("StorageNode component", () => {
       />,
     );
 
-    // Node-level ingress handle
-    const ingressHandle = screen.getByTestId("handle-storage-target");
-    expect(ingressHandle).toBeDefined();
-    expect(ingressHandle.getAttribute("data-position")).toBe("left");
-
-    // Node-level egress handle
-    const egressHandle = screen.getByTestId("handle-storage-source");
-    expect(egressHandle).toBeDefined();
-    expect(egressHandle.getAttribute("data-position")).toBe("right");
+    // Header handles are removed per architecture specification
+    expect(screen.queryByTestId("handle-storage-target")).toBeNull();
+    expect(screen.queryByTestId("handle-storage-source")).toBeNull();
   });
 
   it("renders provider and bucket count badges in the header", () => {
@@ -90,7 +84,7 @@ describe("StorageNode component", () => {
     expect(screen.getByText("1 bucket")).toBeDefined();
   });
 
-  it("renders the Buckets list section with bucket items and handles", () => {
+  it("renders the Buckets list section with bucket items and right egress handle only (left handle removed)", () => {
     render(
       <StorageNode
         id={mockNode.id}
@@ -103,9 +97,9 @@ describe("StorageNode component", () => {
     expect(screen.getByText("Buckets")).toBeDefined();
     // Bucket name item
     expect(screen.getByText("avatars")).toBeDefined();
-    // Ingress handle for the avatars bucket
-    expect(screen.getByTestId("handle-buckets:in:bucket-avatars")).toBeDefined();
-    // Egress handle for the avatars bucket
+    // Left ingress handle for bucket is removed
+    expect(screen.queryByTestId("handle-buckets:in:bucket-avatars")).toBeNull();
+    // Egress handle for bucket notifications remains
     expect(screen.getByTestId("handle-buckets:out:bucket-avatars")).toBeDefined();
   });
 
