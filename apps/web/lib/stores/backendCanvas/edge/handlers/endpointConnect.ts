@@ -58,7 +58,10 @@ export function handleEndpointConnect({
   if (
     targetNode.type === "storage_operation_ref" ||
     targetNode.type === "storage_ref" ||
-    targetNode.type === "bucket_ref"
+    targetNode.type === "bucket_ref" ||
+    targetNode.type === "storage_bucket_ref" ||
+    targetNode.type === "StorageBucketRefNode" ||
+    targetNode.type === "StorageOperationRefNode"
   ) {
     const endpoint = get().endpoints.find((e) => e.id === endpointId);
     if (endpoint) {

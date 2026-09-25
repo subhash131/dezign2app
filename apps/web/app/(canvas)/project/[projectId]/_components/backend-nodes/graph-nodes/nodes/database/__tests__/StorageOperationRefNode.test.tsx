@@ -159,7 +159,7 @@ describe("StorageOperationRefNode", () => {
         e.type === "storage-reference",
     );
     expect(refEdge).toBeDefined();
-    expect(refEdge?.sourceHandle).toBe("bucket:out:bucket-1");
+    expect(refEdge?.sourceHandle).toBe("buckets:out:bucket-1");
     expect(refEdge?.targetHandle).toBe("storage-ref-header");
   });
 

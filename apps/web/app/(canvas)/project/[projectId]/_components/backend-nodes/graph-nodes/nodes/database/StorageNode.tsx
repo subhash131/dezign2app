@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { NodeProps } from "@xyflow/react";
 import { HardDrive, Settings } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
@@ -14,6 +14,14 @@ import { Textarea } from "@workspace/ui/components/textarea";
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
 
+const isStorageBucketRefNode = (type?: string) =>
+  type === "StorageBucketRefNode" ||
+  type === "storage_bucket_ref" ||
+  type === "bucket_ref" ||
+  type === "storage_operation_ref" ||
+  type === "storage_ref" ||
+  type === "StorageOperationRefNode";
+
 export const StorageNode: React.FC<NodeProps<BackendNode>> = ({
   id,
   data,
@@ -23,6 +31,10 @@ export const StorageNode: React.FC<NodeProps<BackendNode>> = ({
   const setActiveConfigItem = useBackendCanvasStore(
     (s) => s.setActiveConfigItem,
   );
+  const nodes = useBackendCanvasStore((s) => s.nodes);
+  const edges = useBackendCanvasStore((s) => s.edges);
+  const addEdge = useBackendCanvasStore((s) => s.addEdge);
+  const deleteEdge = useBackendCanvasStore((s) => s.deleteEdge);
 
   const simulation = useSimulationNodeState(id);
   const borderClass = getSimulationNodeBorderClass(
@@ -32,6 +44,78 @@ export const StorageNode: React.FC<NodeProps<BackendNode>> = ({
 
   const provider = data.storageProvider || "s3";
   const bucketCount = data.buckets?.length || 0;
+
+  // Draw and maintain invisible reference edges from StorageNode buckets to StorageBucketRefNode headers
+  useEffect(() => {
+    const buckets = data.buckets || [];
+    if (buckets.length === 0) return;
+
+    const refNodes = nodes.filter((n) => isStorageBucketRefNode(n.type));
+
+    refNodes.forEach((refNode) => {
+      const refStorageId = refNode.data?.storageNodeId;
+      const refBucket =
+        refNode.data?.bucketId ||
+        refNode.data?.bucketName ||
+        refNode.data?.label;
+
+      const isClaimedByOtherStorage = edges.some(
+        (e) =>
+          (e.type === "storage-reference" || e.type === "reference") &&
+          e.target === refNode.id &&
+          e.source !== id,
+      );
+
+      // If ref node explicitly targets a different storage node, or is connected to another storage node
+      if (refStorageId && refStorageId !== id) return;
+      if (!refStorageId && isClaimedByOtherStorage) return;
+
+      // Find matching bucket on this StorageNode
+      const matchedBucket =
+        buckets.find(
+          (b) => b.id === refBucket || b.name === refBucket,
+        ) || buckets[0];
+
+      if (!matchedBucket) return;
+
+      const sourceHandle = `buckets:out:${matchedBucket.id}`;
+      const legacySourceHandle = `bucket:out:${matchedBucket.id}`;
+      const targetHandle = "storage-ref-header";
+
+      const hasEdge = edges.some(
+        (e) =>
+          (e.type === "storage-reference" || e.type === "reference") &&
+          e.source === id &&
+          e.target === refNode.id &&
+          (e.sourceHandle === sourceHandle ||
+            e.sourceHandle === legacySourceHandle ||
+            !e.sourceHandle),
+      );
+
+      if (!hasEdge) {
+        // Clean up stale reference edges from this storage node to this refNode targeting another bucket
+        edges
+          .filter(
+            (e) =>
+              (e.type === "storage-reference" || e.type === "reference") &&
+              e.source === id &&
+              e.target === refNode.id &&
+              e.sourceHandle !== sourceHandle &&
+              e.sourceHandle !== legacySourceHandle,
+          )
+          .forEach((e) => deleteEdge(e.id));
+
+        addEdge({
+          id: `edge-storage-ref-${id}-${matchedBucket.id}-${refNode.id}`,
+          source: id,
+          target: refNode.id,
+          sourceHandle,
+          targetHandle,
+          type: "storage-reference",
+        });
+      }
+    });
+  }, [id, data.buckets, nodes, edges, addEdge, deleteEdge]);
 
   const handleOpenConfig = (e?: React.MouseEvent) => {
     e?.stopPropagation();

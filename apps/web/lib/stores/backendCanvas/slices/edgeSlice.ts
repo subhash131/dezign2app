@@ -22,6 +22,7 @@ import {
   handleForeignKeyConnect,
   handleLangGraphConnect,
   handleRedisCacheConnect,
+  handleStorageConnect,
 } from "../edge";
 
 export interface EdgeSlice {
@@ -228,6 +229,9 @@ export const createEdgeSlice = (
 
     // 8. Handle Foreign Key column-to-column metadata updates
     handleForeignKeyConnect(context);
+
+    // 9. Handle Storage bucket to StorageBucketRefNode reference connections
+    handleStorageConnect(context);
   },
 
   addEdge: (edgeWithoutIndex) => {
