@@ -153,6 +153,9 @@ export type ConfigItemType =
   | "realtimeConnection"
   | "state_store"
   | "storage"
+  | "storage_ref"
+  | "storage_operation_ref"
+  | "bucket_ref"
   | "types";
 
 export interface ActiveConfigItem {

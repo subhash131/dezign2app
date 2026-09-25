@@ -508,6 +508,89 @@ export const TransformerReferenceEdge = (props: EdgeProps<BackendEdge>) => {
   );
 };
 
+// 5b. Storage Reference Edge (Invisible reference edge between bucket on StorageNode and StorageOperationRefNode header)
+export const StorageReferenceEdge = (props: EdgeProps<BackendEdge>) => {
+  const isEdgeSelected = props.selected;
+  const sourceNode = useBackendCanvasStore((s) =>
+    s.nodes.find((n) => n.id === props.source),
+  );
+  const targetNode = useBackendCanvasStore((s) =>
+    s.nodes.find((n) => n.id === props.target),
+  );
+  const activeConfigItem = useBackendCanvasStore((s) => s.activeConfigItem);
+
+  const isNodeSelected =
+    Boolean(sourceNode?.selected) ||
+    Boolean(targetNode?.selected) ||
+    activeConfigItem?.nodeId === props.source ||
+    activeConfigItem?.id === props.source ||
+    activeConfigItem?.nodeId === props.target ||
+    activeConfigItem?.id === props.target;
+
+  const isVisible = isEdgeSelected || isNodeSelected;
+
+  const {
+    sourceX,
+    sourceY,
+    targetX,
+    targetY,
+    sourcePosition,
+    targetPosition,
+    style,
+  } = props;
+
+  const [edgePath] = getBezierPath({
+    sourceX,
+    sourceY,
+    sourcePosition,
+    targetPosition,
+    targetX,
+    targetY,
+  });
+
+  if (!isVisible) {
+    return (
+      <BaseEdge
+        path={edgePath}
+        style={{
+          opacity: 0,
+          pointerEvents: "none",
+          strokeWidth: 0,
+        }}
+      />
+    );
+  }
+
+  return (
+    <>
+      <EdgeStyles />
+      <EdgeMarkers />
+
+      {/* Subtle amber background glow */}
+      <BaseEdge
+        path={edgePath}
+        style={{
+          ...style,
+          strokeWidth: 4,
+          stroke: "#f59e0b25",
+          filter: "drop-shadow(0 0 6px #f59e0b80)",
+        }}
+      />
+
+      {/* Main dashed edge */}
+      <BaseEdge
+        path={edgePath}
+        style={{
+          ...style,
+          strokeWidth: 1.5,
+          stroke: "#f59e0b", // amber-500
+          strokeDasharray: "4, 4",
+        }}
+      />
+    </>
+  );
+};
+
 export type TypeReferenceEdgeProps = EdgeProps<BackendEdge>;
 
 // 5. Type Reference Edge (Indigo dashed, conditionally visible when either connected node is selected, or always visible if extending a type)

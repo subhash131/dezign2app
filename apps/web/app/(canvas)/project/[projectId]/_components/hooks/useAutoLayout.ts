@@ -94,6 +94,7 @@ export function useGraphAutoLayout(options?: UseGraphAutoLayoutOptions) {
             e.type !== "database-connection" &&
             e.type !== "foreign-key" &&
             e.type !== "transformer-reference" &&
+            e.type !== "storage-reference" &&
             e.type !== "reference",
         );
       const onNodesChange = options?.onNodesChange ?? currentStore.onNodesChange;

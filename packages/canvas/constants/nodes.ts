@@ -15,6 +15,8 @@ export const BACKEND_NODE_EXTERNAL = "external" as const;
 export const BACKEND_NODE_GROUP = "group" as const;
 export const BACKEND_NODE_DB_REF = "db_ref" as const;
 export const BACKEND_NODE_STORAGE = "storage" as const;
+export const BACKEND_NODE_STORAGE_OPERATION_REF = "storage_operation_ref" as const;
+export const BACKEND_NODE_STORAGE_REF = "storage_ref" as const;
 export const BACKEND_NODE_WORKER = "worker" as const;
 export const BACKEND_NODE_SERVERLESS = "serverless" as const;
 export const BACKEND_NODE_SEARCH_INDEX = "search_index" as const;
@@ -80,6 +82,8 @@ export const BACKEND_NODE_TYPES = {
   GROUP: BACKEND_NODE_GROUP,
   DB_REF: BACKEND_NODE_DB_REF,
   STORAGE: BACKEND_NODE_STORAGE,
+  STORAGE_OPERATION_REF: BACKEND_NODE_STORAGE_OPERATION_REF,
+  STORAGE_REF: BACKEND_NODE_STORAGE_REF,
   WORKER: BACKEND_NODE_WORKER,
   SERVERLESS: BACKEND_NODE_SERVERLESS,
   SEARCH_INDEX: BACKEND_NODE_SEARCH_INDEX,
@@ -109,6 +113,7 @@ export const BACKEND_EDGE_IDENTITY_CONNECTION = "identity-connection" as const;
 export const BACKEND_EDGE_MESSAGE = "message" as const;
 export const BACKEND_EDGE_CONNECTION = "connection" as const;
 export const BACKEND_EDGE_TRANSFORMER_REFERENCE = "transformer-reference" as const;
+export const BACKEND_EDGE_STORAGE_REFERENCE = "storage-reference" as const;
 export const BACKEND_EDGE_REFERENCE = "reference" as const;
 export const BACKEND_EDGE_TYPE_REFERENCE = "type-reference" as const;
 
@@ -119,6 +124,7 @@ export const BACKEND_EDGE_TYPES = {
   MESSAGE: BACKEND_EDGE_MESSAGE,
   CONNECTION: BACKEND_EDGE_CONNECTION,
   TRANSFORMER_REFERENCE: BACKEND_EDGE_TRANSFORMER_REFERENCE,
+  STORAGE_REFERENCE: BACKEND_EDGE_STORAGE_REFERENCE,
   REFERENCE: BACKEND_EDGE_REFERENCE,
   TYPE_REFERENCE: BACKEND_EDGE_TYPE_REFERENCE,
 } as const;

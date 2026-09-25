@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { simpleDataSchema, dbRefDataSchema } from "./base";
+import { simpleDataSchema, dbRefDataSchema, storageOperationRefDataSchema } from "./base";
 import { entityDataSchema } from "./entity";
 import {
   kafkaDataSchema,
@@ -62,6 +62,9 @@ export const nodeDataSchemas: Record<string, z.ZodSchema> = {
   external: externalDataSchema,
   group: simpleDataSchema,
   storage: storageDataSchema,
+  storage_operation_ref: storageOperationRefDataSchema,
+  storage_ref: storageOperationRefDataSchema,
+  bucket_ref: storageOperationRefDataSchema,
   // New nodes
   worker: workerDataSchema,
   serverless: serverlessDataSchema,

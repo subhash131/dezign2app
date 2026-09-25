@@ -160,6 +160,9 @@ export function getNodeDimensions(node: LayoutNode): {
     case "db_ref":
     case "vector_db_ref":
     case "redis-cache":
+    case "storage_operation_ref":
+    case "storage_ref":
+    case "bucket_ref":
       return { width: 280, height: 80 };
     case "state_store": {
       const data = getLayoutNodeData(node);

@@ -54,6 +54,9 @@ export type BackendNodeType =
   | "group"
   | "db_ref"
   | "storage"
+  | "storage_operation_ref"
+  | "storage_ref"
+  | "bucket_ref"
   // Redis Dedicated Schema View Nodes
   | "redis_instance"
   | "redis_schema"
@@ -223,8 +226,12 @@ export type {
   StorageOperationParam,
   StorageOperationBadge,
   StorageOperationFunction,
+  CanvasStorageOperationRefNodeData,
 } from "./storage";
-import type { StorageOperationFunction } from "./storage";
+import type {
+  StorageOperationFunction,
+  CanvasStorageOperationRefNodeData,
+} from "./storage";
 
 export interface CanvasStorageNodeData {
   storageProvider?: string;
@@ -245,6 +252,9 @@ export interface CanvasStorageNodeData {
   kmsKeyId?: string;
   buckets?: AnyMessagingResource[];
   storageOperations?: StorageOperationFunction[];
+  storageNodeId?: string;
+  bucketId?: string;
+  bucketName?: string;
 }
 
 /**
@@ -263,6 +273,7 @@ export type BackendNodeData = BaseNodeData &
       CanvasWebPageNodeData &
       MessagingNodeData &
       CanvasStorageNodeData &
+      CanvasStorageOperationRefNodeData &
       CanvasWorkerNodeData &
       CanvasServerlessNodeData &
       CanvasInfrastructureNodeData &

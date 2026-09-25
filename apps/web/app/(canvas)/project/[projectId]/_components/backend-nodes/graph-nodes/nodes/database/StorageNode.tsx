@@ -1,5 +1,5 @@
 import React from "react";
-import { NodeProps, Handle, Position } from "@xyflow/react";
+import { NodeProps } from "@xyflow/react";
 import { HardDrive, Settings } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
@@ -51,26 +51,6 @@ export const StorageNode: React.FC<NodeProps<BackendNode>> = ({
       )}
       onDoubleClick={handleOpenConfig}
     >
-      {/* Node-Level Ingress Handle on Left (Writers / Service connect) */}
-      <Handle
-        type="target"
-        position={Position.Left}
-        id="storage-target"
-        className="w-2.5 h-2.5 -left-1.5 !bg-amber-500 border-2 border-background"
-        title="Storage Ingress (Writes & Service Connections)"
-        style={{ top: "28px" }}
-      />
-
-      {/* Node-Level Egress Handle on Right (Events / Read Notifications) */}
-      <Handle
-        type="source"
-        position={Position.Right}
-        id="storage-source"
-        className="w-2.5 h-2.5 -right-1.5 !bg-amber-500 border-2 border-background"
-        title="Storage Egress (Events & Read Streams)"
-        style={{ top: "28px" }}
-      />
-
       <NodeHeader
         id={id}
         data={data}
@@ -127,6 +107,7 @@ export const StorageNode: React.FC<NodeProps<BackendNode>> = ({
         items={data.buckets || []}
         variant="definition"
         resourceType="buckets"
+        hideLeftHandle={true}
         onChange={(buckets) =>
           updateNode(id, {
             data: {

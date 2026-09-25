@@ -37,3 +37,14 @@ export interface StorageOperationFunction {
   code?: string;
   defaultBucket?: string;
 }
+
+export interface CanvasStorageOperationRefNodeData {
+  storageNodeId?: string;
+  storageProvider?: string;
+  bucketId?: string;
+  bucketName?: string;
+  operationId?: string;
+  targetServiceId?: string;
+  serviceNodeId?: string;
+}
+

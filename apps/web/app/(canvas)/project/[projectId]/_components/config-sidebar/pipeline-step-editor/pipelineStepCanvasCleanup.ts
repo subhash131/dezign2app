@@ -11,6 +11,8 @@ import {
   ensureDatabaseRefConnection,
   cleanupPageRefConnection,
   ensurePageRefConnection,
+  cleanupStorageOperationRefConnection,
+  ensureStorageOperationRefConnection,
 } from "./utils";
 import { removeDerivedConnection } from "./PushToClientStepSection";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -140,6 +142,50 @@ export function handleStepUpdateCanvasEffects({
       }
     }
   }
+
+  if (prevStep.type === "storage_operation" && updatedStep.type !== "storage_operation") {
+    cleanupStorageOperationRefConnection({
+      storageNodeId: prevStep.storageNodeId || prevStep.brokerNodeId,
+      bucketId: prevStep.bucketId,
+      serviceNodeId,
+      endpointId,
+      consumedEventId,
+      functionName: prevStep.functionRef?.name || prevStep.operationId,
+      remainingSteps,
+    });
+  } else if (
+    (prevStep.type === "storage_operation" && updatedStep.type === "storage_operation") ||
+    (prevStep.type !== "storage_operation" && updatedStep.type === "storage_operation")
+  ) {
+    if (
+      prevStep.type === "storage_operation" &&
+      (prevStep.storageNodeId !== updatedStep.storageNodeId ||
+        prevStep.bucketId !== updatedStep.bucketId ||
+        prevStep.functionRef?.name !== updatedStep.functionRef?.name ||
+        prevStep.operationId !== updatedStep.operationId)
+    ) {
+      cleanupStorageOperationRefConnection({
+        storageNodeId: prevStep.storageNodeId || prevStep.brokerNodeId,
+        bucketId: prevStep.bucketId,
+        serviceNodeId,
+        endpointId,
+        consumedEventId,
+        functionName: prevStep.functionRef?.name || prevStep.operationId,
+        remainingSteps,
+      });
+    }
+
+    if (updatedStep.type === "storage_operation") {
+      ensureStorageOperationRefConnection({
+        storageNodeId: updatedStep.storageNodeId || updatedStep.brokerNodeId,
+        bucketId: updatedStep.bucketId,
+        serviceNodeId,
+        endpointId,
+        consumedEventId,
+        functionName: updatedStep.functionRef?.name || updatedStep.operationId,
+      });
+    }
+  }
 }
 
 export interface HandleStepDeleteCanvasEffectsParams {
@@ -194,6 +240,18 @@ export function handleStepDeleteCanvasEffects({
     cleanupDatabaseRefConnection({
       tableNodeId: stepToDelete.tableNodeId,
       databaseId: stepToDelete.databaseId,
+      serviceNodeId,
+      endpointId: endpoint?.id,
+      consumedEventId,
+      functionName: stepToDelete.functionRef?.name || stepToDelete.operationId,
+      remainingSteps,
+    });
+  }
+
+  if (stepToDelete.type === "storage_operation") {
+    cleanupStorageOperationRefConnection({
+      storageNodeId: stepToDelete.storageNodeId || stepToDelete.brokerNodeId,
+      bucketId: stepToDelete.bucketId,
       serviceNodeId,
       endpointId: endpoint?.id,
       consumedEventId,
