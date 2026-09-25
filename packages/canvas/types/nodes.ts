@@ -6,7 +6,7 @@ import type {
   DatabaseEngine,
   DatabaseEngineVersion,
 } from "../techStack";
-import type { MessagingNodeData } from "./messaging";
+import type { MessagingNodeData, AnyMessagingResource } from "./messaging";
 import type {
   CanvasLangGraphNodeData,
   CanvasLangGraphStepNodeData,
@@ -218,6 +218,26 @@ export interface CanvasExternalNodeData extends Partial<BaseNodeData> {
   }>;
 }
 
+export interface CanvasStorageNodeData {
+  storageProvider?: string;
+  storageProviderOther?: string;
+  defaultRegion?: string;
+  endpointUrl?: string;
+  cdnUrl?: string;
+  accessPolicy?: string;
+  publicAccess?: boolean;
+  versioning?: boolean;
+  encryption?: string;
+  corsEnabled?: boolean;
+  accessKeyIdEnv?: string;
+  secretAccessKeyEnv?: string;
+  sessionTokenEnv?: string;
+  roleArn?: string;
+  forcePathStyle?: boolean;
+  kmsKeyId?: string;
+  buckets?: AnyMessagingResource[];
+}
+
 /**
  * Composite data payload for every BackendNode.
  * All domain-specific fields are optional; only `BaseNodeData.label` is required.
@@ -233,6 +253,7 @@ export type BackendNodeData = BaseNodeData &
       CanvasWebAppNodeData &
       CanvasWebPageNodeData &
       MessagingNodeData &
+      CanvasStorageNodeData &
       CanvasWorkerNodeData &
       CanvasServerlessNodeData &
       CanvasInfrastructureNodeData &
