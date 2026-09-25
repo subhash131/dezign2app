@@ -186,6 +186,19 @@ export const StorageOperationRefNode = ({
     );
   }, [edges, id, operations]);
 
+  const isHeaderConnected = useMemo(() => {
+    return edges.some(
+      (e) =>
+        (e.target === id &&
+          (e.targetHandle === "storage-ref-header" ||
+            e.type === "storage-reference" ||
+            e.type === "reference")) ||
+        (e.source === id &&
+          (e.sourceHandle === "storage-ref-header" ||
+            e.sourceHandle === "storage-ref-header-out")),
+    );
+  }, [edges, id]);
+
   const handleOpenConfig = (e?: React.MouseEvent) => {
     e?.stopPropagation();
     setActiveConfigItem({
@@ -301,12 +314,25 @@ export const StorageOperationRefNode = ({
       )}
       onDoubleClick={handleOpenConfig}
     >
-      {/* Target Handle on the header for the invisible reference edge from bucket */}
+      {/* Visible Target Handle on the header for bucket reference from StorageNode */}
       <Handle
         type="target"
         position={Position.Left}
         id="storage-ref-header"
-        className="w-2.5 h-2.5 -left-[5px] opacity-0 hover:opacity-100 transition-opacity"
+        className={cn(
+          "w-2.5 h-2.5 -left-[5px] border-2 transition-all cursor-crosshair rounded-full z-10",
+          isHeaderConnected
+            ? "!bg-amber-500 !border-amber-500 ring-2 ring-amber-500/30 shadow-[0_0_8px_rgba(245,158,11,0.5)]"
+            : "!bg-background border-amber-500/70 hover:!bg-amber-400 hover:scale-125",
+        )}
+        style={{ top: "18px" }}
+        title="Inbound Reference: Connect bucket from StorageNode"
+      />
+      <Handle
+        type="source"
+        position={Position.Left}
+        id="storage-ref-header-out"
+        className="opacity-0 pointer-events-none -left-[5px]"
         style={{ top: "18px" }}
       />
 
@@ -597,13 +623,29 @@ export const StorageOperationRefNode = ({
             </div>
           ) : (
             operations.map((op) => {
-              const isConnected = edges.some(
+              const isLeftConnected = edges.some(
                 (e) =>
                   e.target === id &&
                   (e.targetHandle === `func-${op.name}` ||
                     e.targetHandle === `func-${op.id}` ||
+                    e.targetHandle === `func-in-${op.name}` ||
+                    e.targetHandle === `func-in-${op.id}` ||
                     (!e.targetHandle && op === operations[0])),
               );
+
+              const isRightConnected = edges.some(
+                (e) =>
+                  (e.source === id &&
+                    (e.sourceHandle === `func-out-${op.name}` ||
+                      e.sourceHandle === `func-out-${op.id}` ||
+                      e.sourceHandle === `func-${op.name}` ||
+                      e.sourceHandle === `func-${op.id}`)) ||
+                  (e.target === id &&
+                    (e.targetHandle === `func-out-${op.name}` ||
+                      e.targetHandle === `func-out-${op.id}`)),
+              );
+
+              const isConnected = isLeftConnected || isRightConnected;
 
               const badge = op.badge || getStorageKindBadge(op.kind);
 
@@ -617,7 +659,31 @@ export const StorageOperationRefNode = ({
                       : "hover:bg-secondary/20 text-muted-foreground hover:text-foreground",
                   )}
                 >
-                  <div className="flex items-center gap-2 overflow-hidden flex-1 min-w-0 pr-2">
+                  {/* Inbound Handle on LEFT (from WebPage action or other trigger) */}
+                  <Handle
+                    type="target"
+                    position={Position.Left}
+                    id={`func-${op.name}`}
+                    className={cn(
+                      "w-2.5 h-2.5 border-2 transition-colors -left-[5px]",
+                      isLeftConnected
+                        ? "!bg-amber-500 !border-amber-500 ring-2 ring-amber-500/30"
+                        : "!bg-background border-muted-foreground/60 hover:!bg-amber-400",
+                    )}
+                    style={{ top: "50%", transform: "translateY(-50%)" }}
+                    title="Inbound: Connect from WebPage action"
+                  />
+                  {op.id && op.id !== op.name && (
+                    <Handle
+                      type="target"
+                      position={Position.Left}
+                      id={`func-${op.id}`}
+                      className="opacity-0 pointer-events-none -left-[5px]"
+                      style={{ top: "50%", transform: "translateY(-50%)" }}
+                    />
+                  )}
+
+                  <div className="flex items-center gap-2 overflow-hidden flex-1 min-w-0 pr-2 pl-1">
                     <span
                       className="font-mono text-xs truncate select-text"
                       title={op.signature || op.name}
@@ -659,24 +725,25 @@ export const StorageOperationRefNode = ({
                     </button>
                   </div>
 
-                  {/* Target Handle sitting cleanly on the RIGHT card border */}
+                  {/* Outbound Handle on RIGHT (to Service endpoint) */}
                   <Handle
-                    type="target"
+                    type="source"
                     position={Position.Right}
-                    id={`func-${op.name}`}
+                    id={`func-out-${op.name}`}
                     className={cn(
                       "w-2.5 h-2.5 border-2 transition-colors -right-[5px]",
-                      isConnected
+                      isRightConnected
                         ? "!bg-amber-500 !border-amber-500 ring-2 ring-amber-500/30"
                         : "!bg-background border-muted-foreground/60 hover:!bg-amber-400",
                     )}
                     style={{ top: "50%", transform: "translateY(-50%)" }}
+                    title="Outbound: Connect to Service endpoint"
                   />
                   {op.id && op.id !== op.name && (
                     <Handle
-                      type="target"
+                      type="source"
                       position={Position.Right}
-                      id={`func-${op.id}`}
+                      id={`func-out-${op.id}`}
                       className="opacity-0 pointer-events-none -right-[5px]"
                       style={{ top: "50%", transform: "translateY(-50%)" }}
                     />

@@ -221,6 +221,15 @@ export interface CanvasWebPageNodeData {
   customDependencies?: NodeDependencyItem[];
   pageStores?: GlobalStoreDefinition[];
   stackOrder?: number;
+
+  // Storage & Image Upload configuration
+  connectedStorageNodeId?: string;
+  uploadBucketId?: string;
+  uploadAcceptedMimeTypes?: string[];
+  uploadMaxFileSizeMb?: number;
+  uploadPreviewMode?: "thumbnail" | "none";
+  autoGeneratePresignEndpoint?: boolean;
+  presignEndpointId?: string;
 }
 
 /** Payments node fields (canvas type). */

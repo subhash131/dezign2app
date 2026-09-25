@@ -295,19 +295,37 @@ export const SectionActionRow = ({
             </span>
           );
         })()}
+        {action.storageOperationBinding?.operationName && (
+          <span
+            className="text-[7px] font-mono px-1 py-0.2 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 hover:bg-amber-500/25 border border-amber-500/30 font-semibold cursor-pointer max-w-[120px] truncate transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              setActiveConfigItem({
+                type: "pageEvent",
+                id: action.id,
+                nodeId,
+                sectionId,
+              });
+            }}
+            title={`Bucket operation:\n${action.storageOperationBinding.operationName} (${action.storageOperationBinding.bucketId || "bucket"})${action.storageOperationBinding.endpointId ? `\nLinked Endpoint: ${action.storageOperationBinding.endpointId}` : ""}`}
+          >
+            🪣 {action.storageOperationBinding.operationName}()
+          </span>
+        )}
       </div>
     );
   };
 
   const isActionConnected = edges.some(
     (e) =>
-      e.target === nodeId &&
-      (e.targetHandle === `event-in-${action.id}` ||
-        e.targetHandle === `pageload-in-${action.id}` ||
-        e.targetHandle === `sse-in-${action.id}` ||
-        e.targetHandle === `websocket-in-${action.id}` ||
-        e.targetHandle === `webrtc-in-${action.id}` ||
-        e.targetHandle?.endsWith(`-${action.id}`)),
+      (e.target === nodeId &&
+        (e.targetHandle === `event-in-${action.id}` ||
+          e.targetHandle === `pageload-in-${action.id}` ||
+          e.targetHandle === `sse-in-${action.id}` ||
+          e.targetHandle === `websocket-in-${action.id}` ||
+          e.targetHandle === `webrtc-in-${action.id}` ||
+          e.targetHandle?.endsWith(`-${action.id}`))) ||
+      (e.source === nodeId && e.sourceHandle === `events-${action.id}`),
   );
 
   return (
@@ -317,8 +335,14 @@ export const SectionActionRow = ({
         type="source"
         position={Position.Right}
         id={`events-${action.id}`}
-        className="w-2 h-2 -right-1"
+        className={cn(
+          "w-2 h-2 -right-1 transition-all",
+          action.storageOperationBinding
+            ? "!bg-amber-500 !border-amber-500 ring-2 ring-amber-500/40"
+            : "",
+        )}
         style={{ top: "50%" }}
+        title="Outbound: Connect to Storage Bucket Ref operation or Endpoint"
       />
 
       {/* Inbound Left handles for ALL actions */}

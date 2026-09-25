@@ -5,6 +5,7 @@ import {
   KafkaTopic,
   MESSAGING_TYPES,
 } from "@workspace/canvas/types";
+import { PageSection, UIEventItem } from "@/types/canvas";
 import { BackendCanvasState } from "./types";
 
 export function cleanupDeletedNodesState(
@@ -713,6 +714,106 @@ export function cleanupDeletedEdgesState(
           }
           return ep;
         });
+      }
+    }
+
+    // StorageRef -> Endpoint edge cleanup: remove storage_operation step when edge is deleted
+    const isTargetEndpointHandle =
+      edge.targetHandle?.startsWith("endpoint-in-") ||
+      edge.targetHandle?.startsWith("endpoints-in-") ||
+      edge.targetHandle?.startsWith("routeEndpoints-in-");
+
+    if (isTargetEndpointHandle) {
+      const epId = edge.targetHandle?.replace(
+        /^(?:routeEndpoints|endpoints|endpoint)-in-/,
+        "",
+      );
+      const srcNode = currentState.nodes.find((n) => n.id === edge.source);
+      if (
+        srcNode &&
+        (srcNode.type === "storage_operation_ref" ||
+          srcNode.type === "storage_ref" ||
+          srcNode.type === "bucket_ref" ||
+          srcNode.type === "storage_bucket_ref" ||
+          srcNode.type === "StorageBucketRefNode" ||
+          srcNode.type === "StorageOperationRefNode")
+      ) {
+        const fnName =
+          edge.sourceHandle
+            ?.replace(/^func-out-/, "")
+            ?.replace(/^func-(?:in-)?/, "") || "";
+        nextEndpoints = nextEndpoints.map((ep) => {
+          if (ep.id === epId && ep.pipelineSteps && ep.pipelineSteps.length > 0) {
+            const updatedSteps = ep.pipelineSteps.filter((step) => {
+              if (step.type !== "storage_operation") return true;
+              if (
+                fnName &&
+                (step.functionRef?.name === fnName || step.operationId === fnName)
+              ) {
+                return false;
+              }
+              if (
+                srcNode.data?.storageNodeId &&
+                step.storageNodeId === srcNode.data.storageNodeId
+              ) {
+                return false;
+              }
+              return true;
+            });
+            if (updatedSteps.length !== ep.pipelineSteps.length) {
+              endpointsChanged = true;
+              const updatedEp = { ...ep, pipelineSteps: updatedSteps };
+              pendingEndpointUpserts.push(updatedEp);
+              return updatedEp;
+            }
+          }
+          return ep;
+        });
+      }
+    }
+
+    // WebPage Action -> StorageRef edge cleanup: remove storageOperationBinding when edge is deleted
+    if (edge.sourceHandle?.startsWith("events-")) {
+      const actionId = edge.sourceHandle.replace(/^events-/, "");
+      const tgtNode = currentState.nodes.find((n) => n.id === edge.target);
+      if (
+        tgtNode &&
+        (tgtNode.type === "storage_operation_ref" ||
+          tgtNode.type === "storage_ref" ||
+          tgtNode.type === "bucket_ref" ||
+          tgtNode.type === "storage_bucket_ref" ||
+          tgtNode.type === "StorageBucketRefNode" ||
+          tgtNode.type === "StorageOperationRefNode")
+      ) {
+        const wpNode = nextNodes.find((n) => n.id === edge.source);
+        if (wpNode && wpNode.type === "webPage" && wpNode.data?.sections) {
+          let wpChanged = false;
+          const nextSections = (wpNode.data.sections as PageSection[]).map(
+            (sec: PageSection) => ({
+              ...sec,
+              actions: (sec.actions || []).map((act: UIEventItem) => {
+                if (act.id === actionId && act.storageOperationBinding) {
+                  wpChanged = true;
+                  const { storageOperationBinding: _, ...rest } = act;
+                  return rest as UIEventItem;
+                }
+                return act;
+              }),
+            }),
+          );
+          if (wpChanged) {
+            nodesChanged = true;
+            const updatedWp = {
+              ...wpNode,
+              data: {
+                ...wpNode.data,
+                sections: nextSections,
+              },
+            };
+            nextNodes = nextNodes.map((n) => (n.id === wpNode.id ? updatedWp : n));
+            pendingNodeUpserts.push(updatedWp);
+          }
+        }
       }
     }
 
@@ -1506,11 +1607,11 @@ export function cleanupDeletedEdgesState(
 
   const updates: Partial<BackendCanvasState> = {
     edges: nextEdges,
-    pendingEdgeUpserts: currentState.pendingEdgeUpserts.filter(
+    pendingEdgeUpserts: (currentState.pendingEdgeUpserts || []).filter(
       (e) => !removedSet.has(e.id),
     ),
     pendingEdgeRemovals: [
-      ...currentState.pendingEdgeRemovals,
+      ...(currentState.pendingEdgeRemovals || []),
       ...removedEdgeIds,
     ],
   };

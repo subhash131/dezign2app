@@ -180,14 +180,24 @@ describe("StorageOperationRefNode", () => {
     expect(screen.getByText("downloadObject")).toBeDefined();
     expect(screen.getByText("getUploadPresignedUrl")).toBeDefined();
 
-    // Handles for operations are on the RIGHT side
-    const uploadHandle = screen.getByTestId("handle-func-uploadObject");
-    expect(uploadHandle).toBeDefined();
-    expect(uploadHandle.getAttribute("data-position")).toBe("right");
+    // Handles for operations: inbound (left) from WebPage and outbound (right) to Service
+    const uploadInHandle = screen.getByTestId("handle-func-uploadObject");
+    expect(uploadInHandle).toBeDefined();
+    expect(uploadInHandle.getAttribute("data-position")).toBe("left");
 
-    const downloadHandle = screen.getByTestId("handle-func-downloadObject");
-    expect(downloadHandle).toBeDefined();
-    expect(downloadHandle.getAttribute("data-position")).toBe("right");
+    const uploadOutHandle = screen.getByTestId("handle-func-out-uploadObject");
+    expect(uploadOutHandle).toBeDefined();
+    expect(uploadOutHandle.getAttribute("data-position")).toBe("right");
+
+    const downloadInHandle = screen.getByTestId("handle-func-downloadObject");
+    expect(downloadInHandle).toBeDefined();
+    expect(downloadInHandle.getAttribute("data-position")).toBe("left");
+
+    const downloadOutHandle = screen.getByTestId(
+      "handle-func-out-downloadObject",
+    );
+    expect(downloadOutHandle).toBeDefined();
+    expect(downloadOutHandle.getAttribute("data-position")).toBe("right");
   });
 
   it("allows adding a new operation with the plus button", () => {

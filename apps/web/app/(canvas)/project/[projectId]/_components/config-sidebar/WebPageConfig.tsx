@@ -15,6 +15,7 @@ import {
   WebPageTabsNav,
   WebPageSectionsTab,
   WebPageStateTab,
+  WebPageUploadsTab,
   WebPageApiTab,
   WebPageCodeSyncTab,
   WebPageProtectionTab,
@@ -218,7 +219,13 @@ export const WebPageConfig = ({
         onValueChange={setActiveTab}
         className="flex-1 flex flex-col overflow-hidden mt-4"
       >
-        <WebPageTabsNav sectionsCount={sectionsCount} storeCount={storeCount} />
+        <WebPageTabsNav
+          sectionsCount={sectionsCount}
+          storeCount={storeCount}
+          hasUploadsConfig={Boolean(
+            data.connectedStorageNodeId || data.uploadBucketId || data.presignEndpointId,
+          )}
+        />
 
         {/* Tab 1: Sections & Membership */}
         <WebPageSectionsTab
@@ -250,7 +257,17 @@ export const WebPageConfig = ({
           initialSelectedStoreId={activeConfigItem?.selectedStoreId as string}
         />
 
-        {/* Tab 2: API Parameters & Request Body */}
+        {/* Tab 3: Image & File Uploads (Presigned URL) */}
+        <WebPageUploadsTab
+          nodeId={nodeId}
+          data={data}
+          allNodes={allNodes}
+          allEdges={allEdges}
+          allEndpoints={allEndpoints}
+          onUpdateData={updateData}
+        />
+
+        {/* Tab 4: API Parameters & Request Body */}
         <WebPageApiTab
           connectedEndpoint={connectedEndpoint}
           effectiveHeaders={effectiveHeaders}

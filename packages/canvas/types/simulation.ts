@@ -129,6 +129,15 @@ export type UIEventItem = {
   // State Store action binding
   storeActionBinding?: StoreActionBinding;
   storeActionBindings?: StoreActionBinding[];
+  // Storage operation binding (when linked to storage_operation_ref)
+  storageOperationBinding?: {
+    storageNodeId?: string;
+    bucketId?: string;
+    operationName?: string;
+    refNodeId?: string;
+    endpointId?: string;
+    serviceNodeId?: string;
+  };
   // SSE config (when event === "sse")
   sseConfig?: {
     reconnectStrategy?: "none" | "exponential" | "linear";

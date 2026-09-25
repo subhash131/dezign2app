@@ -9,12 +9,20 @@ import {
   computeStorageOpBindings,
 } from "@/lib/utils/storageOperationsHelper";
 import { ConnectionContext } from "../types";
-import { isMessagingResourceType, MESSAGING_NODE_TYPES } from "../utils";
+import {
+  isMessagingResourceType,
+  MESSAGING_NODE_TYPES,
+  isStorageRefNode,
+} from "../utils";
+import { toast } from "sonner";
+import { PageSection } from "@/types/canvas";
 
 /**
  * Handles endpoint connections:
- * 1. Endpoint -> Database/DB_ref node: syncs databaseNodeIds on endpoint
- * 2. Endpoint -> Messaging node: auto-creates publisher event and pipeline step,
+ * 1. StorageRef -> Service endpoint: auto-provisions storage_operation pipeline step on endpoint
+ * 2. Endpoint -> Database/DB_ref node: syncs databaseNodeIds on endpoint
+ * 3. Endpoint -> StorageRef node: syncs storage_operation pipeline step on endpoint (reverse)
+ * 4. Endpoint -> Messaging node: auto-creates publisher event and pipeline step,
  *    updates endpoint, and cleans up direct ReactFlow edge.
  *
  * @returns boolean `true` if direct edge was intercepted and rewired (messaging target), `false` otherwise.
@@ -23,9 +31,160 @@ export function handleEndpointConnect({
   set,
   get,
   connection,
+  sourceNode,
   targetNode,
   newEdge,
 }: ConnectionContext): boolean {
+  // 0. Storage Operation Ref (source) → Service Endpoint (target)
+  // Flow: webpage action -> storageref operation -> service endpoint
+  const isStorageRefSource = isStorageRefNode(sourceNode.type);
+  const isServiceTarget = targetNode.type === "service";
+  const targetHandle = connection.targetHandle || "";
+  const isTargetEndpoint =
+    targetHandle.startsWith("endpoint-in-") ||
+    targetHandle.startsWith("endpoints-in-") ||
+    targetHandle.startsWith("routeEndpoints-in-") ||
+    targetHandle.startsWith("endpoint-out-") ||
+    targetHandle.startsWith("endpoints-out-") ||
+    targetHandle.startsWith("routeEndpoints-out-");
+
+  if (isStorageRefSource && isServiceTarget && isTargetEndpoint) {
+    const endpointId = targetHandle.replace(
+      /^(?:routeEndpoints|endpoints|endpoint)-(?:in|out)-/,
+      "",
+    );
+    const sourceHandle = connection.sourceHandle || "";
+    const fnName =
+      sourceHandle
+        .replace(/^func-out-/, "")
+        .replace(/^func-(?:in-)?/, "") || "uploadObject";
+    const storageNodeId = sourceNode.data?.storageNodeId;
+    const bucketName =
+      sourceNode.data?.bucketId ||
+      sourceNode.data?.bucketName ||
+      "default-bucket";
+
+    const endpoint =
+      get().endpoints.find((e) => e.id === endpointId) ||
+      targetNode.data?.endpoints?.find((e: any) => e.id === endpointId);
+
+    if (endpoint) {
+      const existingSteps = endpoint.pipelineSteps ?? [];
+      const hasMatchingStep = existingSteps.some(
+        (s) =>
+          s.type === "storage_operation" &&
+          (s.functionRef?.name === fnName || s.operationId === fnName) &&
+          (s.storageNodeId === storageNodeId || s.bucketId === bucketName),
+      );
+
+      if (!hasMatchingStep) {
+        const storageNode = get().nodes.find((n) => n.id === storageNodeId);
+        const ops = getStorageOperations(storageNode);
+        const op =
+          ops.find((o) => o.name === fnName || o.id === fnName) || ops[0];
+        const rawLabel = storageNode?.data?.label || "storage";
+        const packageFolder = toFolderName(rawLabel) || "storage";
+        const nextBindings = computeStorageOpBindings(op, [], bucketName);
+        const newStep: PipelineStep = {
+          id: `step-storage-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          name: op?.label || op?.name || "Storage Operation",
+          type: "storage_operation",
+          enabled: true,
+          outputVariable:
+            op?.kind === "presign_upload" ? "uploadUrl" : "storageResult",
+          storageNodeId,
+          brokerNodeId: storageNodeId,
+          bucketId: bucketName,
+          operationId: op?.id,
+          functionRef: {
+            name: op?.name || fnName,
+            importPath: `@workspace/${packageFolder}/operations`,
+            signature: op?.signature,
+          },
+          inputBindings: nextBindings,
+        };
+        const returnIdx = existingSteps.findIndex(
+          (s) => s.type === "return_response",
+        );
+        const nextPipelineSteps =
+          returnIdx !== -1
+            ? [
+                ...existingSteps.slice(0, returnIdx),
+                newStep,
+                ...existingSteps.slice(returnIdx),
+              ]
+            : [...existingSteps, newStep];
+
+        get().updateEndpoint(endpointId, {
+          pipelineSteps: nextPipelineSteps,
+        });
+
+        // Enrich newEdge data
+        const currentEdges = get().edges;
+        set({
+          edges: currentEdges.map((e) =>
+            e.id === newEdge.id
+              ? {
+                  ...e,
+                  data: {
+                    ...e.data,
+                    isStorageOperation: true,
+                    operationName: fnName,
+                    bucketId: bucketName,
+                    storageNodeId,
+                  },
+                }
+              : e,
+          ),
+        });
+
+        // Link any WebPage action connected to this storage ref operation
+        const webPageNodes = get().nodes.filter((n) => n.type === "webPage");
+        webPageNodes.forEach((wp) => {
+          const wpSections: PageSection[] = wp.data?.sections || [];
+          let wpChanged = false;
+          const nextSections = wpSections.map((sec) => {
+            const nextActions = (sec.actions || []).map((act) => {
+              if (
+                act.storageOperationBinding?.refNodeId === sourceNode.id &&
+                (act.storageOperationBinding.operationName === fnName ||
+                  act.storageOperationBinding.operationName === op?.name)
+              ) {
+                wpChanged = true;
+                return {
+                  ...act,
+                  storageOperationBinding: {
+                    ...act.storageOperationBinding,
+                    endpointId,
+                    serviceNodeId: targetNode.id,
+                  },
+                };
+              }
+              return act;
+            });
+            return { ...sec, actions: nextActions };
+          });
+          if (wpChanged) {
+            get().updateNode(wp.id, {
+              data: {
+                ...wp.data,
+                sections: nextSections,
+                presignEndpointId:
+                  op?.kind === "presign_upload"
+                    ? endpointId
+                    : wp.data?.presignEndpointId,
+              },
+            });
+          }
+        });
+
+        toast.success(
+          `Linked bucket operation "${op?.name || fnName}" to endpoint "${endpoint.name || endpoint.type || "endpoint"}"`,
+        );
+      }
+    }
+  }
+
   const isEndpointConnect =
     connection.sourceHandle?.startsWith("endpoint-out-");
 

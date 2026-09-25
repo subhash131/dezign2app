@@ -216,11 +216,11 @@ export function classifyHandle(
     if (id === "storage-ref-header" || id.startsWith("storage-ref-header")) {
       return "resource-def-in";
     }
-    if (id.startsWith("func-") || handleDirection === "target") {
-      return "action-target";
-    }
-    if (handleDirection === "source") {
+    if (handleDirection === "source" || id.startsWith("func-out-")) {
       return "resource-def-out";
+    }
+    if (id.startsWith("func-") || id.startsWith("func-in-") || handleDirection === "target") {
+      return "action-target";
     }
   }
 

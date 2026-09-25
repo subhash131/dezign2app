@@ -36,7 +36,7 @@ describe("Storage and Bucket Connectability Taxonomy", () => {
     expect(EDGE_TYPE_MAP["endpoint-out→resource-def-in"]).toBe("message");
     expect(EDGE_TYPE_MAP["event-source→resource-def-in"]).toBe("connection");
     expect(EDGE_TYPE_MAP["page-out→resource-def-in"]).toBe("connection");
-    expect(EDGE_TYPE_MAP["resource-def-out→endpoint-in"]).toBe("message");
+    expect(EDGE_TYPE_MAP["resource-def-out→endpoint-in"]).toBe("connection");
   });
 
   it("validates connections to storage buckets through isValidConnection", () => {
@@ -103,7 +103,7 @@ describe("Storage and Bucket Connectability Taxonomy", () => {
       expect(singularBucketToRef.edgeType).toBe("storage-reference");
     }
 
-    // 3. Service endpoint -> storage_operation_ref function handle
+    // 3. Service endpoint -> storage_operation_ref function handle (Service on left)
     const endpointToRefOp = isValidConnection(
       "service",
       "endpoint-out-ep1",
@@ -115,7 +115,7 @@ describe("Storage and Bucket Connectability Taxonomy", () => {
       expect(endpointToRefOp.edgeType).toBe("connection");
     }
 
-    // 4. Service endpoint -> StorageBucketRefNode function handle
+    // 4. Service endpoint -> StorageBucketRefNode function handle (Service on left)
     const endpointToBucketRefNode = isValidConnection(
       "service",
       "endpoint-out-ep1",
@@ -125,6 +125,42 @@ describe("Storage and Bucket Connectability Taxonomy", () => {
     expect(endpointToBucketRefNode.valid).toBe(true);
     if (endpointToBucketRefNode.valid) {
       expect(endpointToBucketRefNode.edgeType).toBe("connection");
+    }
+
+    // 5. In-between flow: WebPage action -> StorageBucketRefNode function handle (left handle)
+    const webPageToRefOp = isValidConnection(
+      "webPage",
+      "events-act-upload",
+      "StorageBucketRefNode",
+      "func-getUploadPresignedUrl",
+    );
+    expect(webPageToRefOp.valid).toBe(true);
+    if (webPageToRefOp.valid) {
+      expect(webPageToRefOp.edgeType).toBe("connection");
+    }
+
+    // 6. In-between flow: StorageBucketRefNode function handle (right handle) -> Service endpoint (left handle)
+    const refOpToEndpoint = isValidConnection(
+      "StorageBucketRefNode",
+      "func-out-getUploadPresignedUrl",
+      "service",
+      "endpoint-in-ep-upload",
+    );
+    expect(refOpToEndpoint.valid).toBe(true);
+    if (refOpToEndpoint.valid) {
+      expect(refOpToEndpoint.edgeType).toBe("connection");
+    }
+
+    // 7. Same flow with storage_operation_ref type alias
+    const storageRefToEndpoint = isValidConnection(
+      "storage_operation_ref",
+      "func-out-getUploadPresignedUrl",
+      "service",
+      "endpoint-in-ep-upload",
+    );
+    expect(storageRefToEndpoint.valid).toBe(true);
+    if (storageRefToEndpoint.valid) {
+      expect(storageRefToEndpoint.edgeType).toBe("connection");
     }
   });
 });

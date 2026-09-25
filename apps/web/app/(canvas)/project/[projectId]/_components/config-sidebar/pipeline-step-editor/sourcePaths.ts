@@ -830,6 +830,120 @@ export function getAvailableSources(
       }
     }
 
+    // ── Storage Step: derive paths based on storage operation kind ──────────
+    if (s.type === "storage_operation" || s.storageNodeId) {
+      const opName = (s.functionRef?.name || s.operationId || "").toLowerCase();
+      const isPresignUpload =
+        opName.includes("uploadpresigned") ||
+        opName.includes("presign_upload") ||
+        opName.includes("presignedupload") ||
+        opName === "getuploadpresignedurl";
+      const isPresignDownload =
+        opName.includes("downloadpresigned") ||
+        opName.includes("presign_download") ||
+        opName.includes("presigneddownload") ||
+        opName === "getdownloadpresignedurl";
+      const isUpload = opName.includes("uploadobject") || opName === "upload";
+      const isList = opName.includes("listobjects") || opName === "list";
+      const isExists = opName.includes("objectexists") || opName === "exists";
+      const isDelete = opName.includes("deleteobject") || opName.includes("delete");
+
+      if (isPresignUpload) {
+        if (!stepPaths.some((p) => p.path === "uploadUrl")) {
+          stepPaths.push({
+            path: "uploadUrl",
+            type: "string",
+            description: "Signed PUT URL for direct browser-to-cloud upload",
+          });
+        }
+        if (!stepPaths.some((p) => p.path === "url")) {
+          stepPaths.push({
+            path: "url",
+            type: "string",
+            description: "Direct upload URL (alias for uploadUrl)",
+          });
+        }
+        if (!stepPaths.some((p) => p.path === "key")) {
+          stepPaths.push({
+            path: "key",
+            type: "string",
+            description: "Target object key/path in bucket",
+          });
+        }
+        if (!stepPaths.some((p) => p.path === "bucket")) {
+          stepPaths.push({
+            path: "bucket",
+            type: "string",
+            description: "Target storage bucket name",
+          });
+        }
+        if (!stepPaths.some((p) => p.path === "expiresIn")) {
+          stepPaths.push({
+            path: "expiresIn",
+            type: "number",
+            description: "Presigned URL expiration TTL in seconds",
+          });
+        }
+      } else if (isPresignDownload) {
+        if (!stepPaths.some((p) => p.path === "downloadUrl")) {
+          stepPaths.push({
+            path: "downloadUrl",
+            type: "string",
+            description: "Signed GET URL for downloading private object",
+          });
+        }
+        if (!stepPaths.some((p) => p.path === "url")) {
+          stepPaths.push({
+            path: "url",
+            type: "string",
+            description: "Download URL (alias for downloadUrl)",
+          });
+        }
+        if (!stepPaths.some((p) => p.path === "key")) {
+          stepPaths.push({
+            path: "key",
+            type: "string",
+            description: "Target object key/path in bucket",
+          });
+        }
+        if (!stepPaths.some((p) => p.path === "bucket")) {
+          stepPaths.push({
+            path: "bucket",
+            type: "string",
+            description: "Target storage bucket name",
+          });
+        }
+      } else if (isList) {
+        if (!stepPaths.some((p) => p.path === "length")) {
+          stepPaths.push({ path: "length", type: "number", description: "Number of objects in bucket" });
+        }
+        if (!stepPaths.some((p) => p.path === "[0].Key")) {
+          stepPaths.push({ path: "[0].Key", type: "string", description: "Object key in bucket" });
+        }
+        if (!stepPaths.some((p) => p.path === "[0].Size")) {
+          stepPaths.push({ path: "[0].Size", type: "number", description: "Object size in bytes" });
+        }
+      } else if (isExists) {
+        if (!stepPaths.some((p) => p.path === "exists")) {
+          stepPaths.push({ path: "exists", type: "boolean", description: "Whether object exists" });
+        }
+      } else if (isDelete) {
+        if (!stepPaths.some((p) => p.path === "success")) {
+          stepPaths.push({ path: "success", type: "boolean", description: "Whether deletion succeeded" });
+        }
+      } else if (isUpload) {
+        if (!stepPaths.some((p) => p.path === "url")) {
+          stepPaths.push({ path: "url", type: "string", description: "Uploaded object public or CDN URL" });
+        }
+        if (!stepPaths.some((p) => p.path === "key")) {
+          stepPaths.push({ path: "key", type: "string", description: "Target object key in storage" });
+        }
+        if (!stepPaths.some((p) => p.path === "etag")) {
+          stepPaths.push({ path: "etag", type: "string", description: "Object ETag checksum" });
+        }
+      }
+    }
+
     const isGenericStepName =
       !s.name ||
       s.name.trim() === "" ||
@@ -1011,3 +1125,34 @@ export function getAvailableTransformers(
 
   return transformers;
 }
+
+/**
+ * Creates an AvailableSource representation for a presigned URL step output
+ * to make it immediately selectable and well-categorized in downstream bindings.
+ */
+export function createPresignedUrlExtraSource(
+  step: PipelineStepDraft,
+  kind: "upload" | "download" = "upload",
+): AvailableSource {
+  const varName = step.outputVariable || (kind === "upload" ? "uploadUrl" : "downloadUrl");
+  return {
+    id: `presign:${step.id}`,
+    label: `🔗 ${step.name || (kind === "upload" ? "Upload Presigned URL" : "Download Presigned URL")} (${varName})`,
+    kind: "step_output",
+    stepId: step.id,
+    variableName: varName,
+    rootVariableName: varName,
+    paths: [
+      {
+        path: kind === "upload" ? "uploadUrl" : "downloadUrl",
+        type: "string",
+        description: `Direct presigned ${kind} URL`,
+      },
+      { path: "url", type: "string", description: "Presigned URL (alias)" },
+      { path: "key", type: "string", description: "Target object key/path in bucket" },
+      { path: "bucket", type: "string", description: "Target storage bucket name" },
+      { path: "expiresIn", type: "number", description: "Expiration time in seconds" },
+    ],
+  };
+}
+

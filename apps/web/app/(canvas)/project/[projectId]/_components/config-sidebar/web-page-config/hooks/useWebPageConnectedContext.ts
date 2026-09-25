@@ -121,15 +121,60 @@ export function useWebPageConnectedContext({
           allNodes.some((n) => n.id === e.source && n.type === "service")),
     );
 
-    if (!connectedServiceEdge) return null;
+    let activeServiceEdge = connectedServiceEdge;
+    if (!activeServiceEdge) {
+      const storageRefEdge = allEdges.find(
+        (e) =>
+          (e.source === nodeId &&
+            allNodes.some(
+              (n) =>
+                n.id === e.target &&
+                (n.type === "storage_operation_ref" ||
+                  n.type === "storage_ref" ||
+                  n.type === "bucket_ref" ||
+                  n.type === "storage_bucket_ref" ||
+                  n.type === "StorageBucketRefNode" ||
+                  n.type === "StorageOperationRefNode"),
+            )) ||
+          (e.target === nodeId &&
+            allNodes.some(
+              (n) =>
+                n.id === e.source &&
+                (n.type === "storage_operation_ref" ||
+                  n.type === "storage_ref" ||
+                  n.type === "bucket_ref" ||
+                  n.type === "storage_bucket_ref" ||
+                  n.type === "StorageBucketRefNode" ||
+                  n.type === "StorageOperationRefNode"),
+            )),
+      );
 
-    const isSource = connectedServiceEdge.source === nodeId;
-    const targetNodeId = isSource
-      ? connectedServiceEdge.target
-      : connectedServiceEdge.source;
-    const targetHandle = isSource
-      ? connectedServiceEdge.targetHandle
-      : connectedServiceEdge.sourceHandle;
+      if (storageRefEdge) {
+        const refNodeId =
+          storageRefEdge.source === nodeId
+            ? storageRefEdge.target
+            : storageRefEdge.source;
+        activeServiceEdge = allEdges.find(
+          (e) =>
+            (e.source === refNodeId &&
+              allNodes.some((n) => n.id === e.target && n.type === "service")) ||
+            (e.target === refNodeId &&
+              allNodes.some((n) => n.id === e.source && n.type === "service")),
+        );
+      }
+    }
+
+    if (!activeServiceEdge) return null;
+
+    const isTargetService = allNodes.some(
+      (n) => n.id === activeServiceEdge!.target && n.type === "service",
+    );
+    const targetNodeId = isTargetService
+      ? activeServiceEdge.target
+      : activeServiceEdge.source;
+    const targetHandle = isTargetService
+      ? activeServiceEdge.targetHandle
+      : activeServiceEdge.sourceHandle;
     const targetNode = allNodes.find((n) => n.id === targetNodeId);
 
     if (!targetNode) return null;

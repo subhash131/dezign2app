@@ -13,6 +13,7 @@ import {
 import { generateKeyBetween } from "fractional-indexing";
 import { getLastIndex } from "../../utils";
 import { ConnectionContext } from "../types";
+import { isStorageRefNode } from "../utils";
 import { toast } from "sonner";
 
 /**
@@ -670,6 +671,125 @@ export function handleFrontendConnect({
         toast.success(`Realtime listener "${updatedConnName}" bound to update ${storeName}.${actionName}()`);
         return true;
       }
+    }
+  }
+
+  // Case 6: WebPage Action <-> StorageOperationRefNode
+  // Flow: webpage action -> storageref operation -> service endpoint
+  const isWebPageToStorageRef =
+    (sourceNode.type === "webPage" && isStorageRefNode(targetNode.type)) ||
+    (isStorageRefNode(sourceNode.type) && targetNode.type === "webPage");
+
+  if (isWebPageToStorageRef) {
+    const webPageNode = sourceNode.type === "webPage" ? sourceNode : targetNode;
+    const storageRefNode = isStorageRefNode(sourceNode.type)
+      ? sourceNode
+      : targetNode;
+    const isForward = sourceNode.type === "webPage";
+    const webHandle = isForward
+      ? (connection.sourceHandle ?? "")
+      : (connection.targetHandle ?? "");
+    const storageHandle = isForward
+      ? (connection.targetHandle ?? "")
+      : (connection.sourceHandle ?? "");
+
+    if (webHandle.startsWith("events-") || webHandle.startsWith("event-in-")) {
+      const actionId = webHandle.replace(/^(?:events-|event-in-)/, "");
+      const opName =
+        storageHandle.replace(/^func-(?:in-)?/, "") || "uploadObject";
+      const storageNodeId = storageRefNode.data?.storageNodeId;
+      const bucketName =
+        storageRefNode.data?.bucketId ||
+        storageRefNode.data?.bucketName ||
+        "default-bucket";
+
+      // Check if storageRefNode is already connected outbound to a Service endpoint
+      const currentEdges = get().edges;
+      const outboundServiceEdge = currentEdges.find(
+        (e) =>
+          e.source === storageRefNode.id &&
+          (e.sourceHandle === `func-out-${opName}` ||
+            e.sourceHandle ===
+              `func-out-${storageHandle.replace(/^func-/, "")}` ||
+            e.sourceHandle?.startsWith("func-out-")),
+      );
+      let targetEndpointId: string | undefined = undefined;
+      let targetServiceId: string | undefined = undefined;
+      if (outboundServiceEdge) {
+        targetServiceId = outboundServiceEdge.target;
+        targetEndpointId = outboundServiceEdge.targetHandle?.replace(
+          /^(?:routeEndpoints|endpoints|endpoint)-(?:in|out)-/,
+          "",
+        );
+      }
+
+      const sections: PageSection[] = webPageNode.data?.sections || [];
+      let updatedActionName = "";
+
+      const updatedSections: PageSection[] = sections.map(
+        (sec: PageSection): PageSection => ({
+          ...sec,
+          actions: (sec.actions || []).map((act: UIEventItem): UIEventItem => {
+            if (act.id === actionId) {
+              updatedActionName = act.name || "Action";
+              return {
+                ...act,
+                storageOperationBinding: {
+                  storageNodeId,
+                  bucketId: bucketName,
+                  operationName: opName,
+                  refNodeId: storageRefNode.id,
+                  ...(targetEndpointId
+                    ? {
+                        endpointId: targetEndpointId,
+                        serviceNodeId: targetServiceId,
+                      }
+                    : {}),
+                },
+              };
+            }
+            return act;
+          }),
+        }),
+      );
+
+      get().updateNode(webPageNode.id, {
+        data: {
+          ...webPageNode.data,
+          sections: updatedSections,
+          connectedStorageNodeId:
+            storageNodeId || webPageNode.data?.connectedStorageNodeId,
+          uploadBucketId: bucketName || webPageNode.data?.uploadBucketId,
+          ...(targetEndpointId && opName.toLowerCase().includes("presign")
+            ? { presignEndpointId: targetEndpointId }
+            : {}),
+        },
+      });
+
+      // Update newEdge data
+      set({
+        edges: currentEdges.map((e) =>
+          e.id === newEdge.id
+            ? {
+                ...e,
+                data: {
+                  ...e.data,
+                  isStorageOperationBinding: true,
+                  actionId,
+                  operationName: opName,
+                  bucketId: bucketName,
+                  storageNodeId,
+                  refNodeId: storageRefNode.id,
+                },
+              }
+            : e,
+        ),
+      });
+
+      toast.success(
+        `Action "${updatedActionName || "Action"}" linked to bucket operation "${opName}"`,
+      );
+      return true;
     }
   }
 
