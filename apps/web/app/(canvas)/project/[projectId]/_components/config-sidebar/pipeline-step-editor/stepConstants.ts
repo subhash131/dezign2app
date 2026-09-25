@@ -16,6 +16,7 @@ import {
   MonitorSmartphone,
   Globe,
   Network,
+  HardDrive,
 } from "lucide-react";
 import {
   StepType,
@@ -48,6 +49,11 @@ export const STEP_TYPE_META: Record<StepType, StepTypeMeta> = {
     label: "Redis",
     icon: React.createElement(Zap, { size: 13 }),
     color: "text-foreground/80 bg-secondary/40 border-border/60",
+  },
+  storage_operation: {
+    label: "Storage",
+    icon: React.createElement(HardDrive, { size: 13 }),
+    color: "text-amber-500 bg-amber-500/10 border-amber-500/30",
   },
   kafka_publish: {
     label: "Kafka Publish",
@@ -120,6 +126,7 @@ export const ADDABLE_STEP_TYPES: readonly StepType[] = [
   "transform",
   "db_operation",
   "redis_operation",
+  "storage_operation",
   "kafka_publish",
   "service_call",
   "external_call",

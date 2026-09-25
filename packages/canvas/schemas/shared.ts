@@ -158,6 +158,7 @@ export const pipelineStepTypeEnum = z.enum([
   "transform",        // call a transformer helper function
   "db_operation",     // call a DB helper (createX, findById, etc.)
   "redis_operation",  // call a Redis cache helper
+  "storage_operation",// call a storage helper (uploadObject, getUploadPresignedUrl, etc.)
   "kafka_publish",    // publishKafkaEvent
   "service_call",     // HTTP / gRPC call to another service
   "external_call",    // HTTP call to an external 3rd-party API
@@ -301,6 +302,10 @@ export interface PipelineStep {
   externalEndpointId?: string;
   /** For DB/Redis operation steps: ID of the selected operation */
   operationId?: string;
+  /** For storage_operation steps: ID of the storage node */
+  storageNodeId?: string;
+  /** For storage_operation steps: ID or name of the bucket */
+  bucketId?: string;
   /** For Kafka/messaging publish steps: ID of the broker node */
   brokerNodeId?: string;
   /** For Kafka/messaging publish steps: ID of the topic / messaging resource */
@@ -427,6 +432,8 @@ export const pipelineStepSchema: z.ZodType<PipelineStep> = z.lazy(() =>
     externalNodeId: z.string().optional(),
     externalEndpointId: z.string().optional(),
     operationId: z.string().optional(),
+    storageNodeId: z.string().optional(),
+    bucketId: z.string().optional(),
     brokerNodeId: z.string().optional(),
     messagingResourceId: z.string().optional(),
     functionRef: z

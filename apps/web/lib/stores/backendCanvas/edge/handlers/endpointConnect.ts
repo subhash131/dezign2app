@@ -117,24 +117,31 @@ export function handleEndpointConnect({
         const newStorageStep: PipelineStep = {
           id: `step-storage-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
           name: publisherName,
-          type: "custom_code",
+          type: "storage_operation",
           enabled: true,
           outputVariable: "storageUploadResult",
+          storageNodeId: targetNode.id,
+          brokerNodeId: targetNode.id,
+          bucketId: topicName || "default-bucket",
+          operationId: "storage-uploadObject",
           functionRef: {
-            name: storageFnName,
-            importPath: `@workspace/${packageFolder}/client`,
+            name: "uploadObject",
+            importPath: `@workspace/${packageFolder}/operations`,
           },
           inputBindings: [
             {
-              argName: "file",
-              source: { kind: "req_body", field: "file" },
-            },
-            {
-              argName: "bucket",
+              argName: "bucketName",
               source: { kind: "inline", value: topicName || "default-bucket" },
             },
+            {
+              argName: "key",
+              source: { kind: "req_body", field: "filename" },
+            },
+            {
+              argName: "body",
+              source: { kind: "req_body", field: "file" },
+            },
           ],
-          brokerNodeId: targetNode.id,
           messagingResourceId,
         };
 

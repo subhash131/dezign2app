@@ -17,6 +17,7 @@ import {
 import { toVarName, toPascalCase, parseSchemaJson } from "@/lib/compiler/utils";
 import { isStepInputUnconfigured } from "@/lib/utils/pipelineValidation";
 import { getEntityDbOperations } from "@/lib/utils/entityOperationsHelper";
+import { getStorageOperations } from "@/lib/utils/storageOperationsHelper";
 
 function extractKafkaTopicSchemaArgs(
   step: PipelineStepDraft,
@@ -350,6 +351,27 @@ export function useStepRowState({
         return [
           { name: "payload", type: "object", required: true },
           { name: "key", type: "string", required: false },
+        ];
+      }
+
+      if (step.type === "storage_operation") {
+        const ops = getStorageOperations();
+        const matchedOp = ops.find(
+          (o) =>
+            o.id === step.operationId ||
+            o.name === step.functionRef?.name ||
+            o.name.toLowerCase() === (step.functionRef?.name || "").toLowerCase(),
+        );
+        if (matchedOp && matchedOp.params) {
+          return matchedOp.params.map((p) => ({
+            name: p.name,
+            type: p.type,
+            required: p.required !== false,
+          }));
+        }
+        return [
+          { name: "bucketName", type: "string", required: true },
+          { name: "key", type: "string", required: true },
         ];
       }
 

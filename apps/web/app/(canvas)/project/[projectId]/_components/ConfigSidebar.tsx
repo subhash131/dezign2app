@@ -38,6 +38,7 @@ import { HookConfig } from "./config-sidebar/HookConfig";
 import { TypesConfig } from "./config-sidebar/TypesConfig";
 import { WebPageRealtimeConnectionConfig } from "./config-sidebar/WebPageRealtimeConnectionConfig";
 import { StateStoreConfig } from "./config-sidebar/StateStoreConfig";
+import { StorageNodeConfig } from "./config-sidebar/StorageNodeConfig";
 
 export const ConfigSidebar = () => {
   const activeConfigItem = useBackendCanvasStore((s) => s.activeConfigItem);
@@ -182,7 +183,9 @@ export const ConfigSidebar = () => {
                         ? "Configure identity provider."
                         : type === "database"
                           ? "Configure database connection properties."
-                          : "Configure event and messaging properties."}
+                          : type === "storage"
+                            ? "Configure storage provider connection and buckets."
+                            : "Configure event and messaging properties."}
             </SheetDescription>
           </SheetHeader>
 
@@ -270,6 +273,8 @@ export const ConfigSidebar = () => {
             />
           ) : type === "realtimeConnection" ? (
             <WebPageRealtimeConnectionConfig id={id} nodeId={nodeId} />
+          ) : type === "storage" ? (
+            <StorageNodeConfig id={id} nodeId={nodeId} />
           ) : (
             <EventConfig id={id} nodeId={nodeId} />
           )}

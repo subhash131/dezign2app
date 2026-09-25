@@ -46,6 +46,38 @@ export function generateStorageReusableFunctions(
       kind: "custom",
     },
     {
+      name: "deleteObjects",
+      importPath: `${packageName}/operations`,
+      signature:
+        "deleteObjects(bucketName: string, keys: string[]): Promise<DeleteObjectsCommandOutput>",
+      targetName: packageFolder,
+      kind: "custom",
+    },
+    {
+      name: "listObjects",
+      importPath: `${packageName}/operations`,
+      signature:
+        "listObjects(bucketName: string, prefix?: string, maxKeys?: number): Promise<_Object[]>",
+      targetName: packageFolder,
+      kind: "custom",
+    },
+    {
+      name: "objectExists",
+      importPath: `${packageName}/operations`,
+      signature:
+        "objectExists(bucketName: string, key: string): Promise<boolean>",
+      targetName: packageFolder,
+      kind: "custom",
+    },
+    {
+      name: "copyObject",
+      importPath: `${packageName}/operations`,
+      signature:
+        "copyObject(sourceBucket: string, sourceKey: string, destBucket: string, destKey: string): Promise<CopyObjectCommandOutput>",
+      targetName: packageFolder,
+      kind: "custom",
+    },
+    {
       name: "STORAGE_BUCKETS",
       importPath: `${packageName}/buckets`,
       signature: "STORAGE_BUCKETS: Record<string, string>",

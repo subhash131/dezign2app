@@ -23,3 +23,4 @@ export * from "./pipeline";
 export * from "./terminal";
 export * from "./custom-types";
 export * from "./realtime";
+export * from "./storage";

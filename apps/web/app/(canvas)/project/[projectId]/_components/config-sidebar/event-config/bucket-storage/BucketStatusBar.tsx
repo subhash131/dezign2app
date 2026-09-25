@@ -15,7 +15,7 @@ export const BucketStatusBar: React.FC<BucketStatusBarProps> = ({ item }) => {
     <div className="flex flex-wrap items-center gap-2 p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
       <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-semibold text-xs">
         <HardDrive size={14} className="shrink-0" />
-        <span>Bucket Configuration</span>
+        <span className="font-mono text-foreground font-bold">{item.name || "Untitled Bucket"}</span>
       </div>
       <div className="ml-auto flex items-center gap-1.5 flex-wrap">
         <Badge variant="outline" className="bg-background/80 text-[10px] font-mono capitalize">
@@ -46,6 +46,11 @@ export const BucketStatusBar: React.FC<BucketStatusBarProps> = ({ item }) => {
         {item.encryption && item.encryption !== "None" && (
           <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30 text-[10px]">
             Encrypted
+          </Badge>
+        )}
+        {Boolean(item.enableMetadata) && (
+          <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30 text-[10px]">
+            Metadata
           </Badge>
         )}
       </div>

@@ -51,6 +51,7 @@ export function renderPipelineStep(
 
     case "db_operation":
     case "redis_operation":
+    case "storage_operation":
     case "service_call":
       rawLines = renderAsyncOperationStep(step, ctx, renderPipelineNested);
       break;

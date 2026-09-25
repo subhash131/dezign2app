@@ -2,6 +2,7 @@ import type { Schema } from "./simulation";
 import type { ArchitectureMetadata } from "./canvas-core";
 import type { KafkaTopic, KafkaBrokerConfig } from "../schemas";
 import type { PipelineStep } from "../schemas/shared";
+import type { StorageOperationFunction } from "./storage";
 
 
 export type {
@@ -224,6 +225,7 @@ export type AnyMessagingResource = {
   enableCdn?: boolean;
   cdnDomain?: string;
   cdnCacheControl?: string;
+  enableMetadata?: boolean;
   storageClass?: string;
   region?: string;
   endpointUrl?: string;
@@ -256,6 +258,7 @@ export type AnyMessagingResource = {
   maxObjectSize?: string;
   persistence?: string;
   replication?: string;
+  storageOperations?: StorageOperationFunction[];
 };
 
 export type ConfigItemData = AnyMessagingResource & {

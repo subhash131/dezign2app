@@ -64,7 +64,16 @@ export const PRESET_EXPIRATIONS: readonly PresetExpirationOption[] = [
   { label: "24h", value: "86400" },
 ];
 
-export const PRESET_FILE_SIZES: readonly string[] = ["10MB", "50MB", "100MB", "500MB", "1GB", "5GB"];
+export const PRESET_FILE_SIZES: readonly string[] = [
+  "250KB",
+  "500KB",
+  "1MB",
+  "5MB",
+  "10MB",
+  "50MB",
+  "100MB",
+  "1GB",
+];
 
 export const DATA_TYPES: readonly string[] = [
   "Image",

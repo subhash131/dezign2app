@@ -12,6 +12,8 @@ import {
   DeleteObjectCommand,
   DeleteObjectsCommand,
   ListObjectsV2Command,
+  HeadObjectCommand,
+  CopyObjectCommand,
   ObjectCannedACL,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
@@ -148,15 +150,53 @@ export async function listObjects(
 }
 
 /**
+ * Checks if an object exists in storage using a lightweight HEAD request.
+ */
+export async function objectExists(bucketName: string, key: string): Promise<boolean> {
+  try {
+    const command = new HeadObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+    });
+    await s3Client.send(command);
+    return true;
+  } catch (err: any) {
+    if (err?.name === "NotFound" || err?.$metadata?.httpStatusCode === 404) {
+      return false;
+    }
+    throw err;
+  }
+}
+
+/**
+ * Copies an object from a source bucket/key to a destination bucket/key without memory buffering.
+ */
+export async function copyObject(
+  sourceBucket: string,
+  sourceKey: string,
+  destBucket: string,
+  destKey: string,
+) {
+  const command = new CopyObjectCommand({
+    CopySource: sourceBucket + "/" + sourceKey.replace(/^\\/+/, ""),
+    Bucket: destBucket,
+    Key: destKey,
+  });
+
+  return s3Client.send(command);
+}
+
+/**
  * Returns a public CDN or direct URL for an object if configured.
  */
 export function getPublicObjectUrl(bucketName: string, key: string): string {
   const meta = getBucketMetadata(bucketName);
+  const cleanKey = key.replace(/^\/+/, "");
   if (meta?.cdnUrl) {
-    const base = meta.cdnUrl.replace(/\\/+$/, "");
-    return \`\${base}/\${key.replace(/^\\/+/, "")}\`;
+    const base = meta.cdnUrl.replace(/\/+$/, "");
+    return base + "/" + cleanKey;
   }
-  return \`https://\${bucketName}.s3.amazonaws.com/\${key.replace(/^\\/+/, "")}\`;
+  return "https://" + bucketName + ".s3.amazonaws.com/" + cleanKey;
 }
 `;
 

@@ -53,6 +53,7 @@ export const resourceItemSchema = z.object({
   enableCdn: z.boolean().optional(),
   cdnDomain: z.string().optional(),
   cdnCacheControl: z.string().optional(),
+  enableMetadata: z.boolean().optional(),
   storageClass: z.string().optional(),
   region: z.string().optional(),
   endpointUrl: z.string().optional(),
@@ -84,6 +85,7 @@ export const resourceItemSchema = z.object({
   maxObjectSize: z.string().optional(),
   persistence: z.string().optional(),
   replication: z.string().optional(),
+  storageOperations: z.array(z.any()).optional(),
   publishedWhen: z.string().optional(),
   handlerLogic: z.string().optional(),
   /**

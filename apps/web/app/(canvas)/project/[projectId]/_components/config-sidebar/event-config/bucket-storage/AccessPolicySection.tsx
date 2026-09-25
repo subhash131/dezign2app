@@ -13,6 +13,10 @@ import { Shield, Check, Clock } from "lucide-react";
 import { LocalInput } from "../../../backend-nodes/graph-nodes/shared";
 import { BucketStorageSectionProps } from "./types";
 import { ACCESS_POLICIES, OPERATIONS, PRESET_EXPIRATIONS } from "./constants";
+import {
+  syncOperationsWithAccessControl,
+  StorageOperationFunction,
+} from "@/lib/utils/storageOperationsHelper";
 
 export const AccessPolicySection: React.FC<BucketStorageSectionProps> = ({
   item,
@@ -22,17 +26,63 @@ export const AccessPolicySection: React.FC<BucketStorageSectionProps> = ({
     ? item.allowedOperations
     : ["read", "write"];
 
-  const toggleOp = (op: string) => {
-    const next = allowedOps.includes(op)
-      ? allowedOps.filter((o) => o !== op)
-      : [...allowedOps, op];
-    handleUpdate(item.id, { allowedOperations: next });
-  };
-
   const accessPolicy = item.accessPolicy || "private";
   const isPresignedActive = Boolean(
     item.enablePresignedUrls || accessPolicy === "presigned-only",
   );
+
+  const toggleOp = (opKey: string) => {
+    const nextAllowed = allowedOps.includes(opKey)
+      ? allowedOps.filter((o) => o !== opKey)
+      : [...allowedOps, opKey];
+
+    const currentOps: StorageOperationFunction[] = item.storageOperations || [];
+    const nextOps = syncOperationsWithAccessControl(
+      currentOps,
+      nextAllowed,
+      accessPolicy,
+      isPresignedActive,
+    );
+
+    handleUpdate(item.id, {
+      allowedOperations: nextAllowed,
+      storageOperations: nextOps,
+    });
+  };
+
+  const handleAccessPolicyChange = (newPolicy: string) => {
+    const isPresignedOnly = newPolicy === "presigned-only";
+    const nextEnablePresigned = isPresignedOnly ? true : Boolean(item.enablePresignedUrls);
+
+    const currentOps: StorageOperationFunction[] = item.storageOperations || [];
+    const nextOps = syncOperationsWithAccessControl(
+      currentOps,
+      allowedOps,
+      newPolicy,
+      nextEnablePresigned,
+    );
+
+    handleUpdate(item.id, {
+      accessPolicy: newPolicy,
+      enablePresignedUrls: nextEnablePresigned,
+      storageOperations: nextOps,
+    });
+  };
+
+  const handlePresignedToggle = (checked: boolean) => {
+    const currentOps: StorageOperationFunction[] = item.storageOperations || [];
+    const nextOps = syncOperationsWithAccessControl(
+      currentOps,
+      allowedOps,
+      accessPolicy,
+      checked,
+    );
+
+    handleUpdate(item.id, {
+      enablePresignedUrls: checked,
+      storageOperations: nextOps,
+    });
+  };
 
   return (
     <div className="flex flex-col gap-3 rounded-xl border bg-card/50 p-4 shadow-sm backdrop-blur-sm border-primary/20">
@@ -52,7 +102,7 @@ export const AccessPolicySection: React.FC<BucketStorageSectionProps> = ({
         <label className="text-[11px] font-medium text-foreground">Access Policy</label>
         <Select
           value={accessPolicy}
-          onValueChange={(v) => handleUpdate(item.id, { accessPolicy: v })}
+          onValueChange={handleAccessPolicyChange}
         >
           <SelectTrigger className="w-full bg-background/50 h-8 text-xs font-medium">
             <SelectValue />
@@ -123,9 +173,7 @@ export const AccessPolicySection: React.FC<BucketStorageSectionProps> = ({
           </div>
           <Switch
             checked={isPresignedActive}
-            onCheckedChange={(checked) =>
-              handleUpdate(item.id, { enablePresignedUrls: checked })
-            }
+            onCheckedChange={handlePresignedToggle}
           />
         </div>
 

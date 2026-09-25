@@ -9,6 +9,45 @@ import { toVarName } from "../../../../utils";
 import { PipelineRenderContext } from "../types";
 import { buildArgList, resolveBinding } from "../sourceResolver";
 import { sortRedisBindings } from "./compileRedisBindingSorter";
+import { PipelineStepInputBinding } from "@workspace/canvas/types";
+
+function sortStorageBindings(
+  bindings: PipelineStepInputBinding[],
+  fnName?: string,
+): PipelineStepInputBinding[] {
+  const paramOrder: Record<string, string[]> = {
+    getUploadPresignedUrl: ["bucketName", "key", "options"],
+    getDownloadPresignedUrl: ["bucketName", "key", "options"],
+    uploadObject: ["bucketName", "key", "body", "options"],
+    downloadObject: ["bucketName", "key"],
+    deleteObject: ["bucketName", "key"],
+    deleteObjects: ["bucketName", "keys"],
+    listObjects: ["bucketName", "prefix", "maxKeys"],
+    objectExists: ["bucketName", "key"],
+    copyObject: ["sourceBucket", "sourceKey", "destBucket", "destKey"],
+  };
+
+  const expected = (fnName && paramOrder[fnName]) || [];
+  if (expected.length === 0) return bindings;
+
+  const result: PipelineStepInputBinding[] = [];
+  expected.forEach((paramName) => {
+    const found = bindings.find(
+      (b) => b.argName.toLowerCase() === paramName.toLowerCase(),
+    );
+    if (found) {
+      result.push(found);
+    }
+  });
+
+  bindings.forEach((b) => {
+    if (!result.includes(b)) {
+      result.push(b);
+    }
+  });
+
+  return result;
+}
 
 /**
  * Renders an async operation step (DB operation, Redis operation, or service call).
@@ -64,6 +103,14 @@ export function renderAsyncOperationStep(
       args = resolveBinding(firstBinding, ctx);
     } else {
       args = buildArgList(inputBindings, ctx);
+    }
+  } else if (type === "storage_operation" && inputBindings.length > 0) {
+    const allPositional = inputBindings.every((b) => /^\d+$/.test(b.argName));
+    if (allPositional) {
+      args = buildArgList(inputBindings, ctx);
+    } else {
+      const sorted = sortStorageBindings(inputBindings, functionRef.name);
+      args = sorted.map((b) => resolveBinding(b, ctx)).join(", ");
     }
   } else {
     args = buildArgList(inputBindings, ctx);
