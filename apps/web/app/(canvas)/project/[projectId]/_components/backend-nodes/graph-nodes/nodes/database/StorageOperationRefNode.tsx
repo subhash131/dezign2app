@@ -306,7 +306,7 @@ export const StorageOperationRefNode = ({
         type="target"
         position={Position.Left}
         id="storage-ref-header"
-        className="w-2.5 h-2.5 -left-[5px] opacity-0 pointer-events-none"
+        className="w-2.5 h-2.5 -left-[5px] opacity-0 hover:opacity-100 transition-opacity"
         style={{ top: "18px" }}
       />
 

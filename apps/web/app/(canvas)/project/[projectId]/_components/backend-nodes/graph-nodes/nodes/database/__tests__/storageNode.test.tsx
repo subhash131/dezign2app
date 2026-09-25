@@ -142,4 +142,85 @@ describe("StorageNode component", () => {
       nodeId: "node-storage-1",
     });
   });
+
+  it("draws an invisible edge from the bucket to the header of the StorageBucketRefNode", () => {
+    const mockRefNode: BackendNode = {
+      id: "ref-bucket-avatars-1",
+      type: "StorageBucketRefNode",
+      position: { x: 500, y: 100 },
+      fractionalIndex: "a1",
+      data: {
+        label: "avatars",
+        storageNodeId: "node-storage-1",
+        bucketId: "avatars",
+        bucketName: "avatars",
+        storageProvider: "s3",
+      },
+    };
+
+    useBackendCanvasStore.setState({
+      nodes: [mockNode, mockRefNode],
+      edges: [],
+    });
+
+    render(
+      <StorageNode
+        id={mockNode.id}
+        data={mockNode.data}
+        selected={false}
+      />,
+    );
+
+    const edges = useBackendCanvasStore.getState().edges;
+    const refEdge = edges.find(
+      (e) =>
+        e.source === "node-storage-1" &&
+        e.target === "ref-bucket-avatars-1" &&
+        e.type === "storage-reference",
+    );
+
+    expect(refEdge).toBeDefined();
+    expect(refEdge?.sourceHandle).toBe("buckets:out:bucket-avatars");
+    expect(refEdge?.targetHandle).toBe("storage-ref-header");
+  });
+
+  it("draws an invisible edge to storage_operation_ref when matching bucket by name or id", () => {
+    const mockOpRefNode: BackendNode = {
+      id: "ref-op-node-1",
+      type: "storage_operation_ref",
+      position: { x: 500, y: 250 },
+      fractionalIndex: "a2",
+      data: {
+        label: "avatars",
+        storageNodeId: "node-storage-1",
+        bucketId: "bucket-avatars",
+        storageProvider: "s3",
+      },
+    };
+
+    useBackendCanvasStore.setState({
+      nodes: [mockNode, mockOpRefNode],
+      edges: [],
+    });
+
+    render(
+      <StorageNode
+        id={mockNode.id}
+        data={mockNode.data}
+        selected={false}
+      />,
+    );
+
+    const edges = useBackendCanvasStore.getState().edges;
+    const refEdge = edges.find(
+      (e) =>
+        e.source === "node-storage-1" &&
+        e.target === "ref-op-node-1" &&
+        e.type === "storage-reference",
+    );
+
+    expect(refEdge).toBeDefined();
+    expect(refEdge?.sourceHandle).toBe("buckets:out:bucket-avatars");
+    expect(refEdge?.targetHandle).toBe("storage-ref-header");
+  });
 });
