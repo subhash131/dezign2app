@@ -76,8 +76,11 @@ export function createFolderNameResolvers(): FolderNameResolvers {
 
     let folderName = base;
     let counter = 1;
-    // ✦ dedup loop — increments suffix until folderName is unique
-    while (servicesInfo.some((s) => s.folderName === folderName)) {
+    // ✦ dedup loop — increments suffix until folderName is unique across all apps/ (services & web-apps)
+    while (
+      servicesInfo.some((s) => s.folderName === folderName) ||
+      webClientsInfo.some((w) => w.folderName === folderName)
+    ) {
       counter++;
       folderName = `${base}-${counter}`;
     }
@@ -86,7 +89,7 @@ export function createFolderNameResolvers(): FolderNameResolvers {
 
   /**
    * Converts a slug into a kebab-case base and appends a numeric suffix
-   * until the name is unique within `webClientsInfo`.
+   * until the name is unique within both webClientsInfo and servicesInfo.
    */
   function getUniqueWebAppFolder(slug: string, defaultName: string): string {
     const base =
@@ -97,8 +100,11 @@ export function createFolderNameResolvers(): FolderNameResolvers {
 
     let folderName = base;
     let counter = 1;
-    // ✦ dedup loop — increments suffix until folderName is unique
-    while (webClientsInfo.some((w) => w.folderName === folderName)) {
+    // ✦ dedup loop — increments suffix until folderName is unique across all apps/
+    while (
+      webClientsInfo.some((w) => w.folderName === folderName) ||
+      servicesInfo.some((s) => s.folderName === folderName)
+    ) {
       counter++;
       folderName = `${base}-${counter}`;
     }

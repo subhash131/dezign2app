@@ -571,6 +571,8 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
             position: position,
             data: finalData,
             fractionalIndex: n.fractionalIndex,
+          }).catch((err) => {
+            console.warn(`[useBackendSync] Error upserting node ${n.id}:`, err);
           });
         }),
         ...uniqueNodeRemovals.map((id) =>
