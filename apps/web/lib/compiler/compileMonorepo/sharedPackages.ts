@@ -39,6 +39,7 @@ import { compileGrpcPackages } from "../grpc";
 import { compileTransformerHelpers } from "../compileTransformerHelpers";
 import { compileExternalNodes } from "../compileExternalNodes";
 import { compileFrontendNodes } from "../compileFrontendHelpers";
+import { compileStorageNodes } from "../compileStorageNodes";
 
 /** Output produced by {@link compileSharedPackages}. */
 export interface SharedPackagesResult {
@@ -52,6 +53,8 @@ export interface SharedPackagesResult {
   redisFunctions: ReusableFunction[];
   /** Reusable external-API calling functions for route generators. */
   externalFunctions: ReusableFunction[];
+  /** Reusable storage functions for route generators. */
+  storageFunctions: ReusableFunction[];
   /**
    * Compiled frontend hooks / components.
    * - `globalFiles`: shared across all web-app clients
@@ -60,6 +63,8 @@ export interface SharedPackagesResult {
   compiledFrontend: ReturnType<typeof compileFrontendNodes>;
   /** gRPC package folder paths for tsconfig references, e.g. ["packages/grpc/my-service"]. */
   grpcPackageFolders: string[];
+  /** Storage package folder paths for tsconfig references, e.g. ["packages/storage"]. */
+  storagePackageFolders: string[];
 }
 
 /**
@@ -226,11 +231,40 @@ export function compileSharedPackages(
     files.push(f);
   });
 
+  // ── step 4.12 | @workspace/storage ──────────────────────────────────────
+  // ✦ emits: packages/storage/** or packages/storage/<folder>/**
+  const compiledStorage = compileStorageNodes(nodes, edges, endpoints, events);
+  const storagePackageFolders: string[] = [];
+  if (compiledStorage.packages && compiledStorage.packages.length > 0) {
+    compiledStorage.packages.forEach((pkg) => {
+      const folderPath = `packages/${pkg.packageFolder}`;
+      storagePackageFolders.push(folderPath);
+      pkg.files.forEach((f) => {
+        files.push({
+          filename: `${folderPath}/${f.filename}`,
+          language: f.language,
+          content: f.content,
+        });
+      });
+    });
+  } else if (compiledStorage.files.length > 0) {
+    const folderPath = `packages/${compiledStorage.packageFolder || "storage"}`;
+    storagePackageFolders.push(folderPath);
+    compiledStorage.files.forEach((f) => {
+      files.push({
+        filename: `${folderPath}/${f.filename}`,
+        language: f.language,
+        content: f.content,
+      });
+    });
+  }
+
   // ── Collect reusable function metadata for service route generators ───────
   const dbFunctions: ReusableFunction[] = compiledDb.reusableFunctions ?? [];
   const kafkaFunctions: ReusableFunction[] = compiledKafka.reusableFunctions ?? [];
   const redisFunctions: ReusableFunction[] = compiledRedis.reusableFunctions ?? [];
   const externalFunctions: ReusableFunction[] = compiledExternal.reusableFunctions ?? [];
+  const storageFunctions: ReusableFunction[] = compiledStorage.reusableFunctions ?? [];
 
   return {
     files,
@@ -238,7 +272,9 @@ export function compileSharedPackages(
     kafkaFunctions,
     redisFunctions,
     externalFunctions,
+    storageFunctions,
     compiledFrontend,
     grpcPackageFolders,
+    storagePackageFolders,
   };
 }

@@ -4,6 +4,7 @@ export * from "./traceResolver";
 export * from "./compileDatabaseNodes";
 export * from "./compileKafkaNodes";
 export * from "./compileRedisNodes";
+export * from "./compileStorageNodes";
 export * from "./compileServiceNode";
 export * from "./compileLangGraphNode";
 export * from "./compileWebPageNode";

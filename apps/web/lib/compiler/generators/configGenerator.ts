@@ -15,6 +15,7 @@ import { toEnvVarName } from "../utils";
 import { isServiceConnectedToKafka } from "../kafka";
 import { compileRedisNodes, isServiceConnectedToRedis } from "../compileRedisNodes";
 import { compileDatabaseNodes } from "../compileDatabaseNodes";
+import { compileStorageNodes, isServiceConnectedToStorage } from "../compileStorageNodes";
 import {
   INTER_SERVICE_PROTOCOL_GRPC,
   GRPC_DEFAULT_PORT,
@@ -610,6 +611,19 @@ export function generateConfigFiles(
     }
   }
 
+  const hasStorage = isServiceConnectedToStorage(node, allNodes, allEdges, endpoints, events);
+  const storageDeps: Record<string, string> = {};
+  if (hasStorage) {
+    const compiledStorage = compileStorageNodes(allNodes, allEdges, endpoints, events);
+    if (compiledStorage.packages && compiledStorage.packages.length > 0) {
+      compiledStorage.packages.forEach((p) => {
+        storageDeps[p.packageName] = "workspace:*";
+      });
+    } else if (compiledStorage.packageName) {
+      storageDeps[compiledStorage.packageName] = "workspace:*";
+    }
+  }
+
   const { hasWs } = resolveServiceRealtimeCapabilities(node, endpoints, events, allNodes, allEdges);
 
   const dbDeps: Record<string, string> = {};
@@ -629,6 +643,7 @@ export function generateConfigFiles(
     ...dbDeps,
     ...(hasKafka ? { [kafkaPackageName]: "workspace:*" } : {}),
     ...redisDeps,
+    ...storageDeps,
     "@workspace/logger": "workspace:*",
     "@workspace/types": "workspace:*",
     express: "^4.19.2",

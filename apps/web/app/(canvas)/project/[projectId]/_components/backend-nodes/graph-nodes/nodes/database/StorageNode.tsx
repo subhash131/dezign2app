@@ -110,6 +110,7 @@ export const StorageNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
       <NodeHeader
         id={id}
         data={data}
+        nodeType="storage"
         icon={HardDrive}
         title="Storage"
         colorClass="bg-amber-500/10 text-amber-700 dark:text-amber-400"

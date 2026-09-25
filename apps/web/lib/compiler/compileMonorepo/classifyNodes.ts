@@ -26,6 +26,8 @@ export interface ClassifiedNodes {
   webAppNodes: BackendNode[];
   /** All "payments" nodes — Creem / payment subscription and billing services. */
   paymentsNodes: BackendNode[];
+  /** All "storage" nodes — AWS S3 / Cloudflare R2 / MinIO object storage. */
+  storageNodes: BackendNode[];
   /**
    * Service nodes that compile into a standalone microservice app directory.
    *
@@ -58,6 +60,7 @@ export function classifyNodes(
   const webPageNodes = nodes.filter((n) => n.type === "webPage");
   const webAppNodes = nodes.filter((n) => n.type === "webApp");
   const paymentsNodes = nodes.filter((n) => n.type === "payments");
+  const storageNodes = nodes.filter((n) => n.type === "storage");
 
   // ── Standalone service filter ───────────────────────────────────────────
   // A "service" node that is connected to a WebApp compiles INTO that WebApp
@@ -75,6 +78,7 @@ export function classifyNodes(
     webPageNodes,
     webAppNodes,
     paymentsNodes,
+    storageNodes,
     standaloneServiceNodes,
   };
 }

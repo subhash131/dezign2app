@@ -106,6 +106,24 @@ export interface CompiledRedisResult {
   packageName?: string;
 }
 
+export interface CompiledStoragePackage {
+  packageName: string;
+  packageFolder: string;
+  storageNodeId?: string;
+  storageLabel?: string;
+  provider: string;
+  files: CompiledFile[];
+  reusableFunctions: ReusableFunction[];
+}
+
+export interface CompiledStorageResult {
+  files: CompiledFile[];
+  packages?: CompiledStoragePackage[];
+  packageFolder?: string;
+  packageName?: string;
+  reusableFunctions: ReusableFunction[];
+}
+
 export interface CompiledWebPageResult {
   webPageId: string;
   webPageName: string;

@@ -35,28 +35,30 @@ export const upsertBackendNode = mutation({
     }
 
     if (
-      (args.type === "entity" || args.type === "group") &&
+      args.data &&
       "label" in args.data &&
-      typeof args.data.label === "string"
+      typeof args.data.label === "string" &&
+      args.data.label.trim() !== ""
     ) {
       const allNodes = await ctx.db
         .query("canvas_backend_nodes")
         .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
         .collect();
 
-      const label = args.data.label;
+      const label = args.data.label.trim();
+      const isWebPage = args.type === "webPage";
       const exists = allNodes.some(
         (n) =>
           n.nodeId !== args.nodeId &&
-          n.type === args.type &&
+          (isWebPage ? n.type === "webPage" : n.type !== "webPage") &&
           n.data?.label &&
-          n.data.label.toLowerCase() === label.toLowerCase(),
+          typeof n.data.label === "string" &&
+          n.data.label.trim().toLowerCase() === label.toLowerCase(),
       );
 
       if (exists) {
-        const typeName = args.type === "entity" ? "table" : "schema group";
         throw new ConvexError(
-          `A ${typeName} with the name "${label}" already exists.`,
+          `A node with the name "${label}" already exists in this project.`,
         );
       }
     }

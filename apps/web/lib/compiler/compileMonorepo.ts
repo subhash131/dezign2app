@@ -154,6 +154,7 @@ export function compileMonorepo(
     ...(compiledKafka.files.length > 0 ? [`packages/${compiledKafka.packageFolder}`] : []),
     ...redisPackagePaths,
     ...sharedResult.grpcPackageFolders,
+    ...sharedResult.storagePackageFolders,
     ...servicesInfo.map((s) => `apps/${s.folderName}`),
     ...webClientsInfo.map((w) => `apps/${w.folderName}`),
   ];
@@ -177,6 +178,7 @@ export function compileMonorepo(
       compiledRedis.packageFolder && compiledRedis.packageFolder !== "redis"
         ? compiledRedis.packageFolder
         : undefined,
+    hasStorage: sharedResult.storagePackageFolders.length > 0,
   });
 
   // ── final | deduplicate (last write wins for any duplicated file path) ────
