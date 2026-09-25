@@ -137,6 +137,23 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
     if (!node) return;
     const updatedFields = fields.filter((f) => f.id !== fieldId);
     const updatedActions = actions.filter((a) => a.targetFieldId !== fieldId);
+    const fieldHandles = [
+      `store-field-in-${fieldId}`,
+      `store-field-out-${fieldId}`,
+      `setter-in-left-${fieldId}`,
+      `setter-in-${fieldId}`,
+      `setter-out-${fieldId}`,
+      `mutate-in-left-${fieldId}`,
+      `mutate-out-${fieldId}`,
+    ];
+    allEdges
+      .filter(
+        (e) =>
+          (e.source === node.id && fieldHandles.includes(e.sourceHandle || "")) ||
+          (e.target === node.id && fieldHandles.includes(e.targetHandle || "")),
+      )
+      .forEach((e) => deleteEdge(e.id));
+
     updateNode(node.id, {
       data: {
         ...node.data,
@@ -144,7 +161,7 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
         actions: updatedActions,
       },
     });
-  }, [node, fields, actions, updateNode]);
+  }, [node, fields, actions, allEdges, deleteEdge, updateNode]);
 
   const handleAddAction = useCallback(() => {
     if (!node) return;
@@ -357,9 +374,17 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
         // Clean up connected canvas edges since disabled hides from node
         const handlesToRemove: string[] = [];
         if (isPopulate) {
-          handlesToRemove.push("populate-in", "populate-out");
+          handlesToRemove.push("populate-in", "populate-out", "populate-in-left");
         } else if (isReset) {
-          handlesToRemove.push("reset-in", "reset-out");
+          handlesToRemove.push("reset-in", "reset-out", "reset-in-left");
+        } else if (isSetter && targetFieldId) {
+          handlesToRemove.push(
+            `setter-in-left-${targetFieldId}`,
+            `setter-in-${targetFieldId}`,
+            `setter-out-${targetFieldId}`,
+            `mutate-in-left-${targetFieldId}`,
+            `mutate-out-${targetFieldId}`,
+          );
         }
 
         if (handlesToRemove.length > 0) {
@@ -466,9 +491,17 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
       // 3. Clean up connected canvas edges for the deleted manipulator
       const handlesToRemove: string[] = [];
       if (isPopulate) {
-        handlesToRemove.push("populate-in", "populate-out");
+        handlesToRemove.push("populate-in", "populate-out", "populate-in-left");
       } else if (isReset) {
-        handlesToRemove.push("reset-in", "reset-out");
+        handlesToRemove.push("reset-in", "reset-out", "reset-in-left");
+      } else if (isSetter && targetFieldId) {
+        handlesToRemove.push(
+          `setter-in-left-${targetFieldId}`,
+          `setter-in-${targetFieldId}`,
+          `setter-out-${targetFieldId}`,
+          `mutate-in-left-${targetFieldId}`,
+          `mutate-out-${targetFieldId}`,
+        );
       }
 
       if (handlesToRemove.length > 0) {

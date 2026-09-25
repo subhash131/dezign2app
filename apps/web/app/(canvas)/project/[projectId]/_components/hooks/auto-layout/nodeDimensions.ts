@@ -155,7 +155,7 @@ export function getNodeDimensions(node: LayoutNode): {
       const data = getLayoutNodeData(node);
       const fields = Array.isArray(data?.fields) ? data.fields.length : 1;
       const actions = Array.isArray(data?.actions) ? data.actions.length : 0;
-      const manipulatorsCount = 3 + actions;
+      const manipulatorsCount = 2 + fields + actions;
       const estHeight = Math.max(160, 75 + 24 + fields * 28 + 24 + manipulatorsCount * 24);
       return { width: 260, height: estHeight };
     }
@@ -404,12 +404,15 @@ export function getHandleYRatio(
       const targetY = 75 + 24 + fields.length * 28 + 24 + 12;
       return Math.min(0.95, Math.max(0.05, targetY / height));
     }
-    if (handleId.startsWith("mutate-")) {
-      const targetY = 75 + 24 + fields.length * 28 + 24 + 36;
+    if (handleId.startsWith("setter-") || handleId.startsWith("mutate-")) {
+      const fId = handleId.replace(/^(setter-|mutate-)(in-left-|in-|out-)?/, "");
+      const idx = fields.findIndex((f: any) => f && f.id === fId);
+      const setterIdx = idx !== -1 ? idx : 0;
+      const targetY = 75 + 24 + fields.length * 28 + 24 + 24 + setterIdx * 24 + 12;
       return Math.min(0.95, Math.max(0.05, targetY / height));
     }
     if (handleId.startsWith("reset-")) {
-      const targetY = 75 + 24 + fields.length * 28 + 24 + 60;
+      const targetY = 75 + 24 + fields.length * 28 + 24 + 24 + fields.length * 24 + 12;
       return Math.min(0.95, Math.max(0.05, targetY / height));
     }
     return 0.5;

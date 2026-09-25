@@ -117,7 +117,7 @@ export const RealtimeStateStoreSection: React.FC<RealtimeStateStoreSectionProps>
       defaultActionType = "set";
       defaultTargetFieldId = firstF.id;
       defaultTargetFieldName = firstF.name;
-      targetHandle = "mutate-in-left";
+      targetHandle = `setter-in-left-${firstF.id}`;
     } else if (storeActions.length > 0) {
       const firstA = storeActions[0]!;
       defaultActionId = firstA.id;
@@ -162,7 +162,7 @@ export const RealtimeStateStoreSection: React.FC<RealtimeStateStoreSectionProps>
         targetFieldName: undefined,
       };
     } else if (actionKey === "builtin-populate") {
-      targetHandle = "mutate-in-left";
+      targetHandle = "populate-in-left";
       updated = {
         ...storeBinding,
         actionId: "builtin-populate",
@@ -173,8 +173,8 @@ export const RealtimeStateStoreSection: React.FC<RealtimeStateStoreSectionProps>
         parameterMappings: storeBinding.parameterMappings || {},
       };
     } else if (actionKey.startsWith("setter-")) {
-      targetHandle = "mutate-in-left";
       const fieldId = actionKey.replace("setter-", "");
+      targetHandle = `setter-in-left-${fieldId}`;
       const matchedField = fields.find((f) => f.id === fieldId);
       const fieldName = matchedField?.name || "field";
       const setterName = `set${toPascalCase(fieldName)}`;

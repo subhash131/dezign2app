@@ -400,6 +400,36 @@ export function handleFrontendConnect({
           targetFieldId = matchedAction.targetFieldId;
           targetFieldName = matchedAction.targetFieldName;
         }
+      } else if (
+        storeHandle.startsWith("setter-in-left-") ||
+        storeHandle.startsWith("setter-in-") ||
+        storeHandle.startsWith("setter-out-") ||
+        storeHandle.startsWith("mutate-in-left-") ||
+        storeHandle.startsWith("mutate-in-") ||
+        storeHandle.startsWith("mutate-out-")
+      ) {
+        const fId = storeHandle.replace(/^(setter-|mutate-)(in-left-|in-|out-)/, "");
+        const matchedField = storeFields.find((f: GlobalStoreField) => f.id === fId);
+        if (matchedField) {
+          targetFieldId = matchedField.id;
+          targetFieldName = matchedField.name;
+          const cap = matchedField.name.charAt(0).toUpperCase() + matchedField.name.slice(1);
+          const defaultSetterName = `set${cap}`;
+          const setterAction = storeActions.find(
+            (a: GlobalStoreAction) =>
+              (a.defaultManipulatorType === "setter" && a.targetFieldId === fId) ||
+              (a.targetFieldId === fId && a.name.toLowerCase() === defaultSetterName.toLowerCase()),
+          );
+          if (setterAction) {
+            actionId = setterAction.id;
+            actionName = setterAction.name;
+            actionType = setterAction.actionType || "set";
+          } else {
+            actionId = `setter-${fId}`;
+            actionName = defaultSetterName;
+            actionType = "set";
+          }
+        }
       } else if (storeHandle.startsWith("store-field-in-") || storeHandle.startsWith("store-field-out-")) {
         const fId = storeHandle.replace(/^store-field-(in-|out-)/, "");
         const matchedField = storeFields.find((f: GlobalStoreField) => f.id === fId);
@@ -458,7 +488,9 @@ export function handleFrontendConnect({
             ? "populate-out"
             : actionType === "reset"
             ? "reset-out"
-            : actionId
+            : targetFieldId
+            ? `setter-out-${targetFieldId}`
+            : actionId && !actionId.startsWith("builtin-")
             ? `store-action-out-${actionId}`
             : "mutate-out";
 

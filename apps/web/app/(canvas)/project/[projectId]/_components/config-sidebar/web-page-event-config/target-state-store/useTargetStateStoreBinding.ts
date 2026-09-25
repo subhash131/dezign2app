@@ -123,7 +123,7 @@ export function useTargetStateStoreBinding({
       defaultActionType = "set";
       defaultTargetFieldId = firstField.id;
       defaultTargetFieldName = firstField.name;
-      storeSourceHandle = "mutate-out";
+      storeSourceHandle = `setter-out-${firstField.id}`;
     } else if (storeActions.length > 0) {
       const firstAct = storeActions[0]!;
       defaultActionId = firstAct.id;
@@ -174,7 +174,7 @@ export function useTargetStateStoreBinding({
         valuePath: undefined,
       };
     } else if (actionKey === "builtin-populate") {
-      storeSourceHandle = "mutate-out";
+      storeSourceHandle = "populate-out";
       updatedBinding = {
         ...storeBinding,
         actionId: "builtin-populate",
@@ -186,8 +186,8 @@ export function useTargetStateStoreBinding({
         parameterMappings: storeBinding.parameterMappings || {},
       };
     } else if (actionKey.startsWith("setter-")) {
-      storeSourceHandle = "mutate-out";
       const fieldId = actionKey.replace("setter-", "");
+      storeSourceHandle = `setter-out-${fieldId}`;
       const matchedField = fields.find((f) => f.id === fieldId);
       const fieldName = matchedField?.name || "field";
       const setterName = `set${toPascalCase(fieldName)}`;

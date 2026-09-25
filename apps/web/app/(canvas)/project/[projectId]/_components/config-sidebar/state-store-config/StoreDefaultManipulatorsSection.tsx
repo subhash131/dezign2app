@@ -198,8 +198,8 @@ export const StoreDefaultManipulatorsSection: React.FC<
         defaultName: defaultSetterName,
         currentAction: setterAction,
         targetField: f,
-        description: `Direct mutation setter for "${f.name}" (${f.type}). Wired to mutate handle or component triggers.`,
-        handleBadge: `mutate (mutate-in/out)`,
+        description: `Direct mutation setter for "${f.name}" (${f.type}). Wired to ${defaultSetterName} handle or component triggers.`,
+        handleBadge: `${defaultSetterName} (${defaultSetterName}-in/out)`,
         defaultCode: `// Set field value\nset({ ${f.name}: payload });`,
         snippets: [
           {

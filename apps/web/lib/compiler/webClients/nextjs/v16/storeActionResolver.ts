@@ -81,7 +81,8 @@ function extractActionIdFromHandle(handleId: string | null | undefined): string 
   if (
     handleId.startsWith("section-state-in-") ||
     handleId.startsWith("state-in-") ||
-    handleId.startsWith("store-state-")
+    handleId.startsWith("store-state-") ||
+    handleId.startsWith("setter-")
   ) {
     return null;
   }
@@ -186,13 +187,55 @@ function resolveStoreBindingFromHandle(
     }
   }
 
-  // 4. Mutate handle: mutate-out or mutate-in
+  // 4. Mutate / Setter handle: mutate-out, mutate-in, setter-out-${f.id}, setter-in-left-${f.id}
   if (
     storeHandleId === "mutate-out" ||
     storeHandleId === "mutate-in" ||
     storeHandleId === "mutate" ||
-    Boolean(storeHandleId?.startsWith("mutate-"))
+    Boolean(storeHandleId?.startsWith("mutate-")) ||
+    Boolean(storeHandleId?.startsWith("setter-"))
   ) {
+    let targetFieldId: string | undefined = undefined;
+    if (storeHandleId?.startsWith("setter-")) {
+      targetFieldId = storeHandleId.replace(/^setter-(in-left-|in-|out-)/, "");
+    } else if (
+      storeHandleId?.startsWith("mutate-out-") ||
+      storeHandleId?.startsWith("mutate-in-left-") ||
+      storeHandleId?.startsWith("mutate-in-")
+    ) {
+      targetFieldId = storeHandleId.replace(/^mutate-(in-left-|in-|out-)/, "");
+    }
+
+    const matchedField = targetFieldId
+      ? (storeFields || []).find((f) => f.id === targetFieldId)
+      : undefined;
+
+    if (matchedField) {
+      const cap = matchedField.name.charAt(0).toUpperCase() + matchedField.name.slice(1);
+      const defaultSetterName = `set${cap}`;
+      const matchedAction = (storeActions || []).find(
+        (a) =>
+          (a.defaultManipulatorType === "setter" && a.targetFieldId === matchedField.id) ||
+          (a.targetFieldId === matchedField.id && a.name.toLowerCase() === defaultSetterName.toLowerCase()),
+      );
+      if (matchedAction) {
+        return {
+          actionId: matchedAction.id,
+          actionName: matchedAction.name,
+          actionType: isValidStoreActionType(matchedAction.actionType) ? matchedAction.actionType : "set",
+          targetFieldId: matchedField.id,
+          targetFieldName: matchedField.name,
+        };
+      }
+      return {
+        actionId: `setter-${matchedField.id}`,
+        actionName: defaultSetterName,
+        actionType: "set",
+        targetFieldId: matchedField.id,
+        targetFieldName: matchedField.name,
+      };
+    }
+
     if (Array.isArray(storeActions) && storeActions.length > 0) {
       const matched =
         storeActions.find(
