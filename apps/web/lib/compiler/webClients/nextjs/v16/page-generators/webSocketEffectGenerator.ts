@@ -86,13 +86,17 @@ export function generateWebSocketEffects(
       .map((r) => `        if (ws.readyState === WebSocket.OPEN) { ws.send(JSON.stringify({ action: "leave", room: "${r}" })); }`)
       .join("\n");
 
-    const connsWithStores = conns.filter((c) => c.storeActionBinding?.storeName);
-    const storeDispatchStatements = connsWithStores
-      .map((c) => {
-        if (c.eventName && c.eventName !== "message") {
-          return `          if (evtName === "${c.eventName}") {\n  ${generateRealtimeStoreSnippet(c.storeActionBinding!, "evtData").trim()}\n          }`;
+    const storeDispatchStatements = conns
+      .flatMap((c) => {
+        const bindings = c.storeActionBindings || (c.storeActionBinding ? [c.storeActionBinding] : []);
+        return bindings.map((b) => ({ conn: c, binding: b }));
+      })
+      .filter(({ binding }) => Boolean(binding.storeName))
+      .map(({ conn, binding }) => {
+        if (conn.eventName && conn.eventName !== "message") {
+          return `          if (evtName === "${conn.eventName}") {\n  ${generateRealtimeStoreSnippet(binding, "evtData").trim()}\n          }`;
         }
-        return generateRealtimeStoreSnippet(c.storeActionBinding!, "evtData").trim();
+        return generateRealtimeStoreSnippet(binding, "evtData").trim();
       })
       .join("\n");
 

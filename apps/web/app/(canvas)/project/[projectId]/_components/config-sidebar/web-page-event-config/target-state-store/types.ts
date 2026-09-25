@@ -1,4 +1,4 @@
-import { BackendNode, UIEventItem, Endpoint, Schema } from "@/types/canvas";
+import { BackendNode, UIEventItem, Endpoint, Schema, StoreActionBinding } from "@/types/canvas";
 
 export function toPascalCase(str: string): string {
   const clean = str.trim();
@@ -24,10 +24,12 @@ export interface TargetStateStoreSectionProps {
   actionName: string;
   actionEvent?: string;
   storeBinding?: UIEventItem["storeActionBinding"];
+  storeBindings?: UIEventItem["storeActionBindings"];
   stateStoreNodes: BackendNode[];
   isEndpointConnected: boolean;
   connectedEndpointName?: string;
   connectedEndpoint?: Endpoint;
   eventRequestBody?: Schema;
-  onUpdateStoreBinding: (binding?: UIEventItem["storeActionBinding"]) => void;
+  onUpdateStoreBinding?: (binding?: UIEventItem["storeActionBinding"]) => void;
+  onUpdateStoreBindings?: (bindings: StoreActionBinding[]) => void;
 }

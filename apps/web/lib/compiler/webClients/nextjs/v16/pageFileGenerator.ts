@@ -287,9 +287,16 @@ export function generatePageAndComponentFiles({
       const isSingleLoadWithEndpoint = Boolean(firstPageLoadLink?.endpoint && effectiveServiceName && pageLoadEvents.length === 1);
 
       const storePopulationLines = pageLoadEvents
-        .filter((e) => e.storeActionBinding?.storeName)
-        .map((e) => {
-          const binding = e.storeActionBinding!;
+        .flatMap((e) => {
+          const bindings = e.storeActionBindings && e.storeActionBindings.length > 0
+            ? e.storeActionBindings
+            : e.storeActionBinding
+            ? [e.storeActionBinding]
+            : [];
+          return bindings.map((binding) => ({ e, binding }));
+        })
+        .filter(({ binding }) => Boolean(binding.storeName))
+        .map(({ e, binding }) => {
           const clean = binding.storeName!.replace(/Store$/i, "");
           const hookName = `use${clean.charAt(0).toUpperCase() + clean.slice(1)}Store`;
           const actionMethod = binding.actionName || "populate";
@@ -368,30 +375,36 @@ export function generatePageAndComponentFiles({
     const unmountActions = allActions.filter((a) => a.event === "unmount");
     const unmountCleanupsList: string[] = [];
     unmountActions.forEach((act) => {
-      const b = act.storeActionBinding;
-      if (b?.storeName) {
-        const clean = b.storeName.replace(/Store$/i, "");
-        const hookName = `use${clean.charAt(0).toUpperCase() + clean.slice(1)}Store`;
-        const method = b.actionName || (b.actionType === "reset" ? "reset" : "reset");
-        unmountCleanupsList.push(`${hookName}.getState().${method}();`);
-      }
+      const bindings = act.storeActionBindings && act.storeActionBindings.length > 0
+        ? act.storeActionBindings
+        : act.storeActionBinding
+        ? [act.storeActionBinding]
+        : [];
+      bindings.forEach((b) => {
+        if (b?.storeName) {
+          const clean = b.storeName.replace(/Store$/i, "");
+          const hookName = `use${clean.charAt(0).toUpperCase() + clean.slice(1)}Store`;
+          const method = b.actionName || (b.actionType === "reset" ? "reset" : "reset");
+          unmountCleanupsList.push(`${hookName}.getState().${method}();`);
+        }
+      });
     });
 
     const pageStoreNames = new Set<string>();
     pageLoadEvents.forEach((evt) => {
-      if (evt.storeActionBinding?.storeName) {
-        pageStoreNames.add(evt.storeActionBinding.storeName);
-      }
+      (evt.storeActionBindings || (evt.storeActionBinding ? [evt.storeActionBinding] : [])).forEach((b) => {
+        if (b?.storeName) pageStoreNames.add(b.storeName);
+      });
     });
     unmountActions.forEach((evt) => {
-      if (evt.storeActionBinding?.storeName) {
-        pageStoreNames.add(evt.storeActionBinding.storeName);
-      }
+      (evt.storeActionBindings || (evt.storeActionBinding ? [evt.storeActionBinding] : [])).forEach((b) => {
+        if (b?.storeName) pageStoreNames.add(b.storeName);
+      });
     });
     (pageMeta.realtimeConnections || []).forEach((c) => {
-      if (c.storeActionBinding?.storeName) {
-        pageStoreNames.add(c.storeActionBinding.storeName);
-      }
+      (c.storeActionBindings || (c.storeActionBinding ? [c.storeActionBinding] : [])).forEach((b) => {
+        if (b?.storeName) pageStoreNames.add(b.storeName);
+      });
     });
 
     const pageStoreImports = Array.from(pageStoreNames)

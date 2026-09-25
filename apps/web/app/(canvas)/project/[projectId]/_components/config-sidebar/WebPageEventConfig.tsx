@@ -482,13 +482,23 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
             actionName={eventName || item?.name || "action"}
             actionEvent={eventType || item?.event}
             storeBinding={item?.storeActionBinding}
+            storeBindings={item?.storeActionBindings}
             stateStoreNodes={nodes.filter((n) => n.type === "state_store")}
             isEndpointConnected={Boolean(linkedTargetNode && endpoint)}
             connectedEndpointName={endpoint?.name}
             connectedEndpoint={endpoint}
             eventRequestBody={item?.requestBody || requestBody}
+            onUpdateStoreBindings={(newBindings) =>
+              updateActionInParent({
+                storeActionBindings: newBindings,
+                storeActionBinding: newBindings[0] || undefined,
+              })
+            }
             onUpdateStoreBinding={(newBinding) =>
-              updateActionInParent({ storeActionBinding: newBinding })
+              updateActionInParent({
+                storeActionBinding: newBinding,
+                storeActionBindings: newBinding ? [newBinding] : [],
+              })
             }
           />
         )}

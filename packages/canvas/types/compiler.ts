@@ -2,7 +2,7 @@ import type { ReusableFunction, BackendNode } from "./nodes";
 import type { BackendEdge } from "./edges";
 import type { Endpoint } from "../schemas";
 import type { RealtimeProtocol } from "./realtime";
-import type { StoreActionType } from "./web-app";
+import type { StoreActionType, StoreActionBinding } from "./web-app";
 
 export interface ServiceInfo {
   id: string;
@@ -170,19 +170,8 @@ export interface LinkedRealtimeConnectionInfo {
   description?: string;
   sourceServicePort?: string;
   streamUrl?: string;
-  storeActionBinding?: {
-    storeNodeId?: string;
-    storeName?: string;
-    actionId?: string;
-    actionName?: string;
-    actionType?: StoreActionType;
-    targetFieldId?: string;
-    targetFieldName?: string;
-    updateSource?: "full_message" | "nested_property" | "static";
-    valuePath?: string;
-    customValue?: string;
-    parameterMappings?: Record<string, string>;
-  };
+  storeActionBinding?: StoreActionBinding;
+  storeActionBindings?: StoreActionBinding[];
 }
 
 export interface PageInfo {

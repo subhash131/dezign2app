@@ -116,7 +116,7 @@ export function generateSectionComponent(
   const hasStateObjects = Array.isArray(section.stateObjects) && section.stateObjects.length > 0;
 
   const boundStores = (section.actions || [])
-    .map((a) => a.storeActionBinding)
+    .flatMap((a) => a.storeActionBindings || (a.storeActionBinding ? [a.storeActionBinding] : []))
     .filter((b): b is NonNullable<typeof b> => Boolean(b && b.storeName));
   const hasStoreBindings = boundStores.length > 0;
 

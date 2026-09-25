@@ -462,6 +462,7 @@ export const pollingConfigConvexValidator = v.object({
 
 // Store Action Binding Validator (Used in Web Page Actions & Realtime Connections)
 export const storeActionBindingConvexValidator = v.object({
+  id: v.optional(v.string()),
   storeNodeId: v.optional(v.string()),
   actionId: v.optional(v.string()),
   storeName: v.optional(v.string()),
@@ -470,6 +471,7 @@ export const storeActionBindingConvexValidator = v.object({
     v.union(
       v.literal("set"),
       v.literal("append"),
+      v.literal("pop"),
       v.literal("remove"),
       v.literal("toggle"),
       v.literal("increment"),
@@ -536,6 +538,7 @@ export const webPageEventConvexValidator = v.object({
   webRtcConfig: v.optional(webRtcConfigConvexValidator),
   pollingConfig: v.optional(pollingConfigConvexValidator),
   storeActionBinding: v.optional(storeActionBindingConvexValidator),
+  storeActionBindings: v.optional(v.array(storeActionBindingConvexValidator)),
 });
 
 // Page State Object Validator
@@ -642,6 +645,7 @@ export const realtimeConnectionConvexValidator = v.object({
   sourceItemName: v.optional(v.string()),
   sourceItemType: v.optional(v.union(v.literal("endpoint"), v.literal("event"))),
   storeActionBinding: v.optional(storeActionBindingConvexValidator),
+  storeActionBindings: v.optional(v.array(storeActionBindingConvexValidator)),
 });
 
 // Web Page Node Data Validator
@@ -786,6 +790,7 @@ export const stateStoreConvexDataValidator = v.object({
         actionType: v.union(
           v.literal("set"),
           v.literal("append"),
+          v.literal("pop"),
           v.literal("remove"),
           v.literal("toggle"),
           v.literal("increment"),

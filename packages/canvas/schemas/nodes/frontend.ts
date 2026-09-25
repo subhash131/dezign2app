@@ -73,6 +73,7 @@ export const globalStoreActionSchema = z.object({
   actionType: z.enum([
     "set",
     "append",
+    "pop",
     "remove",
     "toggle",
     "increment",

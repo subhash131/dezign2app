@@ -181,6 +181,26 @@ export const pollingConfigSchema = z.object({
   stopOnError: z.boolean().optional(),
 });
 
+export const storeActionBindingSchema = z.object({
+  id: z.string().optional(),
+  storeNodeId: z.string().optional(),
+  actionId: z.string().optional(),
+  storeName: z.string().optional(),
+  actionName: z.string().optional(),
+  actionType: z
+    .enum(["set", "append", "pop", "remove", "toggle", "increment", "reset", "populate", "custom", "mutate"])
+    .optional(),
+  targetFieldId: z.string().optional(),
+  targetFieldName: z.string().optional(),
+  updateSource: z
+    .enum(["response", "response_property", "payload", "direct", "static", "full_message", "nested_property"])
+    .optional(),
+  valuePath: z.string().optional(),
+  customValue: z.string().optional(),
+  parameterMappings: z.record(z.string(), z.string()).optional(),
+  payloadExpr: z.string().optional(),
+});
+
 export const clientEventInputSchema = z.object({
   id: z.string().optional().describe("Unique identifier for this event"),
   name: z
@@ -228,26 +248,8 @@ export const clientEventInputSchema = z.object({
   wsConfig: wsConfigSchema.optional(),
   webRtcConfig: webRtcConfigSchema.optional(),
   pollingConfig: pollingConfigSchema.optional(),
-  storeActionBinding: z
-    .object({
-      storeNodeId: z.string().optional(),
-      actionId: z.string().optional(),
-      storeName: z.string().optional(),
-      actionName: z.string().optional(),
-      actionType: z
-        .enum(["set", "append", "remove", "toggle", "increment", "reset", "populate", "custom", "mutate"])
-        .optional(),
-      targetFieldId: z.string().optional(),
-      targetFieldName: z.string().optional(),
-      updateSource: z
-        .enum(["response", "response_property", "payload", "direct", "static"])
-        .optional(),
-      valuePath: z.string().optional(),
-      customValue: z.string().optional(),
-      parameterMappings: z.record(z.string(), z.string()).optional(),
-      payloadExpr: z.string().optional(),
-    })
-    .optional(),
+  storeActionBinding: storeActionBindingSchema.optional(),
+  storeActionBindings: z.array(storeActionBindingSchema).optional(),
 });
 
 export const webPageEventSchema = clientEventInputSchema;
@@ -320,25 +322,8 @@ export const realtimeConnectionSchema = z.object({
   sourceEventId: z.string().optional().describe("ID of source event or endpoint"),
   sourceItemName: z.string().optional().describe("Name of endpoint or event pushing this stream"),
   sourceItemType: z.enum(["endpoint", "event"]).optional().describe("Type of pipeline owner"),
-  storeActionBinding: z
-    .object({
-      storeNodeId: z.string().optional(),
-      actionId: z.string().optional(),
-      storeName: z.string().optional(),
-      actionName: z.string().optional(),
-      actionType: z
-        .enum(["set", "append", "remove", "toggle", "increment", "reset", "populate", "custom", "mutate"])
-        .optional(),
-      targetFieldId: z.string().optional(),
-      targetFieldName: z.string().optional(),
-      updateSource: z
-        .enum(["full_message", "nested_property", "static"])
-        .optional(),
-      valuePath: z.string().optional(),
-      customValue: z.string().optional(),
-      parameterMappings: z.record(z.string(), z.string()).optional(),
-    })
-    .optional(),
+  storeActionBinding: storeActionBindingSchema.optional(),
+  storeActionBindings: z.array(storeActionBindingSchema).optional(),
 });
 
 export const webPageDataSchema = simpleDataSchema.extend({
