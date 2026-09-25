@@ -26,10 +26,14 @@ import {
   CheckCircle2,
   Wrench,
   HelpCircle,
+  Zap,
 } from "lucide-react";
 import { GlobalStoreAction, GlobalStoreField, Parameter } from "@workspace/canvas/types";
 import { TypeCombobox } from "../TypeCombobox";
 import { cn } from "@workspace/ui/lib/utils";
+import { toast } from "sonner";
+import { generateActionCodePreview } from "./types";
+import { InlineActionTester } from "./InlineActionTester";
 
 export interface StoreDefaultManipulatorsSectionProps {
   fields: GlobalStoreField[];
@@ -362,6 +366,14 @@ export const StoreDefaultManipulatorsSection: React.FC<
                       {displayName}()
                     </span>
 
+                    <span className="text-[10px] font-mono text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded border border-cyan-500/20 hidden sm:inline">
+                      {item.type === "reset"
+                        ? `${displayName}()`
+                        : item.type === "populate"
+                        ? `${displayName}(data)`
+                        : `${displayName}(${item.targetField?.name || "value"})`}
+                    </span>
+
                     {/* Status Badge */}
                     {isDisabled ? (
                       <Badge
@@ -546,35 +558,57 @@ export const StoreDefaultManipulatorsSection: React.FC<
                     </div>
                   )}
 
-                  {/* Parameters / Arguments */}
-                  <div className="space-y-1.5 pt-1 border-t border-border/30">
+                  {/* ZONE 1: INPUTS (PARAMETERS) */}
+                  <div className="space-y-2 rounded-md p-2.5 bg-background/50 border border-border/60">
                     <div className="flex items-center justify-between">
-                      <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        Manipulator Arguments ({params.length})
-                      </Label>
+                      <div className="flex items-center gap-1.5">
+                        <Badge
+                          variant="outline"
+                          className="text-[9px] uppercase tracking-wider font-semibold border-cyan-500/40 text-cyan-500 bg-cyan-500/5 px-1 py-0"
+                        >
+                          Zone 1: Inputs
+                        </Badge>
+                        <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                          Manipulator Arguments ({params.length})
+                        </Label>
+                      </div>
                       <Button
                         type="button"
                         variant="ghost"
                         size="sm"
                         onClick={() => handleAddParam(item)}
-                        className="h-5 text-[10px] text-cyan-600 dark:text-cyan-400 hover:bg-cyan-500/10 p-1 cursor-pointer"
+                        className="h-5 text-[10px] text-cyan-600 dark:text-cyan-400 hover:bg-cyan-500/10 px-1.5 cursor-pointer"
                       >
-                        <Plus size={10} className="mr-0.5" /> Add Arg
+                        <Plus size={10} className="mr-0.5" /> Add Input Arg
                       </Button>
                     </div>
 
                     {params.length === 0 ? (
-                      <p className="text-[10px] text-muted-foreground/70 italic">
-                        Receives default{" "}
-                        <code>
-                          {item.type === "populate"
-                            ? "data (Partial<State>)"
-                            : item.type === "reset"
-                            ? "none"
-                            : "value"}
-                        </code>{" "}
-                        argument
-                      </p>
+                      <div className="p-2 rounded bg-muted/30 border border-border/40 flex items-center justify-between text-[10px] text-muted-foreground">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono text-foreground font-medium bg-muted px-1.5 py-0.5 rounded border border-border/60">
+                            {item.type === "populate"
+                              ? "data: Partial<State>"
+                              : item.type === "reset"
+                              ? "none ()"
+                              : `value: ${item.targetField?.type || "any"}`}
+                          </span>
+                          <span className="italic">
+                            {item.type === "reset"
+                              ? "(Takes no parameters; resets store state to defaults)"
+                              : "(Default parameter wired to canvas handles and triggers)"}
+                          </span>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleAddParam(item)}
+                          className="h-5 text-[9px] px-1.5"
+                        >
+                          Customize Inputs
+                        </Button>
+                      </div>
                     ) : (
                       <div className="space-y-1.5">
                         {params.map((param) => (
@@ -583,7 +617,7 @@ export const StoreDefaultManipulatorsSection: React.FC<
                               value={param.name}
                               onChange={(e) =>
                                 handleUpdateParam(item, param.id, {
-                                  name: e.target.value,
+                                  name: e.target.value.trim(),
                                 })
                               }
                               debounceMs={150}
@@ -602,7 +636,7 @@ export const StoreDefaultManipulatorsSection: React.FC<
                             <button
                               type="button"
                               onClick={() => handleRemoveParam(item, param.id)}
-                              className="p-1 text-muted-foreground hover:text-destructive cursor-pointer"
+                              className="p-1 text-muted-foreground hover:text-destructive cursor-pointer shrink-0"
                               title="Remove argument"
                             >
                               <Trash2 size={11} />
@@ -613,13 +647,40 @@ export const StoreDefaultManipulatorsSection: React.FC<
                     )}
                   </div>
 
-                  {/* Custom Logic Code Editor */}
-                  <div className="space-y-1.5 pt-1 border-t border-border/30">
+                  {/* ZONE 2: IMPLEMENTATION LOGIC (BODY) */}
+                  <div className="space-y-2 rounded-md p-2.5 bg-background/50 border border-border/60">
                     <div className="flex items-center justify-between">
-                      <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
-                        <Code2 size={11} className="text-cyan-400" />
-                        <span>Implementation Logic (TypeScript / JS)</span>
-                      </Label>
+                      <div className="flex items-center gap-1.5">
+                        <Badge
+                          variant="outline"
+                          className="text-[9px] uppercase tracking-wider font-semibold border-cyan-500/40 text-cyan-500 bg-cyan-500/5 px-1 py-0"
+                        >
+                          Zone 2: Body
+                        </Badge>
+                        <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                          <Code2 size={11} className="text-cyan-400" />
+                          <span>Implementation Logic (TypeScript / JS)</span>
+                        </Label>
+                      </div>
+                    </div>
+
+                    {/* Scope Bar */}
+                    <div className="p-1.5 rounded bg-muted/40 border border-border/40 text-[9px] text-muted-foreground font-mono flex items-center gap-1 flex-wrap">
+                      <span className="text-foreground/80 font-semibold uppercase text-[8px] tracking-wider">
+                        In Scope:
+                      </span>
+                      <code className="text-emerald-400 bg-emerald-500/10 px-1 rounded">
+                        set(patch | fn)
+                      </code>
+                      <code className="text-sky-400 bg-sky-500/10 px-1 rounded">get()</code>
+                      <code className="text-amber-400 bg-amber-500/10 px-1 rounded">
+                        {params.length > 0 ? params.map((p) => p.name).join(", ") : "payload"}
+                      </code>
+                      {item.type === "reset" && (
+                        <code className="text-purple-400 bg-purple-500/10 px-1 rounded">
+                          initialState
+                        </code>
+                      )}
                     </div>
 
                     {/* Quick Snippets Bar */}
@@ -660,34 +721,47 @@ export const StoreDefaultManipulatorsSection: React.FC<
                       className="min-h-[90px] font-mono text-[11px] bg-background/80 resize-y p-2 leading-relaxed border-border/80"
                     />
 
-                    <span className="text-[9px] text-muted-foreground block font-mono">
-                      Scope: <code>payload</code>, <code>set(updater)</code>, <code>get()</code>
-                      {item.type === "reset" && (
-                        <span>, <code>initialState</code></span>
-                      )}
-                    </span>
+                    {/* AI Prompt / Instruction */}
+                    <div className="space-y-1.5 pt-1.5 border-t border-border/30">
+                      <Label className="text-[10px] font-semibold text-muted-foreground flex items-center gap-1">
+                        <Sparkles size={11} className="text-amber-400" />
+                        <span>AI Prompt / Natural Language Instruction</span>
+                      </Label>
+                      <div className="flex items-center gap-1.5">
+                        <LocalInput
+                          value={item.currentAction?.prompt || ""}
+                          onChange={(e) =>
+                            onModifyDefaultManipulator(item.key, {
+                              name: displayName,
+                              actionType: currentActionType,
+                              targetFieldId: item.targetField?.id,
+                              code: currentCode,
+                              prompt: e.target.value,
+                            })
+                          }
+                          debounceMs={150}
+                          placeholder={`e.g. Customize ${displayName} behavior`}
+                          className="h-7 text-xs bg-background flex-1"
+                        />
+                      </div>
+                    </div>
                   </div>
 
-                  {/* AI Prompt */}
+                  {/* ZONE 3: TEST MANIPULATOR & STATE CHANGE */}
                   <div className="space-y-1">
-                    <Label className="text-[10px] font-semibold text-muted-foreground flex items-center gap-1">
-                      <Sparkles size={11} className="text-amber-400" />
-                      <span>AI Prompt / Instruction</span>
-                    </Label>
-                    <LocalInput
-                      value={item.currentAction?.prompt || ""}
-                      onChange={(e) =>
-                        onModifyDefaultManipulator(item.key, {
+                    <InlineActionTester
+                      action={
+                        item.currentAction || {
+                          id: `default-${item.key}`,
                           name: displayName,
                           actionType: currentActionType,
                           targetFieldId: item.targetField?.id,
                           code: currentCode,
-                          prompt: e.target.value,
-                        })
+                          parameters: params,
+                          defaultManipulatorType: item.type === "setter" ? "setter" : item.type,
+                        }
                       }
-                      debounceMs={150}
-                      placeholder={`e.g. Customize ${displayName} behavior`}
-                      className="h-7 text-xs bg-background"
+                      fields={fields}
                     />
                   </div>
 

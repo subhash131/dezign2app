@@ -1,6 +1,11 @@
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import type { CustomTypeItem, BackendNode } from "@/types/canvas";
 import { toast } from "sonner";
+import {
+  toPascalCase,
+  mapColumnsToTypeFields,
+  findDownstreamAffectedNodes,
+} from "./node";
 
 export interface FetchPackageTypesResponse {
   installed: boolean;
@@ -427,85 +432,6 @@ export function createExtendedTypeNode(sourceNodeId: string, sourceTypeId: strin
 // ─── Entity → TypesNode Auto-Generation ─────────────────────────────────────
 
 /**
- * Converts a snake_case or kebab-case entity/table name to PascalCase.
- * e.g. "user_profiles" → "UserProfiles", "order-items" → "OrderItems"
- */
-function toPascalCase(str: string): string {
-  return str
-    .replace(/[-_\s]+(.)?/g, (_, c: string | undefined) =>
-      c ? c.toUpperCase() : "",
-    )
-    .replace(/^(.)/, (c) => c.toUpperCase());
-}
-
-/**
- * Maps a database column type string to the closest TypeScript primitive/type.
- * Handles common SQL and NoSQL type names.
- */
-function mapColumnTypeToTS(colType: string): string {
-  const t = colType.toLowerCase().trim();
-
-  // String-like
-  if (
-    t.startsWith("varchar") ||
-    t === "text" ||
-    t === "char" ||
-    t === "string" ||
-    t === "uuid" ||
-    t === "bpchar" ||
-    t === "citext" ||
-    t === "tsvector" ||
-    t === "bytea"
-  )
-    return "string";
-
-  // Numeric
-  if (
-    t === "int" ||
-    t === "integer" ||
-    t === "int2" ||
-    t === "int4" ||
-    t === "int8" ||
-    t === "bigint" ||
-    t === "smallint" ||
-    t === "serial" ||
-    t === "bigserial" ||
-    t === "float" ||
-    t === "float4" ||
-    t === "float8" ||
-    t === "double precision" ||
-    t === "decimal" ||
-    t === "numeric" ||
-    t === "real" ||
-    t === "number"
-  )
-    return "number";
-
-  // Boolean
-  if (t === "bool" || t === "boolean") return "boolean";
-
-  // JSON
-  if (t === "json" || t === "jsonb") return "Record<string, string>";
-
-  // Date / time
-  if (
-    t === "timestamp" ||
-    t === "timestamptz" ||
-    t === "date" ||
-    t === "datetime" ||
-    t === "time" ||
-    t === "timetz" ||
-    t === "interval"
-  )
-    return "Date";
-
-  // Enum hint — caller handles enumValues directly
-  if (t === "enum") return "string";
-
-  return "string";
-}
-
-/**
  * Auto-generates a `TypesNode` on the backend canvas from an existing `EntityNode`.
  *
  * - Maps each `CanvasEntityColumn` → `CustomTypeItem` field with proper TS types.
@@ -528,48 +454,64 @@ export function createTypesNodeFromEntity(entityNodeId: string): void {
   // tableName and columns are directly typed optional fields — no casts needed.
   const tableName = entityNode.data.tableName || entityNode.data.label || "Entity";
   const columns = entityNode.data.columns ?? [];
-
   const now = Date.now();
+  const pascalName = toPascalCase(tableName);
+  const typeId = `type-entity-${entityNodeId}`;
 
-  // Map columns → CustomTypeItem fields
-  const fields = columns.map((col, i) => ({
-    id: `f-${now}-${i}-${col.name}`,
-    name: col.name,
-    type:
-      col.enumValues && col.enumValues.length > 0
-        ? col.enumValues.map((v) => `"${v}"`).join(" | ")
-        : mapColumnTypeToTS(col.type),
-    required:
-      Boolean(col.isNotNull) ||
-      Boolean(col.required) ||
-      Boolean(col.isPrimaryKey) ||
-      Boolean(col.isPrimary) ||
-      Boolean(col.primaryKey),
-    isArray: false,
-    description: col.description || `Column from ${tableName}`,
-  }));
+  // ── Idempotency: refresh if a linked TypesNode already exists ──────────────
+  const existing = store.nodes.find(
+    (n) => n.type === "types" && n.data.sourceEntityId === entityNodeId,
+  );
+
+  const existingType = (existing?.data.types ?? []).find((t) => t.id === typeId);
+  const fields = mapColumnsToTypeFields(
+    columns,
+    existingType?.fields ?? [],
+    tableName,
+    `f-${typeId}`,
+  );
 
   const typeItem: CustomTypeItem = {
-    id: `type-entity-${entityNodeId}`,
-    name: toPascalCase(tableName),
+    ...(existingType || {}),
+    id: typeId,
+    name: pascalName,
     kind: "interface",
     description: `Auto-generated TypeScript interface from entity: ${tableName}`,
     fields,
   };
 
-  // ── Idempotency: refresh if a linked TypesNode already exists ──────────────
-  // sourceEntityId is typed on CanvasTypesNodeData (part of BackendNodeData)
-  const existing = store.nodes.find(
-    (n) => n.type === "types" && n.data.sourceEntityId === entityNodeId,
-  );
-
   if (existing) {
     const existingTypes = existing.data.types ?? [];
-    const updatedTypes = existingTypes.filter((t) => t.id !== typeItem.id);
+    const updatedTypes = existingTypes.some((t) => t.id === typeItem.id)
+      ? existingTypes.map((t) => (t.id === typeItem.id ? typeItem : t))
+      : [...existingTypes, typeItem];
+
+    const downstreamNodes = findDownstreamAffectedNodes(
+      store.nodes,
+      store.edges,
+      [existing.id],
+    );
+
+    const affectedSummary = {
+      entityId: entityNodeId,
+      entityName: tableName,
+      updatedAt: now,
+      affectedNodes: downstreamNodes.map((d) => ({
+        id: d.id,
+        name: d.data.label || d.id,
+        type: d.type,
+      })),
+    };
+
     store.updateNode(existing.id, {
       data: {
         ...existing.data,
-        types: [...updatedTypes, typeItem],
+        label: `${pascalName} Types`,
+        sourceEntityId: entityNodeId,
+        sourceEntityName: tableName,
+        entityUpdatedAt: now,
+        entitySyncWarning: affectedSummary,
+        types: updatedTypes,
       },
     });
     store.setActiveConfigItem({
@@ -587,9 +529,11 @@ export function createTypesNodeFromEntity(entityNodeId: string): void {
   const pos = entityNode.position ?? { x: 100, y: 100 };
 
   const newNodeData: BackendNode["data"] = {
-    label: `${toPascalCase(tableName)} Types`,
+    label: `${pascalName} Types`,
     scope: "global",
     sourceEntityId: entityNodeId,
+    sourceEntityName: tableName,
+    entityUpdatedAt: now,
     types: [typeItem],
   };
 

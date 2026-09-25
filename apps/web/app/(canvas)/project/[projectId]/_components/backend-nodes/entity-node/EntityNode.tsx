@@ -17,6 +17,7 @@ import { ColumnList } from "./ColumnList";
 import { IndexList } from "./IndexList";
 import { VectorConfig } from "./VectorConfig";
 import { DbOperationsList } from "./DbOperationsList";
+import { EntityAffectedTypesBanner } from "./EntityAffectedTypesBanner";
 import { getUniqueNodeLabel } from "@workspace/canvas";
 import { NodeHeader } from "../graph-nodes/common";
 import { toast } from "sonner";
@@ -62,6 +63,45 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
   const isVector = data.dbType === "vector";
 
   const allNodes = useBackendCanvasStore((s) => s.nodes);
+  const edges = useBackendCanvasStore((s) => s.edges);
+
+  // Derived TypesNodes generated from or linked to this entity
+  const derivedTypesNodes = React.useMemo(() => {
+    return allNodes.filter(
+      (n) =>
+        n.type === "types" &&
+        (n.data?.sourceEntityId === id ||
+          n.data?.types?.some((t) => t.id === `type-entity-${id}`) ||
+          edges.some(
+            (e) =>
+              e.source === id &&
+              e.target === n.id &&
+              (e.type === "type-reference" || e.data?.label === "generates"),
+          )),
+    );
+  }, [allNodes, id, edges]);
+
+  // Downstream consumers of those derived TypesNodes
+  const affectedDownstreamNodes = React.useMemo(() => {
+    if (derivedTypesNodes.length === 0) return [];
+    const typesIds = new Set(derivedTypesNodes.map((n) => n.id));
+    const downstreamIds = new Set<string>();
+    for (const edge of edges) {
+      if (typesIds.has(edge.source) && !typesIds.has(edge.target) && edge.target !== id) {
+        downstreamIds.add(edge.target);
+      }
+    }
+    return allNodes.filter((n) => downstreamIds.has(n.id));
+  }, [derivedTypesNodes, edges, allNodes, id]);
+
+  const handleViewTypesNode = (nodeId: string) => {
+    setActiveConfigItem({
+      id: nodeId,
+      nodeId: nodeId,
+      type: "types",
+    });
+  };
+
   // List only SQL/relational/document database nodes
   const dbNodes = allNodes.filter(
     (n) => n.type === "database" && n.data?.dbEngine !== "redis",
@@ -217,6 +257,14 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
       {isVector && (
         <VectorConfig id={id} data={data} updateNode={updateNode} />
       )}
+
+      {/* Derived Types Warning Banner */}
+      <EntityAffectedTypesBanner
+        derivedTypesNodes={derivedTypesNodes}
+        affectedDownstreamNodes={affectedDownstreamNodes}
+        entityName={data.label || "Entity"}
+        onViewTypesNode={handleViewTypesNode}
+      />
 
       {/* Column List */}
       <ColumnList

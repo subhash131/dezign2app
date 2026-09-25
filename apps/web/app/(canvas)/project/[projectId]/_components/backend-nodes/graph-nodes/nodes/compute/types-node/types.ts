@@ -40,6 +40,15 @@ export interface TypesNodeInstallBannerProps {
   onRefresh: (e: React.MouseEvent) => void;
 }
 
+export interface TypesNodeEntityWarningBannerProps {
+  sourceEntityName: string;
+  sourceEntityId?: string;
+  affectedNodes: { id: string; name: string; type: string }[];
+  updatedAt?: number;
+  onViewEntity?: () => void;
+  onDismiss?: () => void;
+}
+
 export interface TypesNodeListProps {
   nodeId: string;
   isPackageNode: boolean;
