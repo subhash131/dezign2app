@@ -218,6 +218,14 @@ export interface CanvasExternalNodeData extends Partial<BaseNodeData> {
   }>;
 }
 
+export type {
+  StorageOperationKind,
+  StorageOperationParam,
+  StorageOperationBadge,
+  StorageOperationFunction,
+} from "./storage";
+import type { StorageOperationFunction } from "./storage";
+
 export interface CanvasStorageNodeData {
   storageProvider?: string;
   storageProviderOther?: string;
@@ -236,6 +244,7 @@ export interface CanvasStorageNodeData {
   forcePathStyle?: boolean;
   kmsKeyId?: string;
   buckets?: AnyMessagingResource[];
+  storageOperations?: StorageOperationFunction[];
 }
 
 /**

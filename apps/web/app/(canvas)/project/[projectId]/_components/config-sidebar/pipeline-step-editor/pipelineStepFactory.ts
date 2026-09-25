@@ -16,6 +16,10 @@ import {
 import { upsertDerivedConnection } from "./PushToClientStepSection";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { getEntityDbOperations } from "@/lib/utils/entityOperationsHelper";
+import {
+  getStorageOperations,
+  computeStorageOpBindings,
+} from "@/lib/utils/storageOperationsHelper";
 import { toFolderName, toTableName, toVarName } from "@/lib/compiler/utils";
 
 export interface CreateDefaultStepDraftParams {
@@ -35,6 +39,8 @@ export function getDefaultVariableName(type: StepType, stepNumber: number): stri
       return `dbResult${stepNumber}`;
     case "redis_operation":
       return `cachedResult${stepNumber}`;
+    case "storage_operation":
+      return `storageResult${stepNumber}`;
     case "kafka_publish":
       return `publishResult${stepNumber}`;
     case "service_call":
@@ -209,6 +215,34 @@ export function createDefaultStepDraft({
       name: varName,
       outputVariable: varName,
       inputBindings: [],
+    };
+  } else if (type === "storage_operation") {
+    const storageNodes = allNodes.filter((n) => n.type === "storage");
+    const firstStorage = storageNodes[0];
+    const targetStorageId = firstStorage?.id;
+    const buckets = firstStorage?.data?.buckets || [];
+    const firstBucket = buckets[0]?.name || "default-bucket";
+    const rawLabel = firstStorage?.data?.label || "storage";
+    const packageFolder = toFolderName(rawLabel) || "storage";
+
+    const ops = getStorageOperations(firstStorage);
+    const defaultOp = ops[0];
+    const varName = defaultOp?.kind === "presign_upload" ? "uploadUrl" : defaultVar;
+    const nextBindings = computeStorageOpBindings(defaultOp, [], firstBucket);
+
+    initialFields = {
+      name: defaultOp?.label || "Storage Operation",
+      storageNodeId: targetStorageId,
+      brokerNodeId: targetStorageId,
+      bucketId: firstBucket,
+      operationId: defaultOp?.id,
+      outputVariable: varName,
+      functionRef: {
+        name: defaultOp?.name || "getUploadPresignedUrl",
+        importPath: `@workspace/${packageFolder}/operations`,
+        signature: defaultOp?.signature,
+      },
+      inputBindings: nextBindings,
     };
   } else if (type === "external_call") {
     const extNodes = allNodes.filter((n) => n.type === "external");

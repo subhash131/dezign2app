@@ -102,10 +102,14 @@ describe("compileStorageNodes", () => {
     expect(ops!.content).toContain("export async function getDownloadPresignedUrl");
     expect(ops!.content).toContain("export async function uploadObject");
     expect(ops!.content).toContain("export async function deleteObject");
+    expect(ops!.content).toContain("export async function objectExists");
+    expect(ops!.content).toContain("export async function copyObject");
 
     // 7. reusableFunctions
     expect(result.reusableFunctions.some((rf) => rf.name === "getUploadPresignedUrl")).toBe(true);
     expect(result.reusableFunctions.some((rf) => rf.name === "uploadObject")).toBe(true);
+    expect(result.reusableFunctions.some((rf) => rf.name === "objectExists")).toBe(true);
+    expect(result.reusableFunctions.some((rf) => rf.name === "copyObject")).toBe(true);
   });
 
   it("handles MinIO / custom S3-compatible provider with custom endpoint and forcePathStyle", () => {

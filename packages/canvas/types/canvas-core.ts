@@ -152,6 +152,7 @@ export type ConfigItemType =
   | "vector_db_ref"
   | "realtimeConnection"
   | "state_store"
+  | "storage"
   | "types";
 
 export interface ActiveConfigItem {

@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { StorageNode } from "../StorageNode";
 import { BackendNode } from "@/types/canvas";
+import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 
 interface MockHandleProps {
   id?: string;
@@ -13,43 +14,13 @@ interface MockHandleProps {
   type?: string;
 }
 
-interface MockSelectProps {
-  children?: React.ReactNode;
-  value?: string;
-}
-
-interface MockSelectSubComponentProps {
-  children?: React.ReactNode;
-}
-
-interface MockSelectValueProps {
-  placeholder?: string;
-}
-
-interface MockSelectItemProps {
-  children?: React.ReactNode;
-  value?: string;
-}
-
 // Mock @xyflow/react
 vi.mock("@xyflow/react", () => ({
   Handle: ({ id, position, title, ...props }: MockHandleProps) => (
     <div data-testid={`handle-${id}`} data-position={position} title={title} {...props} />
   ),
   Position: { Left: "left", Right: "right", Top: "top", Bottom: "bottom" },
-}));
-
-// Mock @workspace/ui components
-vi.mock("@workspace/ui/components/select", () => ({
-  Select: ({ children, value }: MockSelectProps) => (
-    <div data-testid="select" data-value={value}>
-      {children}
-    </div>
-  ),
-  SelectTrigger: ({ children }: MockSelectSubComponentProps) => <button>{children}</button>,
-  SelectValue: ({ placeholder }: MockSelectValueProps) => <span>{placeholder}</span>,
-  SelectContent: ({ children }: MockSelectSubComponentProps) => <div>{children}</div>,
-  SelectItem: ({ children, value }: MockSelectItemProps) => <div data-value={value}>{children}</div>,
+  useUpdateNodeInternals: () => vi.fn(),
 }));
 
 // Mock simulation state
@@ -72,7 +43,6 @@ describe("StorageNode component", () => {
       label: "User Media Storage",
       description: "S3 storage for profile pictures and documents",
       storageProvider: "s3",
-      accessPolicy: "private",
       defaultRegion: "us-east-1",
       buckets: [
         {
@@ -105,7 +75,7 @@ describe("StorageNode component", () => {
     expect(egressHandle.getAttribute("data-position")).toBe("right");
   });
 
-  it("renders provider, access, and bucket count badges", () => {
+  it("renders provider and bucket count badges in the header", () => {
     render(
       <StorageNode
         id={mockNode.id}
@@ -117,7 +87,65 @@ describe("StorageNode component", () => {
     expect(screen.getByText("Storage")).toBeDefined();
     expect(screen.getByText("User Media Storage")).toBeDefined();
     expect(screen.getByText("s3")).toBeDefined();
-    expect(screen.getByText("private")).toBeDefined();
     expect(screen.getByText("1 bucket")).toBeDefined();
+  });
+
+  it("renders the Buckets list section with bucket items and handles", () => {
+    render(
+      <StorageNode
+        id={mockNode.id}
+        data={mockNode.data}
+        selected={false}
+      />,
+    );
+
+    // Buckets section header
+    expect(screen.getByText("Buckets")).toBeDefined();
+    // Bucket name item
+    expect(screen.getByText("avatars")).toBeDefined();
+    // Ingress handle for the avatars bucket
+    expect(screen.getByTestId("handle-buckets:in:bucket-avatars")).toBeDefined();
+    // Egress handle for the avatars bucket
+    expect(screen.getByTestId("handle-buckets:out:bucket-avatars")).toBeDefined();
+  });
+
+  it("does not render operations on the node (they belong to bucket config sidebar)", () => {
+    render(
+      <StorageNode
+        id={mockNode.id}
+        data={mockNode.data}
+        selected={false}
+      />,
+    );
+
+    // Node only has Buckets section; operations are managed in bucket sidebar
+    expect(screen.queryByText("Storage Operations")).toBeNull();
+    expect(screen.queryByText("getUploadPresignedUrl")).toBeNull();
+    expect(screen.queryByText("uploadObject")).toBeNull();
+  });
+
+  it("opens storage node config in sidebar when clicking configure button in header", () => {
+    const setActiveConfigItemSpy = vi.fn();
+    useBackendCanvasStore.setState({
+      setActiveConfigItem: setActiveConfigItemSpy,
+    });
+
+    render(
+      <StorageNode
+        id={mockNode.id}
+        data={mockNode.data}
+        selected={false}
+      />,
+    );
+
+    const configureBtn = screen.getByTitle("Configure Storage Node in Sidebar");
+    expect(configureBtn).toBeDefined();
+
+    fireEvent.click(configureBtn);
+    expect(setActiveConfigItemSpy).toHaveBeenCalledWith({
+      type: "storage",
+      id: "node-storage-1",
+      nodeId: "node-storage-1",
+    });
   });
 });

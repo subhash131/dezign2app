@@ -17,6 +17,7 @@ import { StepRowHeader } from "./StepRowHeader";
 import { TransformerStepSection } from "./TransformerStepSection";
 import { DbOperationStepSection } from "./DbOperationStepSection";
 import { RedisOperationStepSection } from "./RedisOperationStepSection";
+import { StorageOperationStepSection } from "./StorageOperationStepSection";
 import { KafkaPublishStepSection } from "./KafkaPublishStepSection";
 import { ServiceCallStepSection } from "./ServiceCallStepSection";
 import { ExternalCallStepSection } from "./ExternalCallStepSection";
@@ -41,6 +42,7 @@ const HAS_OUTPUT_VAR_TYPES = new Set<StepType>([
   "transform",
   "db_operation",
   "redis_operation",
+  "storage_operation",
   "kafka_publish",
   "service_call",
   "external_call",
@@ -197,6 +199,8 @@ const StepRowComponent = ({
                           ? `dbResult${index + 1}`
                           : v === "redis_operation"
                           ? `cachedResult${index + 1}`
+                          : v === "storage_operation"
+                          ? `storageResult${index + 1}`
                           : v === "kafka_publish"
                           ? `publishResult${index + 1}`
                           : v === "service_call"
@@ -446,6 +450,24 @@ const StepRowComponent = ({
                     >
                       {argumentBindingsSection}
                     </RedisOperationStepSection>
+                  );
+                }
+
+                if (step.type === "storage_operation") {
+                  return (
+                    <StorageOperationStepSection
+                      step={step}
+                      allNodes={allNodes}
+                      allEdges={allEdges}
+                      expectedArgs={expectedArgs}
+                      availableSources={availableSources}
+                      showAdvancedSettings={showAdvancedSettings}
+                      onToggleAdvancedSettings={() => setShowAdvancedSettings((v) => !v)}
+                      onChange={onChange}
+                      onAutoMapArguments={handleAutoMapArguments}
+                    >
+                      {argumentBindingsSection}
+                    </StorageOperationStepSection>
                   );
                 }
 

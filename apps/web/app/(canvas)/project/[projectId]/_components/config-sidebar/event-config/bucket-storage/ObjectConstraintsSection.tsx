@@ -92,7 +92,7 @@ export const ObjectConstraintsSection: React.FC<BucketStorageSectionProps> = ({
         </div>
         <LocalInput
           className="h-8 bg-background/50 text-xs font-mono"
-          placeholder="e.g. 50MB, 500MB, 2GB (leave blank for unlimited)"
+          placeholder="e.g. 250KB, 5MB, 50MB, 1GB (leave blank for unlimited)"
           value={item.maxFileSize || ""}
           onBlur={(e) => handleUpdate(item.id, { maxFileSize: e.target.value })}
         />

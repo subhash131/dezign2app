@@ -46,7 +46,11 @@ export const EventConfig: React.FC<EventConfigProps> = ({ id, nodeId }) => {
 
   return (
     <div className="flex flex-col gap-6 mt-6 pb-12">
-      <EventConfigHeader item={item} resourceArrayName={resourceArrayName} />
+      <EventConfigHeader
+        item={item}
+        resourceArrayName={resourceArrayName}
+        handleUpdate={handleUpdate}
+      />
 
       {item.variant !== "definition" && (
         <BrokerBindingConfig
@@ -81,16 +85,14 @@ export const EventConfig: React.FC<EventConfigProps> = ({ id, nodeId }) => {
         <BucketStorageConfig item={item} handleUpdate={handleUpdate} />
       )}
 
-      {!isCache && (
+      {!isCache && !isBucket && (
         <SchemaEditor
           title={
-            isBucket
-              ? "Metadata"
-              : isConsumed
-                ? "Expected Payload"
-                : isPublished
-                  ? "Payload Schema"
-                  : "Schema"
+            isConsumed
+              ? "Expected Payload"
+              : isPublished
+                ? "Payload Schema"
+                : "Schema"
           }
           schema={effectiveSchema}
           readOnly={isReadOnly}

@@ -24,6 +24,7 @@ interface MockSelectItemProps {
 }
 
 interface MockSwitchProps {
+  id?: string;
   checked?: boolean;
   onCheckedChange?: (checked: boolean) => void;
 }
@@ -53,10 +54,12 @@ vi.mock("@workspace/ui/components/select", () => ({
 }));
 
 vi.mock("@workspace/ui/components/switch", () => ({
-  Switch: ({ checked, onCheckedChange }: MockSwitchProps) => (
+  Switch: ({ id, checked, onCheckedChange }: MockSwitchProps) => (
     <input
+      id={id}
       type="checkbox"
       role="switch"
+      data-testid={id || "switch"}
       checked={Boolean(checked)}
       onChange={(e) => onCheckedChange?.(e.target.checked)}
     />
@@ -72,6 +75,29 @@ vi.mock("@workspace/ui/components/button", () => ({
     <button onClick={onClick} className={className}>
       {children}
     </button>
+  ),
+}));
+
+vi.mock("@workspace/ui/components/dialog", () => ({
+  Dialog: ({ children, open }: { children?: React.ReactNode; open?: boolean }) =>
+    open ? <div data-testid="storage-operation-dialog">{children}</div> : null,
+  DialogContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  DialogHeader: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  DialogTitle: ({ children }: { children?: React.ReactNode }) => <h2>{children}</h2>,
+  DialogDescription: ({ children }: { children?: React.ReactNode }) => <p>{children}</p>,
+  DialogFooter: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+}));
+
+vi.mock("@workspace/ui/components/tabs", () => ({
+  Tabs: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  TabsList: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  TabsTrigger: ({ children }: { children?: React.ReactNode }) => <button>{children}</button>,
+  TabsContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+}));
+
+vi.mock("../../../backend-nodes/graph-nodes/Editors", () => ({
+  SchemaEditor: ({ title }: { title?: string }) => (
+    <div data-testid="schema-editor">{title}</div>
   ),
 }));
 
@@ -93,16 +119,82 @@ describe("BucketStorageConfig component", () => {
     eventTriggers: ["s3:ObjectCreated:*"],
   };
 
-  it("renders status chips and configured options", () => {
+  it("renders status chips and configured sections", () => {
     const handleUpdate = vi.fn();
     render(<BucketStorageConfig item={baseItem} handleUpdate={handleUpdate} />);
 
-    // Renders title and provider
-    expect(screen.getByText("Bucket Configuration")).toBeDefined();
-    expect(screen.getByText("Storage Provider & Tier")).toBeDefined();
+    // Renders section titles
+    expect(screen.getByText("Object Metadata Schema")).toBeDefined();
+    expect(screen.getByText("Bucket Tier & Storage Class")).toBeDefined();
     expect(screen.getByText("Connectability & Access Control")).toBeDefined();
     expect(screen.getByText("CORS & Web Client Ingress")).toBeDefined();
+    expect(screen.getByText("Object Types & Size Limits")).toBeDefined();
     expect(screen.getByText("Bucket Event Notifications")).toBeDefined();
+  });
+
+  it("hides metadata fields by default when enableMetadata is false/undefined", () => {
+    const handleUpdate = vi.fn();
+    render(<BucketStorageConfig item={baseItem} handleUpdate={handleUpdate} />);
+
+    // SchemaEditor should not be visible when metadata is not enabled
+    expect(screen.queryByTestId("schema-editor")).toBeNull();
+
+    // Toggle switch is unchecked
+    const metadataSwitch = screen.getByTestId("enable-metadata-switch") as HTMLInputElement;
+    expect(metadataSwitch.checked).toBe(false);
+
+    // Clicking switch toggles enableMetadata to true
+    fireEvent.click(metadataSwitch);
+    expect(handleUpdate).toHaveBeenCalledWith(
+      "bucket-user-avatars",
+      expect.objectContaining({
+        enableMetadata: true,
+      }),
+    );
+  });
+
+  it("shows metadata fields when enableMetadata is true", () => {
+    const handleUpdate = vi.fn();
+    render(
+      <BucketStorageConfig
+        item={{ ...baseItem, enableMetadata: true }}
+        handleUpdate={handleUpdate}
+      />,
+    );
+
+    // SchemaEditor should now be visible
+    expect(screen.getByTestId("schema-editor")).toBeDefined();
+    expect(screen.getByText("Custom Metadata Fields")).toBeDefined();
+
+    // Toggle switch is checked
+    const metadataSwitch = screen.getByTestId("enable-metadata-switch") as HTMLInputElement;
+    expect(metadataSwitch.checked).toBe(true);
+
+    // Clicking switch toggles enableMetadata to false
+    fireEvent.click(metadataSwitch);
+    expect(handleUpdate).toHaveBeenCalledWith(
+      "bucket-user-avatars",
+      expect.objectContaining({
+        enableMetadata: false,
+      }),
+    );
+  });
+
+  it("supports KB preset file sizes like 250KB and 500KB", () => {
+    const handleUpdate = vi.fn();
+    render(<BucketStorageConfig item={baseItem} handleUpdate={handleUpdate} />);
+
+    // Verify 250KB preset is available
+    const preset250kb = screen.getByRole("button", { name: "250KB" });
+    expect(preset250kb).toBeDefined();
+
+    fireEvent.click(preset250kb);
+    expect(handleUpdate).toHaveBeenCalledWith(
+      "bucket-user-avatars",
+      expect.objectContaining({
+        maxFileSize: "250KB",
+      }),
+    );
   });
 
   it("toggles allowed operations", () => {
@@ -182,7 +274,7 @@ describe("BucketStorageConfig component", () => {
     expect(screen.getByText("Config Spec (JSON)")).toBeDefined();
     expect(screen.getByText(".env File")).toBeDefined();
     expect(screen.getByText(/import \{ S3Client.*\} from "@aws-sdk\/client-s3"/)).toBeDefined();
-    expect(screen.getByText(/user-avatars/)).toBeDefined();
+    expect(screen.getAllByText(/user-avatars/).length).toBeGreaterThan(0);
     expect(screen.getByText(/AWS_ACCESS_KEY_ID/)).toBeDefined();
   });
 });
