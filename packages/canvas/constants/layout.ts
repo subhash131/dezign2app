@@ -19,6 +19,10 @@ export const HEAD_NODE_TYPES = new Set<string>([
   "vector_db_ref",
   "storage_operation_ref",
   "storage_ref",
+  "bucket_ref",
+  "storage_bucket_ref",
+  "StorageBucketRefNode",
+  "StorageOperationRefNode",
 ]);
 
 export const TARGET_NODE_TYPES = new Set<string>([

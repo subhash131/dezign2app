@@ -65,6 +65,9 @@ export const nodeDataSchemas: Record<string, z.ZodSchema> = {
   storage_operation_ref: storageOperationRefDataSchema,
   storage_ref: storageOperationRefDataSchema,
   bucket_ref: storageOperationRefDataSchema,
+  storage_bucket_ref: storageOperationRefDataSchema,
+  StorageBucketRefNode: storageOperationRefDataSchema,
+  StorageOperationRefNode: storageOperationRefDataSchema,
   // New nodes
   worker: workerDataSchema,
   serverless: serverlessDataSchema,

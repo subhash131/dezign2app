@@ -46,5 +46,8 @@ export interface CanvasStorageOperationRefNodeData {
   operationId?: string;
   targetServiceId?: string;
   serviceNodeId?: string;
+  storageOperations?: StorageOperationFunction[];
 }
+
+export type CanvasStorageBucketRefNodeData = CanvasStorageOperationRefNodeData;
 

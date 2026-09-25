@@ -820,7 +820,14 @@ export function ensureStorageOperationRefConnection({
 
   // 1. Look for existing storage_operation_ref node associated with this serviceNodeId
   let refNode = allNodes.find((n) => {
-    if (n.type !== "storage_operation_ref" && n.type !== "storage_ref") return false;
+    if (
+      n.type !== "storage_operation_ref" &&
+      n.type !== "storage_ref" &&
+      n.type !== "bucket_ref" &&
+      n.type !== "storage_bucket_ref" &&
+      n.type !== "StorageBucketRefNode"
+    )
+      return false;
     const matchesStorage = !storageNodeId || n.data?.storageNodeId === storageNodeId;
     const matchesBucket =
       !bucketId || n.data?.bucketId === bucketId || n.data?.bucketName === bucketId;
@@ -836,7 +843,14 @@ export function ensureStorageOperationRefConnection({
   // If not found, check if an unattached storage_operation_ref matches bucket
   if (!refNode && bucketId) {
     refNode = allNodes.find((n) => {
-      if (n.type !== "storage_operation_ref" && n.type !== "storage_ref") return false;
+      if (
+        n.type !== "storage_operation_ref" &&
+        n.type !== "storage_ref" &&
+        n.type !== "bucket_ref" &&
+        n.type !== "storage_bucket_ref" &&
+        n.type !== "StorageBucketRefNode"
+      )
+        return false;
       const matchesBucket =
         n.data?.bucketId === bucketId || n.data?.bucketName === bucketId;
       if (!matchesBucket) return false;
@@ -868,6 +882,9 @@ export function ensureStorageOperationRefConnection({
       (n) =>
         n.type === "storage_operation_ref" ||
         n.type === "storage_ref" ||
+        n.type === "bucket_ref" ||
+        n.type === "storage_bucket_ref" ||
+        n.type === "StorageBucketRefNode" ||
         n.type === "db_ref" ||
         n.type === "redis-cache",
     );
@@ -908,14 +925,18 @@ export function ensureStorageOperationRefConnection({
       (b) => b.id === effectiveBucket || b.name === effectiveBucket,
     );
     const resolvedBucketId = bucketObj?.id || effectiveBucket;
-    const refSourceHandle = `bucket:out:${resolvedBucketId}`;
+    const refSourceHandle = `buckets:out:${resolvedBucketId}`;
+    const legacyRefSourceHandle = `bucket:out:${resolvedBucketId}`;
     const refTargetHandle = "storage-ref-header";
 
     const hasRefEdge = store.edges.some(
       (e) =>
         (e.type === "storage-reference" || e.type === "reference") &&
         e.source === effectiveStorageId &&
-        e.target === refNode!.id,
+        e.target === refNode!.id &&
+        (e.sourceHandle === refSourceHandle ||
+          e.sourceHandle === legacyRefSourceHandle ||
+          !e.sourceHandle),
     );
     if (!hasRefEdge) {
       store.addEdge({
@@ -1035,7 +1056,14 @@ export function cleanupStorageOperationRefConnection({
   );
 
   const matchingRefNodes = store.nodes.filter((n) => {
-    if (n.type !== "storage_operation_ref" && n.type !== "storage_ref") return false;
+    if (
+      n.type !== "storage_operation_ref" &&
+      n.type !== "storage_ref" &&
+      n.type !== "bucket_ref" &&
+      n.type !== "storage_bucket_ref" &&
+      n.type !== "StorageBucketRefNode"
+    )
+      return false;
     const matchesStorage = !storageNodeId || n.data?.storageNodeId === storageNodeId;
     const matchesBucket =
       !bucketId || n.data?.bucketId === bucketId || n.data?.bucketName === bucketId;

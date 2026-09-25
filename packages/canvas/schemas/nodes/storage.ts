@@ -1,46 +1,27 @@
 import { z } from "zod";
-import { baseNodeDataSchema, resourceItemSchema } from "./base";
+import {
+  baseNodeDataSchema,
+  resourceItemSchema,
+  storageOperationKindSchema,
+  storageOperationParamSchema,
+  storageOperationBadgeSchema,
+  storageOperationFunctionSchema,
+  storageOperationRefDataSchema,
+  storageBucketRefDataSchema,
+  storageOperationRefDataInputSchema,
+  storageBucketRefDataInputSchema,
+} from "./base";
 
-export const storageOperationKindSchema = z.enum([
-  "presign_upload",
-  "presign_download",
-  "upload",
-  "download",
-  "delete",
-  "batch_delete",
-  "list",
-  "exists",
-  "copy",
-]);
-
-export const storageOperationParamSchema = z.object({
-  name: z.string(),
-  type: z.string(),
-  required: z.boolean().optional(),
-  defaultValue: z.string().optional(),
-  description: z.string().optional(),
-});
-
-export const storageOperationBadgeSchema = z.object({
-  label: z.string(),
-  colorClass: z.string(),
-});
-
-export const storageOperationFunctionSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  label: z.string().optional(),
-  kind: storageOperationKindSchema,
-  description: z.string().optional(),
-  signature: z.string().optional(),
-  returnType: z.string().optional(),
-  params: z.array(storageOperationParamSchema).optional(),
-  badge: storageOperationBadgeSchema.optional(),
-  enabled: z.boolean().optional(),
-  isCustom: z.boolean().optional(),
-  code: z.string().optional(),
-  defaultBucket: z.string().optional(),
-});
+export {
+  storageOperationKindSchema,
+  storageOperationParamSchema,
+  storageOperationBadgeSchema,
+  storageOperationFunctionSchema,
+  storageOperationRefDataSchema,
+  storageBucketRefDataSchema,
+  storageOperationRefDataInputSchema,
+  storageBucketRefDataInputSchema,
+};
 
 export const storageDataSchema = baseNodeDataSchema
   .extend({

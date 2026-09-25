@@ -15,6 +15,8 @@ import {
   redisStreamsDataSchema,
   redisCacheDataSchema,
   storageDataSchema,
+  storageOperationRefDataSchema,
+  storageBucketRefDataSchema,
   edgeDataSchema,
   simulationTestCaseSchema,
   // New nodes
@@ -874,6 +876,7 @@ export const backendNodeDataValidator = v.union(
   zodToConvex(redisStreamsDataSchema),
   zodToConvex(redisCacheDataSchema),
   zodToConvex(storageDataSchema),
+  zodToConvex(storageOperationRefDataSchema),
   zodToConvex(workerDataSchema),
   zodToConvex(safeServerlessDataSchema),
   zodToConvex(searchIndexDataSchema),
@@ -922,6 +925,12 @@ export const backendNodeDataValidator = v.union(
     installError: v.optional(v.string()),
     isReadOnly: v.optional(v.boolean()),
     stackOrder: v.optional(v.number()),
+    storageNodeId: v.optional(v.string()),
+    storageProvider: v.optional(v.string()),
+    bucketId: v.optional(v.string()),
+    bucketName: v.optional(v.string()),
+    operationId: v.optional(v.string()),
+    storageOperations: v.optional(v.array(v.any())),
   }),
 );
 
@@ -938,4 +947,11 @@ export const backendEventDataValidator = zodToConvex(
 export const backendDatabaseDataValidator = zodToConvex(databaseDataSchema);
 
 export const backendEntityDataValidator = zodToConvex(entityDataSchema);
+
+export const backendStorageOperationRefDataValidator = zodToConvex(
+  storageOperationRefDataSchema,
+);
+
+export const backendStorageBucketRefDataValidator =
+  backendStorageOperationRefDataValidator;
 

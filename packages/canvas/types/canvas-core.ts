@@ -156,6 +156,9 @@ export type ConfigItemType =
   | "storage_ref"
   | "storage_operation_ref"
   | "bucket_ref"
+  | "storage_bucket_ref"
+  | "StorageBucketRefNode"
+  | "StorageOperationRefNode"
   | "types";
 
 export interface ActiveConfigItem {

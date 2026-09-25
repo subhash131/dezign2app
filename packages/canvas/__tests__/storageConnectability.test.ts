@@ -67,4 +67,64 @@ describe("Storage and Bucket Connectability Taxonomy", () => {
     );
     expect(pageToBucket.valid).toBe(true);
   });
+
+  it("recognizes StorageBucketRefNode and related types in isBackendNode", async () => {
+    const { isBackendNode } = await import("../utils");
+    expect(isBackendNode("storage_operation_ref")).toBe(true);
+    expect(isBackendNode("storage_ref")).toBe(true);
+    expect(isBackendNode("bucket_ref")).toBe(true);
+    expect(isBackendNode("storage_bucket_ref")).toBe(true);
+    expect(isBackendNode("StorageBucketRefNode")).toBe(true);
+    expect(isBackendNode("StorageOperationRefNode")).toBe(true);
+  });
+
+  it("validates connections to StorageBucketRefNode / storage reference nodes", () => {
+    // 1. Storage bucket -> StorageBucketRefNode header (storage-reference edge)
+    const bucketToRef = isValidConnection(
+      "storage",
+      "buckets:out:b-uploads",
+      "StorageBucketRefNode",
+      "storage-ref-header",
+    );
+    expect(bucketToRef.valid).toBe(true);
+    if (bucketToRef.valid) {
+      expect(bucketToRef.edgeType).toBe("storage-reference");
+    }
+
+    // 2. Storage bucket (singular prefix) -> bucket_ref header
+    const singularBucketToRef = isValidConnection(
+      "storage",
+      "bucket:out:b-uploads",
+      "bucket_ref",
+      "storage-ref-header",
+    );
+    expect(singularBucketToRef.valid).toBe(true);
+    if (singularBucketToRef.valid) {
+      expect(singularBucketToRef.edgeType).toBe("storage-reference");
+    }
+
+    // 3. Service endpoint -> storage_operation_ref function handle
+    const endpointToRefOp = isValidConnection(
+      "service",
+      "endpoint-out-ep1",
+      "storage_operation_ref",
+      "func-uploadObject",
+    );
+    expect(endpointToRefOp.valid).toBe(true);
+    if (endpointToRefOp.valid) {
+      expect(endpointToRefOp.edgeType).toBe("connection");
+    }
+
+    // 4. Service endpoint -> StorageBucketRefNode function handle
+    const endpointToBucketRefNode = isValidConnection(
+      "service",
+      "endpoint-out-ep1",
+      "StorageBucketRefNode",
+      "func-uploadObject",
+    );
+    expect(endpointToBucketRefNode.valid).toBe(true);
+    if (endpointToBucketRefNode.valid) {
+      expect(endpointToBucketRefNode.edgeType).toBe("connection");
+    }
+  });
 });

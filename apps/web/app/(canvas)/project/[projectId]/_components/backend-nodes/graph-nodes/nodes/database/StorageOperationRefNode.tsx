@@ -135,7 +135,8 @@ export const StorageOperationRefNode = ({
       (b) => b.id === selectedBucket || b.name === selectedBucket,
     );
     const bucketId = bucketObj?.id || selectedBucket;
-    const sourceHandle = `bucket:out:${bucketId}`;
+    const sourceHandle = `buckets:out:${bucketId}`;
+    const legacySourceHandle = `bucket:out:${bucketId}`;
     const targetHandle = "storage-ref-header";
 
     const exists = edges.some(
@@ -143,7 +144,9 @@ export const StorageOperationRefNode = ({
         (e.type === "storage-reference" || e.type === "reference") &&
         e.source === activeStorageNode.id &&
         e.target === id &&
-        (e.sourceHandle === sourceHandle || !e.sourceHandle),
+        (e.sourceHandle === sourceHandle ||
+          e.sourceHandle === legacySourceHandle ||
+          !e.sourceHandle),
     );
 
     if (!exists) {
@@ -153,7 +156,9 @@ export const StorageOperationRefNode = ({
           (e) =>
             (e.type === "storage-reference" || e.type === "reference") &&
             e.target === id &&
-            (e.source !== activeStorageNode.id || e.sourceHandle !== sourceHandle),
+            (e.source !== activeStorageNode.id ||
+              (e.sourceHandle !== sourceHandle &&
+                e.sourceHandle !== legacySourceHandle)),
         )
         .forEach((e) => deleteEdge(e.id));
 
