@@ -200,6 +200,36 @@ export function useTargetStateStoreBinding({
         targetFieldName: fieldName,
         updateSource: isEndpointConnected ? "response" : "payload",
       };
+    } else if (actionKey.startsWith("append-")) {
+      const fieldId = actionKey.replace("append-", "");
+      storeSourceHandle = `append-out-${fieldId}`;
+      const matchedField = fields.find((f) => f.id === fieldId);
+      const fieldName = matchedField?.name || "field";
+      const appendName = `append${toPascalCase(fieldName)}`;
+      updatedBinding = {
+        ...storeBinding,
+        actionId: actionKey,
+        actionName: appendName,
+        actionType: "append",
+        targetFieldId: fieldId,
+        targetFieldName: fieldName,
+        updateSource: isEndpointConnected ? "response" : "payload",
+      };
+    } else if (actionKey.startsWith("pop-")) {
+      const fieldId = actionKey.replace("pop-", "");
+      storeSourceHandle = `pop-out-${fieldId}`;
+      const matchedField = fields.find((f) => f.id === fieldId);
+      const fieldName = matchedField?.name || "field";
+      const popName = `pop${toPascalCase(fieldName)}`;
+      updatedBinding = {
+        ...storeBinding,
+        actionId: actionKey,
+        actionName: popName,
+        actionType: "remove",
+        targetFieldId: fieldId,
+        targetFieldName: fieldName,
+        updateSource: "direct",
+      };
     } else {
       // Custom action
       const matchedAct = customActions.find((a) => a.id === actionKey);

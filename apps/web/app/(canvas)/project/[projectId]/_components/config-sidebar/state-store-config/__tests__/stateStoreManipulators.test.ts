@@ -376,6 +376,49 @@ describe("stateStoreManipulators", () => {
       });
       expect(reservedRes.errors.some((e) => e.includes("conflicts with store scope"))).toBe(true);
     });
+
+    it("automatically adds append and pop as default manipulators when a field is an array", () => {
+      const fieldsWithArray: GlobalStoreField[] = [
+        { id: "f1", name: "count", type: "number", defaultValue: 0 },
+        { id: "f2", name: "messages", type: "array", defaultValue: [] },
+      ];
+
+      const manipulators = getStateManipulators(fieldsWithArray, []);
+      const names = manipulators.map((m) => m.name);
+
+      expect(names).toContain("setMessages");
+      expect(names).toContain("appendMessages");
+      expect(names).toContain("popMessages");
+
+      const appendManipulator = manipulators.find((m) => m.name === "appendMessages");
+      expect(appendManipulator?.actionType).toBe("append");
+      expect(appendManipulator?.defaultManipulatorType).toBe("append");
+      expect(appendManipulator?.isCustomized).toBe(false);
+
+      const popManipulator = manipulators.find((m) => m.name === "popMessages");
+      expect(popManipulator?.actionType).toBe("remove");
+      expect(popManipulator?.defaultManipulatorType).toBe("pop");
+      expect(popManipulator?.isCustomized).toBe(false);
+
+      // Test execution with applyManipulator
+      let state: Record<string, any> = { count: 0, messages: ["hello"] };
+
+      const appendRes = applyManipulator({
+        manipulator: appendManipulator!,
+        payload: "world",
+        currentState: state,
+        fields: fieldsWithArray,
+      });
+      expect(appendRes.newState.messages).toEqual(["hello", "world"]);
+
+      const popRes = applyManipulator({
+        manipulator: popManipulator!,
+        payload: undefined,
+        currentState: appendRes.newState,
+        fields: fieldsWithArray,
+      });
+      expect(popRes.newState.messages).toEqual(["hello"]);
+    });
   });
 });
 

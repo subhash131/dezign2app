@@ -430,6 +430,62 @@ export function handleFrontendConnect({
             actionType = "set";
           }
         }
+      } else if (
+        storeHandle.startsWith("append-in-left-") ||
+        storeHandle.startsWith("append-in-") ||
+        storeHandle.startsWith("append-out-")
+      ) {
+        const fId = storeHandle.replace(/^append-(in-left-|in-|out-)/, "");
+        const matchedField = storeFields.find((f: GlobalStoreField) => f.id === fId);
+        if (matchedField) {
+          targetFieldId = matchedField.id;
+          targetFieldName = matchedField.name;
+          const cap = matchedField.name.charAt(0).toUpperCase() + matchedField.name.slice(1);
+          const defaultAppendName = `append${cap}`;
+          const appendAction = storeActions.find(
+            (a: GlobalStoreAction) =>
+              (a.defaultManipulatorType === "append" && a.targetFieldId === fId) ||
+              ((a.name.toLowerCase() === defaultAppendName.toLowerCase() || a.actionType === "append") &&
+                (!a.targetFieldId || a.targetFieldId === fId)),
+          );
+          if (appendAction) {
+            actionId = appendAction.id;
+            actionName = appendAction.name;
+            actionType = appendAction.actionType || "append";
+          } else {
+            actionId = `append-${fId}`;
+            actionName = defaultAppendName;
+            actionType = "append";
+          }
+        }
+      } else if (
+        storeHandle.startsWith("pop-in-left-") ||
+        storeHandle.startsWith("pop-in-") ||
+        storeHandle.startsWith("pop-out-")
+      ) {
+        const fId = storeHandle.replace(/^pop-(in-left-|in-|out-)/, "");
+        const matchedField = storeFields.find((f: GlobalStoreField) => f.id === fId);
+        if (matchedField) {
+          targetFieldId = matchedField.id;
+          targetFieldName = matchedField.name;
+          const cap = matchedField.name.charAt(0).toUpperCase() + matchedField.name.slice(1);
+          const defaultPopName = `pop${cap}`;
+          const popAction = storeActions.find(
+            (a: GlobalStoreAction) =>
+              (a.defaultManipulatorType === "pop" && a.targetFieldId === fId) ||
+              (a.name.toLowerCase() === defaultPopName.toLowerCase() &&
+                (!a.targetFieldId || a.targetFieldId === fId)),
+          );
+          if (popAction) {
+            actionId = popAction.id;
+            actionName = popAction.name;
+            actionType = popAction.actionType || "remove";
+          } else {
+            actionId = `pop-${fId}`;
+            actionName = defaultPopName;
+            actionType = "remove";
+          }
+        }
       } else if (storeHandle.startsWith("store-field-in-") || storeHandle.startsWith("store-field-out-")) {
         const fId = storeHandle.replace(/^store-field-(in-|out-)/, "");
         const matchedField = storeFields.find((f: GlobalStoreField) => f.id === fId);
@@ -488,6 +544,10 @@ export function handleFrontendConnect({
             ? "populate-out"
             : actionType === "reset"
             ? "reset-out"
+            : actionType === "append" && targetFieldId
+            ? `append-out-${targetFieldId}`
+            : actionType === "remove" && targetFieldId
+            ? `pop-out-${targetFieldId}`
             : targetFieldId
             ? `setter-out-${targetFieldId}`
             : actionId && !actionId.startsWith("builtin-")

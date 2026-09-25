@@ -82,7 +82,9 @@ function extractActionIdFromHandle(handleId: string | null | undefined): string 
     handleId.startsWith("section-state-in-") ||
     handleId.startsWith("state-in-") ||
     handleId.startsWith("store-state-") ||
-    handleId.startsWith("setter-")
+    handleId.startsWith("setter-") ||
+    handleId.startsWith("append-") ||
+    handleId.startsWith("pop-")
   ) {
     return null;
   }
@@ -268,6 +270,76 @@ function resolveStoreBindingFromHandle(
       actionName: setterName,
       actionType: "set",
     };
+  }
+
+  // 4b. Append handle: append-out-${f.id}, append-in-left-${f.id}, append-in-${f.id}
+  if (Boolean(storeHandleId?.startsWith("append-"))) {
+    const targetFieldId = storeHandleId!.replace(/^append-(in-left-|in-|out-)?/, "");
+    const matchedField = targetFieldId
+      ? (storeFields || []).find((f) => f.id === targetFieldId)
+      : undefined;
+
+    if (matchedField) {
+      const cap = matchedField.name.charAt(0).toUpperCase() + matchedField.name.slice(1);
+      const defaultAppendName = `append${cap}`;
+      const matchedAction = (storeActions || []).find(
+        (a) =>
+          (a.defaultManipulatorType === "append" && a.targetFieldId === matchedField.id) ||
+          ((a.name.toLowerCase() === defaultAppendName.toLowerCase() || a.actionType === "append") &&
+            (!a.targetFieldId || a.targetFieldId === matchedField.id)),
+      );
+      if (matchedAction) {
+        return {
+          actionId: matchedAction.id,
+          actionName: matchedAction.name,
+          actionType: isValidStoreActionType(matchedAction.actionType) ? matchedAction.actionType : "append",
+          targetFieldId: matchedField.id,
+          targetFieldName: matchedField.name,
+        };
+      }
+      return {
+        actionId: `append-${matchedField.id}`,
+        actionName: defaultAppendName,
+        actionType: "append",
+        targetFieldId: matchedField.id,
+        targetFieldName: matchedField.name,
+      };
+    }
+  }
+
+  // 4c. Pop handle: pop-out-${f.id}, pop-in-left-${f.id}, pop-in-${f.id}
+  if (Boolean(storeHandleId?.startsWith("pop-"))) {
+    const targetFieldId = storeHandleId!.replace(/^pop-(in-left-|in-|out-)?/, "");
+    const matchedField = targetFieldId
+      ? (storeFields || []).find((f) => f.id === targetFieldId)
+      : undefined;
+
+    if (matchedField) {
+      const cap = matchedField.name.charAt(0).toUpperCase() + matchedField.name.slice(1);
+      const defaultPopName = `pop${cap}`;
+      const matchedAction = (storeActions || []).find(
+        (a) =>
+          (a.defaultManipulatorType === "pop" && a.targetFieldId === matchedField.id) ||
+          (a.name.toLowerCase() === defaultPopName.toLowerCase() &&
+            (!a.targetFieldId || a.targetFieldId === matchedField.id)),
+      );
+      if (matchedAction) {
+        return {
+          actionId: matchedAction.id,
+          actionName: matchedAction.name,
+          actionType: isValidStoreActionType(matchedAction.actionType) ? matchedAction.actionType : "remove",
+          targetFieldId: matchedField.id,
+          targetFieldName: matchedField.name,
+        };
+      }
+      return {
+        actionId: `pop-${matchedField.id}`,
+        actionName: defaultPopName,
+        actionType: "remove",
+        targetFieldId: matchedField.id,
+        targetFieldName: matchedField.name,
+      };
+    }
   }
 
   // 5. Generic fallback based on pageAction event

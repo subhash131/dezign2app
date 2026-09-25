@@ -81,6 +81,14 @@ export function getLayoutNodeData(node: LayoutNode): NodeHandleData | undefined 
     "sections" in node.data && Array.isArray(node.data.sections)
       ? (node.data.sections as NodeHandleData["sections"])
       : undefined;
+  const fields =
+    "fields" in node.data && Array.isArray(node.data.fields)
+      ? node.data.fields
+      : undefined;
+  const actions =
+    "actions" in node.data && Array.isArray(node.data.actions)
+      ? node.data.actions
+      : undefined;
 
   return {
     endpoints,
@@ -90,6 +98,8 @@ export function getLayoutNodeData(node: LayoutNode): NodeHandleData | undefined 
     publishedEvents,
     zones,
     sections,
+    fields,
+    actions,
   };
 }
 
@@ -153,10 +163,11 @@ export function getNodeDimensions(node: LayoutNode): {
       return { width: 280, height: 80 };
     case "state_store": {
       const data = getLayoutNodeData(node);
-      const fields = Array.isArray(data?.fields) ? data.fields.length : 1;
+      const fields = Array.isArray(data?.fields) ? data.fields : [];
+      const arrayFieldsCount = fields.filter((f: any) => Boolean(f?.isArray || f?.type === "array" || f?.type?.endsWith("[]"))).length;
       const actions = Array.isArray(data?.actions) ? data.actions.length : 0;
-      const manipulatorsCount = 2 + fields + actions;
-      const estHeight = Math.max(160, 75 + 24 + fields * 28 + 24 + manipulatorsCount * 24);
+      const manipulatorsCount = 2 + fields.length + arrayFieldsCount * 2 + actions;
+      const estHeight = Math.max(160, 75 + 24 + fields.length * 28 + 24 + manipulatorsCount * 24);
       return { width: 260, height: estHeight };
     }
     case "end":
@@ -404,15 +415,59 @@ export function getHandleYRatio(
       const targetY = 75 + 24 + fields.length * 28 + 24 + 12;
       return Math.min(0.95, Math.max(0.05, targetY / height));
     }
-    if (handleId.startsWith("setter-") || handleId.startsWith("mutate-")) {
-      const fId = handleId.replace(/^(setter-|mutate-)(in-left-|in-|out-)?/, "");
-      const idx = fields.findIndex((f: any) => f && f.id === fId);
-      const setterIdx = idx !== -1 ? idx : 0;
-      const targetY = 75 + 24 + fields.length * 28 + 24 + 24 + setterIdx * 24 + 12;
+    if (
+      handleId.startsWith("setter-") ||
+      handleId.startsWith("mutate-") ||
+      handleId.startsWith("append-") ||
+      handleId.startsWith("pop-")
+    ) {
+      let handleType: "setter" | "append" | "pop" = "setter";
+      let fId = "";
+      if (handleId.startsWith("append-")) {
+        handleType = "append";
+        fId = handleId.replace(/^append-(in-left-|in-|out-)?/, "");
+      } else if (handleId.startsWith("pop-")) {
+        handleType = "pop";
+        fId = handleId.replace(/^pop-(in-left-|in-|out-)?/, "");
+      } else {
+        handleType = "setter";
+        fId = handleId.replace(/^(setter-|mutate-)(in-left-|in-|out-)?/, "");
+      }
+
+      let manipulatorIndex = 0;
+      let found = false;
+      for (const f of fields) {
+        if (!f) continue;
+        const isArr = Boolean(f.isArray || f.type === "array" || f.type?.endsWith("[]"));
+        if (f.id === fId && handleType === "setter") {
+          found = true;
+          break;
+        }
+        manipulatorIndex++;
+        if (isArr) {
+          if (f.id === fId && handleType === "append") {
+            found = true;
+            break;
+          }
+          manipulatorIndex++;
+          if (f.id === fId && handleType === "pop") {
+            found = true;
+            break;
+          }
+          manipulatorIndex++;
+        }
+      }
+
+      const targetY = 75 + 24 + fields.length * 28 + 24 + 24 + (found ? manipulatorIndex : 0) * 24 + 12;
       return Math.min(0.95, Math.max(0.05, targetY / height));
     }
     if (handleId.startsWith("reset-")) {
-      const targetY = 75 + 24 + fields.length * 28 + 24 + 24 + fields.length * 24 + 12;
+      let totalFieldManipulators = 0;
+      for (const f of fields) {
+        if (!f) continue;
+        totalFieldManipulators += Boolean(f.isArray || f.type === "array" || f.type?.endsWith("[]")) ? 3 : 1;
+      }
+      const targetY = 75 + 24 + fields.length * 28 + 24 + 24 + totalFieldManipulators * 24 + 12;
       return Math.min(0.95, Math.max(0.05, targetY / height));
     }
     return 0.5;

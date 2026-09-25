@@ -28,12 +28,19 @@ import {
   HelpCircle,
   Zap,
 } from "lucide-react";
-import { GlobalStoreAction, GlobalStoreField, Parameter } from "@workspace/canvas/types";
+import { GlobalStoreAction, GlobalStoreField, Parameter, StoreActionType } from "@workspace/canvas/types";
 import { TypeCombobox } from "../TypeCombobox";
 import { cn } from "@workspace/ui/lib/utils";
 import { toast } from "sonner";
 import { generateActionCodePreview } from "./types";
 import { InlineActionTester } from "./InlineActionTester";
+
+export type DefaultManipulatorKey =
+  | "populate"
+  | "reset"
+  | `setter-${string}`
+  | `append-${string}`
+  | `pop-${string}`;
 
 export interface StoreDefaultManipulatorsSectionProps {
   fields: GlobalStoreField[];
@@ -41,24 +48,24 @@ export interface StoreDefaultManipulatorsSectionProps {
   disabledDefaultManipulators?: string[];
   deletedDefaultManipulators?: string[];
   onModifyDefaultManipulator: (
-    manipulatorKey: "populate" | "reset" | `setter-${string}`,
+    manipulatorKey: DefaultManipulatorKey,
     patch: Partial<GlobalStoreAction>,
   ) => void;
   onRevertDefaultManipulator: (
-    manipulatorKey: "populate" | "reset" | `setter-${string}`,
+    manipulatorKey: DefaultManipulatorKey,
   ) => void;
   onToggleDefaultManipulator: (
-    manipulatorKey: "populate" | "reset" | `setter-${string}`,
+    manipulatorKey: DefaultManipulatorKey,
     enabled: boolean,
   ) => void;
   onDeleteDefaultManipulator?: (
-    manipulatorKey: "populate" | "reset" | `setter-${string}`,
+    manipulatorKey: DefaultManipulatorKey,
   ) => void;
 }
 
 interface DefaultManipulatorItem {
-  key: "populate" | "reset" | `setter-${string}`;
-  type: "populate" | "reset" | "setter";
+  key: DefaultManipulatorKey;
+  type: "populate" | "reset" | "setter" | "append" | "pop";
   defaultName: string;
   currentAction: GlobalStoreAction | undefined;
   targetField?: GlobalStoreField;
@@ -118,7 +125,6 @@ export const StoreDefaultManipulatorsSection: React.FC<
         if (a.defaultManipulatorType === "setter" && a.targetFieldId === f.id) {
           return true;
         }
-        // Match explicit setter override by name and target field
         return (
           a.name.toLowerCase() === defaultSetterName &&
           (!a.targetFieldId || a.targetFieldId === f.id)
@@ -130,6 +136,50 @@ export const StoreDefaultManipulatorsSection: React.FC<
     });
     return map;
   }, [fields, actions]);
+
+  const fieldAppendActions = useMemo(() => {
+    const map = new Map<string, GlobalStoreAction>();
+    fields.forEach((f) => {
+      const defaultAppendName = `append${f.name.toLowerCase()}`;
+      const match = actions.find((a) => {
+        if (a.defaultManipulatorType === "append" && a.targetFieldId === f.id) {
+          return true;
+        }
+        return (
+          (a.name.toLowerCase() === defaultAppendName ||
+            (a.actionType === "append" && a.targetFieldId === f.id)) &&
+          (!a.targetFieldId || a.targetFieldId === f.id)
+        );
+      });
+      if (match) {
+        map.set(f.id, match);
+      }
+    });
+    return map;
+  }, [fields, actions]);
+
+  const fieldPopActions = useMemo(() => {
+    const map = new Map<string, GlobalStoreAction>();
+    fields.forEach((f) => {
+      const defaultPopName = `pop${f.name.toLowerCase()}`;
+      const match = actions.find((a) => {
+        if (a.defaultManipulatorType === "pop" && a.targetFieldId === f.id) {
+          return true;
+        }
+        return (
+          a.name.toLowerCase() === defaultPopName &&
+          (!a.targetFieldId || a.targetFieldId === f.id)
+        );
+      });
+      if (match) {
+        map.set(f.id, match);
+      }
+    });
+    return map;
+  }, [fields, actions]);
+
+  const isArrayField = (f: GlobalStoreField) =>
+    Boolean(f.isArray || f.type === "array" || f.type?.endsWith("[]"));
 
   // Build the list of default manipulators
   const manipulatorItems: DefaultManipulatorItem[] = useMemo(() => {
@@ -186,7 +236,7 @@ export const StoreDefaultManipulatorsSection: React.FC<
       },
     ];
 
-    // Add field setters
+    // Add field setters & array helpers (append, pop)
     fields.forEach((f) => {
       const capitalized = f.name.charAt(0).toUpperCase() + f.name.slice(1);
       const defaultSetterName = `set${capitalized}`;
@@ -240,16 +290,84 @@ export const StoreDefaultManipulatorsSection: React.FC<
             : []),
         ],
       });
+
+      // If array type, also add default append and pop functions
+      if (isArrayField(f)) {
+        const defaultAppendName = `append${capitalized}`;
+        const appendAction = fieldAppendActions.get(f.id);
+        const itemType = f.type.endsWith("[]") ? f.type.slice(0, -2) : "item";
+
+        items.push({
+          key: `append-${f.id}`,
+          type: "append",
+          defaultName: defaultAppendName,
+          currentAction: appendAction,
+          targetField: f,
+          description: `Appends a new ${itemType} to "${f.name}" (${f.type}). Wired to ${defaultAppendName} handle or component triggers.`,
+          handleBadge: `${defaultAppendName} (${defaultAppendName}-in/out)`,
+          defaultCode: `// Append item to ${f.name} array\nset((s) => ({ ${f.name}: [...(Array.isArray(s.${f.name}) ? s.${f.name} : []), payload] }));`,
+          snippets: [
+            {
+              label: "Append Item",
+              code: `// Append item to ${f.name} array\nset((s) => ({ ${f.name}: [...(Array.isArray(s.${f.name}) ? s.${f.name} : []), payload] }));`,
+            },
+            {
+              label: "Prepend Item",
+              code: `// Insert item at beginning of ${f.name}\nset((s) => ({ ${f.name}: [payload, ...(Array.isArray(s.${f.name}) ? s.${f.name} : [])] }));`,
+            },
+            {
+              label: "Deduplicate by ID",
+              code: `// Append item only if id does not already exist\nset((s) => {\n  const existing = Array.isArray(s.${f.name}) ? s.${f.name} : [];\n  const isDupe = payload && typeof payload === "object" && "id" in payload && existing.some((i) => i && typeof i === "object" && "id" in i && i.id === payload.id);\n  return isDupe ? s : { ${f.name}: [...existing, payload] };\n});`,
+            },
+          ],
+        });
+
+        const defaultPopName = `pop${capitalized}`;
+        const popAction = fieldPopActions.get(f.id);
+
+        items.push({
+          key: `pop-${f.id}`,
+          type: "pop",
+          defaultName: defaultPopName,
+          currentAction: popAction,
+          targetField: f,
+          description: `Removes the last ${itemType} from "${f.name}" (${f.type}). Wired to ${defaultPopName} handle or component triggers.`,
+          handleBadge: `${defaultPopName} (${defaultPopName}-in/out)`,
+          defaultCode: `// Remove last item from ${f.name} array\nset((s) => ({ ${f.name}: Array.isArray(s.${f.name}) ? s.${f.name}.slice(0, -1) : [] }));`,
+          snippets: [
+            {
+              label: "Pop Last",
+              code: `// Pop last item from ${f.name}\nset((s) => ({ ${f.name}: Array.isArray(s.${f.name}) ? s.${f.name}.slice(0, -1) : [] }));`,
+            },
+            {
+              label: "Shift First",
+              code: `// Remove first item from ${f.name}\nset((s) => ({ ${f.name}: Array.isArray(s.${f.name}) ? s.${f.name}.slice(1) : [] }));`,
+            },
+            {
+              label: "Clear All",
+              code: `// Clear all items in ${f.name}\nset({ ${f.name}: [] });`,
+            },
+          ],
+        });
+      }
     });
 
     return items;
-  }, [populateAction, resetAction, fields, fieldSetterActions]);
+  }, [populateAction, resetAction, fields, fieldSetterActions, fieldAppendActions, fieldPopActions]);
 
   const visibleItems = useMemo(() => {
     return manipulatorItems.filter(
       (item) => !deletedSet.has(item.key) && !deletedSet.has(item.defaultName),
     );
   }, [manipulatorItems, deletedSet]);
+
+  const getActionType = (item: DefaultManipulatorItem) => {
+    if (item.currentAction?.actionType) return item.currentAction.actionType;
+    if (item.type === "setter") return "set";
+    if (item.type === "append") return "append";
+    if (item.type === "pop") return "remove";
+    return item.type;
+  };
 
   const handleAddParam = (item: DefaultManipulatorItem) => {
     const currentParams = item.currentAction?.parameters || [];
@@ -261,7 +379,7 @@ export const StoreDefaultManipulatorsSection: React.FC<
     };
     onModifyDefaultManipulator(item.key, {
       name: item.currentAction?.name || item.defaultName,
-      actionType: item.currentAction?.actionType || (item.type === "setter" ? "set" : item.type),
+      actionType: getActionType(item),
       targetFieldId: item.targetField?.id,
       parameters: [...currentParams, newParam],
     });
@@ -276,7 +394,7 @@ export const StoreDefaultManipulatorsSection: React.FC<
     const updated = currentParams.map((p) => (p.id === paramId ? { ...p, ...patch } : p));
     onModifyDefaultManipulator(item.key, {
       name: item.currentAction?.name || item.defaultName,
-      actionType: item.currentAction?.actionType || (item.type === "setter" ? "set" : item.type),
+      actionType: getActionType(item),
       targetFieldId: item.targetField?.id,
       parameters: updated,
     });
@@ -287,7 +405,7 @@ export const StoreDefaultManipulatorsSection: React.FC<
     const updated = currentParams.filter((p) => p.id !== paramId);
     onModifyDefaultManipulator(item.key, {
       name: item.currentAction?.name || item.defaultName,
-      actionType: item.currentAction?.actionType || (item.type === "setter" ? "set" : item.type),
+      actionType: getActionType(item),
       targetFieldId: item.targetField?.id,
       parameters: updated,
     });
@@ -322,8 +440,8 @@ export const StoreDefaultManipulatorsSection: React.FC<
           const isCustomized = Boolean(item.currentAction);
           const isDisabled = disabledSet.has(item.key) || disabledSet.has(item.defaultName);
           const displayName = item.currentAction?.name || item.defaultName;
-          const currentActionType =
-            item.currentAction?.actionType || (item.type === "setter" ? "set" : item.type);
+          const currentActionType: StoreActionType =
+            item.currentAction?.actionType || getActionType(item);
           const currentCode = item.currentAction?.code ?? item.defaultCode;
           const params = item.currentAction?.parameters || [];
 
@@ -358,6 +476,10 @@ export const StoreDefaultManipulatorsSection: React.FC<
                       <Download size={13} className="text-emerald-500 shrink-0" />
                     ) : item.type === "reset" ? (
                       <RotateCcw size={13} className="text-rose-500 shrink-0" />
+                    ) : item.type === "append" ? (
+                      <Plus size={13} className="text-violet-500 shrink-0" />
+                    ) : item.type === "pop" ? (
+                      <RotateCcw size={13} className="text-amber-500 shrink-0" />
                     ) : (
                       <Sliders size={13} className="text-cyan-500 shrink-0" />
                     )}
@@ -367,10 +489,12 @@ export const StoreDefaultManipulatorsSection: React.FC<
                     </span>
 
                     <span className="text-[10px] font-mono text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded border border-cyan-500/20 hidden sm:inline">
-                      {item.type === "reset"
+                      {item.type === "reset" || item.type === "pop"
                         ? `${displayName}()`
                         : item.type === "populate"
                         ? `${displayName}(data)`
+                        : item.type === "append"
+                        ? `${displayName}(item)`
                         : `${displayName}(${item.targetField?.name || "value"})`}
                     </span>
 
@@ -426,7 +550,7 @@ export const StoreDefaultManipulatorsSection: React.FC<
                       if (!isCustomized) {
                         onModifyDefaultManipulator(item.key, {
                           name: item.defaultName,
-                          actionType: item.type === "setter" ? "set" : item.type,
+                          actionType: getActionType(item),
                           targetFieldId: item.targetField?.id,
                           code: item.defaultCode,
                         });
@@ -527,8 +651,8 @@ export const StoreDefaultManipulatorsSection: React.FC<
                     </div>
                   </div>
 
-                  {/* Target Field if field setter or set/append/remove/increment */}
-                  {item.type === "setter" && fields.length > 0 && (
+                  {/* Target Field if field setter or append or pop */}
+                  {(item.type === "setter" || item.type === "append" || item.type === "pop") && fields.length > 0 && (
                     <div className="space-y-1">
                       <Label className="text-[10px] font-semibold text-muted-foreground">
                         Target Field
@@ -589,13 +713,15 @@ export const StoreDefaultManipulatorsSection: React.FC<
                           <span className="font-mono text-foreground font-medium bg-muted px-1.5 py-0.5 rounded border border-border/60">
                             {item.type === "populate"
                               ? "data: Partial<State>"
-                              : item.type === "reset"
+                              : item.type === "reset" || item.type === "pop"
                               ? "none ()"
+                              : item.type === "append"
+                              ? `item: ${item.targetField?.type?.endsWith("[]") ? item.targetField.type.slice(0, -2) : "item"}`
                               : `value: ${item.targetField?.type || "any"}`}
                           </span>
                           <span className="italic">
-                            {item.type === "reset"
-                              ? "(Takes no parameters; resets store state to defaults)"
+                            {item.type === "reset" || item.type === "pop"
+                              ? `(Takes no parameters; ${item.type === "reset" ? "resets store state to defaults" : "removes last item from array"})`
                               : "(Default parameter wired to canvas handles and triggers)"}
                           </span>
                         </div>

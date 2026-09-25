@@ -136,7 +136,7 @@ export interface GlobalStoreAction {
   responseMappingMode?: "replace" | "merge" | "custom";
   description?: string;
   prompt?: string;
-  defaultManipulatorType?: "populate" | "reset" | "setter" | "mutate";
+  defaultManipulatorType?: "populate" | "reset" | "setter" | "mutate" | "append" | "pop";
 }
 
 export interface StateStoreTestCase {

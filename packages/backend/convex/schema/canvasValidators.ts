@@ -823,6 +823,8 @@ export const stateStoreConvexDataValidator = v.object({
             v.literal("reset"),
             v.literal("setter"),
             v.literal("mutate"),
+            v.literal("append"),
+            v.literal("pop"),
           ),
         ),
       }),
