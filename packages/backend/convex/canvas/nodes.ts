@@ -57,8 +57,8 @@ export const upsertBackendNode = mutation({
       );
 
       if (exists) {
-        throw new ConvexError(
-          `A node with the name "${label}" already exists in this project.`,
+        log(
+          `[upsertBackendNode] Duplicate label "${label}" detected in project ${args.projectId}. Allowed in DB; highlighted in UI.`,
         );
       }
     }

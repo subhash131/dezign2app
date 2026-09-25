@@ -36,20 +36,6 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
   const indexes = data.indexes || [];
 
   const handleSaveName = (finalName: string) => {
-    // Check global uniqueness for entities
-    const allNodes = useBackendCanvasStore.getState().nodes;
-    const exists = allNodes.some(
-      (n) =>
-        n.id !== id &&
-        n.type === "entity" &&
-        n.data.label.toLowerCase() === finalName.toLowerCase(),
-    );
-
-    if (exists) {
-      toast.error(`Table name "${finalName}" is already used!`);
-      return;
-    }
-
     const latestNode = useBackendCanvasStore
       .getState()
       .nodes.find((n) => n.id === id);
