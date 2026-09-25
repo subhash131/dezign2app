@@ -31,7 +31,7 @@ export const StoreSelector: React.FC<StoreSelectorProps> = ({
         Target State Store
       </Label>
       <Select
-        value={selectedStoreNodeId || "none"}
+        value={selectedStoreNodeId || ""}
         onValueChange={onStoreChange}
       >
         <SelectTrigger className="h-9 text-xs bg-background">

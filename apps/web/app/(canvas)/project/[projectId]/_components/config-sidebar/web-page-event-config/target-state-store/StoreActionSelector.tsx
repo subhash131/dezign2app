@@ -46,8 +46,6 @@ export const StoreActionSelector: React.FC<StoreActionSelectorProps> = ({
   customActions,
   onActionChange,
 }) => {
-  const defaultValue = actionId || (fields.length > 0 ? `setter-${fields[0]!.id}` : "builtin-reset");
-
   return (
     <div className="flex flex-col gap-2">
       <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
@@ -55,7 +53,7 @@ export const StoreActionSelector: React.FC<StoreActionSelectorProps> = ({
         Store Mutation / Action to Call
       </Label>
       <Select
-        value={defaultValue}
+        value={actionId || ""}
         onValueChange={onActionChange}
       >
         <SelectTrigger className="h-9 text-xs bg-background font-mono">
@@ -82,6 +80,42 @@ export const StoreActionSelector: React.FC<StoreActionSelectorProps> = ({
                   </SelectItem>
                 );
               })}
+            </SelectGroup>
+          )}
+
+          {/* Array Operations: Append & Pop */}
+          {fields.some((f) => Boolean(f.isArray || f.type === "array" || f.type?.endsWith("[]"))) && (
+            <SelectGroup>
+              <SelectLabel className="text-[10px] uppercase font-bold text-muted-foreground mt-1">
+                Array Operations
+              </SelectLabel>
+              {fields
+                .filter((f) => Boolean(f.isArray || f.type === "array" || f.type?.endsWith("[]")))
+                .flatMap((f) => {
+                  const appendName = `append${toPascalCase(f.name)}`;
+                  const popName = `pop${toPascalCase(f.name)}`;
+                  const itemType = f.type.endsWith("[]") ? f.type.slice(0, -2) : "item";
+                  return [
+                    <SelectItem key={`append-${f.id}`} value={`append-${f.id}`} className="text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-violet-500 shrink-0" />
+                        <span className="font-semibold font-mono">{appendName}({itemType})</span>
+                        <Badge variant="outline" className="text-[9px] py-0 px-1 border-violet-500/40 text-violet-600 dark:text-violet-400 font-mono">
+                          append
+                        </Badge>
+                      </div>
+                    </SelectItem>,
+                    <SelectItem key={`pop-${f.id}`} value={`pop-${f.id}`} className="text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                        <span className="font-semibold font-mono">{popName}()</span>
+                        <Badge variant="outline" className="text-[9px] py-0 px-1 border-amber-500/40 text-amber-600 dark:text-amber-400 font-mono">
+                          pop last
+                        </Badge>
+                      </div>
+                    </SelectItem>,
+                  ];
+                })}
             </SelectGroup>
           )}
 

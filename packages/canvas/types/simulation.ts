@@ -78,6 +78,33 @@ export type PageSection = {
   primaryImageUrl?: string;
 };
 
+export type StoreActionType =
+  | "set"
+  | "append"
+  | "pop"
+  | "remove"
+  | "toggle"
+  | "increment"
+  | "reset"
+  | "populate"
+  | "custom"
+  | "mutate";
+
+export interface StoreActionBinding {
+  id?: string;
+  storeNodeId?: string;
+  storeName?: string;
+  actionId?: string;
+  actionName?: string;
+  actionType?: StoreActionType;
+  targetFieldId?: string;
+  targetFieldName?: string;
+  updateSource?: "response" | "response_property" | "payload" | "direct" | "static" | "full_message" | "nested_property";
+  valuePath?: string;
+  customValue?: string;
+  parameterMappings?: Record<string, string>;
+}
+
 export type UIEventItem = {
   id: string;
   name: string;
@@ -100,19 +127,8 @@ export type UIEventItem = {
   libraries?: string[];
   renderMode?: "server" | "client";
   // State Store action binding
-  storeActionBinding?: {
-    storeNodeId?: string;
-    storeName?: string;
-    actionId?: string;
-    actionName?: string;
-    actionType?: "set" | "append" | "remove" | "toggle" | "increment" | "reset" | "populate" | "custom" | "mutate";
-    targetFieldId?: string;
-    targetFieldName?: string;
-    updateSource?: "response" | "response_property" | "payload" | "direct" | "static";
-    valuePath?: string;
-    customValue?: string;
-    parameterMappings?: Record<string, string>;
-  };
+  storeActionBinding?: StoreActionBinding;
+  storeActionBindings?: StoreActionBinding[];
   // SSE config (when event === "sse")
   sseConfig?: {
     reconnectStrategy?: "none" | "exponential" | "linear";

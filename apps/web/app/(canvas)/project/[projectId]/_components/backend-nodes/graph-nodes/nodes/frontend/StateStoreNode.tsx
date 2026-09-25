@@ -4,7 +4,7 @@ import React, { useState, useMemo } from "react";
 import { NodeProps, Handle, Position } from "@xyflow/react";
 import { Database, Settings, Trash, Layers, AlertTriangle, Edit3 } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
-import { CustomTypeItem } from "@workspace/canvas/types";
+import { CustomTypeItem, GlobalStoreField, GlobalStoreAction } from "@workspace/canvas/types";
 import { cn } from "@workspace/ui/lib/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { toast } from "sonner";
@@ -491,35 +491,163 @@ export const StateStoreNode = ({
               act.targetFieldId === f.id &&
               act.name.toLowerCase() === `set${f.name.toLowerCase()}`,
           );
-          return !isSetter;
+          const isAppend = (data.fields || []).some(
+            (f) =>
+              (f.isArray || f.type === "array" || f.type?.endsWith("[]")) &&
+              act.targetFieldId === f.id &&
+              (act.name.toLowerCase() === `append${f.name.toLowerCase()}` || act.actionType === "append"),
+          );
+          const isPop = (data.fields || []).some(
+            (f) =>
+              (f.isArray || f.type === "array" || f.type?.endsWith("[]")) &&
+              act.targetFieldId === f.id &&
+              act.name.toLowerCase() === `pop${f.name.toLowerCase()}`,
+          );
+          return !isSetter && !isAppend && !isPop;
         });
 
         const isPopulateDisabled = disabledOrDeleted.has("populate") || disabledOrDeleted.has("load");
         const isResetDisabled = disabledOrDeleted.has("reset");
 
-        const hasActiveSetters =
-          (data.fields || []).some((f) => {
-            const cap = f.name.charAt(0).toUpperCase() + f.name.slice(1);
-            return !disabledOrDeleted.has(`setter-${f.id}`) && !disabledOrDeleted.has(`set${cap}`);
+        // Compute individual field manipulators (setters, plus append & pop for array fields)
+        const fieldManipulators: Array<{
+          key: string;
+          type: "setter" | "append" | "pop";
+          field: GlobalStoreField;
+          name: string;
+          defaultName: string;
+          isCustom: boolean;
+          isDisabled: boolean;
+          override?: GlobalStoreAction;
+          inHandleId: string;
+          outHandleId: string;
+          badgeLabel: string;
+          colorClass: string;
+          dotClass: string;
+          ringClass: string;
+          title: string;
+        }> = [];
+
+        (data.fields || []).forEach((f) => {
+          const cap = f.name.charAt(0).toUpperCase() + f.name.slice(1);
+          const isArr = Boolean(f.isArray || f.type === "array" || f.type?.endsWith("[]"));
+
+          // 1. Setter: set<Field>
+          const defaultSetterName = `set${cap}`;
+          const setterOverride = (data.actions || []).find((a) => {
+            if (a.defaultManipulatorType === "setter" && a.targetFieldId === f.id) return true;
+            return (
+              a.name.toLowerCase() === defaultSetterName.toLowerCase() &&
+              (!a.targetFieldId || a.targetFieldId === f.id)
+            );
           });
-        const isMutateDisabled =
-          disabledOrDeleted.has("mutate") ||
-          ((data.fields || []).length > 0 && !hasActiveSetters);
+          const isSetterDisabled =
+            disabledOrDeleted.has("mutate") ||
+            disabledOrDeleted.has(`setter-${f.id}`) ||
+            disabledOrDeleted.has(defaultSetterName) ||
+            Boolean(setterOverride && disabledOrDeleted.has(setterOverride.name));
+
+          if (!isSetterDisabled) {
+            fieldManipulators.push({
+              key: `setter-${f.id}`,
+              type: "setter",
+              field: f,
+              name: setterOverride?.name || defaultSetterName,
+              defaultName: defaultSetterName,
+              isCustom: Boolean(setterOverride),
+              isDisabled: false,
+              override: setterOverride,
+              inHandleId: `setter-in-left-${f.id}`,
+              outHandleId: `setter-out-${f.id}`,
+              badgeLabel: setterOverride ? "(custom)" : "(setter)",
+              colorClass: "!bg-indigo-500",
+              dotClass: "bg-indigo-500",
+              ringClass: "ring-indigo-500/50",
+              title: `${setterOverride?.name || defaultSetterName}: Drag to WebPage action to update state on trigger`,
+            });
+          }
+
+          // 2. Array helpers: append<Field> & pop<Field>
+          if (isArr) {
+            const defaultAppendName = `append${cap}`;
+            const appendOverride = (data.actions || []).find((a) => {
+              if (a.defaultManipulatorType === "append" && a.targetFieldId === f.id) return true;
+              return (
+                (a.name.toLowerCase() === defaultAppendName.toLowerCase() ||
+                  (a.actionType === "append" && a.targetFieldId === f.id)) &&
+                (!a.targetFieldId || a.targetFieldId === f.id)
+              );
+            });
+            const isAppendDisabled =
+              disabledOrDeleted.has(`append-${f.id}`) ||
+              disabledOrDeleted.has(defaultAppendName) ||
+              Boolean(appendOverride && disabledOrDeleted.has(appendOverride.name));
+
+            if (!isAppendDisabled) {
+              fieldManipulators.push({
+                key: `append-${f.id}`,
+                type: "append",
+                field: f,
+                name: appendOverride?.name || defaultAppendName,
+                defaultName: defaultAppendName,
+                isCustom: Boolean(appendOverride),
+                isDisabled: false,
+                override: appendOverride,
+                inHandleId: `append-in-left-${f.id}`,
+                outHandleId: `append-out-${f.id}`,
+                badgeLabel: appendOverride ? "(custom)" : "(append)",
+                colorClass: "!bg-violet-500",
+                dotClass: "bg-violet-500",
+                ringClass: "ring-violet-500/50",
+                title: `${appendOverride?.name || defaultAppendName}: Drag to WebPage action to append item`,
+              });
+            }
+
+            const defaultPopName = `pop${cap}`;
+            const popOverride = (data.actions || []).find((a) => {
+              if (a.defaultManipulatorType === "pop" && a.targetFieldId === f.id) return true;
+              return (
+                a.name.toLowerCase() === defaultPopName.toLowerCase() &&
+                (!a.targetFieldId || a.targetFieldId === f.id)
+              );
+            });
+            const isPopDisabled =
+              disabledOrDeleted.has(`pop-${f.id}`) ||
+              disabledOrDeleted.has(defaultPopName) ||
+              Boolean(popOverride && disabledOrDeleted.has(popOverride.name));
+
+            if (!isPopDisabled) {
+              fieldManipulators.push({
+                key: `pop-${f.id}`,
+                type: "pop",
+                field: f,
+                name: popOverride?.name || defaultPopName,
+                defaultName: defaultPopName,
+                isCustom: Boolean(popOverride),
+                isDisabled: false,
+                override: popOverride,
+                inHandleId: `pop-in-left-${f.id}`,
+                outHandleId: `pop-out-${f.id}`,
+                badgeLabel: popOverride ? "(custom)" : "(pop)",
+                colorClass: "!bg-amber-500",
+                dotClass: "bg-amber-500",
+                ringClass: "ring-amber-500/50",
+                title: `${popOverride?.name || defaultPopName}: Drag to WebPage action to pop item`,
+              });
+            }
+          }
+        });
 
         const visibleManipulatorCount =
           (isPopulateDisabled ? 0 : 1) +
-          (isMutateDisabled ? 0 : 1) +
+          fieldManipulators.length +
           (isResetDisabled ? 0 : 1) +
           customActions.length;
 
-        // Helper to check if a row is the last visible item in the node
-        const isLastItem = (type: "populate" | "mutate" | "reset") => {
-          if (customActions.length > 0) return false;
-          if (type === "populate") return isMutateDisabled && isResetDisabled;
-          if (type === "mutate") return isResetDisabled;
-          if (type === "reset") return true;
-          return false;
-        };
+        const hasPopulate = !isPopulateDisabled;
+        const manipulatorsCount = fieldManipulators.length;
+        const hasReset = !isResetDisabled;
+        const customCount = customActions.length;
 
         return (
           <div className="flex flex-col border-t border-border/40 text-[9px] font-mono">
@@ -545,8 +673,8 @@ export const StateStoreNode = ({
               <div
                 className={cn(
                   "relative flex items-center justify-between px-3 py-1 bg-muted/5 hover:bg-muted/20 transition-colors group/row",
-                  !isLastItem("populate") && "border-b border-border/20",
-                  isLastItem("populate") && "rounded-b-[10px]",
+                  (manipulatorsCount > 0 || hasReset || customCount > 0) && "border-b border-border/20",
+                  manipulatorsCount === 0 && !hasReset && customCount === 0 && "rounded-b-[10px]",
                 )}
               >
                 {/* Left-side inbound target handle for direct wiring from WebPage actions */}
@@ -582,51 +710,90 @@ export const StateStoreNode = ({
               </div>
             )}
 
-            {/* 2. Mutate Action (only if not disabled) */}
-            {!isMutateDisabled && (
-              <div
-                className={cn(
-                  "relative flex items-center justify-between px-3 py-1 bg-muted/5 hover:bg-muted/20 transition-colors group/row",
-                  !isLastItem("mutate") && "border-b border-border/20",
-                  isLastItem("mutate") && "rounded-b-[10px]",
-                )}
-              >
-                {/* Left-side inbound target handle for direct wiring from WebPage actions */}
-                <Handle
-                  type="target"
-                  position={Position.Left}
-                  id="mutate-in-left"
-                  className="w-2.5 h-2.5 !bg-indigo-500 border-2 border-background cursor-pointer hover:scale-125 transition-transform -left-1.5 z-10"
-                  style={{ top: "50%" }}
-                  title="mutate: Wire from WebPage action or realtime connection"
-                />
-                <div className="flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
-                  <span className="font-semibold text-foreground/90">mutate</span>
-                  <span className="text-[8px] text-muted-foreground/60">(actions)</span>
-                </div>
-                {/* Outbound source handle for wiring to WebPage actions */}
-                <Handle
-                  type="source"
-                  position={Position.Right}
-                  id="mutate-out"
+            {/* 2. Field Manipulators (setters, plus append & pop for array fields) */}
+            {fieldManipulators.map((m, mIdx) => {
+              const f = m.field;
+              const hasBelow = mIdx < manipulatorsCount - 1 || hasReset || customCount > 0;
+              const isManipulatorConnected = edges.some(
+                (e) =>
+                  (e.source === id &&
+                    (e.sourceHandle === m.outHandleId ||
+                      (m.type === "setter" &&
+                        (e.sourceHandle === `mutate-out-${f.id}` ||
+                          (e.sourceHandle === "mutate-out" &&
+                            (e.data?.actionName === m.name ||
+                              (e.data as Record<string, unknown> | undefined)?.targetFieldId === f.id ||
+                              manipulatorsCount === 1)))) ||
+                      (m.override && e.sourceHandle === `store-action-out-${m.override.id}`))) ||
+                  (e.target === id &&
+                    (e.targetHandle === m.inHandleId ||
+                      e.targetHandle === `${m.type}-in-${f.id}` ||
+                      (m.type === "setter" &&
+                        (e.targetHandle === `mutate-in-left-${f.id}` ||
+                          e.targetHandle === `mutate-in-${f.id}` ||
+                          ((e.targetHandle === "mutate-in" || e.targetHandle === "mutate-in-left") &&
+                            (e.data?.actionName === m.name ||
+                              (e.data as Record<string, unknown> | undefined)?.targetFieldId === f.id ||
+                              manipulatorsCount === 1)))) ||
+                      (m.override &&
+                        (e.targetHandle === `store-action-in-${m.override.id}` ||
+                          e.targetHandle === `store-action-in-left-${m.override.id}`)))),
+              );
+
+              return (
+                <div
+                  key={m.key}
                   className={cn(
-                    "w-2.5 h-2.5 !bg-indigo-500 border-2 border-background cursor-pointer hover:scale-125 transition-all -right-1.5 z-10",
-                    edges.some((e) => (e.source === id && (e.sourceHandle === "mutate-out" || e.sourceHandle === "mutate-in")) || (e.target === id && (e.targetHandle === "mutate-in" || e.targetHandle === "mutate-in-left"))) && "ring-2 ring-indigo-500/50 scale-110",
+                    "relative flex items-center justify-between px-3 py-1 bg-muted/5 hover:bg-muted/20 transition-colors group/row",
+                    hasBelow && "border-b border-border/20",
+                    !hasBelow && "rounded-b-[10px]",
                   )}
-                  style={{ top: "50%" }}
-                  title="mutate: Drag to WebPage action to update state on trigger"
-                />
-              </div>
-            )}
+                >
+                  {/* Left-side inbound target handle */}
+                  <Handle
+                    type="target"
+                    position={Position.Left}
+                    id={m.inHandleId}
+                    className={cn(
+                      "w-2.5 h-2.5 border-2 border-background cursor-pointer hover:scale-125 transition-transform -left-1.5 z-10",
+                      m.colorClass,
+                    )}
+                    style={{ top: "50%" }}
+                    title={`${m.name}: Wire from WebPage action or realtime connection`}
+                  />
+                  <div className="flex items-center gap-1.5 truncate max-w-[170px]">
+                    <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", m.dotClass)} />
+                    <span className="font-semibold text-foreground/90 truncate">
+                      {m.name}
+                    </span>
+                    <span className="text-[8px] text-muted-foreground/60 shrink-0">
+                      {m.badgeLabel}
+                    </span>
+                  </div>
+                  {/* Outbound source handle */}
+                  <Handle
+                    type="source"
+                    position={Position.Right}
+                    id={m.outHandleId}
+                    className={cn(
+                      "w-2.5 h-2.5 border-2 border-background cursor-pointer hover:scale-125 transition-all -right-1.5 z-10",
+                      m.colorClass,
+                      isManipulatorConnected && cn("ring-2 scale-110", m.ringClass),
+                    )}
+                    style={{ top: "50%" }}
+                    title={m.title}
+                  />
+                </div>
+              );
+            })}
 
             {/* 3. Reset Action (only if not disabled) */}
             {!isResetDisabled && (
               <div
                 className={cn(
                   "relative flex items-center justify-between px-3 py-1 bg-muted/5 hover:bg-muted/20 transition-colors group/row",
-                  !isLastItem("reset") && "border-b border-border/20",
-                  isLastItem("reset") && "rounded-b-[10px]",
+                  customCount > 0 && "border-b border-border/20",
+                  customCount === 0 && "rounded-b-[10px]",
                 )}
               >
                 {/* Left-side inbound target handle for direct wiring from WebPage actions */}
@@ -718,6 +885,24 @@ export const StateStoreNode = ({
         position={Position.Right}
         id="store-out"
         style={{ top: "28px", opacity: 0, pointerEvents: "none" }}
+      />
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="mutate-out"
+        style={{ top: "50%", opacity: 0, pointerEvents: "none" }}
+      />
+      <Handle
+        type="target"
+        position={Position.Left}
+        id="mutate-in-left"
+        style={{ top: "50%", opacity: 0, pointerEvents: "none" }}
+      />
+      <Handle
+        type="target"
+        position={Position.Left}
+        id="mutate-in"
+        style={{ top: "50%", opacity: 0, pointerEvents: "none" }}
       />
     </div>
   );

@@ -96,6 +96,7 @@ export const SectionActionRow = ({
   }, [action.name, isEditing]);
 
   const setActiveConfigItem = useBackendCanvasStore((s) => s.setActiveConfigItem);
+  const edges = useBackendCanvasStore((s) => s.edges);
 
   const evtStr = action.event || "";
   const evtLower = evtStr.toLowerCase();
@@ -252,26 +253,62 @@ export const SectionActionRow = ({
         >
           {evt}
         </span>
-        {action.storeActionBinding && (
-          <span
-            className="text-[7px] font-mono px-1 py-0.2 rounded bg-indigo-500/15 text-indigo-500 hover:bg-indigo-500/25 border border-indigo-500/30 font-semibold cursor-pointer max-w-[120px] truncate transition-colors"
-            onClick={(e) => {
-              e.stopPropagation();
-              setActiveConfigItem({
-                type: "pageEvent",
-                id: action.id,
-                nodeId,
-                sectionId,
-              });
-            }}
-            title={`Bound to store: ${action.storeActionBinding.storeName || "Store"}.${action.storeActionBinding.actionName || action.storeActionBinding.actionType || "mutate"}()\nSource: ${action.storeActionBinding.updateSource || "response"}${action.storeActionBinding.valuePath ? ` (${action.storeActionBinding.valuePath})` : ""}`}
-          >
-            ⚡{action.storeActionBinding.actionName || action.storeActionBinding.actionType || "store"}()
-          </span>
-        )}
+        {(() => {
+          const rawBindings =
+            Array.isArray(action.storeActionBindings) && action.storeActionBindings.length > 0
+              ? action.storeActionBindings
+              : action.storeActionBinding
+              ? [action.storeActionBinding]
+              : [];
+          const bindings = rawBindings.filter(
+            (b) => Boolean(b.storeNodeId && (b.actionName || b.actionId || b.actionType)),
+          );
+          if (bindings.length === 0) return null;
+
+          const titleText = bindings
+            .map(
+              (b, idx) =>
+                `${idx + 1}. ${b.storeName || "Store"}.${b.actionName || b.actionType || "action"}() (${b.updateSource || "response"}${b.valuePath ? `: ${b.valuePath}` : ""})`,
+            )
+            .join("\n");
+
+          const displayText =
+            bindings.length === 1
+              ? `⚡${bindings[0]!.actionName || bindings[0]!.actionType || "store"}()`
+              : `⚡${bindings.length} mutations`;
+
+          return (
+            <span
+              className="text-[7px] font-mono px-1 py-0.2 rounded bg-indigo-500/15 text-indigo-500 hover:bg-indigo-500/25 border border-indigo-500/30 font-semibold cursor-pointer max-w-[120px] truncate transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                setActiveConfigItem({
+                  type: "pageEvent",
+                  id: action.id,
+                  nodeId,
+                  sectionId,
+                });
+              }}
+              title={`Store operations:\n${titleText}`}
+            >
+              {displayText}
+            </span>
+          );
+        })()}
       </div>
     );
   };
+
+  const isActionConnected = edges.some(
+    (e) =>
+      e.target === nodeId &&
+      (e.targetHandle === `event-in-${action.id}` ||
+        e.targetHandle === `pageload-in-${action.id}` ||
+        e.targetHandle === `sse-in-${action.id}` ||
+        e.targetHandle === `websocket-in-${action.id}` ||
+        e.targetHandle === `webrtc-in-${action.id}` ||
+        e.targetHandle?.endsWith(`-${action.id}`)),
+  );
 
   return (
     <div className="flex flex-col px-3 py-1.5 border-b border-border/40 text-xs relative group/row hover:bg-secondary/20 nodrag">
@@ -290,7 +327,10 @@ export const SectionActionRow = ({
           type="target"
           position={Position.Left}
           id={`pageload-in-${action.id}`}
-          className="w-2 h-2 -left-1 !bg-emerald-500"
+          className={cn(
+            "w-2 h-2 -left-1 !bg-emerald-500 transition-all",
+            isActionConnected && "ring-2 ring-emerald-500/60 scale-125",
+          )}
           style={{ top: "50%" }}
           title="pageLoad (in): Wire from State Store or API endpoint"
         />
@@ -299,7 +339,10 @@ export const SectionActionRow = ({
           type="target"
           position={Position.Left}
           id={`sse-in-${action.id}`}
-          className="w-2 h-2 -left-1 !bg-amber-500"
+          className={cn(
+            "w-2 h-2 -left-1 !bg-amber-500 transition-all",
+            isActionConnected && "ring-2 ring-amber-500/60 scale-125",
+          )}
           style={{ top: "50%" }}
           title="sse (in): Wire from Realtime SSE connection"
         />
@@ -308,7 +351,10 @@ export const SectionActionRow = ({
           type="target"
           position={Position.Left}
           id={`websocket-in-${action.id}`}
-          className="w-2 h-2 -left-1 !bg-cyan-500"
+          className={cn(
+            "w-2 h-2 -left-1 !bg-cyan-500 transition-all",
+            isActionConnected && "ring-2 ring-cyan-500/60 scale-125",
+          )}
           style={{ top: "50%" }}
           title="websocket (in): Wire from WebSocket connection"
         />
@@ -317,7 +363,10 @@ export const SectionActionRow = ({
           type="target"
           position={Position.Left}
           id={`webrtc-in-${action.id}`}
-          className="w-2 h-2 -left-1 !bg-purple-500"
+          className={cn(
+            "w-2 h-2 -left-1 !bg-purple-500 transition-all",
+            isActionConnected && "ring-2 ring-purple-500/60 scale-125",
+          )}
           style={{ top: "50%" }}
           title="webrtc (in): Wire from WebRTC connection"
         />
@@ -326,7 +375,10 @@ export const SectionActionRow = ({
           type="target"
           position={Position.Left}
           id={`event-in-${action.id}`}
-          className="w-2 h-2 -left-1 !bg-indigo-500"
+          className={cn(
+            "w-2 h-2 -left-1 !bg-indigo-500 transition-all",
+            isActionConnected && "ring-2 ring-indigo-500/60 scale-125",
+          )}
           style={{ top: "50%" }}
           title={`${action.name || action.event || "action"} (in): Wire from State Store action or API trigger`}
         />

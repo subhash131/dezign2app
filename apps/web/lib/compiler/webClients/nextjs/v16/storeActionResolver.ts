@@ -1,9 +1,10 @@
 import { BackendNode, BackendEdge } from "@/types/canvas";
-import { UIEventItem } from "@workspace/canvas/types";
+import { UIEventItem, StoreActionBinding } from "@workspace/canvas/types";
 
 export type StoreActionType =
   | "set"
   | "append"
+  | "pop"
   | "remove"
   | "toggle"
   | "increment"
@@ -49,6 +50,7 @@ function isValidStoreActionType(val: string | undefined): val is StoreActionType
   return (
     val === "set" ||
     val === "append" ||
+    val === "pop" ||
     val === "remove" ||
     val === "toggle" ||
     val === "increment" ||
@@ -81,7 +83,10 @@ function extractActionIdFromHandle(handleId: string | null | undefined): string 
   if (
     handleId.startsWith("section-state-in-") ||
     handleId.startsWith("state-in-") ||
-    handleId.startsWith("store-state-")
+    handleId.startsWith("store-state-") ||
+    handleId.startsWith("setter-") ||
+    handleId.startsWith("append-") ||
+    handleId.startsWith("pop-")
   ) {
     return null;
   }
@@ -186,13 +191,55 @@ function resolveStoreBindingFromHandle(
     }
   }
 
-  // 4. Mutate handle: mutate-out or mutate-in
+  // 4. Mutate / Setter handle: mutate-out, mutate-in, setter-out-${f.id}, setter-in-left-${f.id}
   if (
     storeHandleId === "mutate-out" ||
     storeHandleId === "mutate-in" ||
     storeHandleId === "mutate" ||
-    Boolean(storeHandleId?.startsWith("mutate-"))
+    Boolean(storeHandleId?.startsWith("mutate-")) ||
+    Boolean(storeHandleId?.startsWith("setter-"))
   ) {
+    let targetFieldId: string | undefined = undefined;
+    if (storeHandleId?.startsWith("setter-")) {
+      targetFieldId = storeHandleId.replace(/^setter-(in-left-|in-|out-)/, "");
+    } else if (
+      storeHandleId?.startsWith("mutate-out-") ||
+      storeHandleId?.startsWith("mutate-in-left-") ||
+      storeHandleId?.startsWith("mutate-in-")
+    ) {
+      targetFieldId = storeHandleId.replace(/^mutate-(in-left-|in-|out-)/, "");
+    }
+
+    const matchedField = targetFieldId
+      ? (storeFields || []).find((f) => f.id === targetFieldId)
+      : undefined;
+
+    if (matchedField) {
+      const cap = matchedField.name.charAt(0).toUpperCase() + matchedField.name.slice(1);
+      const defaultSetterName = `set${cap}`;
+      const matchedAction = (storeActions || []).find(
+        (a) =>
+          (a.defaultManipulatorType === "setter" && a.targetFieldId === matchedField.id) ||
+          (a.targetFieldId === matchedField.id && a.name.toLowerCase() === defaultSetterName.toLowerCase()),
+      );
+      if (matchedAction) {
+        return {
+          actionId: matchedAction.id,
+          actionName: matchedAction.name,
+          actionType: isValidStoreActionType(matchedAction.actionType) ? matchedAction.actionType : "set",
+          targetFieldId: matchedField.id,
+          targetFieldName: matchedField.name,
+        };
+      }
+      return {
+        actionId: `setter-${matchedField.id}`,
+        actionName: defaultSetterName,
+        actionType: "set",
+        targetFieldId: matchedField.id,
+        targetFieldName: matchedField.name,
+      };
+    }
+
     if (Array.isArray(storeActions) && storeActions.length > 0) {
       const matched =
         storeActions.find(
@@ -225,6 +272,76 @@ function resolveStoreBindingFromHandle(
       actionName: setterName,
       actionType: "set",
     };
+  }
+
+  // 4b. Append handle: append-out-${f.id}, append-in-left-${f.id}, append-in-${f.id}
+  if (Boolean(storeHandleId?.startsWith("append-"))) {
+    const targetFieldId = storeHandleId!.replace(/^append-(in-left-|in-|out-)?/, "");
+    const matchedField = targetFieldId
+      ? (storeFields || []).find((f) => f.id === targetFieldId)
+      : undefined;
+
+    if (matchedField) {
+      const cap = matchedField.name.charAt(0).toUpperCase() + matchedField.name.slice(1);
+      const defaultAppendName = `append${cap}`;
+      const matchedAction = (storeActions || []).find(
+        (a) =>
+          (a.defaultManipulatorType === "append" && a.targetFieldId === matchedField.id) ||
+          ((a.name.toLowerCase() === defaultAppendName.toLowerCase() || a.actionType === "append") &&
+            (!a.targetFieldId || a.targetFieldId === matchedField.id)),
+      );
+      if (matchedAction) {
+        return {
+          actionId: matchedAction.id,
+          actionName: matchedAction.name,
+          actionType: isValidStoreActionType(matchedAction.actionType) ? matchedAction.actionType : "append",
+          targetFieldId: matchedField.id,
+          targetFieldName: matchedField.name,
+        };
+      }
+      return {
+        actionId: `append-${matchedField.id}`,
+        actionName: defaultAppendName,
+        actionType: "append",
+        targetFieldId: matchedField.id,
+        targetFieldName: matchedField.name,
+      };
+    }
+  }
+
+  // 4c. Pop handle: pop-out-${f.id}, pop-in-left-${f.id}, pop-in-${f.id}
+  if (Boolean(storeHandleId?.startsWith("pop-"))) {
+    const targetFieldId = storeHandleId!.replace(/^pop-(in-left-|in-|out-)?/, "");
+    const matchedField = targetFieldId
+      ? (storeFields || []).find((f) => f.id === targetFieldId)
+      : undefined;
+
+    if (matchedField) {
+      const cap = matchedField.name.charAt(0).toUpperCase() + matchedField.name.slice(1);
+      const defaultPopName = `pop${cap}`;
+      const matchedAction = (storeActions || []).find(
+        (a) =>
+          (a.defaultManipulatorType === "pop" && a.targetFieldId === matchedField.id) ||
+          (a.name.toLowerCase() === defaultPopName.toLowerCase() &&
+            (!a.targetFieldId || a.targetFieldId === matchedField.id)),
+      );
+      if (matchedAction) {
+        return {
+          actionId: matchedAction.id,
+          actionName: matchedAction.name,
+          actionType: isValidStoreActionType(matchedAction.actionType) ? matchedAction.actionType : "remove",
+          targetFieldId: matchedField.id,
+          targetFieldName: matchedField.name,
+        };
+      }
+      return {
+        actionId: `pop-${matchedField.id}`,
+        actionName: defaultPopName,
+        actionType: "remove",
+        targetFieldId: matchedField.id,
+        targetFieldName: matchedField.name,
+      };
+    }
   }
 
   // 5. Generic fallback based on pageAction event
@@ -265,13 +382,15 @@ function resolveStoreBindingFromHandle(
   };
 }
 
-function findMatchingEdgeForAction(
+function findAllMatchingEdgesForAction(
   pageNodeId: string,
   action: UIEventItem,
   allNodes: readonly BackendNode[],
   allEdges: readonly BackendEdge[],
-): { edge: BackendEdge; storeNode: BackendNode; storeHandle: string | null | undefined } | null {
-  // First pass: look for exact action handle match (highest priority)
+): Array<{ edge: BackendEdge; storeNode: BackendNode; storeHandle: string | null | undefined }> {
+  const matches: Array<{ edge: BackendEdge; storeNode: BackendNode; storeHandle: string | null | undefined }> = [];
+
+  // First pass: look for exact action handle matches (highest priority)
   for (const edge of allEdges) {
     // Direction A: Store -> Page
     if (edge.target === pageNodeId) {
@@ -279,7 +398,7 @@ function findMatchingEdgeForAction(
       if (targetActionId === action.id) {
         const storeNode = allNodes.find((n) => n.id === edge.source && n.type === "state_store");
         if (storeNode) {
-          return { edge, storeNode, storeHandle: edge.sourceHandle };
+          matches.push({ edge, storeNode, storeHandle: edge.sourceHandle });
         }
       }
     }
@@ -290,10 +409,14 @@ function findMatchingEdgeForAction(
       if (sourceActionId === action.id) {
         const storeNode = allNodes.find((n) => n.id === edge.target && n.type === "state_store");
         if (storeNode) {
-          return { edge, storeNode, storeHandle: edge.targetHandle };
+          matches.push({ edge, storeNode, storeHandle: edge.targetHandle });
         }
       }
     }
+  }
+
+  if (matches.length > 0) {
+    return matches;
   }
 
   // Second pass: page-level lifecycle matching (fallback)
@@ -310,10 +433,10 @@ function findMatchingEdgeForAction(
           if (storeNode) {
             const sh = edge.sourceHandle || "";
             if (isPageLoad && (sh.startsWith("populate") || sh === "load")) {
-              return { edge, storeNode, storeHandle: edge.sourceHandle };
+              matches.push({ edge, storeNode, storeHandle: edge.sourceHandle });
             }
             if (isUnmount && (sh.startsWith("reset") || sh === "unmount")) {
-              return { edge, storeNode, storeHandle: edge.sourceHandle };
+              matches.push({ edge, storeNode, storeHandle: edge.sourceHandle });
             }
           }
         }
@@ -327,10 +450,10 @@ function findMatchingEdgeForAction(
           if (storeNode) {
             const th = edge.targetHandle || "";
             if (isPageLoad && (th.startsWith("populate") || th === "load")) {
-              return { edge, storeNode, storeHandle: edge.targetHandle };
+              matches.push({ edge, storeNode, storeHandle: edge.targetHandle });
             }
             if (isUnmount && (th.startsWith("reset") || th === "unmount")) {
-              return { edge, storeNode, storeHandle: edge.targetHandle };
+              matches.push({ edge, storeNode, storeHandle: edge.targetHandle });
             }
           }
         }
@@ -338,7 +461,80 @@ function findMatchingEdgeForAction(
     }
   }
 
-  return null;
+  return matches;
+}
+
+function resolveActionWithBindings(
+  pageNodeId: string,
+  act: UIEventItem,
+  allNodes: readonly BackendNode[],
+  allEdges: readonly BackendEdge[],
+): { action: UIEventItem; changed: boolean } {
+  const matches = findAllMatchingEdgesForAction(pageNodeId, act, allNodes, allEdges);
+  if (matches.length > 0) {
+    const resolvedBindings: StoreActionBinding[] = matches.map((match, mIdx) => {
+      const storeNode = match.storeNode;
+      const storeName = storeNode.data?.storeName || storeNode.data?.label || "App";
+      const inferred = resolveStoreBindingFromHandle(storeNode, match.storeHandle, act);
+
+      const edgeData = match.edge.data as Record<string, unknown> | undefined;
+      const existing =
+        (act.storeActionBindings || []).find(
+          (b) =>
+            (edgeData?.bindingId && b.id === edgeData.bindingId) ||
+            (b.storeNodeId === storeNode.id &&
+              (b.actionId === inferred.actionId || b.actionName === inferred.actionName)),
+        ) || (mIdx === 0 ? act.storeActionBinding : undefined);
+
+      return {
+        id: existing?.id || (edgeData?.bindingId as string) || `bnd-${act.id}-${mIdx}`,
+        storeNodeId: storeNode.id,
+        storeName,
+        actionId: existing?.actionId || inferred.actionId,
+        actionName: existing?.actionName || inferred.actionName,
+        actionType: (existing?.actionType as any) || inferred.actionType,
+        targetFieldId: existing?.targetFieldId || inferred.targetFieldId,
+        targetFieldName: existing?.targetFieldName || inferred.targetFieldName,
+        updateSource:
+          existing?.updateSource || (inferred.actionType === "reset" ? "direct" : "response"),
+        valuePath: existing?.valuePath,
+        customValue: existing?.customValue,
+        parameterMappings: existing?.parameterMappings,
+      };
+    });
+
+    return {
+      action: {
+        ...act,
+        storeActionBinding: resolvedBindings[0],
+        storeActionBindings: resolvedBindings,
+      },
+      changed: true,
+    };
+  }
+
+  // If no canvas edges matched, ensure storeActionBindings and storeActionBinding are in sync
+  if (Array.isArray(act.storeActionBindings) && act.storeActionBindings.length > 0) {
+    if (!act.storeActionBinding) {
+      return {
+        action: {
+          ...act,
+          storeActionBinding: act.storeActionBindings[0],
+        },
+        changed: true,
+      };
+    }
+  } else if (act.storeActionBinding && !act.storeActionBindings?.length) {
+    return {
+      action: {
+        ...act,
+        storeActionBindings: [act.storeActionBinding],
+      },
+      changed: true,
+    };
+  }
+
+  return { action: act, changed: false };
 }
 
 /**
@@ -359,30 +555,16 @@ export function resolveStoreActionBindings(
       ? rawSections.map((sec) => {
           let sectionChanged = false;
           const nextActions = (sec.actions || []).map((act) => {
-            const match = findMatchingEdgeForAction(node.id, act, allNodes, allEdges);
-            if (match) {
-              const storeNode = match.storeNode;
-              const storeName = storeNode.data?.storeName || storeNode.data?.label || "App";
-              const binding = resolveStoreBindingFromHandle(storeNode, match.storeHandle, act);
+            const { action: resolvedAct, changed } = resolveActionWithBindings(
+              node.id,
+              act,
+              allNodes,
+              allEdges,
+            );
+            if (changed) {
               sectionChanged = true;
-              return {
-                ...act,
-                storeActionBinding: {
-                  storeNodeId: storeNode.id,
-                  storeName,
-                  actionId: act.storeActionBinding?.actionId || binding.actionId,
-                  actionName: act.storeActionBinding?.actionName || binding.actionName,
-                  actionType: (act.storeActionBinding?.actionType as any) || binding.actionType,
-                  targetFieldId: act.storeActionBinding?.targetFieldId || binding.targetFieldId,
-                  targetFieldName: act.storeActionBinding?.targetFieldName || binding.targetFieldName,
-                  updateSource: act.storeActionBinding?.updateSource || "response",
-                  valuePath: act.storeActionBinding?.valuePath,
-                  customValue: act.storeActionBinding?.customValue,
-                  parameterMappings: act.storeActionBinding?.parameterMappings,
-                },
-              };
             }
-            return act;
+            return resolvedAct;
           });
 
           if (sectionChanged) {
@@ -400,30 +582,16 @@ export function resolveStoreActionBindings(
     const rawEvents = node.data?.events;
     const nextEvents = Array.isArray(rawEvents)
       ? rawEvents.map((evt) => {
-          const match = findMatchingEdgeForAction(node.id, evt, allNodes, allEdges);
-          if (match) {
-            const storeNode = match.storeNode;
-            const storeName = storeNode.data?.storeName || storeNode.data?.label || "App";
-            const binding = resolveStoreBindingFromHandle(storeNode, match.storeHandle, evt);
+          const { action: resolvedEvt, changed } = resolveActionWithBindings(
+            node.id,
+            evt,
+            allNodes,
+            allEdges,
+          );
+          if (changed) {
             hasChanges = true;
-            return {
-              ...evt,
-              storeActionBinding: {
-                storeNodeId: storeNode.id,
-                storeName,
-                actionId: evt.storeActionBinding?.actionId || binding.actionId,
-                actionName: evt.storeActionBinding?.actionName || binding.actionName,
-                actionType: (evt.storeActionBinding?.actionType as any) || binding.actionType,
-                targetFieldId: evt.storeActionBinding?.targetFieldId || binding.targetFieldId,
-                targetFieldName: evt.storeActionBinding?.targetFieldName || binding.targetFieldName,
-                updateSource: evt.storeActionBinding?.updateSource || "response",
-                valuePath: evt.storeActionBinding?.valuePath,
-                customValue: evt.storeActionBinding?.customValue,
-                parameterMappings: evt.storeActionBinding?.parameterMappings,
-              },
-            };
           }
-          return evt;
+          return resolvedEvt;
         })
       : rawEvents;
 
@@ -432,7 +600,7 @@ export function resolveStoreActionBindings(
     const nextRealtime = Array.isArray(rawRealtime)
       ? rawRealtime.map((conn) => {
           // Check if edge connects this realtime connection to a state_store
-          const matchEdge = allEdges.find(
+          const matchEdges = allEdges.filter(
             (e) =>
               (e.source === node.id &&
                 (e.sourceHandle === `rtc-out-${conn.id}` || e.sourceHandle === `rtc-in-${conn.id}`)) ||
@@ -440,39 +608,76 @@ export function resolveStoreActionBindings(
                 (e.targetHandle === `rtc-out-${conn.id}` || e.targetHandle === `rtc-in-${conn.id}`)),
           );
 
-          if (matchEdge) {
-            const isSource = matchEdge.source === node.id;
-            const storeNodeId = isSource ? matchEdge.target : matchEdge.source;
-            const storeHandle = isSource ? matchEdge.targetHandle : matchEdge.sourceHandle;
-            const storeNode = allNodes.find((n) => n.id === storeNodeId && n.type === "state_store");
+          if (matchEdges.length > 0) {
+            const resolvedBindings: StoreActionBinding[] = matchEdges.map((matchEdge, mIdx) => {
+              const isSource = matchEdge.source === node.id;
+              const storeNodeId = isSource ? matchEdge.target : matchEdge.source;
+              const storeHandle = isSource ? matchEdge.targetHandle : matchEdge.sourceHandle;
+              const storeNode = allNodes.find((n) => n.id === storeNodeId && n.type === "state_store");
 
-            if (storeNode) {
-              const storeName = storeNode.data?.storeName || storeNode.data?.label || "App";
+              const storeName = storeNode?.data?.storeName || storeNode?.data?.label || "App";
               const fakeAction: UIEventItem = {
                 id: conn.id,
                 name: conn.eventName || "message",
                 event: "message",
               };
-              const binding = resolveStoreBindingFromHandle(storeNode, storeHandle, fakeAction);
+              const binding = storeNode
+                ? resolveStoreBindingFromHandle(storeNode, storeHandle, fakeAction)
+                : {
+                    actionId: "custom",
+                    actionName: "message",
+                    actionType: "custom" as const,
+                  };
+
+              const edgeData = matchEdge.data as Record<string, unknown> | undefined;
+              const existing =
+                (conn.storeActionBindings || []).find(
+                  (b) =>
+                    (edgeData?.bindingId && b.id === edgeData.bindingId) ||
+                    (b.storeNodeId === storeNodeId &&
+                      (b.actionId === binding.actionId || b.actionName === binding.actionName)),
+                ) || (mIdx === 0 ? conn.storeActionBinding : undefined);
+
+              return {
+                id: existing?.id || (edgeData?.bindingId as string) || `bnd-rtc-${conn.id}-${mIdx}`,
+                storeNodeId,
+                storeName,
+                actionId: existing?.actionId || binding.actionId,
+                actionName: existing?.actionName || binding.actionName,
+                actionType: (existing?.actionType as any) || binding.actionType,
+                targetFieldId: existing?.targetFieldId || binding.targetFieldId,
+                targetFieldName: existing?.targetFieldName || binding.targetFieldName,
+                updateSource: existing?.updateSource || "full_message",
+                valuePath: existing?.valuePath,
+                customValue: existing?.customValue,
+                parameterMappings: existing?.parameterMappings,
+              };
+            });
+
+            hasChanges = true;
+            return {
+              ...conn,
+              storeActionBinding: resolvedBindings[0],
+              storeActionBindings: resolvedBindings,
+            };
+          }
+
+          if (Array.isArray(conn.storeActionBindings) && conn.storeActionBindings.length > 0) {
+            if (!conn.storeActionBinding) {
               hasChanges = true;
               return {
                 ...conn,
-                storeActionBinding: {
-                  storeNodeId: storeNode.id,
-                  storeName,
-                  actionId: conn.storeActionBinding?.actionId || binding.actionId,
-                  actionName: conn.storeActionBinding?.actionName || binding.actionName,
-                  actionType: (conn.storeActionBinding?.actionType as any) || binding.actionType,
-                  targetFieldId: conn.storeActionBinding?.targetFieldId || binding.targetFieldId,
-                  targetFieldName: conn.storeActionBinding?.targetFieldName || binding.targetFieldName,
-                  updateSource: conn.storeActionBinding?.updateSource || "full_message",
-                  valuePath: conn.storeActionBinding?.valuePath,
-                  customValue: conn.storeActionBinding?.customValue,
-                  parameterMappings: conn.storeActionBinding?.parameterMappings,
-                },
+                storeActionBinding: conn.storeActionBindings[0],
               };
             }
+          } else if (conn.storeActionBinding && !conn.storeActionBindings?.length) {
+            hasChanges = true;
+            return {
+              ...conn,
+              storeActionBindings: [conn.storeActionBinding],
+            };
           }
+
           return conn;
         })
       : rawRealtime;

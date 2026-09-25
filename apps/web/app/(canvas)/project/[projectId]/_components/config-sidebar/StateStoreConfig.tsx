@@ -18,6 +18,7 @@ import {
   StoreIdentitySection,
   StoreFieldsSection,
   StoreDefaultManipulatorsSection,
+  DefaultManipulatorKey,
   StoreActionsSection,
   StoreLiveTestPlayground,
 } from "./state-store-config";
@@ -137,6 +138,29 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
     if (!node) return;
     const updatedFields = fields.filter((f) => f.id !== fieldId);
     const updatedActions = actions.filter((a) => a.targetFieldId !== fieldId);
+    const fieldHandles = [
+      `store-field-in-${fieldId}`,
+      `store-field-out-${fieldId}`,
+      `setter-in-left-${fieldId}`,
+      `setter-in-${fieldId}`,
+      `setter-out-${fieldId}`,
+      `append-in-left-${fieldId}`,
+      `append-in-${fieldId}`,
+      `append-out-${fieldId}`,
+      `pop-in-left-${fieldId}`,
+      `pop-in-${fieldId}`,
+      `pop-out-${fieldId}`,
+      `mutate-in-left-${fieldId}`,
+      `mutate-out-${fieldId}`,
+    ];
+    allEdges
+      .filter(
+        (e) =>
+          (e.source === node.id && fieldHandles.includes(e.sourceHandle || "")) ||
+          (e.target === node.id && fieldHandles.includes(e.targetHandle || "")),
+      )
+      .forEach((e) => deleteEdge(e.id));
+
     updateNode(node.id, {
       data: {
         ...node.data,
@@ -144,7 +168,7 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
         actions: updatedActions,
       },
     });
-  }, [node, fields, actions, updateNode]);
+  }, [node, fields, actions, allEdges, deleteEdge, updateNode]);
 
   const handleAddAction = useCallback(() => {
     if (!node) return;
@@ -185,14 +209,22 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
 
   const handleModifyDefaultManipulator = useCallback(
     (
-      manipulatorKey: "populate" | "reset" | `setter-${string}`,
+      manipulatorKey: DefaultManipulatorKey,
       patch: Partial<GlobalStoreAction>,
     ) => {
       if (!node) return;
       const isPopulate = manipulatorKey === "populate";
       const isReset = manipulatorKey === "reset";
       const isSetter = manipulatorKey.startsWith("setter-");
-      const targetFieldId = isSetter ? manipulatorKey.slice("setter-".length) : patch.targetFieldId;
+      const isAppend = manipulatorKey.startsWith("append-");
+      const isPop = manipulatorKey.startsWith("pop-");
+      const targetFieldId = isSetter
+        ? manipulatorKey.slice("setter-".length)
+        : isAppend
+        ? manipulatorKey.slice("append-".length)
+        : isPop
+        ? manipulatorKey.slice("pop-".length)
+        : patch.targetFieldId;
 
       const existingIndex = actions.findIndex((a) => {
         if (a.defaultManipulatorType === manipulatorKey) return true;
@@ -221,10 +253,38 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
               (!a.targetFieldId || a.targetFieldId === targetFieldId))
           );
         }
+        if (isAppend) {
+          const field = fields.find((f) => f.id === targetFieldId);
+          const appendName = field ? `append${field.name.toLowerCase()}` : "";
+          return (
+            (a.defaultManipulatorType === "append" && a.targetFieldId === targetFieldId) ||
+            (Boolean(appendName) &&
+              a.name.toLowerCase() === appendName &&
+              (!a.targetFieldId || a.targetFieldId === targetFieldId))
+          );
+        }
+        if (isPop) {
+          const field = fields.find((f) => f.id === targetFieldId);
+          const popName = field ? `pop${field.name.toLowerCase()}` : "";
+          return (
+            (a.defaultManipulatorType === "pop" && a.targetFieldId === targetFieldId) ||
+            (Boolean(popName) &&
+              a.name.toLowerCase() === popName &&
+              (!a.targetFieldId || a.targetFieldId === targetFieldId))
+          );
+        }
         return false;
       });
 
-      const manipulatorType = isPopulate ? "populate" : isReset ? "reset" : "setter";
+      const manipulatorType = isPopulate
+        ? "populate"
+        : isReset
+        ? "reset"
+        : isSetter
+        ? "setter"
+        : isAppend
+        ? "append"
+        : "pop";
       let updatedActions: GlobalStoreAction[];
 
       if (existingIndex >= 0) {
@@ -248,8 +308,22 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
               ? "populate"
               : isReset
               ? "reset"
+              : isAppend
+              ? `append${capitalizedField}`
+              : isPop
+              ? `pop${capitalizedField}`
               : `set${capitalizedField}`),
-          actionType: patch.actionType || (isSetter ? "set" : isPopulate ? "populate" : "reset"),
+          actionType:
+            patch.actionType ||
+            (isSetter
+              ? "set"
+              : isAppend
+              ? "append"
+              : isPop
+              ? "remove"
+              : isPopulate
+              ? "populate"
+              : "reset"),
           targetFieldId,
           code: patch.code,
           parameters: patch.parameters,
@@ -273,12 +347,20 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
   );
 
   const handleRevertDefaultManipulator = useCallback(
-    (manipulatorKey: "populate" | "reset" | `setter-${string}`) => {
+    (manipulatorKey: DefaultManipulatorKey) => {
       if (!node) return;
       const isPopulate = manipulatorKey === "populate";
       const isReset = manipulatorKey === "reset";
       const isSetter = manipulatorKey.startsWith("setter-");
-      const targetFieldId = isSetter ? manipulatorKey.slice("setter-".length) : undefined;
+      const isAppend = manipulatorKey.startsWith("append-");
+      const isPop = manipulatorKey.startsWith("pop-");
+      const targetFieldId = isSetter
+        ? manipulatorKey.slice("setter-".length)
+        : isAppend
+        ? manipulatorKey.slice("append-".length)
+        : isPop
+        ? manipulatorKey.slice("pop-".length)
+        : undefined;
 
       const filteredActions = actions.filter((a) => {
         if (a.defaultManipulatorType === manipulatorKey) return false;
@@ -307,6 +389,26 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
               (!a.targetFieldId || a.targetFieldId === targetFieldId))
           );
         }
+        if (isAppend) {
+          const field = fields.find((f) => f.id === targetFieldId);
+          const appendName = field ? `append${field.name.toLowerCase()}` : "";
+          return !(
+            (a.defaultManipulatorType === "append" && a.targetFieldId === targetFieldId) ||
+            (Boolean(appendName) &&
+              a.name.toLowerCase() === appendName &&
+              (!a.targetFieldId || a.targetFieldId === targetFieldId))
+          );
+        }
+        if (isPop) {
+          const field = fields.find((f) => f.id === targetFieldId);
+          const popName = field ? `pop${field.name.toLowerCase()}` : "";
+          return !(
+            (a.defaultManipulatorType === "pop" && a.targetFieldId === targetFieldId) ||
+            (Boolean(popName) &&
+              a.name.toLowerCase() === popName &&
+              (!a.targetFieldId || a.targetFieldId === targetFieldId))
+          );
+        }
         return true;
       });
 
@@ -322,12 +424,20 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
   );
 
   const handleToggleDefaultManipulator = useCallback(
-    (manipulatorKey: "populate" | "reset" | `setter-${string}`, enabled: boolean) => {
+    (manipulatorKey: DefaultManipulatorKey, enabled: boolean) => {
       if (!node) return;
       const isPopulate = manipulatorKey === "populate";
       const isReset = manipulatorKey === "reset";
       const isSetter = manipulatorKey.startsWith("setter-");
-      const targetFieldId = isSetter ? manipulatorKey.slice("setter-".length) : undefined;
+      const isAppend = manipulatorKey.startsWith("append-");
+      const isPop = manipulatorKey.startsWith("pop-");
+      const targetFieldId = isSetter
+        ? manipulatorKey.slice("setter-".length)
+        : isAppend
+        ? manipulatorKey.slice("append-".length)
+        : isPop
+        ? manipulatorKey.slice("pop-".length)
+        : undefined;
       const targetField = fields.find((f) => f.id === targetFieldId);
 
       const currentDisabled = new Set(node.data?.disabledDefaultManipulators || []);
@@ -342,6 +452,14 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
           const cap = targetField.name.charAt(0).toUpperCase() + targetField.name.slice(1);
           currentDisabled.delete(`set${cap}`);
         }
+        if (isAppend && targetField) {
+          const cap = targetField.name.charAt(0).toUpperCase() + targetField.name.slice(1);
+          currentDisabled.delete(`append${cap}`);
+        }
+        if (isPop && targetField) {
+          const cap = targetField.name.charAt(0).toUpperCase() + targetField.name.slice(1);
+          currentDisabled.delete(`pop${cap}`);
+        }
       } else {
         currentDisabled.add(manipulatorKey);
         if (isPopulate) {
@@ -353,13 +471,41 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
           const cap = targetField.name.charAt(0).toUpperCase() + targetField.name.slice(1);
           currentDisabled.add(`set${cap}`);
         }
+        if (isAppend && targetField) {
+          const cap = targetField.name.charAt(0).toUpperCase() + targetField.name.slice(1);
+          currentDisabled.add(`append${cap}`);
+        }
+        if (isPop && targetField) {
+          const cap = targetField.name.charAt(0).toUpperCase() + targetField.name.slice(1);
+          currentDisabled.add(`pop${cap}`);
+        }
 
         // Clean up connected canvas edges since disabled hides from node
         const handlesToRemove: string[] = [];
         if (isPopulate) {
-          handlesToRemove.push("populate-in", "populate-out");
+          handlesToRemove.push("populate-in", "populate-out", "populate-in-left");
         } else if (isReset) {
-          handlesToRemove.push("reset-in", "reset-out");
+          handlesToRemove.push("reset-in", "reset-out", "reset-in-left");
+        } else if (isSetter && targetFieldId) {
+          handlesToRemove.push(
+            `setter-in-left-${targetFieldId}`,
+            `setter-in-${targetFieldId}`,
+            `setter-out-${targetFieldId}`,
+            `mutate-in-left-${targetFieldId}`,
+            `mutate-out-${targetFieldId}`,
+          );
+        } else if (isAppend && targetFieldId) {
+          handlesToRemove.push(
+            `append-in-left-${targetFieldId}`,
+            `append-in-${targetFieldId}`,
+            `append-out-${targetFieldId}`,
+          );
+        } else if (isPop && targetFieldId) {
+          handlesToRemove.push(
+            `pop-in-left-${targetFieldId}`,
+            `pop-in-${targetFieldId}`,
+            `pop-out-${targetFieldId}`,
+          );
         }
 
         if (handlesToRemove.length > 0) {
@@ -397,12 +543,20 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
   );
 
   const handleDeleteDefaultManipulator = useCallback(
-    (manipulatorKey: "populate" | "reset" | `setter-${string}`) => {
+    (manipulatorKey: DefaultManipulatorKey) => {
       if (!node) return;
       const isPopulate = manipulatorKey === "populate";
       const isReset = manipulatorKey === "reset";
       const isSetter = manipulatorKey.startsWith("setter-");
-      const targetFieldId = isSetter ? manipulatorKey.slice("setter-".length) : undefined;
+      const isAppend = manipulatorKey.startsWith("append-");
+      const isPop = manipulatorKey.startsWith("pop-");
+      const targetFieldId = isSetter
+        ? manipulatorKey.slice("setter-".length)
+        : isAppend
+        ? manipulatorKey.slice("append-".length)
+        : isPop
+        ? manipulatorKey.slice("pop-".length)
+        : undefined;
       const targetField = fields.find((f) => f.id === targetFieldId);
 
       // 1. Add to deletedDefaultManipulators
@@ -419,6 +573,14 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
         const cap = targetField.name.charAt(0).toUpperCase() + targetField.name.slice(1);
         currentDeleted.add(`set${cap}`);
       }
+      if (isAppend && targetField) {
+        const cap = targetField.name.charAt(0).toUpperCase() + targetField.name.slice(1);
+        currentDeleted.add(`append${cap}`);
+      }
+      if (isPop && targetField) {
+        const cap = targetField.name.charAt(0).toUpperCase() + targetField.name.slice(1);
+        currentDeleted.add(`pop${cap}`);
+      }
 
       // Also clean from disabled if present
       const currentDisabled = new Set(node.data?.disabledDefaultManipulators || []);
@@ -431,6 +593,14 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
       if (isSetter && targetField) {
         const cap = targetField.name.charAt(0).toUpperCase() + targetField.name.slice(1);
         currentDisabled.delete(`set${cap}`);
+      }
+      if (isAppend && targetField) {
+        const cap = targetField.name.charAt(0).toUpperCase() + targetField.name.slice(1);
+        currentDisabled.delete(`append${cap}`);
+      }
+      if (isPop && targetField) {
+        const cap = targetField.name.charAt(0).toUpperCase() + targetField.name.slice(1);
+        currentDisabled.delete(`pop${cap}`);
       }
 
       // 2. Remove any custom action override in actions
@@ -460,15 +630,53 @@ export const StateStoreConfig: React.FC<StateStoreConfigProps> = ({
               (!a.targetFieldId || a.targetFieldId === targetFieldId))
           );
         }
+        if (isAppend) {
+          const appendName = targetField ? `append${targetField.name.toLowerCase()}` : "";
+          return !(
+            (a.defaultManipulatorType === "append" && a.targetFieldId === targetFieldId) ||
+            (Boolean(appendName) &&
+              a.name.toLowerCase() === appendName &&
+              (!a.targetFieldId || a.targetFieldId === targetFieldId))
+          );
+        }
+        if (isPop) {
+          const popName = targetField ? `pop${targetField.name.toLowerCase()}` : "";
+          return !(
+            (a.defaultManipulatorType === "pop" && a.targetFieldId === targetFieldId) ||
+            (Boolean(popName) &&
+              a.name.toLowerCase() === popName &&
+              (!a.targetFieldId || a.targetFieldId === targetFieldId))
+          );
+        }
         return true;
       });
 
       // 3. Clean up connected canvas edges for the deleted manipulator
       const handlesToRemove: string[] = [];
       if (isPopulate) {
-        handlesToRemove.push("populate-in", "populate-out");
+        handlesToRemove.push("populate-in", "populate-out", "populate-in-left");
       } else if (isReset) {
-        handlesToRemove.push("reset-in", "reset-out");
+        handlesToRemove.push("reset-in", "reset-out", "reset-in-left");
+      } else if (isSetter && targetFieldId) {
+        handlesToRemove.push(
+          `setter-in-left-${targetFieldId}`,
+          `setter-in-${targetFieldId}`,
+          `setter-out-${targetFieldId}`,
+          `mutate-in-left-${targetFieldId}`,
+          `mutate-out-${targetFieldId}`,
+        );
+      } else if (isAppend && targetFieldId) {
+        handlesToRemove.push(
+          `append-in-left-${targetFieldId}`,
+          `append-in-${targetFieldId}`,
+          `append-out-${targetFieldId}`,
+        );
+      } else if (isPop && targetFieldId) {
+        handlesToRemove.push(
+          `pop-in-left-${targetFieldId}`,
+          `pop-in-${targetFieldId}`,
+          `pop-out-${targetFieldId}`,
+        );
       }
 
       if (handlesToRemove.length > 0) {

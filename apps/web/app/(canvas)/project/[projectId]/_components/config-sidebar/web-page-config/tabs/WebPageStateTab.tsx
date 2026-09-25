@@ -62,6 +62,11 @@ export function WebPageStateTab({
         if (act.storeActionBinding?.storeNodeId) {
           ids.add(act.storeActionBinding.storeNodeId);
         }
+        if (Array.isArray(act.storeActionBindings)) {
+          act.storeActionBindings.forEach((b: any) => {
+            if (b?.storeNodeId) ids.add(b.storeNodeId);
+          });
+        }
       });
     });
 

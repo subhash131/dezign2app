@@ -127,6 +127,44 @@ export function generateZustandStore(
     return `  set${fPascal}: (value: ${tsType}) => void;`;
   });
 
+  const isArrayField = (f: { type?: string; isArray?: boolean }) =>
+    Boolean(f.isArray || f.type === "array" || f.type?.endsWith("[]"));
+
+  const activeAppendFields = fields.filter((f) => {
+    if (!isArrayField(f)) return false;
+    const fPascal = toPascalCase(f.name);
+    const appendName = `append${fPascal}`;
+    const isOverridden = actionNames.has(toCamelCase(appendName));
+    const isDisabled =
+      disabledManipulators.has(appendName) || disabledManipulators.has(`append-${f.id}`);
+    return !isOverridden && !isDisabled;
+  });
+
+  const appendLines = activeAppendFields.map((f) => {
+    const fPascal = toPascalCase(f.name);
+    const itemTsType = f.type.endsWith("[]")
+      ? f.type.slice(0, -2)
+      : f.type === "array"
+      ? "unknown"
+      : "unknown";
+    return `  append${fPascal}: (item: ${itemTsType}) => void;`;
+  });
+
+  const activePopFields = fields.filter((f) => {
+    if (!isArrayField(f)) return false;
+    const fPascal = toPascalCase(f.name);
+    const popName = `pop${fPascal}`;
+    const isOverridden = actionNames.has(toCamelCase(popName));
+    const isDisabled =
+      disabledManipulators.has(popName) || disabledManipulators.has(`pop-${f.id}`);
+    return !isOverridden && !isDisabled;
+  });
+
+  const popLines = activePopFields.map((f) => {
+    const fPascal = toPascalCase(f.name);
+    return `  pop${fPascal}: () => void;`;
+  });
+
   // Target unwrap field for collection responses (e.g. API returning { data: [...] } into a store field)
   const rawBase = baseName.replace(/Store$/i, "");
   const pluralName = toCamelCase(toPlural(rawBase));
@@ -393,6 +431,18 @@ ${payloadPrep}
     return `  set${fPascal}: (value) => set({ ${fName}: value }),`;
   });
 
+  const appendImpls = activeAppendFields.map((f) => {
+    const fName = toCamelCase(f.name);
+    const fPascal = toPascalCase(f.name);
+    return `  append${fPascal}: (item) => set((s) => ({ ${fName}: Array.isArray(s.${fName}) ? [...s.${fName}, item] : [item] })),`;
+  });
+
+  const popImpls = activePopFields.map((f) => {
+    const fName = toCamelCase(f.name);
+    const fPascal = toPascalCase(f.name);
+    return `  pop${fPascal}: () => set((s) => ({ ${fName}: Array.isArray(s.${fName}) ? s.${fName}.slice(0, -1) : [] })),`;
+  });
+
   const descriptionComment = store.description
     ? `/**\n * ${store.description.replace(/\n/g, "\n * ")}\n */\n`
     : "";
@@ -440,7 +490,7 @@ ${payloadPrep}
     (set, get) => ({
       ...initialState,
 ${setterImpls.map((l) => `    ${l}`).join("\n")}
-${customActionImpls.length > 0 ? `${customActionImpls.map((l) => `    ${l}`).join("\n")}\n` : ""}${builtInImpls.join("\n")}
+${appendImpls.length > 0 ? `${appendImpls.map((l) => `    ${l}`).join("\n")}\n` : ""}${popImpls.length > 0 ? `${popImpls.map((l) => `    ${l}`).join("\n")}\n` : ""}${customActionImpls.length > 0 ? `${customActionImpls.map((l) => `    ${l}`).join("\n")}\n` : ""}${builtInImpls.join("\n")}
     }),
     {
       name: "${storageKey}",
@@ -451,7 +501,7 @@ ${customActionImpls.length > 0 ? `${customActionImpls.map((l) => `    ${l}`).joi
     : `export const ${hookName} = create<${interfaceName}>((set, get) => ({
   ...initialState,
 ${setterImpls.join("\n")}
-${customActionImpls.length > 0 ? `${customActionImpls.join("\n")}\n` : ""}${builtInImpls.join("\n")}
+${appendImpls.length > 0 ? `${appendImpls.join("\n")}\n` : ""}${popImpls.length > 0 ? `${popImpls.join("\n")}\n` : ""}${customActionImpls.length > 0 ? `${customActionImpls.join("\n")}\n` : ""}${builtInImpls.join("\n")}
 }));`;
 
   const STANDARD_TS_TYPES = new Set([
@@ -494,7 +544,7 @@ ${imports}${typesImportStmt}
 ${descriptionComment}export interface ${interfaceName} {
 ${fieldTypeLines.join("\n")}
 ${setterLines.join("\n")}
-${customActionSignatures.length > 0 ? `${customActionSignatures.join("\n")}\n` : ""}${builtInSignatures.join("\n")}
+${appendLines.length > 0 ? `${appendLines.join("\n")}\n` : ""}${popLines.length > 0 ? `${popLines.join("\n")}\n` : ""}${customActionSignatures.length > 0 ? `${customActionSignatures.join("\n")}\n` : ""}${builtInSignatures.join("\n")}
 }
 
 const initialState = {

@@ -1,8 +1,19 @@
-import type { UIEventItem, PageSection, Parameter, Schema, StateVariableType, PageStateObject } from "./simulation";
+import type {
+  UIEventItem,
+  PageSection,
+  Parameter,
+  Schema,
+  StateVariableType,
+  PageStateObject,
+  StoreActionType,
+  StoreActionBinding,
+} from "./simulation";
 import type { WebAppZone, ProtectionRule, PaymentsPlanConfig } from "./auth";
 import type { ClientDeliveryProtocol } from "./messaging";
 import type { RealtimeProtocol, JsonValue } from "./realtime";
 import type { NodeDependencyItem } from "./services";
+
+export type { StoreActionType, StoreActionBinding };
 
 export type SectionIconName =
   | "layout-grid"
@@ -46,17 +57,6 @@ export interface PresetTriggerOption {
   defaultRoute: string;
 }
 
-export type StoreActionType =
-  | "set"
-  | "append"
-  | "remove"
-  | "toggle"
-  | "increment"
-  | "reset"
-  | "populate"
-  | "custom"
-  | "mutate";
-
 /**
  * A real-time connection that a WebPageNode listens on.
  * Connections can be manually declared OR derived from a `push_to_client` pipeline step.
@@ -99,19 +99,8 @@ export interface RealtimeConnection {
   sourceItemName?: string;
   sourceItemType?: "endpoint" | "event";
   /** State Store binding to update when realtime messages arrive */
-  storeActionBinding?: {
-    storeNodeId?: string;
-    storeName?: string;
-    actionId?: string;
-    actionName?: string;
-    actionType?: StoreActionType;
-    targetFieldId?: string;
-    targetFieldName?: string;
-    updateSource?: "full_message" | "nested_property" | "static";
-    valuePath?: string;
-    customValue?: string;
-    parameterMappings?: Record<string, string>;
-  };
+  storeActionBinding?: StoreActionBinding;
+  storeActionBindings?: StoreActionBinding[];
 }
 
 export interface GlobalStoreField {
@@ -136,7 +125,7 @@ export interface GlobalStoreAction {
   responseMappingMode?: "replace" | "merge" | "custom";
   description?: string;
   prompt?: string;
-  defaultManipulatorType?: "populate" | "reset" | "setter" | "mutate";
+  defaultManipulatorType?: "populate" | "reset" | "setter" | "mutate" | "append" | "pop";
 }
 
 export interface StateStoreTestCase {

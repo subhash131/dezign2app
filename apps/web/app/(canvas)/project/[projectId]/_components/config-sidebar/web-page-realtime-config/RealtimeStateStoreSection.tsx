@@ -117,7 +117,7 @@ export const RealtimeStateStoreSection: React.FC<RealtimeStateStoreSectionProps>
       defaultActionType = "set";
       defaultTargetFieldId = firstF.id;
       defaultTargetFieldName = firstF.name;
-      targetHandle = "mutate-in-left";
+      targetHandle = `setter-in-left-${firstF.id}`;
     } else if (storeActions.length > 0) {
       const firstA = storeActions[0]!;
       defaultActionId = firstA.id;
@@ -162,7 +162,7 @@ export const RealtimeStateStoreSection: React.FC<RealtimeStateStoreSectionProps>
         targetFieldName: undefined,
       };
     } else if (actionKey === "builtin-populate") {
-      targetHandle = "mutate-in-left";
+      targetHandle = "populate-in-left";
       updated = {
         ...storeBinding,
         actionId: "builtin-populate",
@@ -173,8 +173,8 @@ export const RealtimeStateStoreSection: React.FC<RealtimeStateStoreSectionProps>
         parameterMappings: storeBinding.parameterMappings || {},
       };
     } else if (actionKey.startsWith("setter-")) {
-      targetHandle = "mutate-in-left";
       const fieldId = actionKey.replace("setter-", "");
+      targetHandle = `setter-in-left-${fieldId}`;
       const matchedField = fields.find((f) => f.id === fieldId);
       const fieldName = matchedField?.name || "field";
       const setterName = `set${toPascalCase(fieldName)}`;
@@ -515,18 +515,6 @@ export const RealtimeStateStoreSection: React.FC<RealtimeStateStoreSectionProps>
               </div>
             ) : (
               <div className="flex flex-col gap-2.5">
-                {targetField && (
-                  <div className="flex items-center justify-between text-xs py-1.5 px-2 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-700 dark:text-indigo-300">
-                    <div className="flex items-center gap-1.5 font-mono text-xs font-semibold">
-                      <Zap size={11} className="text-indigo-500" />
-                      <span>{storeBinding.actionName}(value)</span>
-                    </div>
-                    <span className="text-[10px] text-muted-foreground font-mono">
-                      mutates state.{targetField.name} ({targetField.type})
-                    </span>
-                  </div>
-                )}
-
                 {/* Multi-parameter Mapping for custom actions with multiple params */}
                 {customActionParameters.length > 1 && (
                   <div className="flex flex-col gap-2 p-2.5 rounded-lg border border-border/50 bg-muted/20">

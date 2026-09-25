@@ -480,6 +480,74 @@ describe("StateStore <-> WebPage & TypesNode Connection and Cleanup", () => {
       expect(edge?.targetHandle).toBe("pageload-in-act-load");
     });
 
+    it("wires StateStore field setter manipulator (setter-out) to WebPage action directly", () => {
+      const store = useBackendCanvasStore.getState();
+
+      const storeNode: BackendNode = {
+        id: "store-conv",
+        type: "state_store",
+        position: { x: 0, y: 0 },
+        data: {
+          label: "conversationStore",
+          fields: [
+            { id: "f-msg", name: "messages", type: "Message[]" },
+            { id: "f-conv", name: "conversations", type: "Conversation[]" },
+          ],
+        },
+        fractionalIndex: "a0",
+      };
+
+      const pageNode: BackendNode = {
+        id: "page-conv",
+        type: "webPage",
+        position: { x: 400, y: 0 },
+        data: {
+          label: "Conversations",
+          sections: [
+            {
+              id: "sec-main",
+              name: "Main",
+              renderMode: "client",
+              actions: [
+                {
+                  id: "act-update",
+                  name: "onNewMessage",
+                  event: "custom",
+                },
+              ],
+            },
+          ],
+        },
+        fractionalIndex: "a1",
+      };
+
+      store.setNodesAndEdges([storeNode, pageNode], [], [], [], [], "proj-state-test");
+
+      useBackendCanvasStore.getState().onConnect({
+        source: "store-conv",
+        target: "page-conv",
+        sourceHandle: "setter-out-f-msg",
+        targetHandle: "event-in-act-update",
+      });
+
+      const updatedPage = useBackendCanvasStore.getState().nodes.find((n) => n.id === "page-conv");
+      const action = updatedPage?.data?.sections?.[0]?.actions?.[0];
+
+      expect(action?.storeActionBinding).toBeDefined();
+      expect(action?.storeActionBinding?.storeNodeId).toBe("store-conv");
+      expect(action?.storeActionBinding?.actionName).toBe("setMessages");
+      expect(action?.storeActionBinding?.actionType).toBe("set");
+      expect(action?.storeActionBinding?.targetFieldId).toBe("f-msg");
+      expect(action?.storeActionBinding?.targetFieldName).toBe("messages");
+
+      const edge = useBackendCanvasStore.getState().edges.find(
+        (e) => e.source === "store-conv" && e.target === "page-conv",
+      );
+      expect(edge).toBeDefined();
+      expect(edge?.sourceHandle).toBe("setter-out-f-msg");
+      expect(edge?.targetHandle).toBe("event-in-act-update");
+    });
+
     it("cleans up storeActionBinding when action edge to state_store is removed", () => {
       const mockState: BackendCanvasState = {
         nodes: [

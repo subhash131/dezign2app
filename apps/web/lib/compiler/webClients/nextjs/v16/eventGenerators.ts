@@ -67,6 +67,7 @@ export function generateEventComponent(
       typeDefs,
       libraries: eventItem?.libraries || [],
       storeActionBinding: eventItem?.storeActionBinding,
+      storeActionBindings: eventItem?.storeActionBindings,
     });
   }
 
@@ -82,5 +83,6 @@ export function generateEventComponent(
     params,
     libraries: eventItem?.libraries || [],
     storeActionBinding: eventItem?.storeActionBinding,
+    storeActionBindings: eventItem?.storeActionBindings,
   });
 }

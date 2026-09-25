@@ -34,6 +34,10 @@ export type BackendEdge = {
     storeName?: string;
     fieldName?: string;
     actionName?: string;
+    actionType?: string;
+    bindingId?: string;
+    targetFieldId?: string;
+    targetFieldName?: string;
     storeId?: string;
     fieldId?: string;
     sectionId?: string;

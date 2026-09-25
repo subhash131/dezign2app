@@ -659,6 +659,101 @@ describe("Convex canvasValidators exact schema", () => {
     const parsedStore = stateStoreNodeDataSchema.safeParse(storeWithMutate);
     expect(parsedStore.success).toBe(true);
   });
+
+  it("validates webPage actions with multi-manipulation storeActionBindings (populate, pop, etc.) in Convex & Zod schemas", async () => {
+    const { webPageDataSchema } = await import("@workspace/canvas/schemas");
+    const { webPageConvexDataValidator, storeActionBindingConvexValidator } = await import(
+      "../../../../../packages/backend/convex/schema/canvasValidators"
+    );
+
+    // Exact payload reported in user's Convex upsertBackendNode error
+    const userPayload = {
+      isLayout: false,
+      label: "conversations",
+      position: { x: 1355.0, y: 340.0 },
+      sections: [
+        {
+          id: "sec-1",
+          name: "Main",
+          actions: [
+            {
+              event: "pageLoad",
+              id: "evt-1790102749230",
+              name: "pageLoad",
+              storeActionBindings: [
+                {
+                  actionId: "manipulator-1790168561382",
+                  actionName: "populate",
+                  actionType: "populate" as const,
+                  id: "bnd-evt-1790102749230-0",
+                  parameterMappings: { conversations: "data" },
+                  storeName: "conversationStore",
+                  storeNodeId: "9f4cecc9-5943-40e5-b0a2-a439fdf11b1b",
+                  updateSource: "response_property" as const,
+                  valuePath: "data",
+                },
+              ],
+            },
+            {
+              event: "click",
+              id: "6y5l5cv",
+              name: "create conversation",
+              storeActionBindings: [
+                {
+                  actionId: "manipulator-pop",
+                  actionName: "popMessages",
+                  actionType: "pop" as const,
+                  id: "bnd-6y5l5cv-0",
+                  storeName: "conversationStore",
+                  storeNodeId: "9f4cecc9-5943-40e5-b0a2-a439fdf11b1b",
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    const parsedPage = webPageDataSchema.safeParse(userPayload);
+    expect(parsedPage.success).toBe(true);
+
+    // Verify convex validator fields
+    expect(webPageConvexDataValidator.fields.sections).toBeDefined();
+    expect(storeActionBindingConvexValidator.fields.id).toBeDefined();
+    expect(storeActionBindingConvexValidator.fields.actionType).toBeDefined();
+    expect(storeActionBindingConvexValidator.fields.parameterMappings).toBeDefined();
+  });
+
+  it("validates store action edge data with actionType, bindingId, targetFieldId, targetFieldName in Convex & Zod schemas", async () => {
+    const { edgeDataSchema } = await import("@workspace/canvas/schemas");
+    const { backendEdgeDataValidator } = await import(
+      "../../../../../packages/backend/convex/schema/canvasValidators"
+    );
+
+    // Exact edge data reported in user's Convex upsertBackendEdge error
+    const edgeData = {
+      actionName: "setMessages",
+      actionType: "set",
+      bindingId: "bnd-1790334765666-a6ds",
+      isStoreAction: true,
+      isStoreActionBinding: true,
+      storeName: "conversationStore",
+      targetFieldId: "00ab7b6a-54d0-4424-a9f7-4df83fefcf6a",
+      targetFieldName: "messages",
+    };
+
+    const parsedEdge = edgeDataSchema.safeParse(edgeData);
+    expect(parsedEdge.success).toBe(true);
+
+    // Verify convex validator fields
+    expect(backendEdgeDataValidator.fields.actionName).toBeDefined();
+    expect(backendEdgeDataValidator.fields.actionType).toBeDefined();
+    expect(backendEdgeDataValidator.fields.bindingId).toBeDefined();
+    expect(backendEdgeDataValidator.fields.targetFieldId).toBeDefined();
+    expect(backendEdgeDataValidator.fields.targetFieldName).toBeDefined();
+    expect(backendEdgeDataValidator.fields.isStoreAction).toBeDefined();
+    expect(backendEdgeDataValidator.fields.isStoreActionBinding).toBeDefined();
+  });
 });
 
 

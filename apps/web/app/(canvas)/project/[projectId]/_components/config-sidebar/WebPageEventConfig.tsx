@@ -124,15 +124,17 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
   }, [item]);
 
   const updateActionInParent = (changes: Partial<UIEventItem>) => {
-    if (!parentNode) return;
-    const currentSections: PageSection[] = parentNode.data.sections || [];
+    const currentNodes = useBackendCanvasStore.getState().nodes;
+    const latestParent = currentNodes.find((n) => n.id === nodeId) || parentNode;
+    if (!latestParent) return;
+    const currentSections: PageSection[] = latestParent.data.sections || [];
     const updatedSections = currentSections.map((sec) => ({
       ...sec,
       actions: (sec.actions || []).map((act) =>
         act.id === id ? { ...act, ...changes } : act,
       ),
     }));
-    updateNode(nodeId, { data: { ...parentNode.data, sections: updatedSections } });
+    updateNode(nodeId, { data: { ...latestParent.data, sections: updatedSections } });
   };
 
   const handleUpdateEvent = (
@@ -482,13 +484,23 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
             actionName={eventName || item?.name || "action"}
             actionEvent={eventType || item?.event}
             storeBinding={item?.storeActionBinding}
+            storeBindings={item?.storeActionBindings}
             stateStoreNodes={nodes.filter((n) => n.type === "state_store")}
             isEndpointConnected={Boolean(linkedTargetNode && endpoint)}
             connectedEndpointName={endpoint?.name}
             connectedEndpoint={endpoint}
             eventRequestBody={item?.requestBody || requestBody}
+            onUpdateStoreBindings={(newBindings) =>
+              updateActionInParent({
+                storeActionBindings: newBindings,
+                storeActionBinding: newBindings[0] || undefined,
+              })
+            }
             onUpdateStoreBinding={(newBinding) =>
-              updateActionInParent({ storeActionBinding: newBinding })
+              updateActionInParent({
+                storeActionBinding: newBinding,
+                storeActionBindings: newBinding ? [newBinding] : [],
+              })
             }
           />
         )}

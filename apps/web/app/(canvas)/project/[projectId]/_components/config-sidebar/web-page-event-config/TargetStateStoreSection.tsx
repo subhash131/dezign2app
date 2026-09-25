@@ -7,16 +7,12 @@ import {
   AccordionTrigger,
 } from "@workspace/ui/components/accordion";
 import { Badge } from "@workspace/ui/components/badge";
-import { Database, Sliders } from "lucide-react";
-import { StoreCallPreviewCard } from "../state-store-config/StoreCallPreviewCard";
+import { Button } from "@workspace/ui/components/button";
+import { Database, Plus } from "lucide-react";
 import {
   TargetStateStoreSectionProps,
   useTargetStateStoreBinding,
-  StoreSelector,
-  StoreActionSelector,
-  StorePopulateMapping,
-  StoreArgumentMapping,
-  StoreActiveBadgeCard,
+  StoreManipulationCard,
 } from "./target-state-store";
 
 export type { TargetStateStoreSectionProps };
@@ -27,42 +23,37 @@ export const TargetStateStoreSection: React.FC<TargetStateStoreSectionProps> = (
   actionName,
   actionEvent,
   storeBinding,
+  storeBindings,
   stateStoreNodes,
   isEndpointConnected,
   connectedEndpointName,
   connectedEndpoint,
   eventRequestBody,
   onUpdateStoreBinding,
+  onUpdateStoreBindings,
 }) => {
   const {
-    selectedStoreNode,
-    fields,
-    customActions,
-    targetField,
-    customActionParameters,
-    isPopulateAction,
-    isResetAction,
-    selectedSourceKind,
-    currentSuggestedPaths,
-    handleStoreChange,
-    handleActionChange,
-    handleSourceKindChange,
-    handlePathChange,
-    handleCustomValueChange,
-    handleFieldMappingChange,
-    handleAutoMatchPopulate,
+    bindings,
+    handleAddManipulation,
+    handleRemoveManipulation,
+    handleMoveManipulation,
+    handleUpdateManipulation,
   } = useTargetStateStoreBinding({
     nodeId,
     actionId,
     actionName,
     actionEvent,
     storeBinding,
+    storeBindings,
     stateStoreNodes,
     isEndpointConnected,
     connectedEndpoint,
     eventRequestBody,
     onUpdateStoreBinding,
+    onUpdateStoreBindings,
   });
+
+  const activeBindingsCount = bindings.filter((b) => Boolean(b.storeNodeId)).length;
 
   return (
     <AccordionItem
@@ -74,131 +65,93 @@ export const TargetStateStoreSection: React.FC<TargetStateStoreSectionProps> = (
           <div className="flex items-center gap-2">
             <Database size={14} className="text-indigo-500" />
             <span className="text-xs font-semibold">
-              Target State Store &amp; Mutation
+              Target State Store Manipulations
             </span>
+            {activeBindingsCount > 0 && (
+              <Badge
+                variant="secondary"
+                className="text-[10px] font-mono px-1.5 py-0 h-4 bg-indigo-500/15 text-indigo-600 dark:text-indigo-400"
+              >
+                {activeBindingsCount}
+              </Badge>
+            )}
           </div>
-          {storeBinding && (
+          {bindings.length === 1 && bindings[0]?.storeName && (
+            <Badge
+              variant="secondary"
+              className="text-[10px] font-mono font-medium bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border border-indigo-500/30 truncate max-w-[170px]"
+            >
+              {bindings[0].storeName}.{bindings[0].actionName || "set"}()
+            </Badge>
+          )}
+          {bindings.length > 1 && (
             <Badge
               variant="secondary"
               className="text-[10px] font-mono font-medium bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border border-indigo-500/30"
             >
-              {storeBinding.storeName}.{storeBinding.actionName}()
+              {activeBindingsCount} Updates
             </Badge>
           )}
         </div>
       </AccordionTrigger>
       <AccordionContent className="px-4 pb-5 pt-2">
         <div className="flex flex-col gap-4">
-          {/* Target State Store Selector */}
-          <StoreSelector
-            selectedStoreNodeId={storeBinding?.storeNodeId}
-            stateStoreNodes={stateStoreNodes}
-            onStoreChange={handleStoreChange}
-          />
-
-          {/* Store Mutation / Action Selector */}
-          {selectedStoreNode && storeBinding && (
-            <StoreActionSelector
-              actionId={storeBinding.actionId}
-              fields={fields}
-              customActions={customActions}
-              onActionChange={handleActionChange}
-            />
-          )}
-
-          {/* Input Values / Parameter Mapping Section */}
-          {selectedStoreNode && storeBinding && (
-            <div className="flex flex-col gap-3 p-3 rounded-lg bg-secondary/20 border border-border/60">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                  <Sliders size={11} className="text-indigo-500" />
-                  Function Input &amp; Argument Mapping
-                </span>
-                {isPopulateAction ? (
-                  <Badge variant="outline" className="text-[9px] font-mono border-emerald-500/40 text-emerald-600 dark:text-emerald-400">
-                    Target: {fields.length} store fields
-                  </Badge>
-                ) : targetField ? (
-                  <Badge variant="outline" className="text-[9px] font-mono">
-                    Target: {targetField.name} ({targetField.type})
-                  </Badge>
-                ) : null}
+          {bindings.length === 0 ? (
+            <div className="flex flex-col items-center justify-center p-6 border border-dashed rounded-xl bg-muted/20 text-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-indigo-500/10 flex items-center justify-center text-indigo-500">
+                <Database size={20} />
               </div>
-
-              {isPopulateAction ? (
-                <StorePopulateMapping
-                  fields={fields}
-                  parameterMappings={storeBinding.parameterMappings}
-                  isEndpointConnected={isEndpointConnected}
-                  connectedEndpoint={connectedEndpoint}
-                  connectedEndpointName={connectedEndpointName}
-                  actionName={actionName}
-                  selectedSourceKind={selectedSourceKind}
-                  currentSuggestedPaths={currentSuggestedPaths}
-                  onSourceKindChange={handleSourceKindChange}
-                  onFieldMappingChange={handleFieldMappingChange}
-                  onAutoMatchPopulate={handleAutoMatchPopulate}
-                />
-              ) : (
-                <StoreArgumentMapping
-                  isResetAction={isResetAction}
-                  targetField={targetField}
-                  customActionParameters={customActionParameters}
-                  actionName={actionName}
-                  storeName={storeBinding.storeName}
-                  boundActionName={storeBinding.actionName}
-                  parameterMappings={storeBinding.parameterMappings}
-                  onUpdateParameterMapping={(paramName, p) => {
-                    onUpdateStoreBinding({
-                      ...storeBinding,
-                      parameterMappings: {
-                        ...(storeBinding.parameterMappings || {}),
-                        [paramName]: p,
-                      },
-                    });
-                  }}
-                  selectedSourceKind={selectedSourceKind}
-                  onSourceKindChange={handleSourceKindChange}
-                  isEndpointConnected={isEndpointConnected}
-                  connectedEndpoint={connectedEndpoint}
-                  connectedEndpointName={connectedEndpointName}
-                  valuePath={storeBinding.valuePath}
-                  onPathChange={handlePathChange}
-                  customValue={storeBinding.customValue}
-                  onCustomValueChange={handleCustomValueChange}
-                  currentSuggestedPaths={currentSuggestedPaths}
-                />
-              )}
+              <div className="flex flex-col gap-1">
+                <span className="text-xs font-semibold">No State Store Manipulations</span>
+                <span className="text-[11px] text-muted-foreground max-w-[280px]">
+                  Wire this action to mutate state stores (set field, append/pop array, populate, or call custom actions).
+                </span>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="gap-1.5 text-xs border-indigo-500/30 hover:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400"
+                onClick={handleAddManipulation}
+              >
+                <Plus size={13} />
+                Add Store Mutation
+              </Button>
             </div>
-          )}
+          ) : (
+            <div className="flex flex-col gap-3">
+              {bindings.map((b, idx) => (
+                <StoreManipulationCard
+                  key={b.id || idx}
+                  index={idx}
+                  totalCount={bindings.length}
+                  binding={b}
+                  stateStoreNodes={stateStoreNodes}
+                  isEndpointConnected={isEndpointConnected}
+                  connectedEndpointName={connectedEndpointName}
+                  connectedEndpoint={connectedEndpoint}
+                  eventRequestBody={eventRequestBody}
+                  actionName={actionName}
+                  onUpdateBinding={(updated) => handleUpdateManipulation(idx, updated)}
+                  onRemove={() => handleRemoveManipulation(idx)}
+                  onMoveUp={idx > 0 ? () => handleMoveManipulation(idx, idx - 1) : undefined}
+                  onMoveDown={
+                    idx < bindings.length - 1 ? () => handleMoveManipulation(idx, idx + 1) : undefined
+                  }
+                />
+              ))}
 
-          {/* Live Compiled Store Function Call Preview */}
-          {selectedStoreNode && storeBinding && (
-            <StoreCallPreviewCard
-              storeName={storeBinding.storeName || "App"}
-              actionName={storeBinding.actionName || "action"}
-              actionType={storeBinding.actionType}
-              targetFieldName={storeBinding.targetFieldName}
-              updateSource={storeBinding.updateSource}
-              valuePath={storeBinding.valuePath}
-              customValue={storeBinding.customValue}
-              parameterMappings={storeBinding.parameterMappings}
-              sourceKind={selectedSourceKind === "endpoint" ? "response" : "payload"}
-              subtitle={
-                selectedSourceKind === "endpoint"
-                  ? `Executes on ${connectedEndpointName || "API"} response`
-                  : `Executes on ${actionName || "event"} trigger`
-              }
-            />
-          )}
-
-          {/* Active Connection Badge Card */}
-          {selectedStoreNode && storeBinding && (
-            <StoreActiveBadgeCard
-              storeName={storeBinding.storeName}
-              actionName={storeBinding.actionName}
-              actionType={storeBinding.actionType}
-            />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full gap-1.5 text-xs py-3 border-dashed border-indigo-500/30 hover:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400"
+                onClick={handleAddManipulation}
+              >
+                <Plus size={13} />
+                Add Another Store Mutation
+              </Button>
+            </div>
           )}
         </div>
       </AccordionContent>

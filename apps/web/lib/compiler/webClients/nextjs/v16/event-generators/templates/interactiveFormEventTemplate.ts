@@ -1,3 +1,4 @@
+import { StoreActionBinding } from "@workspace/canvas/types";
 import { ResolvedEventParameters } from "../types";
 
 function resolveActionLibImports(libraries?: string[]): string {
@@ -28,6 +29,7 @@ export function generateInteractiveFormEventTemplate({
   params,
   libraries = [],
   storeActionBinding,
+  storeActionBindings,
 }: {
   componentName: string;
   eventName: string;
@@ -38,19 +40,8 @@ export function generateInteractiveFormEventTemplate({
   typeDefs: string[];
   params: ResolvedEventParameters;
   libraries?: string[];
-  storeActionBinding?: {
-    storeNodeId?: string;
-    storeName?: string;
-    actionId?: string;
-    actionName?: string;
-    actionType?: string;
-    targetFieldId?: string;
-    targetFieldName?: string;
-    updateSource?: "response" | "response_property" | "payload" | "static" | "direct";
-    valuePath?: string;
-    customValue?: string;
-    parameterMappings?: Record<string, string>;
-  };
+  storeActionBinding?: StoreActionBinding;
+  storeActionBindings?: StoreActionBinding[];
 }): string {
   const {
     mergedPathParams,
@@ -70,147 +61,180 @@ export function generateInteractiveFormEventTemplate({
   } = params;
 
   const libImports = resolveActionLibImports(libraries);
-  const rawStoreName = storeActionBinding?.storeName?.replace(/Store$/i, "");
-  const storeHookName = rawStoreName
-    ? `use${rawStoreName.charAt(0).toUpperCase() + rawStoreName.slice(1)}Store`
-    : "";
-  const storeActionName =
-    storeActionBinding?.actionName ||
-    (storeActionBinding?.targetFieldName
-      ? `set${storeActionBinding.targetFieldName.charAt(0).toUpperCase() + storeActionBinding.targetFieldName.slice(1)}`
-      : storeActionBinding?.actionType === "reset"
-      ? "reset"
-      : storeActionBinding?.actionType === "populate"
-      ? "populate"
-      : "set");
-  const storeImport = storeHookName ? `import { ${storeHookName} } from "@/lib/stores";\n` : "";
 
-  // Helper to emit input mapping for store call
-  const generateStoreUpdate = (payloadVar: string) => {
-    if (!storeHookName) return { preTrigger: "", postTrigger: "" };
-    const hasApiUrl = Boolean(url && url.trim() && url !== "#");
-    const src = !hasApiUrl
-      ? (hasBodyFields || hasRawJson ? "payload" : "direct")
-      : (storeActionBinding?.updateSource || "response");
-    const vPath = storeActionBinding?.valuePath?.trim();
-    const cVal = storeActionBinding?.customValue?.trim();
+  const bindings: StoreActionBinding[] =
+    Array.isArray(storeActionBindings) && storeActionBindings.length > 0
+      ? storeActionBindings
+      : storeActionBinding
+      ? [storeActionBinding]
+      : [];
 
-    if (src === "payload") {
-      if (storeActionName === "populate" && storeActionBinding?.parameterMappings && Object.keys(storeActionBinding.parameterMappings).length > 0) {
-        const mappedEntries = Object.entries(storeActionBinding.parameterMappings)
-          .filter(([_, path]) => path && path.trim())
-          .map(([fieldName, path]) => {
-            const chain = path.trim().split(".").map((p, i) => (i === 0 ? p : `?.${p}`)).join("");
-            return `${fieldName}: ${payloadVar}?.${chain}`;
-          });
-        return {
-          preTrigger: `      ${storeHookName}.getState().populate({ ${mappedEntries.join(", ")} });\n`,
-          postTrigger: "",
-        };
-      }
-      if (storeActionBinding?.actionType === "custom" && storeActionBinding?.parameterMappings && Object.keys(storeActionBinding.parameterMappings).length > 0) {
-        const paramArgs = Object.values(storeActionBinding.parameterMappings).map((path) => {
-          if (!path || !path.trim()) return "undefined";
-          const chain = path.trim().split(".").map((p, i) => (i === 0 ? p : `?.${p}`)).join("");
-          return `${payloadVar}?.${chain}`;
-        });
-        return {
-          preTrigger: `      ${storeHookName}.getState().${storeActionName}(${paramArgs.join(", ")});\n`,
-          postTrigger: "",
-        };
-      }
-      if (vPath) {
-        const chain = vPath.split(".").map((p, i) => (i === 0 ? p : `?.${p}`)).join("");
-        return {
-          preTrigger: `      ${storeHookName}.getState().${storeActionName}(${payloadVar}?.${chain});\n`,
-          postTrigger: "",
-        };
-      }
-      return {
-        preTrigger: `      ${storeHookName}.getState().${storeActionName}(${payloadVar});\n`,
-        postTrigger: "",
-      };
-    }
-    if (src === "static") {
-      let parsed = "undefined";
-      if (cVal) {
-        try {
-          JSON.parse(cVal);
-          parsed = cVal;
-        } catch {
-          parsed = JSON.stringify(cVal);
+  const uniqueStoreNames = Array.from(
+    new Set(
+      bindings
+        .map((b) => b.storeName?.replace(/Store$/i, ""))
+        .filter((n): n is string => Boolean(n)),
+    ),
+  );
+
+  const storeImports =
+    uniqueStoreNames.length > 0
+      ? uniqueStoreNames
+          .map((raw) => {
+            const hook = `use${raw.charAt(0).toUpperCase() + raw.slice(1)}Store`;
+            return `import { ${hook} } from "@/lib/stores";`;
+          })
+          .join("\n") + "\n"
+      : "";
+
+  // Helper to emit input mapping for store calls
+  const generateStoreUpdates = (payloadVar: string) => {
+    let preTrigger = "";
+    let postTrigger = "";
+
+    bindings.forEach((b) => {
+      const rawStoreName = b.storeName?.replace(/Store$/i, "");
+      if (!rawStoreName) return;
+      const storeHookName = `use${rawStoreName.charAt(0).toUpperCase() + rawStoreName.slice(1)}Store`;
+      const storeActionName =
+        b.actionName ||
+        (b.targetFieldName
+          ? `set${b.targetFieldName.charAt(0).toUpperCase() + b.targetFieldName.slice(1)}`
+          : b.actionType === "reset"
+          ? "reset"
+          : b.actionType === "populate"
+          ? "populate"
+          : "set");
+
+      const hasApiUrl = Boolean(url && url.trim() && url !== "#");
+      const src = !hasApiUrl
+        ? hasBodyFields || hasRawJson
+          ? "payload"
+          : "direct"
+        : b.updateSource || "response";
+      const vPath = b.valuePath?.trim();
+      const cVal = b.customValue?.trim();
+
+      if (src === "payload") {
+        if (
+          storeActionName === "populate" &&
+          b.parameterMappings &&
+          Object.keys(b.parameterMappings).length > 0
+        ) {
+          const mappedEntries = Object.entries(b.parameterMappings)
+            .filter(([_, path]) => path && path.trim())
+            .map(([fieldName, path]) => {
+              const chain = path.trim().split(".").map((p, i) => (i === 0 ? p : `?.${p}`)).join("");
+              return `${fieldName}: ${payloadVar}?.${chain}`;
+            });
+          preTrigger += `      ${storeHookName}.getState().populate({ ${mappedEntries.join(", ")} });\n`;
+          return;
         }
+        if (
+          b.actionType === "custom" &&
+          b.parameterMappings &&
+          Object.keys(b.parameterMappings).length > 0
+        ) {
+          const paramArgs = Object.values(b.parameterMappings).map((path) => {
+            if (!path || !path.trim()) return "undefined";
+            const chain = path.trim().split(".").map((p, i) => (i === 0 ? p : `?.${p}`)).join("");
+            return `${payloadVar}?.${chain}`;
+          });
+          preTrigger += `      ${storeHookName}.getState().${storeActionName}(${paramArgs.join(", ")});\n`;
+          return;
+        }
+        if (vPath) {
+          const chain = vPath.split(".").map((p, i) => (i === 0 ? p : `?.${p}`)).join("");
+          preTrigger += `      ${storeHookName}.getState().${storeActionName}(${payloadVar}?.${chain});\n`;
+          return;
+        }
+        preTrigger += `      ${storeHookName}.getState().${storeActionName}(${payloadVar});\n`;
+        return;
       }
-      return {
-        preTrigger: `      ${storeHookName}.getState().${storeActionName}(${parsed});\n`,
-        postTrigger: "",
-      };
-    }
-    if (src === "direct") {
-      return {
-        preTrigger: `      ${storeHookName}.getState().${storeActionName}();\n`,
-        postTrigger: "",
-      };
-    }
-    if (src === "response_property" && vPath) {
-      const chain = vPath.split(".").filter(Boolean).map((k) => `?.[${JSON.stringify(k)}]`).join("");
-      return {
-        preTrigger: "",
-        postTrigger: `      if (triggerResult) {
+
+      if (src === "static") {
+        let parsed = "undefined";
+        if (cVal) {
+          try {
+            JSON.parse(cVal);
+            parsed = cVal;
+          } catch {
+            parsed = JSON.stringify(cVal);
+          }
+        }
+        preTrigger += `      ${storeHookName}.getState().${storeActionName}(${parsed});\n`;
+        return;
+      }
+
+      if (src === "direct") {
+        preTrigger += `      ${storeHookName}.getState().${storeActionName}();\n`;
+        return;
+      }
+
+      if (src === "response_property" && vPath) {
+        const chain = vPath.split(".").filter(Boolean).map((k) => `?.[${JSON.stringify(k)}]`).join("");
+        postTrigger += `      if (triggerResult) {
         const resData = (triggerResult as any)?.data !== undefined ? (triggerResult as any).data : triggerResult;
         const extracted = resData${chain};
         ${storeHookName}.getState().${storeActionName}(extracted);
-      }\n`,
-      };
-    }
-    // Response with explicit parameter mappings (e.g. for populate or multi-param custom action)
-    if (storeActionName === "populate" && storeActionBinding?.parameterMappings && Object.keys(storeActionBinding.parameterMappings).length > 0) {
-      const mappedEntries = Object.entries(storeActionBinding.parameterMappings)
-        .filter(([_, path]) => path && path.trim())
-        .map(([fieldName, path]) => {
-          const chain = path.trim().split(".").map((p, i) => (i === 0 ? p : `?.${p}`)).join("");
-          return `${fieldName}: resData?.${chain}`;
-        });
-      if (mappedEntries.length > 0) {
-        return {
-          preTrigger: "",
-          postTrigger: `      if (triggerResult) {
+      }\n`;
+        return;
+      }
+
+      // Response with explicit parameter mappings (e.g. for populate or multi-param custom action)
+      if (
+        storeActionName === "populate" &&
+        b.parameterMappings &&
+        Object.keys(b.parameterMappings).length > 0
+      ) {
+        const mappedEntries = Object.entries(b.parameterMappings)
+          .filter(([_, path]) => path && path.trim())
+          .map(([fieldName, path]) => {
+            const chain = path.trim().split(".").map((p, i) => (i === 0 ? p : `?.${p}`)).join("");
+            return `${fieldName}: resData?.${chain}`;
+          });
+        if (mappedEntries.length > 0) {
+          postTrigger += `      if (triggerResult) {
         const resData = (triggerResult as any)?.data !== undefined ? (triggerResult as any).data : triggerResult;
         ${storeHookName}.getState().populate({ ${mappedEntries.join(", ")} });
-      }\n`,
-        };
+      }\n`;
+          return;
+        }
       }
-    }
-    if (storeActionBinding?.actionType === "custom" && storeActionBinding?.parameterMappings && Object.keys(storeActionBinding.parameterMappings).length > 0) {
-      const paramArgs = Object.values(storeActionBinding.parameterMappings).map((path) => {
-        if (!path || !path.trim()) return "undefined";
-        const chain = path.trim().split(".").map((p, i) => (i === 0 ? p : `?.${p}`)).join("");
-        return `resData?.${chain}`;
-      });
-      return {
-        preTrigger: "",
-        postTrigger: `      if (triggerResult) {
+
+      if (
+        b.actionType === "custom" &&
+        b.parameterMappings &&
+        Object.keys(b.parameterMappings).length > 0
+      ) {
+        const paramArgs = Object.values(b.parameterMappings).map((path) => {
+          if (!path || !path.trim()) return "undefined";
+          const chain = path.trim().split(".").map((p, i) => (i === 0 ? p : `?.${p}`)).join("");
+          return `resData?.${chain}`;
+        });
+        postTrigger += `      if (triggerResult) {
         const resData = (triggerResult as any)?.data !== undefined ? (triggerResult as any).data : triggerResult;
         ${storeHookName}.getState().${storeActionName}(${paramArgs.join(", ")});
-      }\n`,
-      };
-    }
-    // Default response:
-    return {
-      preTrigger: "",
-      postTrigger: `      if (triggerResult) {
+      }\n`;
+        return;
+      }
+
+      // Default response:
+      postTrigger += `      if (triggerResult) {
         const resData = (triggerResult as any)?.data !== undefined ? (triggerResult as any).data : triggerResult;
         ${storeHookName}.getState().${storeActionName}(resData);
-      }\n`,
-    };
+      }\n`;
+    });
+
+    return { preTrigger, postTrigger };
   };
 
-  const storeSnippet = generateStoreUpdate(hasBodyFields || hasRawJson ? "payloadBody" : "undefined");
+  const storeSnippet = generateStoreUpdates(hasBodyFields || hasRawJson ? "payloadBody" : "undefined");
 
   return `"use client";
 
 import React, { useState, useEffect } from "react";
-${storeImport}import { Button } from "@workspace/ui/components/button";
+${storeImports}import { Button } from "@workspace/ui/components/button";
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@workspace/ui/components/card";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";

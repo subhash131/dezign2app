@@ -77,11 +77,12 @@ export function generateSseEffects(sseConnections: LinkedRealtimeConnectionInfo[
 
     const customListeners = customEvents
       .map((evtName) => {
-        const matchingConns = conns.filter(
-          (c) => c.eventName?.trim() === evtName && c.storeActionBinding?.storeName,
-        );
-        const storeStatements = matchingConns
-          .map((c) => generateRealtimeStoreSnippet(c.storeActionBinding!, "parsed"))
+        const matchingBindings = conns
+          .filter((c) => c.eventName?.trim() === evtName)
+          .flatMap((c) => c.storeActionBindings || (c.storeActionBinding ? [c.storeActionBinding] : []))
+          .filter((b) => Boolean(b.storeName));
+        const storeStatements = matchingBindings
+          .map((b) => generateRealtimeStoreSnippet(b, "parsed"))
           .join("");
 
         return `      es.addEventListener("${evtName}", (event) => {
@@ -107,11 +108,12 @@ ${storeStatements}        setTriggerLogs((prev) => [
       })
       .join("\n");
 
-    const defaultConns = conns.filter(
-      (c) => (!c.eventName || c.eventName === "message") && c.storeActionBinding?.storeName,
-    );
-    const defaultStoreStatements = defaultConns
-      .map((c) => generateRealtimeStoreSnippet(c.storeActionBinding!, "parsed"))
+    const defaultBindings = conns
+      .filter((c) => !c.eventName || c.eventName === "message")
+      .flatMap((c) => c.storeActionBindings || (c.storeActionBinding ? [c.storeActionBinding] : []))
+      .filter((b) => Boolean(b.storeName));
+    const defaultStoreStatements = defaultBindings
+      .map((b) => generateRealtimeStoreSnippet(b, "parsed"))
       .join("");
 
     effectBlocks.push(`  // Real-time SSE listener for ${conns[0]?.sourceServiceName || "Service"}
