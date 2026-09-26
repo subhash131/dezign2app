@@ -229,6 +229,8 @@ export type AnyMessagingResource = {
   storageClass?: string;
   region?: string;
   endpointUrl?: string;
+  accessKeyId?: string;
+  secretAccessKey?: string;
   accessKeyIdEnv?: string;
   secretAccessKeyEnv?: string;
   sessionTokenEnv?: string;

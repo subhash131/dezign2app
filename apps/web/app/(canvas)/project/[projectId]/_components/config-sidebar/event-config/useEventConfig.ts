@@ -31,37 +31,96 @@ export function useEventConfig(id: string, nodeId: string) {
 
   if (!item) {
     // Look in nodes for topics, queues, streams, channels, caches, buckets
-    parentNode = nodes.find((n) => n.id === nodeId);
-    if (parentNode && parentNode.data) {
-      const { topics, streams, queues, channels, caches, buckets } =
-        parentNode.data;
-      const candidateArrays: Array<{
-        name: ResourceArrayName;
-        arr:
-          | typeof topics
-          | typeof streams
-          | typeof queues
-          | typeof channels
-          | typeof caches
-          | typeof buckets;
-      }> = [
-        { name: "topics", arr: topics },
-        { name: "streams", arr: streams },
-        { name: "queues", arr: queues },
-        { name: "channels", arr: channels },
-        { name: "caches", arr: caches },
-        { name: "buckets", arr: buckets },
-      ];
+    const targetNodes = nodeId
+      ? nodes.filter((n) => n.id === nodeId)
+      : nodes;
+    const searchNodes = targetNodes.length > 0 ? targetNodes : nodes;
 
-      for (const candidate of candidateArrays) {
-        if (candidate.arr) {
-          const match = candidate.arr.find((r) => r.id === id);
-          if (match) {
-            item = { ...match, variant: "definition", nodeId: parentNode.id };
-            isNodeResource = true;
-            resourceArrayName = candidate.name;
-            break;
-          }
+    for (const node of searchNodes) {
+      if (!node || !node.data) continue;
+
+      if (node.data.buckets) {
+        const bucketMatch = node.data.buckets.find((b) => b.id === id);
+        if (bucketMatch) {
+          parentNode = node;
+          item = {
+            ...bucketMatch,
+            endpointUrl: bucketMatch.endpointUrl || node.data.endpointUrl,
+            region: bucketMatch.region || node.data.defaultRegion,
+            storageType: bucketMatch.storageType || node.data.storageProvider,
+            forcePathStyle:
+              bucketMatch.forcePathStyle !== undefined
+                ? bucketMatch.forcePathStyle
+                : node.data.forcePathStyle,
+            accessKeyId:
+              bucketMatch.accessKeyId || node.data.accessKeyId,
+            secretAccessKey:
+              bucketMatch.secretAccessKey || node.data.secretAccessKey,
+            accessKeyIdEnv:
+              bucketMatch.accessKeyIdEnv || node.data.accessKeyIdEnv,
+            secretAccessKeyEnv:
+              bucketMatch.secretAccessKeyEnv || node.data.secretAccessKeyEnv,
+            variant: "definition",
+            nodeId: node.id,
+          };
+          isNodeResource = true;
+          resourceArrayName = "buckets";
+          break;
+        }
+      }
+
+      if (node.data.topics) {
+        const match = node.data.topics.find((r) => r.id === id);
+        if (match) {
+          parentNode = node;
+          item = { ...match, variant: "definition", nodeId: node.id };
+          isNodeResource = true;
+          resourceArrayName = "topics";
+          break;
+        }
+      }
+
+      if (node.data.streams) {
+        const match = node.data.streams.find((r) => r.id === id);
+        if (match) {
+          parentNode = node;
+          item = { ...match, variant: "definition", nodeId: node.id };
+          isNodeResource = true;
+          resourceArrayName = "streams";
+          break;
+        }
+      }
+
+      if (node.data.queues) {
+        const match = node.data.queues.find((r) => r.id === id);
+        if (match) {
+          parentNode = node;
+          item = { ...match, variant: "definition", nodeId: node.id };
+          isNodeResource = true;
+          resourceArrayName = "queues";
+          break;
+        }
+      }
+
+      if (node.data.channels) {
+        const match = node.data.channels.find((r) => r.id === id);
+        if (match) {
+          parentNode = node;
+          item = { ...match, variant: "definition", nodeId: node.id };
+          isNodeResource = true;
+          resourceArrayName = "channels";
+          break;
+        }
+      }
+
+      if (node.data.caches) {
+        const match = node.data.caches.find((r) => r.id === id);
+        if (match) {
+          parentNode = node;
+          item = { ...match, variant: "definition", nodeId: node.id };
+          isNodeResource = true;
+          resourceArrayName = "caches";
+          break;
         }
       }
     }
@@ -123,9 +182,14 @@ export function useEventConfig(id: string, nodeId: string) {
       } else if (resourceArrayName === "buckets" && currentData.buckets) {
         const currentItem = currentData.buckets.find((r) => r.id === eventId);
         if (currentItem) {
-          const hasChange = Object.entries(changes).some(
-            ([k, v]) => (currentItem as any)[k] !== v,
-          );
+          let hasChange = false;
+          let prop: keyof AnyMessagingResource;
+          for (prop in changes) {
+            if (currentItem[prop] !== changes[prop]) {
+              hasChange = true;
+              break;
+            }
+          }
           if (!hasChange) return;
         }
         const updatedList = currentData.buckets.map((r) =>
@@ -158,12 +222,13 @@ export function useEventConfig(id: string, nodeId: string) {
     ? messagingNodes.find((n) => n.id === item.brokerNodeId)
     : undefined;
 
-  const availableResources = selectedBroker
-    ? ((selectedBroker.data.topics ||
-        selectedBroker.data.streams ||
-        selectedBroker.data.queues ||
-        selectedBroker.data.channels ||
-        []) as AnyMessagingResource[])
+  const availableResources: AnyMessagingResource[] = selectedBroker
+    ? [
+        ...(selectedBroker.data.topics ?? []),
+        ...(selectedBroker.data.streams ?? []),
+        ...(selectedBroker.data.queues ?? []),
+        ...(selectedBroker.data.channels ?? []),
+      ]
     : [];
 
   const boundBrokerResource = item?.messagingResourceId

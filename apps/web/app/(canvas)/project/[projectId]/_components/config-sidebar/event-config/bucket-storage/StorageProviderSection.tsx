@@ -7,7 +7,7 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select";
 import { Switch } from "@workspace/ui/components/switch";
-import { Cloud, Key } from "lucide-react";
+import { Cloud, Key, AlertTriangle } from "lucide-react";
 import { LocalInput } from "../../../backend-nodes/graph-nodes/shared";
 import { BucketStorageSectionProps } from "./types";
 import { STORAGE_PROVIDERS, STORAGE_CLASSES } from "./constants";
@@ -25,6 +25,17 @@ export const StorageProviderSection: React.FC<BucketStorageSectionProps> = ({
         <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
           Storage Provider & Tier
         </span>
+      </div>
+
+      {/* Limitations & Prerequisites Notice */}
+      <div className="flex flex-col gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/5 p-2.5 text-[11px] text-muted-foreground">
+        <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-semibold text-xs">
+          <AlertTriangle size={13} />
+          <span>Storage Prerequisites &amp; Limitations</span>
+        </div>
+        <p className="leading-relaxed">
+          Buckets defined in the canvas are architecture blueprints and are not automatically created on AWS or local servers until provisioned. When connecting to local emulators like SeaweedFS (<code className="font-mono text-[10px] bg-background/80 px-1 py-0.5 rounded">http://localhost:8333</code>), enable <strong>Force Path-Style URLs</strong> and configure credentials.
+        </p>
       </div>
 
       <div className="flex flex-col gap-1.5">

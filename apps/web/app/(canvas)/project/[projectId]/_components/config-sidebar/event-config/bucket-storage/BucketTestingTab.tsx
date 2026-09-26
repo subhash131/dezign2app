@@ -10,10 +10,16 @@ import {
   Clock,
   Terminal,
   Server,
+  AlertTriangle,
+  RefreshCw,
+  Loader2,
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
+import { cn } from "@workspace/ui/lib/utils";
 import { LocalInput, LocalTextarea } from "../../../backend-nodes/graph-nodes/shared";
+import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import {
   Select,
   SelectContent,
@@ -25,15 +31,19 @@ import { ConfigItemData } from "../types";
 import {
   checkStorageConnection,
   executeStorageOperation,
+  listStorageBuckets,
+  createStorageBucket,
   type CheckStorageConnectionResult,
   type ExecuteStorageOperationResult,
+  type ServerBucketInfo,
 } from "@/lib/services/storageService";
 import { STORAGE_OPERATIONS } from "@workspace/canvas/constants";
-import type { TestingViewMode, StorageOperationOption, OperationOption } from "@workspace/canvas/types";
+import type { TestingViewMode, StorageOperationOption } from "@workspace/canvas/types";
 import { toVarNameSafe } from "./snippetUtils";
 
 export interface BucketTestingTabProps {
   item: ConfigItemData;
+  handleUpdate?: (id: string, updates: Partial<ConfigItemData>) => void;
 }
 
 
@@ -195,16 +205,46 @@ describe("${bucketName} — Generated S3 Client & Operations Suite", () => {
 `;
 }
 
-export const BucketTestingTab: React.FC<BucketTestingTabProps> = ({ item }) => {
+export const BucketTestingTab: React.FC<BucketTestingTabProps> = ({ item, handleUpdate }) => {
   const [viewMode, setViewMode] = useState<TestingViewMode>("operations");
   const [selectedOpKey, setSelectedOpKey] = useState<string>("uploadObject");
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedResult, setCopiedResult] = useState(false);
 
-  // Endpoint and server configuration overrides
-  const [endpointOverride, setEndpointOverride] = useState<string>(item.endpointUrl || "");
-  const [accessKeyOverride, setAccessKeyOverride] = useState<string>("");
-  const [secretKeyOverride, setSecretKeyOverride] = useState<string>("");
+  // Live creation and server discovery state
+  const [isCreatingBucket, setIsCreatingBucket] = useState(false);
+  const [createSuccessMsg, setCreateSuccessMsg] = useState<string | null>(null);
+  const [createErrorMsg, setCreateErrorMsg] = useState<string | null>(null);
+  const [serverBuckets, setServerBuckets] = useState<ServerBucketInfo[] | null>(null);
+  const [serverScanError, setServerScanError] = useState<string | null>(null);
+  const [isScanningServer, setIsScanningServer] = useState(false);
+
+  // Canvas store lookup to automatically fetch all configuration from Storage Node
+  const nodes = useBackendCanvasStore((s) => s.nodes);
+  const setActiveConfigItem = useBackendCanvasStore((s) => s.setActiveConfigItem);
+
+  const parentNode = useMemo(() => {
+    if (item.nodeId) {
+      const match = nodes.find((n) => n.id === item.nodeId);
+      if (match) return match;
+    }
+    return nodes.find((n) => n.data?.buckets?.some((b) => b.id === item.id));
+  }, [nodes, item.nodeId, item.id]);
+
+  const parentData = parentNode?.data;
+  const configuredEndpoint = (item.endpointUrl || parentData?.endpointUrl || "").trim();
+  const configuredRegion = item.region || parentData?.defaultRegion || "us-east-1";
+  const configuredStorageType = item.storageType || parentData?.storageProvider || "s3";
+  const configuredForcePathStyle =
+    item.forcePathStyle !== undefined
+      ? item.forcePathStyle
+      : parentData?.forcePathStyle !== undefined
+        ? parentData.forcePathStyle
+        : true;
+  const configuredAccessKeyId = (item.accessKeyId || parentData?.accessKeyId || "").trim();
+  const configuredSecretAccessKey = (item.secretAccessKey || parentData?.secretAccessKey || "").trim();
+  const configuredAccessKeyIdEnv = item.accessKeyIdEnv || parentData?.accessKeyIdEnv;
+  const configuredSecretAccessKeyEnv = item.secretAccessKeyEnv || parentData?.secretAccessKeyEnv;
 
   // Form inputs for operations
   const [keyInput, setKeyInput] = useState<string>("uploads/avatars/user-42.png");
@@ -226,12 +266,78 @@ export const BucketTestingTab: React.FC<BucketTestingTabProps> = ({ item }) => {
   const [connResult, setConnResult] = useState<CheckStorageConnectionResult | null>(null);
 
   const bucketName = item.name || "default-bucket";
-  const region = item.region || "us-east-1";
+  const region = configuredRegion;
   const accessPolicy = item.accessPolicy || "private";
-  const activeEndpoint = (endpointOverride.trim() || item.endpointUrl || "").trim() || `https://s3.${region}.amazonaws.com`;
+  const activeEndpoint = configuredEndpoint || `https://s3.${region}.amazonaws.com`;
+
+  const handleScanServerBuckets = async () => {
+    setIsScanningServer(true);
+    setServerScanError(null);
+    try {
+      const res = await listStorageBuckets({
+        endpointUrl: activeEndpoint,
+        region,
+        bucketName,
+        storageType: configuredStorageType,
+        forcePathStyle: configuredForcePathStyle,
+        accessKeyId: configuredAccessKeyId || undefined,
+        secretAccessKey: configuredSecretAccessKey || undefined,
+        accessKeyIdEnv: configuredAccessKeyIdEnv,
+        secretAccessKeyEnv: configuredSecretAccessKeyEnv,
+      });
+      if (res.success) {
+        setServerBuckets(res.buckets);
+      } else {
+        setServerScanError(res.error || "Failed to scan server buckets");
+      }
+    } catch (err) {
+      setServerScanError(err instanceof Error ? err.message : "Failed to scan server buckets");
+    } finally {
+      setIsScanningServer(false);
+    }
+  };
+
+  const handleCreateBucketNow = async () => {
+    setIsCreatingBucket(true);
+    setCreateSuccessMsg(null);
+    setCreateErrorMsg(null);
+    try {
+      const res = await createStorageBucket(
+        {
+          endpointUrl: activeEndpoint,
+          region,
+          bucketName,
+          storageType: configuredStorageType,
+          forcePathStyle: configuredForcePathStyle,
+          accessKeyId: configuredAccessKeyId || undefined,
+          secretAccessKey: configuredSecretAccessKey || undefined,
+          accessKeyIdEnv: configuredAccessKeyIdEnv,
+          secretAccessKeyEnv: configuredSecretAccessKeyEnv,
+        },
+        bucketName,
+      );
+      if (res.success) {
+        setCreateSuccessMsg(`✓ Bucket "${bucketName}" created successfully on server.`);
+        await handleRunConnectionTest();
+        await handleScanServerBuckets();
+      } else {
+        setCreateErrorMsg(res.error || res.message || "Failed to create bucket on server");
+      }
+    } catch (err) {
+      setCreateErrorMsg(err instanceof Error ? err.message : "Failed to create bucket on server");
+    } finally {
+      setIsCreatingBucket(false);
+    }
+  };
+
+  const handleSwitchBucket = (newBucketName: string) => {
+    if (handleUpdate) {
+      handleUpdate(item.id, { name: newBucketName });
+    }
+  };
 
   const selectedOp = useMemo(
-    () => STORAGE_OPERATIONS.find((o) => o.key === selectedOpKey) || (STORAGE_OPERATIONS[0] as OperationOption),
+    () => STORAGE_OPERATIONS.find((o) => o.key === selectedOpKey) ?? STORAGE_OPERATIONS[0],
     [selectedOpKey],
   );
 
@@ -263,15 +369,15 @@ export const BucketTestingTab: React.FC<BucketTestingTabProps> = ({ item }) => {
         endpointUrl: activeEndpoint,
         region,
         bucketName,
-        storageType: item.storageType || "s3",
-        forcePathStyle: item.forcePathStyle,
-        accessKeyId: accessKeyOverride || undefined,
-        secretAccessKey: secretKeyOverride || undefined,
-        accessKeyIdEnv: item.accessKeyIdEnv,
-        secretAccessKeyEnv: item.secretAccessKeyEnv,
+        storageType: configuredStorageType,
+        forcePathStyle: configuredForcePathStyle,
+        accessKeyId: configuredAccessKeyId || undefined,
+        secretAccessKey: configuredSecretAccessKey || undefined,
+        accessKeyIdEnv: configuredAccessKeyIdEnv,
+        secretAccessKeyEnv: configuredSecretAccessKeyEnv,
       });
       setConnResult(res);
-    } catch (err: any) {
+    } catch (err) {
       setConnResult({
         success: false,
         serverActive: false,
@@ -281,7 +387,7 @@ export const BucketTestingTab: React.FC<BucketTestingTabProps> = ({ item }) => {
         endpoint: activeEndpoint,
         bucket: bucketName,
         region,
-        error: err?.message || String(err),
+        error: err instanceof Error ? err.message : String(err),
       });
     } finally {
       setIsTestingConn(false);
@@ -299,12 +405,12 @@ export const BucketTestingTab: React.FC<BucketTestingTabProps> = ({ item }) => {
           endpointUrl: activeEndpoint,
           region,
           bucketName,
-          storageType: item.storageType || "s3",
-          forcePathStyle: item.forcePathStyle,
-          accessKeyId: accessKeyOverride || undefined,
-          secretAccessKey: secretKeyOverride || undefined,
-          accessKeyIdEnv: item.accessKeyIdEnv,
-          secretAccessKeyEnv: item.secretAccessKeyEnv,
+          storageType: configuredStorageType,
+          forcePathStyle: configuredForcePathStyle,
+          accessKeyId: configuredAccessKeyId || undefined,
+          secretAccessKey: configuredSecretAccessKey || undefined,
+          accessKeyIdEnv: configuredAccessKeyIdEnv,
+          secretAccessKeyEnv: configuredSecretAccessKeyEnv,
           cdnUrl: item.cdnDomain,
         },
         operation: selectedOpKey,
@@ -321,7 +427,7 @@ export const BucketTestingTab: React.FC<BucketTestingTabProps> = ({ item }) => {
         },
       });
       setOpResult(res);
-    } catch (err: any) {
+    } catch (err) {
       setOpResult({
         success: false,
         serverActive: false,
@@ -332,7 +438,7 @@ export const BucketTestingTab: React.FC<BucketTestingTabProps> = ({ item }) => {
         method: "FETCH",
         url: activeEndpoint,
         data: null,
-        error: err?.message || String(err),
+        error: err instanceof Error ? err.message : String(err),
       });
     } finally {
       setIsExecutingOp(false);
@@ -354,7 +460,7 @@ export const BucketTestingTab: React.FC<BucketTestingTabProps> = ({ item }) => {
 
   return (
     <div className="flex flex-col gap-4 text-xs">
-      {/* ─── Target Server Live Status Bar ─── */}
+      {/* ─── Target Server Live Status Bar (Auto-fetched from Storage Config) ─── */}
       <div className="flex flex-col gap-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/25">
         <div className="flex items-center justify-between flex-wrap gap-1">
           <div className="flex items-center gap-1.5 font-semibold text-amber-600 dark:text-amber-400">
@@ -364,45 +470,67 @@ export const BucketTestingTab: React.FC<BucketTestingTabProps> = ({ item }) => {
               {activeEndpoint}
             </code>
           </div>
-          <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30 text-[10px] gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            Live Server Dispatch
-          </Badge>
+          <div className="flex items-center gap-1.5">
+            {parentNode && (
+              <Badge variant="outline" className="bg-amber-500/10 text-amber-500 border-amber-500/30 text-[10px]">
+                {parentNode.data?.label || "Storage Node"}
+              </Badge>
+            )}
+            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30 text-[10px] gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Live Server Dispatch
+            </Badge>
+          </div>
         </div>
 
-        {/* Optional endpoint and credentials quick overrides */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 border-t border-amber-500/20 text-[11px]">
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[10px] text-muted-foreground">Endpoint (MinIO / LocalStack / AWS)</span>
-            <LocalInput
-              className="h-7 text-xs font-mono bg-background"
-              placeholder={item.endpointUrl || `https://s3.${region}.amazonaws.com`}
-              value={endpointOverride}
-              onChange={(e) => setEndpointOverride(e.target.value)}
-              debounceMs={150}
-            />
+        {/* Read-only configuration summary automatically fetched from config */}
+        <div className="flex items-center justify-between flex-wrap gap-2 pt-1.5 border-t border-amber-500/20 text-[11px]">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[10px] font-mono text-muted-foreground">
+              Provider: <strong className="text-foreground uppercase">{configuredStorageType}</strong>
+            </span>
+            <span className="text-muted-foreground/40">•</span>
+            <span className="text-[10px] font-mono text-muted-foreground">
+              Region: <strong className="text-foreground">{region}</strong>
+            </span>
+            <span className="text-muted-foreground/40">•</span>
+            <span className="text-[10px] font-mono text-muted-foreground">
+              Style: <strong className="text-foreground">{configuredForcePathStyle ? "Path-Style" : "Virtual-Hosted"}</strong>
+            </span>
+            <span className="text-muted-foreground/40">•</span>
+            <span className="text-[10px] font-mono text-muted-foreground">
+              Auth:{" "}
+              {configuredAccessKeyId ? (
+                <span className="text-emerald-500 font-medium">
+                  Direct ({configuredAccessKeyId} / ••••••)
+                </span>
+              ) : configuredAccessKeyIdEnv ? (
+                <span className="text-amber-500 font-medium">
+                  Env (${configuredAccessKeyIdEnv})
+                </span>
+              ) : (
+                <span className="text-muted-foreground">AWS Credentials Chain</span>
+              )}
+            </span>
           </div>
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[10px] text-muted-foreground">Access Key ID (Optional override)</span>
-            <LocalInput
-              className="h-7 text-xs font-mono bg-background"
-              placeholder={item.accessKeyIdEnv ? `env: ${item.accessKeyIdEnv}` : "minioadmin"}
-              value={accessKeyOverride}
-              onChange={(e) => setAccessKeyOverride(e.target.value)}
-              debounceMs={150}
-            />
-          </div>
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[10px] text-muted-foreground">Secret Key (Optional override)</span>
-            <LocalInput
-              type="password"
-              className="h-7 text-xs font-mono bg-background"
-              placeholder={item.secretAccessKeyEnv ? `env: ${item.secretAccessKeyEnv}` : "minioadmin"}
-              value={secretKeyOverride}
-              onChange={(e) => setSecretKeyOverride(e.target.value)}
-              debounceMs={150}
-            />
-          </div>
+
+          {parentNode && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-[10px] text-amber-600 dark:text-amber-400 hover:text-amber-500 hover:bg-amber-500/10 gap-1 ml-auto cursor-pointer"
+              onClick={() => {
+                setActiveConfigItem({
+                  type: "storage",
+                  id: parentNode.id,
+                  nodeId: parentNode.id,
+                });
+              }}
+            >
+              <ExternalLink size={10} />
+              <span>Edit in {parentNode.data?.label || "Storage Node"}</span>
+            </Button>
+          )}
         </div>
       </div>
 
@@ -655,9 +783,44 @@ export const BucketTestingTab: React.FC<BucketTestingTabProps> = ({ item }) => {
               </div>
 
               {opResult.error && (
-                <div className="p-2 rounded bg-destructive/10 border border-destructive/20 text-destructive text-[11px]">
-                  <strong>Server Error:</strong> {opResult.error}
-                  {opResult.tip && <p className="text-[10px] text-muted-foreground mt-1">{opResult.tip}</p>}
+                <div className="flex flex-col gap-2 p-2.5 rounded bg-destructive/10 border border-destructive/20 text-destructive text-[11px]">
+                  <div>
+                    <strong>Server Error:</strong> {opResult.error}
+                    {opResult.tip && <p className="text-[10px] text-muted-foreground mt-1">{opResult.tip}</p>}
+                  </div>
+
+                  {/* 1-Click Create Bucket if 404 NoSuchBucket */}
+                  {opResult.status === 404 && (
+                    <div className="flex flex-col gap-2 pt-2 border-t border-destructive/20">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-muted-foreground">
+                          Bucket &quot;{bucketName}&quot; does not exist on this server.
+                        </span>
+                        <Button
+                          size="sm"
+                          disabled={isCreatingBucket}
+                          onClick={handleCreateBucketNow}
+                          className="h-6 text-[10px] bg-amber-500 hover:bg-amber-600 text-black font-semibold gap-1 px-2 shrink-0"
+                        >
+                          {isCreatingBucket ? <Loader2 size={10} className="animate-spin" /> : <Play size={10} />}
+                          Create Bucket Now
+                        </Button>
+                      </div>
+
+                      {createSuccessMsg && (
+                        <div className="text-[11px] text-emerald-500 font-medium flex items-center gap-1">
+                          <CheckCircle2 size={12} /> {createSuccessMsg}
+                        </div>
+                      )}
+
+                      {createErrorMsg && (
+                        <div className="p-2 rounded bg-destructive/15 border border-destructive/30 text-destructive text-[11px] flex items-start gap-1.5 font-mono">
+                          <XCircle size={12} className="shrink-0 mt-0.5" />
+                          <span className="break-all">{createErrorMsg}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -719,7 +882,7 @@ export const BucketTestingTab: React.FC<BucketTestingTabProps> = ({ item }) => {
               </div>
               <div className="flex flex-col gap-0.5 p-2 rounded bg-background/60 border border-border/40">
                 <span className="text-[10px] text-muted-foreground">Storage Provider</span>
-                <span className="font-mono font-medium text-foreground uppercase">{item.storageType || "s3"}</span>
+                <span className="font-mono font-medium text-foreground uppercase">{configuredStorageType}</span>
               </div>
               <div className="flex flex-col gap-0.5 p-2 rounded bg-background/60 border border-border/40">
                 <span className="text-[10px] text-muted-foreground">Region</span>
@@ -831,9 +994,84 @@ const res = await s3Client.send(cmd);`}
               )}
 
               {connResult.error && (
-                <div className="p-2 rounded bg-destructive/10 border border-destructive/20 text-destructive text-[11px]">
-                  <strong>Result:</strong> {connResult.error}
-                  {connResult.tip && <p className="text-[10px] text-muted-foreground mt-1">{connResult.tip}</p>}
+                <div className="flex flex-col gap-2 p-2.5 rounded bg-destructive/10 border border-destructive/20 text-destructive text-[11px]">
+                  <div>
+                    <strong>Result:</strong> {connResult.error}
+                    {connResult.tip && <p className="text-[10px] text-muted-foreground mt-1">{connResult.tip}</p>}
+                  </div>
+
+                  {/* If 404: Offer 1-Click Create Bucket & Discovery */}
+                  {(connResult.status === 404 || connResult.bucketExists === false) && (
+                    <div className="flex flex-col gap-2 pt-2 border-t border-destructive/20">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-amber-600 dark:text-amber-400 text-xs">
+                          Bucket &quot;{bucketName}&quot; not found on server
+                        </span>
+                        <Button
+                          size="sm"
+                          disabled={isCreatingBucket}
+                          onClick={handleCreateBucketNow}
+                          className="h-7 text-xs bg-amber-500 hover:bg-amber-600 text-black font-semibold gap-1 px-2.5 shrink-0"
+                        >
+                          {isCreatingBucket ? <Loader2 size={11} className="animate-spin" /> : <Play size={11} />}
+                          Create Bucket on Server
+                        </Button>
+                      </div>
+
+                      {createSuccessMsg && (
+                        <div className="text-[11px] text-emerald-500 font-medium flex items-center gap-1">
+                          <CheckCircle2 size={12} /> {createSuccessMsg}
+                        </div>
+                      )}
+
+                      {createErrorMsg && (
+                        <div className="p-2 rounded bg-destructive/15 border border-destructive/30 text-destructive text-[11px] flex items-start gap-1.5 font-mono">
+                          <XCircle size={12} className="shrink-0 mt-0.5" />
+                          <span className="break-all">{createErrorMsg}</span>
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between pt-1 border-t border-destructive/15">
+                        <span className="text-[10px] text-muted-foreground">
+                          Want to select an existing bucket on this server instead?
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={isScanningServer}
+                          onClick={handleScanServerBuckets}
+                          className="h-5 px-1.5 text-[9px] gap-1 hover:border-amber-500/40"
+                        >
+                          <RefreshCw size={9} className={cn(isScanningServer && "animate-spin")} />
+                          {isScanningServer ? "Scanning..." : "Scan Server Buckets"}
+                        </Button>
+                      </div>
+
+                      {serverScanError && (
+                        <div className="p-2 rounded bg-destructive/15 border border-destructive/30 text-destructive text-[11px] flex items-start gap-1.5 font-mono">
+                          <XCircle size={12} className="shrink-0 mt-0.5" />
+                          <span className="break-all">{serverScanError}</span>
+                        </div>
+                      )}
+
+                      {serverBuckets && serverBuckets.length > 0 && (
+                        <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                          {serverBuckets.map((sb) => (
+                            <Button
+                              key={sb.name}
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleSwitchBucket(sb.name)}
+                              className="h-5 px-2 text-[10px] font-mono hover:border-amber-500/50"
+                              title={`Switch current bucket to "${sb.name}"`}
+                            >
+                              Switch to: {sb.name}
+                            </Button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 

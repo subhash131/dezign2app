@@ -1,10 +1,15 @@
 import {
   checkStorageConnectionAction,
   executeStorageOperationAction,
+  listStorageBucketsAction,
+  createStorageBucketAction,
   type StorageConnectionConfig,
   type CheckStorageConnectionResult,
   type ExecuteStorageOperationPayload,
   type ExecuteStorageOperationResult,
+  type ListStorageBucketsResult,
+  type CreateStorageBucketResult,
+  type ServerBucketInfo,
 } from "@/app/actions/storageActions";
 
 export type {
@@ -12,6 +17,9 @@ export type {
   CheckStorageConnectionResult,
   ExecuteStorageOperationPayload,
   ExecuteStorageOperationResult,
+  ListStorageBucketsResult,
+  CreateStorageBucketResult,
+  ServerBucketInfo,
 };
 
 /**
@@ -32,3 +40,23 @@ export async function executeStorageOperation(
 ): Promise<ExecuteStorageOperationResult> {
   return executeStorageOperationAction(payload);
 }
+
+/**
+ * Discover and list all existing buckets on the configured storage server.
+ */
+export async function listStorageBuckets(
+  config: StorageConnectionConfig,
+): Promise<ListStorageBucketsResult> {
+  return listStorageBucketsAction(config);
+}
+
+/**
+ * Create a bucket directly on the configured storage server.
+ */
+export async function createStorageBucket(
+  config: StorageConnectionConfig,
+  bucketName: string,
+): Promise<CreateStorageBucketResult> {
+  return createStorageBucketAction(config, bucketName);
+}
+

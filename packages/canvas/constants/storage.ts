@@ -2,6 +2,14 @@ import type { StorageOperationOption } from "../types/storage";
 
 export const STORAGE_OPERATIONS: readonly StorageOperationOption[] = [
   {
+    key: "createBucket",
+    name: "createBucket",
+    label: "createBucket(bucketName)",
+    desc: "Dispatches HTTP PUT to create the bucket on the target server (SeaweedFS, MinIO, or AWS)",
+    kind: "write",
+    defaultKey: "",
+  },
+  {
     key: "uploadObject",
     name: "uploadObject",
     label: "uploadObject(bucket, key, body, options)",
