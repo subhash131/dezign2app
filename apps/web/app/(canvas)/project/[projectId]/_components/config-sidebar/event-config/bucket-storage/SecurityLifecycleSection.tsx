@@ -83,7 +83,9 @@ export const SecurityLifecycleSection: React.FC<BucketStorageSectionProps> = ({
             className="h-8 bg-background/50 text-xs font-mono"
             placeholder="arn:aws:kms:us-east-1:123456789012:key/..."
             value={item.kmsKeyId || ""}
+            onChange={(e) => handleUpdate(item.id, { kmsKeyId: e.target.value })}
             onBlur={(e) => handleUpdate(item.id, { kmsKeyId: e.target.value })}
+            debounceMs={200}
           />
         </div>
       )}
@@ -97,9 +99,13 @@ export const SecurityLifecycleSection: React.FC<BucketStorageSectionProps> = ({
             className="h-8 bg-background/50 text-xs font-mono"
             placeholder="e.g. 30, 90, 365"
             value={item.lifecycleExpirationDays || ""}
+            onChange={(e) =>
+              handleUpdate(item.id, { lifecycleExpirationDays: e.target.value })
+            }
             onBlur={(e) =>
               handleUpdate(item.id, { lifecycleExpirationDays: e.target.value })
             }
+            debounceMs={200}
           />
         </div>
 
@@ -111,9 +117,13 @@ export const SecurityLifecycleSection: React.FC<BucketStorageSectionProps> = ({
             className="h-8 bg-background/50 text-xs font-mono"
             placeholder="e.g. 60, 90, 180"
             value={item.lifecycleGlacierDays || ""}
+            onChange={(e) =>
+              handleUpdate(item.id, { lifecycleGlacierDays: e.target.value })
+            }
             onBlur={(e) =>
               handleUpdate(item.id, { lifecycleGlacierDays: e.target.value })
             }
+            debounceMs={200}
           />
         </div>
       </div>

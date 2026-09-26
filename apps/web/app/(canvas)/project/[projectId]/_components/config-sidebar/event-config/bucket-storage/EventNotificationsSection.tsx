@@ -78,9 +78,13 @@ export const EventNotificationsSection: React.FC<BucketStorageSectionProps> = ({
               className="h-7 text-xs font-mono"
               placeholder="e.g. uploads/ or raw/"
               value={item.eventPrefixFilter || ""}
+              onChange={(e) =>
+                handleUpdate(item.id, { eventPrefixFilter: e.target.value })
+              }
               onBlur={(e) =>
                 handleUpdate(item.id, { eventPrefixFilter: e.target.value })
               }
+              debounceMs={200}
             />
           </div>
           <div className="flex flex-col gap-1">
@@ -91,9 +95,13 @@ export const EventNotificationsSection: React.FC<BucketStorageSectionProps> = ({
               className="h-7 text-xs font-mono"
               placeholder="e.g. .jpg or .mp4"
               value={item.eventSuffixFilter || ""}
+              onChange={(e) =>
+                handleUpdate(item.id, { eventSuffixFilter: e.target.value })
+              }
               onBlur={(e) =>
                 handleUpdate(item.id, { eventSuffixFilter: e.target.value })
               }
+              debounceMs={200}
             />
           </div>
         </div>

@@ -44,7 +44,9 @@ export const CorsConfigSection: React.FC<BucketStorageSectionProps> = ({
               className="h-8 bg-background/50 text-xs font-mono"
               placeholder="e.g. * or https://myapp.com, http://localhost:3000"
               value={item.corsOrigins || "*"}
+              onChange={(e) => handleUpdate(item.id, { corsOrigins: e.target.value })}
               onBlur={(e) => handleUpdate(item.id, { corsOrigins: e.target.value })}
+              debounceMs={200}
             />
           </div>
 
@@ -80,7 +82,9 @@ export const CorsConfigSection: React.FC<BucketStorageSectionProps> = ({
                 className="h-8 bg-background/50 text-xs font-mono"
                 placeholder="* or Content-Type, Authorization"
                 value={item.corsHeaders || "*"}
+                onChange={(e) => handleUpdate(item.id, { corsHeaders: e.target.value })}
                 onBlur={(e) => handleUpdate(item.id, { corsHeaders: e.target.value })}
+                debounceMs={200}
               />
             </div>
 
@@ -90,7 +94,9 @@ export const CorsConfigSection: React.FC<BucketStorageSectionProps> = ({
                 className="h-8 bg-background/50 text-xs font-mono"
                 placeholder="3600"
                 value={item.corsMaxAge || "3600"}
+                onChange={(e) => handleUpdate(item.id, { corsMaxAge: e.target.value })}
                 onBlur={(e) => handleUpdate(item.id, { corsMaxAge: e.target.value })}
+                debounceMs={200}
               />
             </div>
           </div>

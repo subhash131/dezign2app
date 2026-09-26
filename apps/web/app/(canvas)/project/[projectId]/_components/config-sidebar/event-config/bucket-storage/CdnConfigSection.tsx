@@ -38,7 +38,9 @@ export const CdnConfigSection: React.FC<BucketStorageSectionProps> = ({
               className="h-8 bg-background/50 text-xs font-mono"
               placeholder="e.g. cdn.myapp.com or d1234abcd.cloudfront.net"
               value={item.cdnDomain || ""}
+              onChange={(e) => handleUpdate(item.id, { cdnDomain: e.target.value })}
               onBlur={(e) => handleUpdate(item.id, { cdnDomain: e.target.value })}
+              debounceMs={200}
             />
           </div>
 

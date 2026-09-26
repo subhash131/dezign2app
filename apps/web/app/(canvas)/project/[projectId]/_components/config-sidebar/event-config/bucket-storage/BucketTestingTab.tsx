@@ -7,19 +7,13 @@ import {
   XCircle,
   Copy,
   Check,
-  HardDrive,
   Clock,
   Terminal,
-  Globe,
-  AlertTriangle,
   Server,
-  Layers,
-  Sparkles,
 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
-import { Input } from "@workspace/ui/components/input";
-import { Textarea } from "@workspace/ui/components/textarea";
+import { LocalInput, LocalTextarea } from "../../../backend-nodes/graph-nodes/shared";
 import {
   Select,
   SelectContent,
@@ -380,30 +374,33 @@ export const BucketTestingTab: React.FC<BucketTestingTabProps> = ({ item }) => {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 border-t border-amber-500/20 text-[11px]">
           <div className="flex flex-col gap-0.5">
             <span className="text-[10px] text-muted-foreground">Endpoint (MinIO / LocalStack / AWS)</span>
-            <Input
+            <LocalInput
               className="h-7 text-xs font-mono bg-background"
               placeholder={item.endpointUrl || `https://s3.${region}.amazonaws.com`}
               value={endpointOverride}
               onChange={(e) => setEndpointOverride(e.target.value)}
+              debounceMs={150}
             />
           </div>
           <div className="flex flex-col gap-0.5">
             <span className="text-[10px] text-muted-foreground">Access Key ID (Optional override)</span>
-            <Input
+            <LocalInput
               className="h-7 text-xs font-mono bg-background"
               placeholder={item.accessKeyIdEnv ? `env: ${item.accessKeyIdEnv}` : "minioadmin"}
               value={accessKeyOverride}
               onChange={(e) => setAccessKeyOverride(e.target.value)}
+              debounceMs={150}
             />
           </div>
           <div className="flex flex-col gap-0.5">
             <span className="text-[10px] text-muted-foreground">Secret Key (Optional override)</span>
-            <Input
+            <LocalInput
               type="password"
               className="h-7 text-xs font-mono bg-background"
               placeholder={item.secretAccessKeyEnv ? `env: ${item.secretAccessKeyEnv}` : "minioadmin"}
               value={secretKeyOverride}
               onChange={(e) => setSecretKeyOverride(e.target.value)}
+              debounceMs={150}
             />
           </div>
         </div>
@@ -510,10 +507,11 @@ export const BucketTestingTab: React.FC<BucketTestingTabProps> = ({ item }) => {
             {/* Target Key */}
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-medium text-foreground">Object Key / Path</label>
-              <Input
+              <LocalInput
                 className="h-8 text-xs font-mono bg-background"
                 value={keyInput}
                 onChange={(e) => setKeyInput(e.target.value)}
+                debounceMs={150}
                 placeholder="e.g. uploads/avatars/user-1.png"
               />
             </div>
@@ -523,19 +521,21 @@ export const BucketTestingTab: React.FC<BucketTestingTabProps> = ({ item }) => {
               <>
                 <div className="flex flex-col gap-1">
                   <label className="text-[11px] font-medium text-foreground">Content-Type</label>
-                  <Input
+                  <LocalInput
                     className="h-8 text-xs font-mono bg-background"
                     value={contentTypeInput}
                     onChange={(e) => setContentTypeInput(e.target.value)}
+                    debounceMs={150}
                   />
                 </div>
 
                 <div className="flex flex-col gap-1">
                   <label className="text-[11px] font-medium text-foreground">Payload Data to Send</label>
-                  <Textarea
+                  <LocalTextarea
                     className="h-16 text-xs font-mono bg-background resize-none"
                     value={bodyInput}
                     onChange={(e) => setBodyInput(e.target.value)}
+                    debounceMs={200}
                   />
                 </div>
 
@@ -547,18 +547,20 @@ export const BucketTestingTab: React.FC<BucketTestingTabProps> = ({ item }) => {
                     <div className="grid grid-cols-2 gap-2">
                       <div className="flex flex-col gap-0.5">
                         <label className="text-[10px] text-muted-foreground">userId</label>
-                        <Input
+                        <LocalInput
                           className="h-7 text-xs bg-background"
                           value={metadataUser}
                           onChange={(e) => setMetadataUser(e.target.value)}
+                          debounceMs={150}
                         />
                       </div>
                       <div className="flex flex-col gap-0.5">
                         <label className="text-[10px] text-muted-foreground">tags</label>
-                        <Input
+                        <LocalInput
                           className="h-7 text-xs bg-background"
                           value={metadataTags}
                           onChange={(e) => setMetadataTags(e.target.value)}
+                          debounceMs={150}
                         />
                       </div>
                     </div>
@@ -570,10 +572,11 @@ export const BucketTestingTab: React.FC<BucketTestingTabProps> = ({ item }) => {
             {(selectedOpKey === "getUploadPresignedUrl" || selectedOpKey === "getDownloadPresignedUrl") && (
               <div className="flex flex-col gap-1">
                 <label className="text-[11px] font-medium text-foreground">Expiration (Seconds)</label>
-                <Input
+                <LocalInput
                   className="h-8 text-xs font-mono bg-background"
                   value={ttlInput}
                   onChange={(e) => setTtlInput(e.target.value)}
+                  debounceMs={150}
                 />
               </div>
             )}
@@ -581,10 +584,11 @@ export const BucketTestingTab: React.FC<BucketTestingTabProps> = ({ item }) => {
             {selectedOpKey === "listObjects" && (
               <div className="flex flex-col gap-1">
                 <label className="text-[11px] font-medium text-foreground">Folder / Prefix Filter</label>
-                <Input
+                <LocalInput
                   className="h-8 text-xs font-mono bg-background"
                   value={prefixInput}
                   onChange={(e) => setPrefixInput(e.target.value)}
+                  debounceMs={150}
                 />
               </div>
             )}

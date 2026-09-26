@@ -55,9 +55,13 @@ export const StorageProviderSection: React.FC<BucketStorageSectionProps> = ({
             className="h-8 bg-background/50 text-xs"
             placeholder="e.g. MinIO, Cloudflare R2, On-Prem NAS, Ceph"
             value={item.storageTypeOther || ""}
+            onChange={(e) =>
+              handleUpdate(item.id, { storageTypeOther: e.target.value })
+            }
             onBlur={(e) =>
               handleUpdate(item.id, { storageTypeOther: e.target.value })
             }
+            debounceMs={200}
           />
         </div>
       )}
@@ -88,7 +92,9 @@ export const StorageProviderSection: React.FC<BucketStorageSectionProps> = ({
             className="h-8 bg-background/50 text-xs font-mono"
             placeholder="e.g. us-east-1"
             value={item.region || ""}
+            onChange={(e) => handleUpdate(item.id, { region: e.target.value })}
             onBlur={(e) => handleUpdate(item.id, { region: e.target.value })}
+            debounceMs={200}
           />
         </div>
       </div>
@@ -101,7 +107,9 @@ export const StorageProviderSection: React.FC<BucketStorageSectionProps> = ({
           className="h-8 bg-background/50 text-xs font-mono"
           placeholder="e.g. https://s3.amazonaws.com or https://s3.us-east-1.amazonaws.com"
           value={item.endpointUrl || ""}
+          onChange={(e) => handleUpdate(item.id, { endpointUrl: e.target.value })}
           onBlur={(e) => handleUpdate(item.id, { endpointUrl: e.target.value })}
+          debounceMs={200}
         />
       </div>
 
@@ -123,9 +131,13 @@ export const StorageProviderSection: React.FC<BucketStorageSectionProps> = ({
               className="h-7 bg-background/50 text-xs font-mono"
               placeholder="AWS_ACCESS_KEY_ID"
               value={item.accessKeyIdEnv || ""}
+              onChange={(e) =>
+                handleUpdate(item.id, { accessKeyIdEnv: e.target.value })
+              }
               onBlur={(e) =>
                 handleUpdate(item.id, { accessKeyIdEnv: e.target.value })
               }
+              debounceMs={200}
             />
           </div>
 
@@ -137,9 +149,13 @@ export const StorageProviderSection: React.FC<BucketStorageSectionProps> = ({
               className="h-7 bg-background/50 text-xs font-mono"
               placeholder="AWS_SECRET_ACCESS_KEY"
               value={item.secretAccessKeyEnv || ""}
+              onChange={(e) =>
+                handleUpdate(item.id, { secretAccessKeyEnv: e.target.value })
+              }
               onBlur={(e) =>
                 handleUpdate(item.id, { secretAccessKeyEnv: e.target.value })
               }
+              debounceMs={200}
             />
           </div>
         </div>
@@ -153,9 +169,13 @@ export const StorageProviderSection: React.FC<BucketStorageSectionProps> = ({
               className="h-7 bg-background/50 text-xs font-mono"
               placeholder="AWS_SESSION_TOKEN"
               value={item.sessionTokenEnv || ""}
+              onChange={(e) =>
+                handleUpdate(item.id, { sessionTokenEnv: e.target.value })
+              }
               onBlur={(e) =>
                 handleUpdate(item.id, { sessionTokenEnv: e.target.value })
               }
+              debounceMs={200}
             />
           </div>
 
@@ -167,7 +187,9 @@ export const StorageProviderSection: React.FC<BucketStorageSectionProps> = ({
               className="h-7 bg-background/50 text-xs font-mono"
               placeholder="arn:aws:iam::..."
               value={item.roleArn || ""}
+              onChange={(e) => handleUpdate(item.id, { roleArn: e.target.value })}
               onBlur={(e) => handleUpdate(item.id, { roleArn: e.target.value })}
+              debounceMs={200}
             />
           </div>
         </div>

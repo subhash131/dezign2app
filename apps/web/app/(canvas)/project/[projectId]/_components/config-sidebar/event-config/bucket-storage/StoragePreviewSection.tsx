@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { Button } from "@workspace/ui/components/button";
 import { Terminal, Copy, Check } from "lucide-react";
 import { ConfigItemData } from "../types";
@@ -19,16 +19,11 @@ export const StoragePreviewSection: React.FC<StoragePreviewSectionProps> = ({
   const [activeTab, setActiveTab] = useState<PreviewTab>("code");
   const [copied, setCopied] = useState<boolean>(false);
 
-  const sdkCode = generateSdkSnippet(item);
-  const configSpec = generateConfigSpec(item);
-  const envSnippet = generateEnvSnippet(item);
-
-  const activeSnippet =
-    activeTab === "code"
-      ? sdkCode
-      : activeTab === "spec"
-        ? configSpec
-        : envSnippet;
+  const activeSnippet = useMemo(() => {
+    if (activeTab === "code") return generateSdkSnippet(item);
+    if (activeTab === "spec") return generateConfigSpec(item);
+    return generateEnvSnippet(item);
+  }, [item, activeTab]);
 
   const handleCopy = () => {
     if (typeof navigator !== "undefined" && navigator.clipboard) {
