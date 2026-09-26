@@ -3,7 +3,12 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { BucketTestingTab } from "../BucketTestingTab";
 import { ConfigItemData } from "../../types";
-import { checkStorageConnection, executeStorageOperation } from "@/lib/services/storageService";
+import {
+  checkStorageConnection,
+  executeStorageOperation,
+  createStorageBucket,
+  listStorageBuckets,
+} from "@/lib/services/storageService";
 
 interface MockSelectProps {
   children?: React.ReactNode;
@@ -93,6 +98,18 @@ vi.mock("@/lib/services/storageService", () => ({
       bucket: payload.connection.bucketName,
       key: payload.params.key,
     },
+  })),
+  createStorageBucket: vi.fn(async (_connection, bucketName) => ({
+    success: false,
+    bucketName: bucketName || "default-bucket",
+    status: 403,
+    statusText: "Forbidden",
+    message: "Access Denied. SignatureDoesNotMatch",
+    error: "Access Denied. SignatureDoesNotMatch",
+  })),
+  listStorageBuckets: vi.fn(async () => ({
+    success: true,
+    buckets: [{ name: "existing-bucket-1" }, { name: "existing-bucket-2" }],
   })),
 }));
 
@@ -208,5 +225,55 @@ describe("BucketTestingTab component", () => {
       expect(screen.getByText(/ECONNREFUSED/)).toBeDefined();
       expect(screen.getByText(/Ensure your MinIO\/LocalStack\/S3 server is running/)).toBeDefined();
     });
+  });
+
+  it("displays inline error response without popups or alerts when bucket creation fails", async () => {
+    vi.mocked(checkStorageConnection).mockResolvedValueOnce({
+      success: false,
+      serverActive: true,
+      status: 404,
+      statusText: "Not Found",
+      durationMs: 12,
+      endpoint: "http://localhost:8333",
+      bucket: "missing-bucket",
+      region: "us-east-1",
+      bucketExists: false,
+      error: "Bucket 'missing-bucket' does not exist (404 NoSuchBucket)",
+      tip: "Verify your bucket name or create it.",
+    });
+
+    vi.mocked(createStorageBucket).mockResolvedValueOnce({
+      success: false,
+      bucketName: "missing-bucket",
+      status: 403,
+      statusText: "Forbidden",
+      message: "Access Denied. Check credentials.",
+      error: "Access Denied. Check credentials.",
+    });
+
+    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
+
+    render(<BucketTestingTab item={{ ...baseItem, name: "missing-bucket", endpointUrl: "http://localhost:8333" }} />);
+
+    const connTabButton = screen.getByText("Test Connection");
+    fireEvent.click(connTabButton);
+
+    const testConnButton = screen.getByRole("button", { name: /Ping Server & Test S3 Connection/i });
+    fireEvent.click(testConnButton);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Bucket "missing-bucket" not found on server/i)).toBeDefined();
+    });
+
+    const createButton = screen.getByRole("button", { name: /Create Bucket on Server/i });
+    fireEvent.click(createButton);
+
+    await waitFor(() => {
+      expect(createStorageBucket).toHaveBeenCalled();
+      expect(screen.getByText("Access Denied. Check credentials.")).toBeDefined();
+      expect(alertSpy).not.toHaveBeenCalled();
+    });
+
+    alertSpy.mockRestore();
   });
 });

@@ -54,7 +54,11 @@ export const BucketStorageConfig: React.FC<BucketStorageConfigProps> = ({
       {/* ─── Main Tabs: Configuration vs Testing & Code Verification ─── */}
       <Tabs
         value={activeTab}
-        onValueChange={(val) => setActiveTab(val as "config" | "test")}
+        onValueChange={(val) => {
+          if (val === "config" || val === "test") {
+            setActiveTab(val);
+          }
+        }}
         className="w-full flex flex-col gap-3"
       >
         <TabsList className="grid grid-cols-2 w-full h-8 bg-muted/60 p-0.5 rounded-lg border border-border/60">
@@ -140,7 +144,7 @@ export const BucketStorageConfig: React.FC<BucketStorageConfigProps> = ({
 
     {/* ─── TAB 2: Testing & Code Verification ─── */}
     <TabsContent value="test" className="flex flex-col gap-4 m-0 outline-none">
-      <BucketTestingTab item={item} />
+      <BucketTestingTab item={item} handleUpdate={handleUpdate} />
     </TabsContent>
   </Tabs>
 </div>

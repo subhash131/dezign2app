@@ -251,6 +251,8 @@ export interface CanvasStorageNodeData {
   corsEnabled?: boolean;
   accessKeyIdEnv?: string;
   secretAccessKeyEnv?: string;
+  accessKeyId?: string;
+  secretAccessKey?: string;
   sessionTokenEnv?: string;
   roleArn?: string;
   forcePathStyle?: boolean;

@@ -10,6 +10,12 @@ import {
   Settings,
   ExternalLink,
   Lock,
+  AlertTriangle,
+  RefreshCw,
+  CheckCircle2,
+  XCircle,
+  Loader2,
+  Database,
 } from "lucide-react";
 import { Badge } from "@workspace/ui/components/badge";
 import { Button } from "@workspace/ui/components/button";
@@ -26,6 +32,11 @@ import {
 } from "@workspace/ui/components/select";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { BackendNode, AnyMessagingResource } from "@/types/canvas";
+import {
+  listStorageBuckets,
+  createStorageBucket,
+  type ServerBucketInfo,
+} from "@/lib/services/storageService";
 import { cn } from "@workspace/ui/lib/utils";
 
 export interface StorageNodeConfigProps {
@@ -63,6 +74,14 @@ export const StorageNodeConfig: React.FC<StorageNodeConfigProps> = ({
 
   const [newBucketName, setNewBucketName] = useState("");
   const [isAddingBucket, setIsAddingBucket] = useState(false);
+
+  // Live Server Buckets Discovery & Creation State
+  const [serverBuckets, setServerBuckets] = useState<ServerBucketInfo[] | null>(null);
+  const [isScanningServer, setIsScanningServer] = useState(false);
+  const [serverScanError, setServerScanError] = useState<string | null>(null);
+  const [creatingBucketName, setCreatingBucketName] = useState<string | null>(null);
+  const [createdSuccessMap, setCreatedSuccessMap] = useState<Record<string, boolean>>({});
+  const [bucketActionErrors, setBucketActionErrors] = useState<Record<string, string>>({});
 
   if (!node) {
     return (
@@ -137,6 +156,92 @@ export const StorageNodeConfig: React.FC<StorageNodeConfigProps> = ({
       id: bucketId,
       nodeId: node.id,
     });
+  };
+
+  const handleScanServerBuckets = async () => {
+    setIsScanningServer(true);
+    setServerScanError(null);
+    try {
+      const res = await listStorageBuckets({
+        endpointUrl: data.endpointUrl,
+        region: data.defaultRegion || "us-east-1",
+        bucketName: buckets[0]?.name || "default",
+        storageType: provider,
+        forcePathStyle: data.forcePathStyle,
+        accessKeyId: data.accessKeyId,
+        secretAccessKey: data.secretAccessKey,
+        accessKeyIdEnv: data.accessKeyIdEnv,
+        secretAccessKeyEnv: data.secretAccessKeyEnv,
+      });
+
+      if (res.success) {
+        setServerBuckets(res.buckets);
+      } else {
+        setServerScanError(res.error || "Failed to fetch buckets from server");
+      }
+    } catch (err) {
+      setServerScanError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsScanningServer(false);
+    }
+  };
+
+  const handleCreateBucketOnServer = async (bucketName: string) => {
+    setCreatingBucketName(bucketName);
+    try {
+      const res = await createStorageBucket(
+        {
+          endpointUrl: data.endpointUrl,
+          region: data.defaultRegion || "us-east-1",
+          bucketName,
+          storageType: provider,
+          forcePathStyle: data.forcePathStyle,
+          accessKeyId: data.accessKeyId,
+          secretAccessKey: data.secretAccessKey,
+          accessKeyIdEnv: data.accessKeyIdEnv,
+          secretAccessKeyEnv: data.secretAccessKeyEnv,
+        },
+        bucketName,
+      );
+
+      if (res.success) {
+        setCreatedSuccessMap((prev) => ({ ...prev, [bucketName]: true }));
+        setBucketActionErrors((prev) => {
+          const next = { ...prev };
+          delete next[bucketName];
+          return next;
+        });
+        await handleScanServerBuckets();
+      } else {
+        const errorMsg = res.error || res.message || `Failed to create bucket "${bucketName}"`;
+        setBucketActionErrors((prev) => ({ ...prev, [bucketName]: errorMsg }));
+      }
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "Failed to create bucket on server";
+      setBucketActionErrors((prev) => ({ ...prev, [bucketName]: errorMsg }));
+    } finally {
+      setCreatingBucketName(null);
+    }
+  };
+
+  const handleImportServerBucket = (serverBucketName: string) => {
+    if (buckets.some((b) => b.name === serverBucketName)) return;
+    const newBucketId = `bucket-${Date.now()}`;
+    const newBucket: AnyMessagingResource = {
+      id: newBucketId,
+      name: serverBucketName,
+      storageType: provider,
+      accessPolicy: "private",
+      storageClass: "STANDARD",
+    };
+    const nextBuckets = [...buckets, newBucket];
+    updateNode(node.id, {
+      data: {
+        ...data,
+        buckets: nextBuckets,
+      },
+    });
+    setCreatedSuccessMap((prev) => ({ ...prev, [serverBucketName]: true }));
   };
 
   return (
@@ -360,6 +465,45 @@ export const StorageNodeConfig: React.FC<StorageNodeConfigProps> = ({
             />
           </div>
         </div>
+
+        {/* Live / Local Testing Credentials */}
+        <div className="flex flex-col gap-2 pt-2 border-t border-border/40">
+          <div className="flex flex-col">
+            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+              Live Testing & Local Emulator Credentials (Direct)
+            </span>
+            <span className="text-[10px] text-muted-foreground">
+              Direct credentials for testing or local SeaweedFS/MinIO emulator (e.g. admin &amp; change-this-secret)
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-medium text-foreground">
+                Access Key ID
+              </label>
+              <LocalInput
+                className="h-8 bg-background/50 text-xs font-mono"
+                placeholder="e.g. admin"
+                value={data.accessKeyId || ""}
+                onChange={(e) => handleUpdateField("accessKeyId", e.target.value)}
+                debounceMs={150}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-medium text-foreground">
+                Secret Access Key
+              </label>
+              <LocalInput
+                type="password"
+                className="h-8 bg-background/50 text-xs font-mono"
+                placeholder="e.g. change-this-secret"
+                value={data.secretAccessKey || ""}
+                onChange={(e) => handleUpdateField("secretAccessKey", e.target.value)}
+                debounceMs={150}
+              />
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* ─── 4. Default Security & Encryption ─── */}
@@ -429,6 +573,28 @@ export const StorageNodeConfig: React.FC<StorageNodeConfigProps> = ({
         )}
       </div>
 
+      {/* ─── Limitations & Requirements Warning ─── */}
+      <div className="flex flex-col gap-2 rounded-xl border border-amber-500/40 bg-amber-500/5 p-3.5 shadow-sm">
+        <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-semibold text-xs">
+          <AlertTriangle size={15} />
+          <span>Storage Prerequisites &amp; Limitations</span>
+        </div>
+        <ul className="list-disc list-inside space-y-1 text-[11px] text-muted-foreground leading-relaxed pl-1">
+          <li>
+            <strong>Canvas vs. Live Server:</strong> Buckets defined here are architecture blueprints. They are <em>not</em> automatically created on AWS or local servers until provisioned.
+          </li>
+          <li>
+            <strong>Local SeaweedFS / MinIO:</strong> When using <code className="font-mono text-[10px] bg-background/80 px-1 py-0.5 rounded border border-border">http://localhost:8333</code>, always enable <strong>Path-Style Addressing</strong>. If SeaweedFS has authentication enabled, set the Access Key (<code className="font-mono text-[10px]">admin</code>) and Secret Key above.
+          </li>
+          <li>
+            <strong>AWS Naming Rules:</strong> S3 bucket names must be 3–63 characters, lowercase, numbers and hyphens only, and globally unique across all AWS accounts.
+          </li>
+          <li>
+            <strong>IAM Permissions:</strong> Code or actions creating buckets require <code className="font-mono text-[10px]">s3:CreateBucket</code> permissions.
+          </li>
+        </ul>
+      </div>
+
       {/* ─── 5. Managed Buckets Section ─── */}
       <div className="flex flex-col gap-3 rounded-xl border bg-card/50 p-4 shadow-sm backdrop-blur-sm border-amber-500/20">
         <div className="flex items-center justify-between">
@@ -453,34 +619,145 @@ export const StorageNodeConfig: React.FC<StorageNodeConfigProps> = ({
           Each bucket defines its own access policy, CORS settings, lifecycle rules, and supported operations.
         </p>
 
+        {/* Live Server Discovery & Sync Bar */}
+        <div className="flex flex-col gap-2 p-3 rounded-lg border border-border/60 bg-secondary/15">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <Database size={13} className="text-amber-500" />
+              <span className="text-[11px] font-semibold text-foreground">
+                Live Server Discovery &amp; Sync
+              </span>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={isScanningServer}
+              onClick={handleScanServerBuckets}
+              className="h-6 px-2 text-[10px] font-medium gap-1 hover:border-amber-500/50"
+            >
+              <RefreshCw size={11} className={cn(isScanningServer && "animate-spin text-amber-500")} />
+              {isScanningServer ? "Checking..." : "Fetch Server Buckets"}
+            </Button>
+          </div>
+
+          <div className="text-[10px] text-muted-foreground">
+            Target Endpoint: <code className="font-mono text-foreground font-semibold">{data.endpointUrl || `https://s3.${data.defaultRegion || "us-east-1"}.amazonaws.com`}</code>
+          </div>
+
+          {serverScanError && (
+            <div className="p-2 rounded bg-destructive/10 border border-destructive/20 text-destructive text-[11px] flex items-start gap-1.5">
+              <XCircle size={13} className="shrink-0 mt-0.5" />
+              <div className="flex flex-col">
+                <span className="font-semibold">Discovery Notice:</span>
+                <span>{serverScanError}</span>
+              </div>
+            </div>
+          )}
+
+          {serverBuckets !== null && (
+            <div className="flex flex-col gap-2 pt-1 border-t border-border/40">
+              <div className="flex items-center justify-between text-[10px]">
+                <span className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                  <CheckCircle2 size={11} />
+                  Found {serverBuckets.length} {serverBuckets.length === 1 ? "bucket" : "buckets"} on server
+                </span>
+              </div>
+
+              {serverBuckets.length === 0 ? (
+                <div className="text-[11px] text-muted-foreground italic">
+                  No buckets found on this server. Click &quot;Add Bucket&quot; or create one below.
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {serverBuckets.map((sb) => {
+                    const alreadyOnCanvas = buckets.some((b) => b.name === sb.name);
+                    return (
+                      <div
+                        key={sb.name}
+                        className={cn(
+                          "flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] border font-mono",
+                          alreadyOnCanvas
+                            ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+                            : "bg-background border-border hover:border-amber-500/50",
+                        )}
+                      >
+                        <HardDrive size={10} />
+                        <span>{sb.name}</span>
+                        {alreadyOnCanvas ? (
+                          <span className="text-[9px] text-emerald-600 dark:text-emerald-400 font-sans font-semibold">
+                            (on canvas)
+                          </span>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleImportServerBucket(sb.name)}
+                            className="h-4 px-1 text-[9px] text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 font-sans font-medium"
+                          >
+                            + Add to Canvas
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         {isAddingBucket && (
-          <div className="flex items-center gap-2 p-2 rounded-lg bg-background/80 border border-amber-500/30">
-            <Input
-              className="h-7 text-xs font-mono flex-1"
-              placeholder="e.g. avatars, invoices, raw-uploads"
-              value={newBucketName}
-              onChange={(e) => setNewBucketName(e.target.value)}
-              autoFocus
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleAddBucket();
-                if (e.key === "Escape") setIsAddingBucket(false);
-              }}
-            />
-            <Button
-              size="sm"
-              onClick={handleAddBucket}
-              className="h-7 text-xs bg-amber-500 hover:bg-amber-600 text-white px-2.5"
-            >
-              Create
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => setIsAddingBucket(false)}
-              className="h-7 text-xs px-2 text-muted-foreground"
-            >
-              Cancel
-            </Button>
+          <div className="flex flex-col gap-2 p-2 rounded-lg bg-background/80 border border-amber-500/30">
+            <div className="flex items-center gap-2">
+              <Input
+                className="h-7 text-xs font-mono flex-1"
+                placeholder="e.g. avatars, invoices, raw-uploads"
+                value={newBucketName}
+                onChange={(e) => setNewBucketName(e.target.value)}
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleAddBucket();
+                  if (e.key === "Escape") setIsAddingBucket(false);
+                }}
+              />
+              <Button
+                size="sm"
+                onClick={handleAddBucket}
+                className="h-7 text-xs bg-amber-500 hover:bg-amber-600 text-white px-2.5"
+              >
+                Create
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setIsAddingBucket(false)}
+                className="h-7 text-xs px-2 text-muted-foreground"
+              >
+                Cancel
+              </Button>
+            </div>
+
+            {/* Quick-pick from Server Buckets if discovered */}
+            {serverBuckets && serverBuckets.filter((sb) => !buckets.some((b) => b.name === sb.name)).length > 0 && (
+              <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-border/40 text-[10px]">
+                <span className="text-muted-foreground font-sans">Or pick from server:</span>
+                {serverBuckets
+                  .filter((sb) => !buckets.some((b) => b.name === sb.name))
+                  .map((sb) => (
+                    <Button
+                      key={sb.name}
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setNewBucketName(sb.name);
+                      }}
+                      className="h-5 px-1.5 text-[10px] font-mono hover:border-amber-500/50"
+                    >
+                      {sb.name}
+                    </Button>
+                  ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -490,55 +767,110 @@ export const StorageNodeConfig: React.FC<StorageNodeConfigProps> = ({
               No buckets configured yet. Click &quot;Add Bucket&quot; above to create one.
             </div>
           ) : (
-            buckets.map((b) => (
-              <div
-                key={b.id}
-                className="flex items-center justify-between p-2.5 text-xs hover:bg-secondary/20 transition-colors"
-              >
-                <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
-                  <HardDrive size={13} className="text-amber-500 shrink-0" />
-                  <span className="font-mono text-xs font-semibold text-foreground truncate">
-                    {b.name}
-                  </span>
-                  <Badge
-                    variant="outline"
-                    className={cn(
-                      "text-[9px] px-1 py-0 h-4 capitalize shrink-0",
-                      b.accessPolicy === "public-read"
-                        ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
-                        : b.accessPolicy === "presigned-only"
-                          ? "bg-blue-500/10 text-blue-600 border-blue-500/30"
-                          : "bg-muted text-muted-foreground",
-                    )}
-                  >
-                    {b.accessPolicy || "private"}
-                  </Badge>
-                </div>
+            buckets.map((b) => {
+              const bucketName = b.name || "unnamed";
+              const isFoundOnServer =
+                Boolean(createdSuccessMap[bucketName]) ||
+                Boolean(serverBuckets?.some((sb) => sb.name === bucketName));
+              const isCreatingThis = creatingBucketName === bucketName;
 
-                <div className="flex items-center gap-1 shrink-0">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-6 px-2 text-xs text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 gap-1 font-medium"
-                    onClick={() => handleOpenBucketConfig(b.id)}
-                    title="Configure Bucket in Sidebar"
-                  >
-                    <Settings size={12} />
-                    <span>Configure</span>
-                    <ExternalLink size={10} />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-6 w-6 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                    onClick={() => handleDeleteBucket(b.id)}
-                    title="Delete Bucket"
-                  >
-                    <Trash size={12} />
-                  </Button>
+              return (
+                <div key={b.id} className="flex flex-col">
+                  <div className="flex items-center justify-between p-2.5 text-xs hover:bg-secondary/20 transition-colors">
+                    <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
+                      <HardDrive size={13} className="text-amber-500 shrink-0" />
+                      <span className="font-mono text-xs font-semibold text-foreground truncate">
+                        {bucketName}
+                      </span>
+
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "text-[9px] px-1 py-0 h-4 capitalize shrink-0",
+                          b.accessPolicy === "public-read"
+                            ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
+                            : b.accessPolicy === "presigned-only"
+                              ? "bg-blue-500/10 text-blue-600 border-blue-500/30"
+                              : "bg-muted text-muted-foreground",
+                        )}
+                      >
+                        {b.accessPolicy || "private"}
+                      </Badge>
+
+                      {/* Server status indicator */}
+                      {serverBuckets !== null && (
+                        isFoundOnServer ? (
+                          <Badge
+                            variant="outline"
+                            className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-[9px] font-mono px-1 py-0 h-4 shrink-0 flex items-center gap-0.5"
+                          >
+                            <CheckCircle2 size={9} />
+                            <span>On Server</span>
+                          </Badge>
+                        ) : (
+                          <Badge
+                            variant="outline"
+                            className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 text-[9px] font-mono px-1 py-0 h-4 shrink-0 flex items-center gap-0.5"
+                          >
+                            <AlertTriangle size={9} />
+                            <span>Not on Server</span>
+                          </Badge>
+                        )
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      {/* If server scanned and bucket not found on server, offer 1-click Create on Server */}
+                      {serverBuckets !== null && !isFoundOnServer && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={isCreatingThis}
+                          onClick={() => handleCreateBucketOnServer(bucketName)}
+                          className="h-6 px-1.5 text-[10px] text-amber-600 dark:text-amber-400 border-amber-500/40 hover:bg-amber-500/10 gap-1 font-medium"
+                          title={`Create bucket "${bucketName}" directly on target server`}
+                        >
+                          {isCreatingThis ? (
+                            <Loader2 size={10} className="animate-spin" />
+                          ) : (
+                            <Plus size={10} />
+                          )}
+                          <span>Create on Server</span>
+                        </Button>
+                      )}
+
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 px-2 text-xs text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 gap-1 font-medium"
+                        onClick={() => handleOpenBucketConfig(b.id)}
+                        title="Configure Bucket in Sidebar"
+                      >
+                        <Settings size={12} />
+                        <span>Configure</span>
+                        <ExternalLink size={10} />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-6 w-6 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                        onClick={() => handleDeleteBucket(b.id)}
+                        title="Delete Bucket"
+                      >
+                        <Trash size={12} />
+                      </Button>
+                    </div>
+                  </div>
+
+                  {bucketActionErrors[bucketName] && (
+                    <div className="px-3 py-1.5 text-[10px] text-destructive bg-destructive/10 border-t border-destructive/20 flex items-start gap-1.5 font-mono">
+                      <XCircle size={12} className="shrink-0 mt-0.5" />
+                      <span className="break-all">{bucketActionErrors[bucketName]}</span>
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>

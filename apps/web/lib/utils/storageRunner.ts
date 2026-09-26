@@ -5,6 +5,9 @@ import type {
   CheckStorageConnectionResult,
   ExecuteStorageOperationPayload,
   ExecuteStorageOperationResult,
+  ServerBucketInfo,
+  ListStorageBucketsResult,
+  CreateStorageBucketResult,
 } from "@workspace/canvas/types";
 
 export type {
@@ -12,6 +15,9 @@ export type {
   CheckStorageConnectionResult,
   ExecuteStorageOperationPayload,
   ExecuteStorageOperationResult,
+  ServerBucketInfo,
+  ListStorageBucketsResult,
+  CreateStorageBucketResult,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -332,9 +338,226 @@ export function parseS3XmlResponse(text: string): Record<string, unknown> | null
   return Object.keys(result).length > 0 ? result : null;
 }
 
+export function parseS3BucketsXml(text: string): ServerBucketInfo[] {
+  if (!text || (!text.includes("<") && !text.includes(">"))) return [];
+  const buckets: ServerBucketInfo[] = [];
+  const bucketMatches = text.matchAll(
+    /<Bucket>[\s\S]*?<Name>([^<]+)<\/Name>(?:[\s\S]*?<CreationDate>([^<]+)<\/CreationDate>)?[\s\S]*?<\/Bucket>/gi,
+  );
+  for (const match of bucketMatches) {
+    const name = match[1]?.trim();
+    if (name) {
+      buckets.push({
+        name,
+        creationDate: match[2]?.trim(),
+      });
+    }
+  }
+  return buckets;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
-// Core Live Runners: Connection & Operations
+// Core Live Runners: Discovery, Creation, Connection & Operations
 // ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Lists all existing buckets from the configured storage server (AWS S3, SeaweedFS, MinIO).
+ */
+export async function listStorageBucketsLive(
+  config: StorageConnectionConfig,
+): Promise<ListStorageBucketsResult> {
+  const region = config.region || process.env.AWS_REGION || "us-east-1";
+  const { accessKeyId, secretAccessKey, sessionToken } = resolveCredentials(config);
+
+  let endpoint = (config.endpointUrl || "").trim() || `https://s3.${region}.amazonaws.com`;
+  endpoint = endpoint.replace(/\/+$/, "");
+  const requestUrl = `${endpoint}/`;
+  const urlObj = new URL(requestUrl);
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+  try {
+    const signedHeaders = signS3Request({
+      method: "GET",
+      url: requestUrl,
+      region,
+      host: urlObj.host,
+      accessKeyId,
+      secretAccessKey,
+      sessionToken,
+    });
+
+    const response = await fetch(requestUrl, {
+      method: "GET",
+      headers: signedHeaders,
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+    const text = await response.text();
+    const serverHeader = response.headers.get("server") || undefined;
+
+    if (response.status >= 200 && response.status < 300) {
+      const buckets = parseS3BucketsXml(text);
+      return {
+        success: true,
+        serverActive: true,
+        status: response.status,
+        statusText: response.statusText || "OK",
+        buckets,
+        endpoint,
+        serverHeader,
+      };
+    }
+
+    const xmlError = parseS3XmlResponse(text);
+    const errorMsg = xmlError?.message
+      ? String(xmlError.message)
+      : response.status === 403
+        ? "Access Denied (HTTP 403). Make sure valid Access Key ID and Secret Access Key are provided (e.g. AWS_ACCESS_KEY_ID=admin, AWS_SECRET_ACCESS_KEY=change-this-secret)."
+        : `Server returned HTTP ${response.status} ${response.statusText || ""}`;
+
+    return {
+      success: false,
+      serverActive: true,
+      status: response.status,
+      statusText: response.statusText,
+      buckets: [],
+      endpoint,
+      serverHeader,
+      error: errorMsg,
+      tip:
+        response.status === 403
+          ? "Check your credentials. For local SeaweedFS/MinIO, set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY."
+          : undefined,
+    };
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    return {
+      success: false,
+      serverActive: false,
+      status: 0,
+      statusText: "Connection Failed",
+      buckets: [],
+      endpoint,
+      error: `Could not connect to storage server at ${endpoint} (${err.message || String(err)})`,
+      tip: `Ensure your storage server is running and reachable at ${endpoint}.`,
+    };
+  }
+}
+
+/**
+ * Creates a bucket directly on the live target storage server (AWS S3, SeaweedFS, MinIO).
+ */
+export async function createStorageBucketLive(
+  config: StorageConnectionConfig,
+  bucketName: string,
+): Promise<CreateStorageBucketResult> {
+  const cleanBucket = (bucketName || config.bucketName || "").trim().toLowerCase();
+  if (!cleanBucket) {
+    return {
+      success: false,
+      bucketName: "",
+      status: 400,
+      message: "Bucket name cannot be empty",
+      error: "Missing bucket name",
+    };
+  }
+
+  const region = config.region || process.env.AWS_REGION || "us-east-1";
+  const { accessKeyId, secretAccessKey, sessionToken } = resolveCredentials(config);
+
+  const resolved = resolveStorageUrl({ ...config, bucketName: cleanBucket, forcePathStyle: true }, "");
+  const requestUrl = resolved.url;
+  const urlObj = new URL(requestUrl);
+
+  const isLocalOrIp =
+    urlObj.hostname === "localhost" ||
+    urlObj.hostname === "127.0.0.1" ||
+    /^\d+\.\d+\.\d+\.\d+$/.test(urlObj.hostname);
+
+  let body = "";
+  if (!isLocalOrIp && region && region !== "us-east-1") {
+    body = `<CreateBucketConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><LocationConstraint>${region}</LocationConstraint></CreateBucketConfiguration>`;
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+  try {
+    const signedHeaders = signS3Request({
+      method: "PUT",
+      url: requestUrl,
+      region,
+      host: urlObj.host,
+      accessKeyId,
+      secretAccessKey,
+      sessionToken,
+      body,
+      extraHeaders: body ? { "Content-Type": "application/xml" } : {},
+    });
+
+    const response = await fetch(requestUrl, {
+      method: "PUT",
+      headers: signedHeaders,
+      body: body || undefined,
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+    const text = await response.text();
+
+    if (response.status >= 200 && response.status < 300) {
+      return {
+        success: true,
+        bucketName: cleanBucket,
+        status: response.status,
+        statusText: response.statusText || "Created",
+        message: `Bucket "${cleanBucket}" created successfully on storage server.`,
+      };
+    }
+
+    const xmlError = parseS3XmlResponse(text);
+    const code = xmlError?.code ? String(xmlError.code) : "";
+    if (code === "BucketAlreadyOwnedByYou") {
+      return {
+        success: true,
+        bucketName: cleanBucket,
+        status: 200,
+        statusText: "Already Owned",
+        message: `Bucket "${cleanBucket}" already exists and is owned by you.`,
+      };
+    }
+
+    const errorMsg = xmlError?.message
+      ? String(xmlError.message)
+      : `HTTP ${response.status}: ${response.statusText || "Bucket creation failed"}`;
+
+    return {
+      success: false,
+      bucketName: cleanBucket,
+      status: response.status,
+      statusText: response.statusText,
+      message: `Failed to create bucket "${cleanBucket}"`,
+      error: errorMsg,
+      tip:
+        response.status === 403
+          ? "Access denied. Ensure your credentials have permission to create buckets."
+          : undefined,
+    };
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    return {
+      success: false,
+      bucketName: cleanBucket,
+      status: 0,
+      statusText: "Request Failed",
+      message: `Failed to connect to storage server at ${resolved.endpoint}`,
+      error: err.message || String(err),
+    };
+  }
+}
 
 /**
  * Sends a real HTTP request to the configured S3 / storage server to test connection.
@@ -377,10 +600,12 @@ export async function checkStorageConnectionLive(
 
     const serverHeader = response.headers.get("server") || undefined;
     const isSuccess = response.status >= 200 && response.status < 400;
+    const bucketExists = response.status >= 200 && response.status < 300;
 
     return {
       success: isSuccess,
       serverActive: true,
+      bucketExists,
       status: response.status,
       statusText: response.statusText || (isSuccess ? "OK" : "Error"),
       durationMs,
@@ -390,13 +615,15 @@ export async function checkStorageConnectionLive(
       serverHeader,
       headers: responseHeaders,
       error: !isSuccess
-        ? `Storage server responded with HTTP ${response.status} ${response.statusText || ""}`
+        ? response.status === 404
+          ? `Storage server is reachable, but bucket "${config.bucketName}" was not found (HTTP 404). You can click "Create Bucket" to initialize it.`
+          : `Storage server responded with HTTP ${response.status} ${response.statusText || ""}`
         : undefined,
       tip:
         response.status === 403
           ? "Storage server is reachable, but access was denied. Verify your accessKeyId and secretAccessKey."
           : response.status === 404
-            ? `Storage server is reachable, but bucket "${config.bucketName}" was not found. You may need to create the bucket first.`
+            ? `Storage server is reachable, but bucket "${config.bucketName}" was not found. Use "Create Bucket" to initialize it.`
             : undefined,
     };
   } catch (err: any) {
@@ -411,6 +638,7 @@ export async function checkStorageConnectionLive(
     return {
       success: false,
       serverActive: false,
+      bucketExists: false,
       status: 0,
       statusText: "Connection Failed",
       durationMs,
@@ -444,6 +672,23 @@ export async function executeStorageOperationLive(
   let presignedResultUrl: string | undefined = undefined;
 
   switch (operation) {
+    case "createBucket": {
+      method = "PUT";
+      const bucketToCreate = params.key || connection.bucketName;
+      const bucketResolved = resolveStorageUrl({ ...connection, bucketName: bucketToCreate, forcePathStyle: true }, "");
+      requestUrl = bucketResolved.url;
+      const isLocalOrIp =
+        new URL(bucketResolved.endpoint).hostname === "localhost" ||
+        new URL(bucketResolved.endpoint).hostname === "127.0.0.1";
+      if (!isLocalOrIp && region && region !== "us-east-1") {
+        body = `<CreateBucketConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><LocationConstraint>${region}</LocationConstraint></CreateBucketConfiguration>`;
+        extraHeaders["Content-Type"] = "application/xml";
+      } else {
+        body = "";
+      }
+      break;
+    }
+
     case "uploadObject": {
       method = "PUT";
       body = params.body || "Hello world from live storage test";

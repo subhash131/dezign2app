@@ -116,9 +116,37 @@ export interface StorageConnectionConfig {
   cdnUrl?: string;
 }
 
+export interface ServerBucketInfo {
+  name: string;
+  creationDate?: string;
+}
+
+export interface ListStorageBucketsResult {
+  success: boolean;
+  serverActive: boolean;
+  status: number;
+  statusText?: string;
+  buckets: ServerBucketInfo[];
+  endpoint: string;
+  serverHeader?: string;
+  error?: string;
+  tip?: string;
+}
+
+export interface CreateStorageBucketResult {
+  success: boolean;
+  bucketName: string;
+  status: number;
+  statusText?: string;
+  message: string;
+  error?: string;
+  tip?: string;
+}
+
 export interface CheckStorageConnectionResult {
   success: boolean;
   serverActive: boolean;
+  bucketExists?: boolean;
   status: number;
   statusText: string;
   durationMs: number;

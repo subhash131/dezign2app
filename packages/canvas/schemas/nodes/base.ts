@@ -59,6 +59,8 @@ export const resourceItemSchema = z.object({
   endpointUrl: z.string().optional(),
   accessKeyIdEnv: z.string().optional(),
   secretAccessKeyEnv: z.string().optional(),
+  accessKeyId: z.string().optional(),
+  secretAccessKey: z.string().optional(),
   sessionTokenEnv: z.string().optional(),
   roleArn: z.string().optional(),
   forcePathStyle: z.boolean().optional(),
