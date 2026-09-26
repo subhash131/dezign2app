@@ -171,6 +171,81 @@ export function isNodeDerivedFromEntity(
 }
 
 /**
+ * Compares an EntityNode with a derived TypesNode to check if they are in sync.
+ * Returns true if the TypesNode has an interface matching the entity name and all column definitions.
+ */
+export function isEntitySyncedWithTypes(
+  entityNode: BackendNode,
+  typesNode: BackendNode,
+): boolean {
+  if (entityNode.type !== "entity" || typesNode.type !== "types") return true;
+
+  const tableName =
+    entityNode.data.tableName || entityNode.data.label || "Entity";
+  const columns = entityNode.data.columns ?? [];
+  const pascalName = toPascalCase(tableName);
+  const targetTypeId = `type-entity-${entityNode.id}`;
+
+  const currentTypes = typesNode.data.types ?? [];
+  const typeItem =
+    currentTypes.find((t) => t.id === targetTypeId) ||
+    currentTypes.find(
+      (t) =>
+        t.id.startsWith("type-entity-") ||
+        t.name.toLowerCase() === pascalName.toLowerCase(),
+    ) ||
+    currentTypes[0];
+
+  // If there's no type definition in the TypesNode yet, it's out of sync
+  if (!typeItem) return false;
+
+  // If the interface name doesn't match the current entity table name, it's out of sync
+  if (typeItem.name !== pascalName) return false;
+
+  const fields = typeItem.fields ?? [];
+  // If column count differs, it's out of sync
+  if (columns.length !== fields.length) return false;
+
+  // Check each column against the type fields
+  for (let i = 0; i < columns.length; i++) {
+    const col = columns[i];
+    if (!col) continue;
+
+    const expectedFieldType =
+      col.enumValues && col.enumValues.length > 0
+        ? col.enumValues.map((v) => JSON.stringify(v)).join(" | ")
+        : mapColumnTypeToTS(col.type);
+
+    const expectedRequired = Boolean(
+      col.isNotNull ||
+      col.required ||
+      col.isPrimaryKey ||
+      col.isPrimary ||
+      col.primaryKey,
+    );
+
+    const matchingField = fields.find((f) => f.name === col.name);
+    if (!matchingField) return false;
+    if (matchingField.type !== expectedFieldType) return false;
+    if (Boolean(matchingField.required) !== expectedRequired) return false;
+  }
+
+  return true;
+}
+
+/**
+ * Returns any derived TypesNodes that are currently out of sync with this EntityNode.
+ */
+export function getOutOfSyncDerivedTypesNodes(
+  entityNode: BackendNode,
+  derivedTypesNodes: BackendNode[],
+): BackendNode[] {
+  return derivedTypesNodes.filter(
+    (typesNode) => !isEntitySyncedWithTypes(entityNode, typesNode),
+  );
+}
+
+/**
  * Finds all downstream nodes that consume or extend the given TypesNodes.
  */
 export function findDownstreamAffectedNodes(

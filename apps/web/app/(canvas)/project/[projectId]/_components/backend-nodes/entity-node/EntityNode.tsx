@@ -3,6 +3,7 @@ import { NodeProps, Handle, Position } from "@xyflow/react";
 import { Database, Table2, Trash, Settings, Sparkles } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { createTypesNodeFromEntity } from "@/lib/stores/backendCanvas/packageTypesSync";
+import { getOutOfSyncDerivedTypesNodes } from "@/lib/stores/backendCanvas/node";
 import { cn } from "@workspace/ui/lib/utils";
 import {
   Select,
@@ -66,6 +67,18 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
           )),
     );
   }, [allNodes, id, edges]);
+
+  const currentNode = React.useMemo(() => {
+    return (
+      allNodes.find((n) => n.id === id) ||
+      ({ id, type: "entity", data } as BackendNode)
+    );
+  }, [allNodes, id, data]);
+
+  // Derived TypesNodes that have changes not yet synced with this entity
+  const outOfSyncTypesNodes = React.useMemo(() => {
+    return getOutOfSyncDerivedTypesNodes(currentNode, derivedTypesNodes);
+  }, [currentNode, derivedTypesNodes]);
 
   // Downstream consumers of those derived TypesNodes
   const affectedDownstreamNodes = React.useMemo(() => {
@@ -244,12 +257,15 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
         <VectorConfig id={id} data={data} updateNode={updateNode} />
       )}
 
-      {/* Derived Types Warning Banner */}
+      {/* Derived Types Warning Banner - only shown when out of sync */}
       <EntityAffectedTypesBanner
+        entityId={id}
         derivedTypesNodes={derivedTypesNodes}
+        outOfSyncTypesNodes={outOfSyncTypesNodes}
         affectedDownstreamNodes={affectedDownstreamNodes}
         entityName={data.label || "Entity"}
         onViewTypesNode={handleViewTypesNode}
+        onSync={() => createTypesNodeFromEntity(id)}
       />
 
       {/* Column List */}

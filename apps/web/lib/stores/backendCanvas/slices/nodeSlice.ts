@@ -7,7 +7,6 @@ import {
   createTableNode,
   createLangGraphStepNode,
   syncEntityRenameReferences,
-  syncEntityDerivedTypes,
   syncNodeDropdownEdges,
   executeNodeDeletion,
 } from "../node";
@@ -161,24 +160,6 @@ export const createNodeSlice = (
     const updated = nextNodes.find((n) => n.id === id);
     if (!updated) return;
 
-    // 1.5. Synchronize derived types in TypesNodes if this is an EntityNode
-    const additionalUpserts: BackendNode[] = [];
-    if (
-      updated.type === "entity" &&
-      (changes.data?.columns !== undefined ||
-        changes.data?.label !== undefined ||
-        changes.data?.tableName !== undefined)
-    ) {
-      const syncResult = syncEntityDerivedTypes(
-        nextNodes,
-        id,
-        updated,
-        get().edges,
-      );
-      nextNodes = syncResult.nextNodes;
-      additionalUpserts.push(...syncResult.updatedTypesNodes);
-    }
-
     // 2. Synchronize dropdown updates to canvas edges
     const edgeSync = syncNodeDropdownEdges(
       id,
@@ -193,7 +174,6 @@ export const createNodeSlice = (
       pendingNodeUpserts: [
         ...get().pendingNodeUpserts,
         updated,
-        ...additionalUpserts,
       ],
       ...(edgeSync.edgesChanged ? { edges: edgeSync.nextEdges } : {}),
       ...(edgeSync.newPendingEdgeRemovals.length > 0

@@ -4,14 +4,18 @@ import {
   createTypesNodeFromEntity,
   createExtendedTypeNode,
 } from "../packageTypesSync";
+import {
+  isEntitySyncedWithTypes,
+  getOutOfSyncDerivedTypesNodes,
+} from "../node/nodeEntitySync";
 import { BackendNode } from "@/types/canvas";
 
-describe("Entity to TypesNode Automatic Derivation & Sync", () => {
+describe("Entity to TypesNode Derivation & Out-of-Sync Banner Sync", () => {
   beforeEach(() => {
     useBackendCanvasStore.getState().reset("proj-entity-sync-test");
   });
 
-  it("automatically synchronizes derived TypesNode when Entity columns are added or changed", () => {
+  it("detects when Entity is out-of-sync and synchronizes when sync is triggered", () => {
     const store = useBackendCanvasStore.getState();
 
     // 1. Add an Entity Node
@@ -34,13 +38,18 @@ describe("Entity to TypesNode Automatic Derivation & Sync", () => {
     createTypesNodeFromEntity(entityId);
 
     const stateAfterGen = useBackendCanvasStore.getState();
+    const entityAfterGen = stateAfterGen.nodes.find((n) => n.id === entityId)!;
     const typesNode = stateAfterGen.nodes.find(
       (n) => n.type === "types" && n.data?.sourceEntityId === entityId,
-    );
+    )!;
     expect(typesNode).toBeDefined();
     expect(typesNode?.data?.label).toBe("Users Types");
     expect(typesNode?.data?.types?.[0]?.name).toBe("Users");
     expect(typesNode?.data?.types?.[0]?.fields).toHaveLength(2);
+
+    // Initial state is fully in sync
+    expect(isEntitySyncedWithTypes(entityAfterGen, typesNode)).toBe(true);
+    expect(getOutOfSyncDerivedTypesNodes(entityAfterGen, [typesNode])).toHaveLength(0);
 
     const emailField = typesNode?.data?.types?.[0]?.fields?.find((f) => f.name === "email");
     expect(emailField?.type).toBe("string");
@@ -56,7 +65,7 @@ describe("Entity to TypesNode Automatic Derivation & Sync", () => {
 
     store.addEdge({
       id: "edge-types-service",
-      source: typesNode!.id,
+      source: typesNode.id,
       target: "service-auth-1",
       sourceHandle: "types-out",
       targetHandle: "types-in",
@@ -76,10 +85,25 @@ describe("Entity to TypesNode Automatic Derivation & Sync", () => {
       },
     });
 
+    // Verify out-of-sync state: Entity was updated, but TypesNode requires sync action
+    const stateBeforeSync = useBackendCanvasStore.getState();
+    const entityBeforeSync = stateBeforeSync.nodes.find((n) => n.id === entityId)!;
+    const typesBeforeSync = stateBeforeSync.nodes.find((n) => n.id === typesNode.id)!;
+    expect(isEntitySyncedWithTypes(entityBeforeSync, typesBeforeSync)).toBe(false);
+    expect(getOutOfSyncDerivedTypesNodes(entityBeforeSync, [typesBeforeSync])).toHaveLength(1);
+
+    // 5. Trigger sync (as performed by the "Sync" button on the Entity banner)
+    createTypesNodeFromEntity(entityId);
+
     const stateAfterUpdate = useBackendCanvasStore.getState();
     const updatedTypesNode = stateAfterUpdate.nodes.find(
-      (n) => n.id === typesNode!.id,
-    );
+      (n) => n.id === typesNode.id,
+    )!;
+    const updatedEntityNode = stateAfterUpdate.nodes.find((n) => n.id === entityId)!;
+
+    // After sync, isEntitySyncedWithTypes is true, and out-of-sync list is empty (banner disappears)
+    expect(isEntitySyncedWithTypes(updatedEntityNode, updatedTypesNode)).toBe(true);
+    expect(getOutOfSyncDerivedTypesNodes(updatedEntityNode, [updatedTypesNode])).toHaveLength(0);
 
     // Derived types should now have 3 fields
     const updatedFields = updatedTypesNode?.data?.types?.[0]?.fields;
@@ -100,7 +124,7 @@ describe("Entity to TypesNode Automatic Derivation & Sync", () => {
     expect(updatedTypesNode?.data?.entitySyncWarning?.affectedNodes[0]?.name).toBe("Auth Service");
   });
 
-  it("automatically updates interface name and TypesNode label when Entity is renamed", () => {
+  it("detects entity rename as out-of-sync and updates interface name and label on sync", () => {
     const store = useBackendCanvasStore.getState();
 
     const entityId = "entity-order-items-1";
@@ -122,7 +146,7 @@ describe("Entity to TypesNode Automatic Derivation & Sync", () => {
 
     const initialTypesNode = useBackendCanvasStore
       .getState()
-      .nodes.find((n) => n.data?.sourceEntityId === entityId);
+      .nodes.find((n) => n.data?.sourceEntityId === entityId)!;
     expect(initialTypesNode?.data?.label).toBe("OrderItems Types");
     expect(initialTypesNode?.data?.types?.[0]?.name).toBe("OrderItems");
 
@@ -138,15 +162,24 @@ describe("Entity to TypesNode Automatic Derivation & Sync", () => {
       },
     });
 
+    const entityBeforeSync = useBackendCanvasStore
+      .getState()
+      .nodes.find((n) => n.id === entityId)!;
+    expect(isEntitySyncedWithTypes(entityBeforeSync, initialTypesNode)).toBe(false);
+
+    // Trigger sync
+    createTypesNodeFromEntity(entityId);
+
     const updatedTypesNode = useBackendCanvasStore
       .getState()
-      .nodes.find((n) => n.id === initialTypesNode!.id);
+      .nodes.find((n) => n.id === initialTypesNode.id)!;
 
+    expect(isEntitySyncedWithTypes(entityBeforeSync, updatedTypesNode)).toBe(true);
     expect(updatedTypesNode?.data?.label).toBe("CustomerOrders Types");
     expect(updatedTypesNode?.data?.types?.[0]?.name).toBe("CustomerOrders");
   });
 
-  it("updates inherited fields in extended TypesNode when base Entity changes", () => {
+  it("updates inherited fields in extended TypesNode when base Entity is synced", () => {
     const store = useBackendCanvasStore.getState();
 
     const entityId = "entity-product-1";
@@ -195,6 +228,19 @@ describe("Entity to TypesNode Automatic Derivation & Sync", () => {
         ],
       },
     });
+
+    const productEntity = useBackendCanvasStore
+      .getState()
+      .nodes.find((n) => n.id === entityId)!;
+    expect(isEntitySyncedWithTypes(productEntity, baseTypesNode)).toBe(false);
+
+    // Trigger sync
+    createTypesNodeFromEntity(entityId);
+
+    const updatedBaseNode = useBackendCanvasStore
+      .getState()
+      .nodes.find((n) => n.id === baseTypesNode.id)!;
+    expect(isEntitySyncedWithTypes(productEntity, updatedBaseNode)).toBe(true);
 
     const updatedExtNode = useBackendCanvasStore
       .getState()

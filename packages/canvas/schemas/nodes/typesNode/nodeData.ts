@@ -2,6 +2,22 @@ import { z } from "zod";
 import { baseNodeDataSchema } from "../base";
 import { customTypeItemSchema } from "./item";
 
+export const entitySyncWarningSchema = z.object({
+  entityId: z.string(),
+  entityName: z.string(),
+  updatedAt: z.number(),
+  affectedNodes: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string().optional(),
+      type: z.string().optional(),
+    }),
+  ),
+  dismissed: z.boolean().optional(),
+});
+
+export type EntitySyncWarning = z.infer<typeof entitySyncWarningSchema>;
+
 /**
  * Full data schema for a Types canvas node.
  *
@@ -40,6 +56,12 @@ export const typesNodeDataSchema = baseNodeDataSchema
 
     // Node-level read-only lock (e.g. pure package nodes)
     isReadOnly: z.boolean().optional(),
+
+    // Entity-derived type synchronization tracking
+    sourceEntityId: z.string().optional(),
+    sourceEntityName: z.string().optional(),
+    entityUpdatedAt: z.number().optional(),
+    entitySyncWarning: entitySyncWarningSchema.optional(),
   })
   .passthrough();
 
