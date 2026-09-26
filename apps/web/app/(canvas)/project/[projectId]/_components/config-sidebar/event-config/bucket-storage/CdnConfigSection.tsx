@@ -10,6 +10,7 @@ import { Switch } from "@workspace/ui/components/switch";
 import { Globe } from "lucide-react";
 import { LocalInput } from "../../../backend-nodes/graph-nodes/shared";
 import { BucketStorageSectionProps } from "./types";
+import { EnvVarCombobox } from "../../EnvVarCombobox";
 
 export const CdnConfigSection: React.FC<BucketStorageSectionProps> = ({
   item,
@@ -34,13 +35,18 @@ export const CdnConfigSection: React.FC<BucketStorageSectionProps> = ({
         <div className="flex flex-col gap-3 pt-1">
           <div className="flex flex-col gap-1.5">
             <label className="text-[11px] font-medium text-foreground">CDN Distribution Domain</label>
-            <LocalInput
-              className="h-8 bg-background/50 text-xs font-mono"
-              placeholder="e.g. cdn.myapp.com or d1234abcd.cloudfront.net"
+            <EnvVarCombobox
+              placeholder="e.g. CDN_DOMAIN or cdn.myapp.com"
               value={item.cdnDomain || ""}
-              onChange={(e) => handleUpdate(item.id, { cdnDomain: e.target.value })}
-              onBlur={(e) => handleUpdate(item.id, { cdnDomain: e.target.value })}
-              debounceMs={200}
+              onValueChange={(val) => handleUpdate(item.id, { cdnDomain: val })}
+              nodeId={item.nodeId}
+              defaultSuggestions={[
+                "CDN_DOMAIN",
+                "CLOUDFRONT_DOMAIN",
+                "NEXT_PUBLIC_CDN_URL",
+                "cdn.example.com",
+              ]}
+              allowRawInput={true}
             />
           </div>
 

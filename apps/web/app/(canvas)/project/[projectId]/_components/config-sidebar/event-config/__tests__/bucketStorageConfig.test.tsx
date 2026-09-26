@@ -101,6 +101,17 @@ vi.mock("../../../backend-nodes/graph-nodes/Editors", () => ({
   ),
 }));
 
+vi.mock("../../EnvVarCombobox", () => ({
+  EnvVarCombobox: ({ value, onValueChange, placeholder }: { value?: string; onValueChange?: (val: string) => void; placeholder?: string }) => (
+    <input
+      data-testid="env-var-combobox"
+      placeholder={placeholder}
+      value={value}
+      onChange={(e) => onValueChange?.(e.target.value)}
+    />
+  ),
+}));
+
 describe("BucketStorageConfig component", () => {
   const baseItem: ConfigItemData = {
     id: "bucket-user-avatars",
@@ -126,6 +137,7 @@ describe("BucketStorageConfig component", () => {
     // Renders section titles
     expect(screen.getByText("Object Metadata Schema")).toBeDefined();
     expect(screen.getByText("Bucket Tier & Storage Class")).toBeDefined();
+    expect(screen.getByText("Connection & Network")).toBeDefined();
     expect(screen.getByText("Connectability & Access Control")).toBeDefined();
     expect(screen.getByText("CORS & Web Client Ingress")).toBeDefined();
     expect(screen.getByText("Object Types & Size Limits")).toBeDefined();
@@ -291,6 +303,23 @@ describe("BucketStorageConfig component", () => {
     expect(screen.getByText("Test Connection")).toBeDefined();
     expect(screen.getByText("Vitest Suite")).toBeDefined();
     expect(screen.getByText("Generated Code Under Test")).toBeDefined();
+  });
+
+  it("updates connection env variables when selecting via combobox", () => {
+    const handleUpdate = vi.fn();
+    render(<BucketStorageConfig item={baseItem} handleUpdate={handleUpdate} />);
+
+    const comboboxes = screen.getAllByTestId("env-var-combobox");
+    expect(comboboxes.length).toBeGreaterThanOrEqual(2);
+
+    // Update access key env via combobox
+    fireEvent.change(comboboxes[0]!, { target: { value: "CUSTOM_S3_KEY_ID" } });
+    expect(handleUpdate).toHaveBeenCalledWith(
+      "bucket-user-avatars",
+      expect.objectContaining({
+        accessKeyIdEnv: "CUSTOM_S3_KEY_ID",
+      }),
+    );
   });
 });
 
