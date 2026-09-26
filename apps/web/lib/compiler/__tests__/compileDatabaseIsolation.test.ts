@@ -199,14 +199,24 @@ describe("Database Isolation & Multi-Engine Architecture under packages/db/*", (
 
     const monorepo = compileMonorepo([mysqlDbNode, productEntity], [], [], [], [], "MysqlApp");
 
-    const packageJsonFile = monorepo.files.find((f) => f.filename === "packages/db/package.json");
+    const packageJsonFile = monorepo.files.find((f) => f.filename === "packages/db/primary-mysql/package.json");
     expect(packageJsonFile).toBeDefined();
     expect(packageJsonFile?.content).toContain('"mysql2"');
     const parsedPkg = JSON.parse(packageJsonFile!.content);
-    expect(parsedPkg.name).toBe("@workspace/db");
+    expect(parsedPkg.name).toBe("@workspace/db-primary-mysql");
 
-    const connFile = monorepo.files.find((f) => f.filename === "packages/db/connection.ts");
+    // Central @workspace/db depends on the isolated package
+    const rootPkgFile = monorepo.files.find((f) => f.filename === "packages/db/package.json");
+    expect(rootPkgFile).toBeDefined();
+    const parsedRootPkg = JSON.parse(rootPkgFile!.content);
+    expect(parsedRootPkg.dependencies?.["@workspace/db-primary-mysql"]).toBe("workspace:*");
+
+    const connFile = monorepo.files.find((f) => f.filename === "packages/db/primary-mysql/connection.ts");
     expect(connFile?.content).toContain('import mysql from "mysql2/promise"');
+
+    // Central connection re-exports from isolated package
+    const rootConnFile = monorepo.files.find((f) => f.filename === "packages/db/connection.ts");
+    expect(rootConnFile?.content).toContain('export * from "./primary-mysql/connection"');
   });
 
   it("should preserve single SQLite database backward compatibility", () => {

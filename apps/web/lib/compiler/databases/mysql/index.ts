@@ -3,11 +3,13 @@ import {
   CompiledFile,
   CompiledDatabaseResult,
   ReusableFunction,
-  CanvasEntityNodeData,
-  CanvasDatabaseNodeData,
 } from "@workspace/canvas/types";
 import { sqlColumnToTsType } from "@workspace/canvas/constants";
 import { toTableName, toVarName, toSqlIdentifier, toSingular, toPlural } from "../../utils";
+import {
+  generateDatabaseConnectionTest,
+  generateTableHelperTest,
+} from "../../generators/databaseTestGenerator";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -310,7 +312,12 @@ export function compileMysqlDatabase(
     if (uniqueValueExports.length > 0) {
       helperBarrel.push(`export { ${uniqueValueExports.join(", ")} } from "./${varName}";`);
     }
+
+    files.push(generateTableHelperTest(tableNode, tables, "mysql", varName));
   });
+
+  // tests/connection.test.ts
+  files.push(generateDatabaseConnectionTest("mysql", packageName));
 
   // helpers/index.ts
   files.push({
@@ -393,7 +400,7 @@ export function compileMysqlDatabase(
           "./helpers": "./helpers/index.ts",
           "./helpers/*": "./helpers/*.ts",
         },
-        scripts: { build: "tsc", "check-types": "tsc --noEmit" },
+        scripts: { build: "tsc", "check-types": "tsc --noEmit", test: "vitest run" },
         dependencies: {
           "@workspace/logger": "workspace:*",
           mysql2: "^3.9.1",
@@ -402,6 +409,7 @@ export function compileMysqlDatabase(
           "@workspace/typescript-config": "workspace:*",
           "@types/node": "^20.11.0",
           typescript: "^5.3.3",
+          vitest: "^1.6.0",
         },
       },
       null,
@@ -417,7 +425,7 @@ export function compileMysqlDatabase(
       {
         extends: "@workspace/typescript-config/base.json",
         compilerOptions: { outDir: "dist" },
-        include: ["index.ts", "connection.ts", "helpers/**/*"],
+        include: ["index.ts", "connection.ts", "helpers/**/*", "tests/**/*"],
       },
       null,
       2,

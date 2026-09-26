@@ -35,3 +35,4 @@ export * from "./generators/loggerGenerator";
 export * from "./generators/schemaToTypeScript";
 export * from "./generators/typesGenerator";
 export * from "./generators/testGenerator";
+export * from "./generators/databaseTestGenerator";

@@ -185,12 +185,16 @@ export function computeNodeDeletionDiff(
     edges.filter((e) => !allDeletedIds.has(e.source) && !allDeletedIds.has(e.target));
 
   // 4. Compile monorepo AFTER deletion
+  const afterTestCases = (testCases || []).filter(
+    (tc) => !allDeletedIds.has(tc.targetNodeId),
+  );
+
   const filesAfter = compileMonorepo(
     afterNodes,
     afterEndpoints,
     afterEvents,
     afterEdges,
-    testCases,
+    afterTestCases,
     projectName,
   ).files;
 

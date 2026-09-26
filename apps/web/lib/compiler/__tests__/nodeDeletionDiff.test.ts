@@ -316,5 +316,95 @@ describe("Canvas Node Architecture Impact Engine", () => {
     expect(svcImpact.severedConnections.length).toBe(1);
     expect(svcImpact.cascadeElements.some((e) => e.label === "getUsers")).toBe(true);
   });
+
+  it("correctly identifies deleted table helper files and test files when an entity node is deleted", () => {
+    const dbNode: BackendNode = {
+      id: "node-db-1",
+      type: "database",
+      position: { x: 100, y: 100 },
+      fractionalIndex: "a0",
+      data: { label: "Main DB", dbEngine: "sqlite" },
+    };
+
+    const usersTableNode: BackendNode = {
+      id: "node-table-users",
+      type: "entity",
+      position: { x: 100, y: 250 },
+      fractionalIndex: "a1",
+      data: {
+        label: "users",
+        databaseId: "node-db-1",
+        columns: [{ name: "id", type: "string", isPrimaryKey: true }],
+      },
+    };
+
+    const ordersTableNode: BackendNode = {
+      id: "node-table-orders",
+      type: "entity",
+      position: { x: 300, y: 250 },
+      fractionalIndex: "a2",
+      data: {
+        label: "orders",
+        databaseId: "node-db-1",
+        columns: [{ name: "id", type: "string", isPrimaryKey: true }],
+      },
+    };
+
+    const diff = computeNodeDeletionDiff(
+      [dbNode, usersTableNode, ordersTableNode],
+      [],
+      [],
+      [],
+      [],
+      "Test Monorepo",
+      ["node-table-users"],
+    );
+
+    expect(diff.deletedNodes.length).toBe(1);
+    expect(diff.deletedNodes[0]?.id).toBe("node-table-users");
+
+    // Deleted files should include the users helper in isolated DB, its unit test, and central forwarder
+    expect(diff.deletedFiles).toContain("packages/db/main-db/helpers/users.ts");
+    expect(diff.deletedFiles).toContain("packages/db/main-db/tests/helpers/users.test.ts");
+    expect(diff.deletedFiles).toContain("packages/db/helpers/users.ts");
+
+    // Orders helper and test must still remain in filesAfter
+    expect(diff.filesAfter.some((f) => f.filename === "packages/db/main-db/helpers/orders.ts")).toBe(true);
+    expect(diff.filesAfter.some((f) => f.filename === "packages/db/main-db/tests/helpers/orders.test.ts")).toBe(true);
+    expect(diff.filesAfter.some((f) => f.filename === "packages/db/helpers/orders.ts")).toBe(true);
+  });
+
+  it("filters testCases referencing deleted nodes and includes their test files in deletedFiles", () => {
+    const svcNode: BackendNode = {
+      id: "node-svc-1",
+      type: "service",
+      position: { x: 100, y: 100 },
+      fractionalIndex: "a0",
+      data: { label: "Auth Service", port: "8080" },
+    };
+
+    const testCase = {
+      id: "tc-1",
+      name: "should verify token",
+      targetNodeId: "node-svc-1",
+      method: "POST",
+      endpoint: "/api/token",
+      expectedStatus: 200,
+    };
+
+    const diff = computeNodeDeletionDiff(
+      [svcNode],
+      [],
+      [],
+      [],
+      [testCase as any],
+      "Test Monorepo",
+      ["node-svc-1"],
+    );
+
+    // Test file generated for Auth Service should be in deletedFiles
+    expect(diff.deletedFiles.some((f) => f.includes("apps/auth-service/tests/"))).toBe(true);
+    expect(diff.filesAfter.some((f) => f.filename.includes("apps/auth-service/tests/"))).toBe(false);
+  });
 });
 

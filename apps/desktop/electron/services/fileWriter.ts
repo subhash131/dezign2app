@@ -176,7 +176,7 @@ export async function writeProject(
               if (["node_modules", ".next", ".git", "dist", "build", ".turbo"].includes(entry.name)) continue;
               cleanStaleDir(fullEntryPath);
               try {
-                if (fs.readdirSync(fullEntryPath).length === 0) {
+                if (fs.existsSync(fullEntryPath) && fs.readdirSync(fullEntryPath).length === 0) {
                   fs.rmdirSync(fullEntryPath);
                 }
               } catch {}
@@ -191,6 +191,18 @@ export async function writeProject(
               }
             }
           }
+          // If the directory itself became empty after cleaning, remove it (unless it is outputDir or a root category)
+          try {
+            if (
+              fs.existsSync(dir) &&
+              dir !== outputDir &&
+              dir !== appsDir &&
+              dir !== packagesDir &&
+              fs.readdirSync(dir).length === 0
+            ) {
+              fs.rmdirSync(dir);
+            }
+          } catch {}
         } catch {}
       };
 
@@ -208,19 +220,20 @@ export async function writeProject(
             if (!hasMatchingFile) {
               // Stale app directory that is no longer in canvas project
               const staleFolderPath = path.join(appsDir, item.name);
-              fs.rmSync(staleFolderPath, { recursive: true, force: true });
-            } else {
-              // Clean up orphaned route/consumer/component files inside the app's app/, src/, and tests/ directories
-              for (const sub of ["app", "src", "tests"]) {
-                const subDir = path.join(appsDir, item.name, sub);
-                cleanStaleDir(subDir);
+              try {
+                fs.rmSync(staleFolderPath, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+              } catch (e) {
+                console.warn(`[fileWriter] Failed to delete stale app folder ${staleFolderPath}:`, e);
               }
+            } else {
+              // Clean up orphaned route/consumer/component files across the app directory
+              cleanStaleDir(path.join(appsDir, item.name));
             }
           }
         }
       }
 
-      // Also clean up stale packages if packages were deleted, and clean stale files inside package src/
+      // Also clean up stale packages if packages were deleted, and clean stale files inside package subfolders
       const packagesDir = path.join(outputDir, "packages");
       if (fs.existsSync(packagesDir)) {
         const existingPackageFolders = fs.readdirSync(packagesDir, {
@@ -240,11 +253,48 @@ export async function writeProject(
               !["ui", "typescript-config", "logger", "types"].includes(item.name)
             ) {
               const stalePkgPath = path.join(packagesDir, item.name);
-              fs.rmSync(stalePkgPath, { recursive: true, force: true });
+              try {
+                fs.rmSync(stalePkgPath, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+              } catch (e) {
+                console.warn(`[fileWriter] Failed to delete stale package ${stalePkgPath}:`, e);
+              }
             } else if (hasMatchingFile) {
-              for (const sub of ["src", "tests"]) {
-                const subDir = path.join(packagesDir, item.name, sub);
-                cleanStaleDir(subDir);
+              const pkgPath = path.join(packagesDir, item.name);
+              try {
+                const entries = fs.readdirSync(pkgPath, { withFileTypes: true });
+                for (const entry of entries) {
+                  if (["node_modules", "dist", "build", ".turbo", ".git"].includes(entry.name)) continue;
+                  const fullEntryPath = path.join(pkgPath, entry.name);
+                  if (entry.isDirectory()) {
+                    // Check if this directory is an isolated subpackage (e.g. packages/db/sqlite-db, packages/storage/minio)
+                    const subPrefix = `packages/${item.name}/${entry.name}/`;
+                    const hasSubFiles = Array.from(currentFileSet).some((f) =>
+                      f.startsWith(subPrefix)
+                    );
+                    if (!hasSubFiles && !["src", "tests", "__tests__", "helpers"].includes(entry.name)) {
+                      // Subpackage was removed or renamed (e.g. postgre -> postgres)
+                      try {
+                        fs.rmSync(fullEntryPath, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+                      } catch (rmErr) {
+                        console.warn(`[fileWriter] Failed removing stale subpackage ${fullEntryPath}:`, rmErr);
+                      }
+                    } else {
+                      // Directory is active subpackage or shared folder (helpers, tests, src)
+                      cleanStaleDir(fullEntryPath);
+                    }
+                  } else if (entry.isFile()) {
+                    const relPath = path.relative(outputDir, fullEntryPath).replace(/\\/g, "/");
+                    if (!currentFileSet.has(relPath)) {
+                      try {
+                        fs.unlinkSync(fullEntryPath);
+                      } catch (e) {
+                        console.warn(`[fileWriter] Failed to delete stale file ${relPath}:`, e);
+                      }
+                    }
+                  }
+                }
+              } catch (e) {
+                console.warn(`[fileWriter] Failed cleaning package ${item.name}:`, e);
               }
             }
           }
