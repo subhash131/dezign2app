@@ -277,4 +277,20 @@ describe("BucketStorageConfig component", () => {
     expect(screen.getAllByText(/user-avatars/).length).toBeGreaterThan(0);
     expect(screen.getByText(/AWS_ACCESS_KEY_ID/)).toBeDefined();
   });
+
+  it("renders Configuration and Testing tabs with testing features", () => {
+    const handleUpdate = vi.fn();
+    render(<BucketStorageConfig item={baseItem} handleUpdate={handleUpdate} />);
+
+    // Verify main tab triggers
+    expect(screen.getByText("Configuration")).toBeDefined();
+    expect(screen.getByText("Testing & Code Verification")).toBeDefined();
+
+    // Verify testing tab features rendered
+    expect(screen.getByText("Test Operations")).toBeDefined();
+    expect(screen.getByText("Test Connection")).toBeDefined();
+    expect(screen.getByText("Vitest Suite")).toBeDefined();
+    expect(screen.getByText("Generated Code Under Test")).toBeDefined();
+  });
 });
+

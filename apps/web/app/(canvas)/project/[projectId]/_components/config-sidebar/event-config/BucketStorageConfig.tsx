@@ -1,8 +1,14 @@
-import React from "react";
+import React, { useState } from "react";
 import { AnyMessagingResource } from "@/types/canvas";
 import { ConfigItemData } from "./types";
-import { Database } from "lucide-react";
+import { Database, Sliders, FlaskConical } from "lucide-react";
 import { Switch } from "@workspace/ui/components/switch";
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+} from "@workspace/ui/components/tabs";
 import {
   BucketStatusBar,
   BucketTierSection,
@@ -14,18 +20,23 @@ import {
   EventNotificationsSection,
   SecurityLifecycleSection,
   StoragePreviewSection,
+  BucketTestingTab,
 } from "./bucket-storage";
 import { SchemaEditor } from "../../backend-nodes/graph-nodes/Editors";
 
 export interface BucketStorageConfigProps {
   item: ConfigItemData;
   handleUpdate: (eventId: string, changes: Partial<AnyMessagingResource>) => void;
+  initialTab?: "config" | "test";
 }
 
 export const BucketStorageConfig: React.FC<BucketStorageConfigProps> = ({
   item,
   handleUpdate,
+  initialTab = "config",
 }) => {
+  const [activeTab, setActiveTab] = useState<"config" | "test">(initialTab);
+
   const isMetadataEnabled =
     item.enableMetadata !== undefined
       ? Boolean(item.enableMetadata)
@@ -36,9 +47,35 @@ export const BucketStorageConfig: React.FC<BucketStorageConfigProps> = ({
         );
 
   return (
-    <div className="flex flex-col gap-5 mt-2 mb-4 text-xs hide-scrollbar">
+    <div className="flex flex-col gap-4 mt-2 mb-4 text-xs hide-scrollbar">
       {/* ─── Status & Quick Capability Bar ─── */}
       <BucketStatusBar item={item} />
+
+      {/* ─── Main Tabs: Configuration vs Testing & Code Verification ─── */}
+      <Tabs
+        value={activeTab}
+        onValueChange={(val) => setActiveTab(val as "config" | "test")}
+        className="w-full flex flex-col gap-3"
+      >
+        <TabsList className="grid grid-cols-2 w-full h-8 bg-muted/60 p-0.5 rounded-lg border border-border/60">
+          <TabsTrigger
+            value="config"
+            className="text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <Sliders size={12} />
+            <span>Configuration</span>
+          </TabsTrigger>
+          <TabsTrigger
+            value="test"
+            className="text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <FlaskConical size={12} className="text-amber-500" />
+            <span>Testing & Code Verification</span>
+          </TabsTrigger>
+        </TabsList>
+
+        {/* ─── TAB 1: Configuration ─── */}
+        <TabsContent value="config" className="flex flex-col gap-5 m-0 outline-none">
 
       {/* ─── 1. Object Custom Metadata Schema ─── */}
       <div className="flex flex-col gap-3 rounded-xl border bg-card/50 p-4 shadow-sm backdrop-blur-sm border-amber-500/20">
@@ -99,7 +136,14 @@ export const BucketStorageConfig: React.FC<BucketStorageConfigProps> = ({
 
       {/* ─── 10. Complete Configuration Preview (Live Summary) ─── */}
       <StoragePreviewSection item={item} />
-    </div>
+    </TabsContent>
+
+    {/* ─── TAB 2: Testing & Code Verification ─── */}
+    <TabsContent value="test" className="flex flex-col gap-4 m-0 outline-none">
+      <BucketTestingTab item={item} />
+    </TabsContent>
+  </Tabs>
+</div>
   );
 };
 

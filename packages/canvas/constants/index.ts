@@ -9,5 +9,4 @@ export * from "./database";
 export * from "./web-app";
 export * from "./realtime";
 export * from "./redis";
-
-
+export * from "./storage";

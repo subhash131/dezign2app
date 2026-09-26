@@ -12,3 +12,4 @@ export * from "./EventNotificationsSection";
 export * from "./CdnConfigSection";
 export * from "./SecurityLifecycleSection";
 export * from "./StoragePreviewSection";
+export * from "./BucketTestingTab";
