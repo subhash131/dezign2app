@@ -121,6 +121,13 @@ export function useEventConfig(id: string, nodeId: string) {
           data: { ...currentData, caches: updatedList },
         });
       } else if (resourceArrayName === "buckets" && currentData.buckets) {
+        const currentItem = currentData.buckets.find((r) => r.id === eventId);
+        if (currentItem) {
+          const hasChange = Object.entries(changes).some(
+            ([k, v]) => (currentItem as any)[k] !== v,
+          );
+          if (!hasChange) return;
+        }
         const updatedList = currentData.buckets.map((r) =>
           r.id === eventId ? Object.assign({}, r, changes) : r,
         );

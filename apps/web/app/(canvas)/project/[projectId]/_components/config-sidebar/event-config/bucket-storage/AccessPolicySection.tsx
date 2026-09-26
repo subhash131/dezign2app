@@ -205,9 +205,13 @@ export const AccessPolicySection: React.FC<BucketStorageSectionProps> = ({
               className="h-7 text-xs font-mono"
               placeholder="Expiration in seconds (default 900s)"
               value={item.presignedUrlTtl || "900"}
+              onChange={(e) =>
+                handleUpdate(item.id, { presignedUrlTtl: e.target.value })
+              }
               onBlur={(e) =>
                 handleUpdate(item.id, { presignedUrlTtl: e.target.value })
               }
+              debounceMs={200}
             />
           </div>
         )}

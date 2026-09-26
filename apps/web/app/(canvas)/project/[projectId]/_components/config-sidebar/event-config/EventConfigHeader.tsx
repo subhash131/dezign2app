@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { ConfigItemData, ResourceArrayName } from "./types";
 import { AnyMessagingResource } from "@/types/canvas";
-import { Input } from "@workspace/ui/components/input";
+import { LocalInput } from "../../backend-nodes/graph-nodes/shared";
 import { cn } from "@workspace/ui/lib/utils";
 import { Edit3 } from "lucide-react";
 
@@ -9,36 +9,35 @@ export interface EventConfigHeaderProps {
   item: ConfigItemData;
   resourceArrayName: ResourceArrayName;
   handleUpdate?: (eventId: string, changes: Partial<AnyMessagingResource>) => void;
+  debounceMs?: number;
 }
 
 export const EventConfigHeader: React.FC<EventConfigHeaderProps> = ({
   item,
   resourceArrayName,
   handleUpdate,
+  debounceMs = process.env.NODE_ENV === "test" ? 0 : 200,
 }) => {
   const isCache = resourceArrayName === "caches" || item.kind === "cache";
   const isBucket = resourceArrayName === "buckets";
   const isConsumed = item.variant === "consume";
   const isReadOnly = item.variant !== "definition" && !isBucket;
 
-  const [name, setName] = useState(item.name || "");
-
-  useEffect(() => {
-    setName(item.name || "");
-  }, [item.name]);
-
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = isBucket
       ? e.target.value.toLowerCase().replace(/[^a-z0-9.-]/g, "-")
       : e.target.value;
-    setName(val);
-    handleUpdate?.(item.id, { name: val });
+    if (val !== item.name) {
+      handleUpdate?.(item.id, { name: val });
+    }
   };
 
-  const handleBlur = () => {
-    const trimmed = name.trim();
+  const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    const val = isBucket
+      ? e.target.value.toLowerCase().replace(/[^a-z0-9.-]/g, "-")
+      : e.target.value;
+    const trimmed = val.trim();
     if (trimmed !== item.name) {
-      setName(trimmed);
       handleUpdate?.(item.id, { name: trimmed });
     }
   };
@@ -63,12 +62,13 @@ export const EventConfigHeader: React.FC<EventConfigHeaderProps> = ({
 
         {isBucket || (!isReadOnly && handleUpdate) ? (
           <div className="relative flex-1 group">
-            <Input
+            <LocalInput
               className="h-8 text-base font-semibold tracking-tight text-foreground bg-background/60 font-mono pr-7 border-border/60 hover:border-amber-500/50 focus-visible:border-amber-500 focus-visible:ring-1 focus-visible:ring-amber-500/30 transition-colors"
               placeholder={isBucket ? "e.g. avatars, documents" : "Resource name"}
-              value={name}
+              value={item.name || ""}
               onChange={handleChange}
               onBlur={handleBlur}
+              debounceMs={debounceMs}
               title="Edit bucket name (syncs with node bucket label)"
             />
             <Edit3

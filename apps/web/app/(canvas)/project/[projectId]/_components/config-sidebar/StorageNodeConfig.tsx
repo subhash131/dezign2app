@@ -16,6 +16,7 @@ import { Button } from "@workspace/ui/components/button";
 import { Switch } from "@workspace/ui/components/switch";
 import { Input } from "@workspace/ui/components/input";
 import { Textarea } from "@workspace/ui/components/textarea";
+import { LocalInput, LocalTextarea } from "../backend-nodes/graph-nodes/shared";
 import {
   Select,
   SelectContent,
@@ -80,6 +81,7 @@ export const StorageNodeConfig: React.FC<StorageNodeConfigProps> = ({
     key: K,
     value: BackendNode["data"][K],
   ) => {
+    if (data[key] === value) return;
     updateNode(node.id, {
       data: {
         ...data,
@@ -173,11 +175,12 @@ export const StorageNodeConfig: React.FC<StorageNodeConfigProps> = ({
           <label className="text-[11px] font-medium text-foreground">
             Storage Node Name
           </label>
-          <Input
+          <LocalInput
             className="h-8 bg-background/50 text-xs"
             placeholder="e.g. User Media Storage, Primary Blob Store"
             value={data.label || ""}
             onChange={(e) => handleUpdateField("label", e.target.value)}
+            debounceMs={150}
           />
         </div>
 
@@ -186,11 +189,12 @@ export const StorageNodeConfig: React.FC<StorageNodeConfigProps> = ({
           <label className="text-[11px] font-medium text-foreground">
             Architecture Role & Description
           </label>
-          <Textarea
+          <LocalTextarea
             className="min-h-[50px] text-xs bg-background/50 resize-none"
             placeholder="Describe what data this storage provider manages (e.g. AWS S3 storing user avatars, documents, and backups)"
             value={data.description || ""}
             onChange={(e) => handleUpdateField("description", e.target.value)}
+            debounceMs={200}
           />
         </div>
       </div>
@@ -240,11 +244,12 @@ export const StorageNodeConfig: React.FC<StorageNodeConfigProps> = ({
             <label className="text-[11px] font-medium text-foreground">
               AWS Region
             </label>
-            <Input
+            <LocalInput
               className="h-8 bg-background/50 text-xs font-mono"
               placeholder="us-east-1"
               value={data.defaultRegion || ""}
               onChange={(e) => handleUpdateField("defaultRegion", e.target.value)}
+              debounceMs={150}
             />
           </div>
 
@@ -252,11 +257,12 @@ export const StorageNodeConfig: React.FC<StorageNodeConfigProps> = ({
             <label className="text-[11px] font-medium text-foreground">
               Endpoint URL (Optional)
             </label>
-            <Input
+            <LocalInput
               className="h-8 bg-background/50 text-xs font-mono"
               placeholder="https://s3.amazonaws.com"
               value={data.endpointUrl || ""}
               onChange={(e) => handleUpdateField("endpointUrl", e.target.value)}
+              debounceMs={150}
             />
           </div>
         </div>
@@ -265,11 +271,12 @@ export const StorageNodeConfig: React.FC<StorageNodeConfigProps> = ({
           <label className="text-[11px] font-medium text-foreground">
             CDN / CloudFront Domain
           </label>
-          <Input
+          <LocalInput
             className="h-8 bg-background/50 text-xs font-mono"
             placeholder="cdn.example.com"
             value={data.cdnUrl || ""}
             onChange={(e) => handleUpdateField("cdnUrl", e.target.value)}
+            debounceMs={150}
           />
         </div>
 
@@ -303,11 +310,12 @@ export const StorageNodeConfig: React.FC<StorageNodeConfigProps> = ({
             <label className="text-[11px] font-medium text-foreground">
               Access Key ID Env
             </label>
-            <Input
+            <LocalInput
               className="h-8 bg-background/50 text-xs font-mono"
               placeholder="AWS_ACCESS_KEY_ID"
               value={data.accessKeyIdEnv || ""}
               onChange={(e) => handleUpdateField("accessKeyIdEnv", e.target.value)}
+              debounceMs={150}
             />
           </div>
 
@@ -315,11 +323,12 @@ export const StorageNodeConfig: React.FC<StorageNodeConfigProps> = ({
             <label className="text-[11px] font-medium text-foreground">
               Secret Key Env
             </label>
-            <Input
+            <LocalInput
               className="h-8 bg-background/50 text-xs font-mono"
               placeholder="AWS_SECRET_ACCESS_KEY"
               value={data.secretAccessKeyEnv || ""}
               onChange={(e) => handleUpdateField("secretAccessKeyEnv", e.target.value)}
+              debounceMs={150}
             />
           </div>
         </div>
@@ -329,11 +338,12 @@ export const StorageNodeConfig: React.FC<StorageNodeConfigProps> = ({
             <label className="text-[11px] font-medium text-foreground">
               Session Token Env (Optional)
             </label>
-            <Input
+            <LocalInput
               className="h-8 bg-background/50 text-xs font-mono"
               placeholder="AWS_SESSION_TOKEN"
               value={data.sessionTokenEnv || ""}
               onChange={(e) => handleUpdateField("sessionTokenEnv", e.target.value)}
+              debounceMs={150}
             />
           </div>
 
@@ -341,11 +351,12 @@ export const StorageNodeConfig: React.FC<StorageNodeConfigProps> = ({
             <label className="text-[11px] font-medium text-foreground">
               IAM Role ARN (Optional)
             </label>
-            <Input
+            <LocalInput
               className="h-8 bg-background/50 text-xs font-mono"
               placeholder="arn:aws:iam::..."
               value={data.roleArn || ""}
               onChange={(e) => handleUpdateField("roleArn", e.target.value)}
+              debounceMs={150}
             />
           </div>
         </div>
@@ -407,11 +418,12 @@ export const StorageNodeConfig: React.FC<StorageNodeConfigProps> = ({
             <label className="text-[11px] font-medium text-foreground">
               KMS Key ID or ARN
             </label>
-            <Input
+            <LocalInput
               className="h-8 bg-background/50 text-xs font-mono"
               placeholder="arn:aws:kms:us-east-1:..."
               value={data.kmsKeyId || ""}
               onChange={(e) => handleUpdateField("kmsKeyId", e.target.value)}
+              debounceMs={150}
             />
           </div>
         )}

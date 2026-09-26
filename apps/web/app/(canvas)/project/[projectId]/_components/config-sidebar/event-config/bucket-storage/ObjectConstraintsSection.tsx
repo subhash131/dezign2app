@@ -62,9 +62,13 @@ export const ObjectConstraintsSection: React.FC<BucketStorageSectionProps> = ({
             className="h-8 bg-background/50 text-xs"
             placeholder="e.g. CAD Files, Parquet, SQLite snapshots"
             value={item.storedDataTypesOther || ""}
+            onChange={(e) =>
+              handleUpdate(item.id, { storedDataTypesOther: e.target.value })
+            }
             onBlur={(e) =>
               handleUpdate(item.id, { storedDataTypesOther: e.target.value })
             }
+            debounceMs={200}
           />
         </div>
       )}
@@ -94,7 +98,9 @@ export const ObjectConstraintsSection: React.FC<BucketStorageSectionProps> = ({
           className="h-8 bg-background/50 text-xs font-mono"
           placeholder="e.g. 250KB, 5MB, 50MB, 1GB (leave blank for unlimited)"
           value={item.maxFileSize || ""}
+          onChange={(e) => handleUpdate(item.id, { maxFileSize: e.target.value })}
           onBlur={(e) => handleUpdate(item.id, { maxFileSize: e.target.value })}
+          debounceMs={200}
         />
       </div>
 
@@ -107,7 +113,9 @@ export const ObjectConstraintsSection: React.FC<BucketStorageSectionProps> = ({
           className="h-8 bg-background/50 text-xs font-mono"
           placeholder="e.g. .png, .jpg, .jpeg, .pdf, image/*, application/pdf"
           value={item.allowedExtensions || ""}
+          onChange={(e) => handleUpdate(item.id, { allowedExtensions: e.target.value })}
           onBlur={(e) => handleUpdate(item.id, { allowedExtensions: e.target.value })}
+          debounceMs={200}
         />
       </div>
     </div>
