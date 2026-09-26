@@ -931,6 +931,10 @@ export const backendNodeDataValidator = v.union(
     bucketName: v.optional(v.string()),
     operationId: v.optional(v.string()),
     storageOperations: v.optional(v.array(v.any())),
+    sourceEntityId: v.optional(v.string()),
+    sourceEntityName: v.optional(v.string()),
+    entityUpdatedAt: v.optional(v.number()),
+    entitySyncWarning: v.optional(v.any()),
   }),
 );
 
@@ -947,6 +951,8 @@ export const backendEventDataValidator = zodToConvex(
 export const backendDatabaseDataValidator = zodToConvex(databaseDataSchema);
 
 export const backendEntityDataValidator = zodToConvex(entityDataSchema);
+
+export const backendTypesNodeDataValidator = zodToConvex(typesNodeDataSchema);
 
 export const backendStorageOperationRefDataValidator = zodToConvex(
   storageOperationRefDataSchema,

@@ -10,14 +10,18 @@ import {
   Radio,
   Braces,
   Cpu,
+  Sparkles,
 } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 
 export interface EntityAffectedTypesBannerProps {
+  entityId: string;
   derivedTypesNodes: BackendNode[];
+  outOfSyncTypesNodes: BackendNode[];
   affectedDownstreamNodes: BackendNode[];
   entityName: string;
   onViewTypesNode?: (nodeId: string) => void;
+  onSync?: () => void;
 }
 
 function getNodeIcon(type?: string) {
@@ -41,48 +45,62 @@ function getNodeIcon(type?: string) {
 export const EntityAffectedTypesBanner: React.FC<
   EntityAffectedTypesBannerProps
 > = ({
+  entityId,
   derivedTypesNodes,
+  outOfSyncTypesNodes,
   affectedDownstreamNodes,
   entityName,
   onViewTypesNode,
+  onSync,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  if (derivedTypesNodes.length === 0) return null;
+  // Only display the banner when the entity has changes not yet synced to derived TypesNodes
+  if (outOfSyncTypesNodes.length === 0) return null;
 
   return (
-    <div className="mx-3 my-1.5 p-2 rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-300 dark:text-amber-200 flex flex-col gap-1.5 shadow-xs nodrag">
+    <div className="mx-3 my-1.5 p-2 rounded-lg border border-amber-500/50 bg-amber-500/10 text-amber-300 dark:text-amber-200 flex flex-col gap-1.5 shadow-xs nodrag">
       <div className="flex items-center justify-between gap-1.5">
         <div className="flex items-center gap-1.5 min-w-0">
           <AlertTriangle size={13} className="text-amber-400 shrink-0" />
           <span className="text-[10px] font-bold text-amber-300 truncate">
-            Derived Types Linked
+            Types Out of Sync
           </span>
-          <span className="text-[7px] font-mono px-1 py-0.2 rounded font-bold bg-amber-500/20 text-amber-300 shrink-0 uppercase tracking-wide">
-            {derivedTypesNodes.length} TYPES
+          <span className="text-[7.5px] font-mono px-1 py-0.2 rounded font-bold bg-amber-500/20 text-amber-300 shrink-0 uppercase tracking-wide">
+            {outOfSyncTypesNodes.length} UNSYNCED
           </span>
-          {affectedDownstreamNodes.length > 0 && (
-            <span className="text-[7px] font-mono px-1 py-0.2 rounded font-bold bg-amber-500/30 text-amber-200 shrink-0">
-              {affectedDownstreamNodes.length} AFFECTED
-            </span>
-          )}
         </div>
 
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setIsExpanded((prev) => !prev);
-          }}
-          className="text-amber-400/80 hover:text-amber-200 p-0.5 rounded hover:bg-amber-500/20 transition-colors cursor-pointer shrink-0"
-          title={isExpanded ? "Collapse banner" : "Expand banner"}
-        >
-          {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-        </button>
+        <div className="flex items-center gap-1 shrink-0">
+          {onSync && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onSync();
+              }}
+              className="px-2 py-0.5 rounded bg-amber-500 hover:bg-amber-400 text-black font-semibold text-[9.5px] transition-colors flex items-center gap-1 cursor-pointer shadow-xs"
+              title="Sync changes to derived TypesNode"
+            >
+              <Sparkles size={10} />
+              <span>Sync</span>
+            </button>
+          )}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsExpanded((prev) => !prev);
+            }}
+            className="text-amber-400/80 hover:text-amber-200 p-0.5 rounded hover:bg-amber-500/20 transition-colors cursor-pointer shrink-0"
+            title={isExpanded ? "Collapse banner" : "Expand banner"}
+          >
+            {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+          </button>
+        </div>
       </div>
 
       <div className="text-[9.5px] text-amber-200/90 leading-tight">
-        Changes to this table automatically sync{" "}
-        {derivedTypesNodes.map((n, i) => (
+        Table changes have not been synced to{" "}
+        {outOfSyncTypesNodes.map((n, i) => (
           <span key={n.id}>
             <button
               onClick={(e) => {
@@ -94,7 +112,7 @@ export const EntityAffectedTypesBanner: React.FC<
             >
               {n.data.label || "TypesNode"}
             </button>
-            {i < derivedTypesNodes.length - 1 ? ", " : ""}
+            {i < outOfSyncTypesNodes.length - 1 ? ", " : ""}
           </span>
         ))}
         .
@@ -105,7 +123,7 @@ export const EntityAffectedTypesBanner: React.FC<
           {affectedDownstreamNodes.length > 0 ? (
             <div className="flex flex-col gap-1">
               <span className="text-[9px] font-semibold text-amber-400">
-                ⚠️ Downstream components that will be affected:
+                ⚠️ Downstream components that will receive updated types:
               </span>
               <div className="flex flex-wrap gap-1 max-h-[70px] overflow-y-auto pr-0.5">
                 {affectedDownstreamNodes.map((node) => {
@@ -127,8 +145,7 @@ export const EntityAffectedTypesBanner: React.FC<
             </div>
           ) : (
             <p className="text-[9px] text-amber-300/60 italic">
-              No downstream components connected yet. Connections will receive
-              updated types automatically.
+              Click &quot;Sync&quot; to update linked types contract.
             </p>
           )}
         </div>

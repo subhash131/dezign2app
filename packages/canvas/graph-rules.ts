@@ -62,10 +62,10 @@ export const CONNECTION_RULES: Record<HandleKind, HandleKind[]> = {
     "resource-def-in",
     "action-target",
   ],
-  "entity-column-source": ["entity-column-target"],
+  "entity-column-source": ["entity-column-target", "type-in"],
   "entity-column-target": [],
   "entity-top-target": [],
-  "entity-bottom-source": ["entity-top-target"],
+  "entity-bottom-source": ["entity-top-target", "type-in"],
   "database-target": [],
   "database-source": [
     "endpoint-in",
@@ -153,6 +153,8 @@ export const CONNECTION_RULES: Record<HandleKind, HandleKind[]> = {
 export const EDGE_TYPE_MAP: Record<string, string> = {
   "entity-column-source→entity-column-target": "foreign-key",
   "entity-bottom-source→entity-top-target": "foreign-key",
+  "entity-column-source→type-in": "type-reference",
+  "entity-bottom-source→type-in": "type-reference",
   "database-source→entity-top-target": "database-connection",
   "database-source→consumed-event-in": "connection",
   "consumed-event-out→database-target": "connection",

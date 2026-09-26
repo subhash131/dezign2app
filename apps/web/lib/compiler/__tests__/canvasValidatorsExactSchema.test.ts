@@ -799,6 +799,64 @@ describe("Convex canvasValidators exact schema", () => {
     expect(backendStorageBucketRefDataValidator.fields.storageOperations).toBeDefined();
     expect(backendNodeDataValidator.members.length).toBeGreaterThan(10);
   });
+
+  it("validates entity-derived types node payload with sourceEntityId, sourceEntityName, entityUpdatedAt, and entitySyncWarning in Convex & Zod schemas", async () => {
+    const { typesNodeDataSchema } = await import("@workspace/canvas/schemas");
+    const { backendTypesNodeDataValidator } = await import(
+      "../../../../../packages/backend/convex/schema/canvasValidators"
+    );
+
+    // Exact payload reported in user's Convex upsertBackendNode error
+    const userPayload = {
+      entityUpdatedAt: 1790386902884.0,
+      label: "User Types",
+      position: { x: 1209.0, y: 274.0 },
+      scope: "global" as const,
+      sourceEntityId: "36a889dc-34c2-4af4-8f7a-cad66d23f624",
+      sourceEntityName: "user",
+      types: [
+        {
+          id: "type-entity-36a889dc-34c2-4af4-8f7a-cad66d23f624",
+          name: "User",
+          kind: "interface" as const,
+          description: "Auto-generated TypeScript interface from entity: user",
+          fields: [
+            {
+              id: "f-type-entity-36a889dc-34c2-4af4-8f7a-cad66d23f624-0-id",
+              name: "id",
+              type: "string",
+              required: true,
+              isArray: false,
+              description: "Column from user",
+            },
+          ],
+        },
+      ],
+      entitySyncWarning: {
+        entityId: "36a889dc-34c2-4af4-8f7a-cad66d23f624",
+        entityName: "user",
+        updatedAt: 1790386902884.0,
+        affectedNodes: [
+          {
+            id: "node-service-1",
+            name: "User Service",
+            type: "service",
+          },
+        ],
+        dismissed: false,
+      },
+    };
+
+    const parsed = typesNodeDataSchema.safeParse(userPayload);
+    expect(parsed.success).toBe(true);
+
+    // Verify convex validator fields
+    expect(backendTypesNodeDataValidator).toBeDefined();
+    expect(backendTypesNodeDataValidator.fields.sourceEntityId).toBeDefined();
+    expect(backendTypesNodeDataValidator.fields.sourceEntityName).toBeDefined();
+    expect(backendTypesNodeDataValidator.fields.entityUpdatedAt).toBeDefined();
+    expect(backendTypesNodeDataValidator.fields.entitySyncWarning).toBeDefined();
+  });
 });
 
 

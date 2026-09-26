@@ -5,6 +5,7 @@ import {
   toPascalCase,
   mapColumnsToTypeFields,
   findDownstreamAffectedNodes,
+  syncEntityDerivedTypes,
 } from "./node";
 
 export interface FetchPackageTypesResponse {
@@ -481,44 +482,24 @@ export function createTypesNodeFromEntity(entityNodeId: string): void {
   };
 
   if (existing) {
-    const existingTypes = existing.data.types ?? [];
-    const updatedTypes = existingTypes.some((t) => t.id === typeItem.id)
-      ? existingTypes.map((t) => (t.id === typeItem.id ? typeItem : t))
-      : [...existingTypes, typeItem];
-
-    const downstreamNodes = findDownstreamAffectedNodes(
+    const { updatedTypesNodes } = syncEntityDerivedTypes(
       store.nodes,
+      entityNodeId,
+      entityNode,
       store.edges,
-      [existing.id],
     );
 
-    const affectedSummary = {
-      entityId: entityNodeId,
-      entityName: tableName,
-      updatedAt: now,
-      affectedNodes: downstreamNodes.map((d) => ({
-        id: d.id,
-        name: d.data.label || d.id,
-        type: d.type,
-      })),
-    };
+    for (const uNode of updatedTypesNodes) {
+      store.updateNode(uNode.id, {
+        data: uNode.data,
+      });
+    }
 
-    store.updateNode(existing.id, {
-      data: {
-        ...existing.data,
-        label: `${pascalName} Types`,
-        sourceEntityId: entityNodeId,
-        sourceEntityName: tableName,
-        entityUpdatedAt: now,
-        entitySyncWarning: affectedSummary,
-        types: updatedTypes,
-      },
-    });
     store.setActiveConfigItem({
       id: existing.id,
       nodeId: existing.id,
       type: "types",
-      selectedTypeId: typeItem.id,
+      selectedTypeId: typeId,
     });
     toast.success(`Refreshed "${typeItem.name}" types from entity "${tableName}"`);
     return;
@@ -549,6 +530,7 @@ export function createTypesNodeFromEntity(entityNodeId: string): void {
     id: `edge-entity-types-${entityNodeId}-${newNodeId}`,
     source: entityNodeId,
     target: newNodeId,
+    targetHandle: "types-in",
     type: "type-reference",
     data: { label: "generates" },
   });

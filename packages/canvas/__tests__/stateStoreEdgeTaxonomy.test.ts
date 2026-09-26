@@ -54,4 +54,32 @@ describe("StateStore and Section State Handle Taxonomy", () => {
     );
     expect(typeToStore.valid).toBe(true);
   });
+
+  it("validates entity to types node connections", () => {
+    // Both entity-bottom-source and entity-column-source can connect to type-in
+    expect(CONNECTION_RULES["entity-bottom-source"]).toContain("type-in");
+    expect(CONNECTION_RULES["entity-column-source"]).toContain("type-in");
+    expect(EDGE_TYPE_MAP["entity-bottom-source→type-in"]).toBe("type-reference");
+    expect(EDGE_TYPE_MAP["entity-column-source→type-in"]).toBe("type-reference");
+
+    // Default handle connection (sourceHandle: undefined, targetHandle: "types-in" or undefined)
+    const entityDefaultToTypes = isValidConnection("entity", undefined, "types", "types-in");
+    expect(entityDefaultToTypes.valid).toBe(true);
+    if (entityDefaultToTypes.valid) {
+      expect(entityDefaultToTypes.edgeType).toBe("type-reference");
+    }
+
+    const entityDefaultToTypesUndefined = isValidConnection("entity", undefined, "types", undefined);
+    expect(entityDefaultToTypesUndefined.valid).toBe(true);
+    if (entityDefaultToTypesUndefined.valid) {
+      expect(entityDefaultToTypesUndefined.edgeType).toBe("type-reference");
+    }
+
+    // Column handle connection
+    const entityColToTypes = isValidConnection("entity", "source-0", "types", "types-in");
+    expect(entityColToTypes.valid).toBe(true);
+    if (entityColToTypes.valid) {
+      expect(entityColToTypes.edgeType).toBe("type-reference");
+    }
+  });
 });
