@@ -16,6 +16,7 @@ import { isServiceConnectedToKafka } from "../kafka";
 import { compileRedisNodes, isServiceConnectedToRedis } from "../compileRedisNodes";
 import { compileDatabaseNodes } from "../compileDatabaseNodes";
 import { compileStorageNodes, isServiceConnectedToStorage } from "../compileStorageNodes";
+import { generateEnvFilesForNode, collectEnvSections } from "./generateEnvFile";
 import {
   INTER_SERVICE_PROTOCOL_GRPC,
   GRPC_DEFAULT_PORT,
@@ -781,19 +782,35 @@ export function generateConfigFiles(
   }
 
   const grpcPort = node.data?.grpcPort || "50051";
-  const dbEnvLines: string[] = [];
-  if (hasDb) {
-    dbEnvLines.push("DATABASE_PATH=../../packages/db/sqlite.db");
-    dbEnvLines.push("DATABASE_URL=../../packages/db/sqlite.db");
-  }
 
-  const envFile = `PORT=${port}
+  // ── Canvas-driven .env generation ─────────────────────────────────────────
+  // Prefer envVars defined on the canvas node (own + connected package nodes).
+  // Fall back to the legacy hardcoded lines only when no canvas envVars exist.
+  const canvasSections = collectEnvSections(node, allNodes, allEdges);
+
+  let envFile: string;
+  let envExampleFile: string;
+
+  if (canvasSections.length > 0) {
+    // Canvas-driven: use structured envVars from the node and its package dependencies
+    const { env, envExample } = generateEnvFilesForNode(node, allNodes, allEdges);
+    envFile = env;
+    envExampleFile = envExample;
+  } else {
+    // Legacy fallback: build .env from inferred lines (old behaviour)
+    const dbEnvLines: string[] = [];
+    if (hasDb) {
+      dbEnvLines.push("DATABASE_PATH=../../packages/db/sqlite.db");
+      dbEnvLines.push("DATABASE_URL=../../packages/db/sqlite.db");
+    }
+
+    envFile = `PORT=${port}
 GRPC_PORT=${grpcPort}
 NODE_ENV=development
 LOG_LEVEL=info
 ${dbEnvLines.length > 0 ? dbEnvLines.join("\n") + "\n" : ""}${redisEnvLines.length > 0 ? redisEnvLines.join("\n") + "\n" : ""}${connectedServiceEnvLines.length > 0 ? connectedServiceEnvLines.join("\n") + "\n" : ""}`;
-
-
+    envExampleFile = envFile;
+  }
 
 
   const gitignoreFile = `node_modules
@@ -903,6 +920,11 @@ dist
       filename: ".env",
       language: "dotenv",
       content: envFile,
+    },
+    {
+      filename: ".env.example",
+      language: "dotenv",
+      content: envExampleFile,
     },
     {
       filename: ".gitignore",

@@ -84,6 +84,8 @@ export function compileNextjsV16Service(
       hasDb,
       hasKafka,
       hasRedis,
+      allNodes,
+      allEdges,
     }),
   ];
 
