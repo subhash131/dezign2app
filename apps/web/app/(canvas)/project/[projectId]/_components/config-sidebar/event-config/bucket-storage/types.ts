@@ -41,3 +41,18 @@ export interface EventTriggerOption {
 }
 
 export type PreviewTab = "code" | "spec" | "env";
+
+export type {
+  TestingViewMode,
+  StorageOperationOption,
+  BucketTestOperation,
+  BucketCallerRole,
+  BucketAuditCheck,
+  BucketTestResult,
+  StorageConnectionConfig,
+  CheckStorageConnectionResult,
+  ExecuteStorageOperationPayload,
+  ExecuteStorageOperationResult,
+} from "@workspace/canvas/types";
+
+
