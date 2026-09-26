@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   HardDrive,
   Cloud,
@@ -38,6 +38,9 @@ import {
   type ServerBucketInfo,
 } from "@/lib/services/storageService";
 import { cn } from "@workspace/ui/lib/utils";
+import { NodeEnvVarsSection } from "./NodeEnvVarsSection";
+import type { EnvVarEntry } from "./NodeEnvVarsSection";
+import { getDefaultNodeEnvVars } from "@workspace/canvas";
 
 export interface StorageNodeConfigProps {
   id: string;
@@ -108,6 +111,14 @@ export const StorageNodeConfig: React.FC<StorageNodeConfigProps> = ({
       },
     });
   };
+
+  // Auto-seed default env vars if missing
+  useEffect(() => {
+    if (data.envVars === undefined) {
+      const defaults = getDefaultNodeEnvVars("storage", data);
+      handleUpdateField("envVars", defaults as BackendNode["data"]["envVars"]);
+    }
+  }, [node?.id, data.envVars]);
 
   const handleAddBucket = () => {
     const trimmed = newBucketName.trim().toLowerCase().replace(/[^a-z0-9.-]/g, "-");
@@ -875,7 +886,25 @@ export const StorageNodeConfig: React.FC<StorageNodeConfigProps> = ({
         </div>
       </div>
 
-      {/* ─── 6. Live Environment & SDK Initialization Preview ─── */}
+
+      {/* ─── 6. Environment Variables ─── */}
+      <div className="flex flex-col gap-3 rounded-xl border bg-card/50 p-4 shadow-sm backdrop-blur-sm">
+        <NodeEnvVarsSection
+          mode="package"
+          nodeKindLabel="storage"
+          envVars={(data.envVars as EnvVarEntry[] | undefined) ?? []}
+          defaultEnvVars={getDefaultNodeEnvVars("storage", data)}
+          onLoadDefaults={() =>
+            handleUpdateField(
+              "envVars",
+              getDefaultNodeEnvVars("storage", data) as BackendNode["data"]["envVars"],
+            )
+          }
+          onChange={(updated) => handleUpdateField("envVars", updated as BackendNode["data"]["envVars"])}
+        />
+      </div>
+
+      {/* ─── 7. Live Environment & SDK Initialization Preview ─── */}
       <div className="flex flex-col gap-2 rounded-xl border bg-secondary/15 p-4 text-xs font-mono">
         <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
           S3 Client Initialization Code Preview

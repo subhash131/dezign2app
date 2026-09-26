@@ -1,5 +1,6 @@
 import { CompiledFile, NodeDependencyItem } from "@workspace/canvas/types";
-import { BackendNode } from "@/types/canvas";
+import { BackendNode, BackendEdge } from "@/types/canvas";
+import { generateEnvFilesForNode, collectEnvSections } from "@/lib/compiler/generators/generateEnvFile";
 
 export interface GenerateNextjsConfigParams {
   node: BackendNode;
@@ -11,6 +12,8 @@ export interface GenerateNextjsConfigParams {
   hasDb: boolean;
   hasKafka: boolean;
   hasRedis: boolean;
+  allNodes?: BackendNode[];
+  allEdges?: BackendEdge[];
 }
 
 export function generateNextjsConfigFiles(params: GenerateNextjsConfigParams): CompiledFile[] {
@@ -24,6 +27,8 @@ export function generateNextjsConfigFiles(params: GenerateNextjsConfigParams): C
     hasDb,
     hasKafka,
     hasRedis,
+    allNodes = [],
+    allEdges = [],
   } = params;
 
   const files: CompiledFile[] = [];
@@ -184,16 +189,20 @@ export default nextConfig;
 `,
   });
 
-  // 5. .env.example
-  files.push({
-    filename: ".env.example",
-    language: "dotenv",
-    content: `PORT=${port}
+  // 5. .env / .env.example
+  const canvasSections = collectEnvSections(node, allNodes, allEdges);
+  if (canvasSections.length > 0) {
+    const { env, envExample } = generateEnvFilesForNode(node, allNodes, allEdges);
+    files.push({ filename: ".env", language: "dotenv", content: env });
+    files.push({ filename: ".env.example", language: "dotenv", content: envExample });
+  } else {
+    // Legacy fallback
+    const legacyEnv = `PORT=${port}
 NODE_ENV=development
-${hasDb ? `DATABASE_URL=postgresql://postgres:postgres@localhost:5432/${sanitizedName}\n` : ""}${
-      hasKafka ? `KAFKA_BROKERS=localhost:9092\n` : ""
-    }${hasRedis ? `REDIS_URL=redis://localhost:6379\n` : ""}`,
-  });
+${hasDb ? `DATABASE_URL=postgresql://postgres:postgres@localhost:5432/${sanitizedName}\n` : ""}${hasKafka ? `KAFKA_BROKERS=localhost:9092\n` : ""}${hasRedis ? `REDIS_URL=redis://localhost:6379\n` : ""}`;
+    files.push({ filename: ".env", language: "dotenv", content: legacyEnv });
+    files.push({ filename: ".env.example", language: "dotenv", content: legacyEnv });
+  }
 
   // 6. .gitignore
   files.push({

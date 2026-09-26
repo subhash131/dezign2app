@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
@@ -21,9 +21,12 @@ import {
   Server,
   Package,
   Settings,
+  KeyRound,
 } from "lucide-react";
 import { NodePackageManager } from "./NodePackageManager";
-import { NodeDependencyItem } from "@workspace/canvas";
+import { NodeEnvVarsSection } from "./NodeEnvVarsSection";
+import type { EnvVarEntry } from "./NodeEnvVarsSection";
+import { NodeDependencyItem, getDefaultNodeEnvVars } from "@workspace/canvas";
 import { toast } from "sonner";
 import {
   INTER_SERVICE_PROTOCOL_OPTIONS,
@@ -53,6 +56,14 @@ export const ServiceConfig: React.FC<ServiceConfigProps> = ({ id, nodeId }) => {
   const updateData = (changes: Partial<typeof data>) => {
     updateNode(nodeId, { data: { ...data, ...changes } });
   };
+
+  // Auto-seed default env vars if missing
+  useEffect(() => {
+    if (data.envVars === undefined) {
+      const defaults = getDefaultNodeEnvVars("service", data);
+      updateData({ envVars: defaults });
+    }
+  }, [nodeId, data.envVars]);
 
   const serviceLabel = data.label || "Service";
   const port = String(data.port || "8080");
@@ -161,17 +172,26 @@ export const ServiceConfig: React.FC<ServiceConfigProps> = ({ id, nodeId }) => {
 
       {/* Tabs: Settings vs Packages */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="w-full grid grid-cols-2 p-1 bg-muted/50 rounded-lg">
+        <TabsList className="w-full grid grid-cols-3 p-1 bg-muted/50 rounded-lg">
           <TabsTrigger value="settings" className="text-xs flex items-center gap-1.5 data-[state=active]:bg-background">
             <Settings className="w-3.5 h-3.5" />
-            Overview & Settings
+            Settings
           </TabsTrigger>
           <TabsTrigger value="packages" className="text-xs flex items-center gap-1.5 data-[state=active]:bg-background">
             <Package className="w-3.5 h-3.5 text-primary" />
-            Packages & Libraries
+            Packages
             {customDependencies.length > 0 && (
               <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-primary/20 text-primary font-mono font-bold">
                 {customDependencies.length}
+              </span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="envvars" className="text-xs flex items-center gap-1.5 data-[state=active]:bg-background">
+            <KeyRound className="w-3.5 h-3.5 text-emerald-500" />
+            Env Vars
+            {(data.envVars?.length ?? 0) > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-500/20 text-emerald-600 font-mono font-bold">
+                {data.envVars!.length}
               </span>
             )}
           </TabsTrigger>
@@ -321,6 +341,17 @@ export const ServiceConfig: React.FC<ServiceConfigProps> = ({ id, nodeId }) => {
             onUpdateDependencies={(deps) => updateData({ customDependencies: deps })}
             inferredDependencies={inferredDeps}
             inferredDevDependencies={inferredDevDeps}
+          />
+        </TabsContent>
+
+        {/* Tab 3: Environment Variables */}
+        <TabsContent value="envvars" className="pt-3">
+          <NodeEnvVarsSection
+            mode="app"
+            envVars={(data.envVars as EnvVarEntry[] | undefined) ?? []}
+            defaultEnvVars={getDefaultNodeEnvVars("service", data)}
+            onLoadDefaults={() => updateData({ envVars: getDefaultNodeEnvVars("service", data) })}
+            onChange={(updated) => updateData({ envVars: updated })}
           />
         </TabsContent>
       </Tabs>

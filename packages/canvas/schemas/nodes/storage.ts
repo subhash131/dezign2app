@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   baseNodeDataSchema,
+  envVarItemSchema,
   resourceItemSchema,
   storageOperationKindSchema,
   storageOperationParamSchema,
@@ -46,5 +47,6 @@ export const storageDataSchema = baseNodeDataSchema
     forcePathStyle: z.boolean().optional(),
     kmsKeyId: z.string().optional(),
     storageOperations: z.array(storageOperationFunctionSchema).optional(),
+    envVars: z.array(envVarItemSchema).optional(),
   })
   .strict();

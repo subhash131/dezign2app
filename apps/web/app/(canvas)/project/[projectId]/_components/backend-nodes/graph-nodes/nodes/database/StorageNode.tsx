@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import { NodeProps } from "@xyflow/react";
-import { HardDrive, Settings, Upload, Download, Link2 } from "lucide-react";
+import { HardDrive, Settings, Upload, Download, Link2, KeyRound } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -10,6 +10,7 @@ import {
   useSimulationNodeState,
   getSimulationNodeBorderClass,
 } from "../../common";
+import { NodeEnvVarsSection } from "../ai-security/ExternalEnvVarsDrawer";
 import { Textarea } from "@workspace/ui/components/textarea";
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
@@ -44,6 +45,7 @@ export const StorageNode: React.FC<NodeProps<BackendNode>> = ({
 
   const provider = data.storageProvider || "s3";
   const bucketCount = data.buckets?.length || 0;
+  const envVarsCount = data.envVars?.length || 0;
   const hasPresignEnabled =
     bucketCount > 0 &&
     (data.buckets || []).some(
@@ -180,6 +182,16 @@ export const StorageNode: React.FC<NodeProps<BackendNode>> = ({
                 {hasPresignEnabled ? "⚡ presign on" : "presign off"}
               </Badge>
             )}
+            {envVarsCount > 0 && (
+              <Badge
+                variant="outline"
+                className="text-[9px] px-1 py-0 h-4 font-mono font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 flex items-center gap-0.5"
+                title={`${envVarsCount} environment variable${envVarsCount === 1 ? "" : "s"} configured`}
+              >
+                <KeyRound size={8} />
+                {envVarsCount} env
+              </Badge>
+            )}
           </div>
         }
         rightElement={
@@ -225,42 +237,8 @@ export const StorageNode: React.FC<NodeProps<BackendNode>> = ({
         }
       />
 
-      {/* Quick Capabilities / Operations Bar */}
-      <div className="px-3 py-1.5 bg-secondary/20 border-t border-border/40 flex items-center justify-between text-[10px] text-muted-foreground nodrag">
-        <span className="font-mono text-[9px] text-muted-foreground/70 uppercase tracking-wider font-semibold">
-          Capabilities
-        </span>
-        <div className="flex items-center gap-1.5 font-mono text-[9px]">
-          <span
-            className="flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400 font-medium"
-            title="Upload objects supported"
-          >
-            <Upload size={10} />
-            <span>Upload</span>
-          </span>
-          <span className="text-border">•</span>
-          <span
-            className="flex items-center gap-0.5 text-cyan-600 dark:text-cyan-400 font-medium"
-            title="Download objects supported"
-          >
-            <Download size={10} />
-            <span>Fetch</span>
-          </span>
-          <span className="text-border">•</span>
-          <span
-            className={cn(
-              "flex items-center gap-0.5 font-medium",
-              hasPresignEnabled
-                ? "text-sky-600 dark:text-sky-400"
-                : "text-muted-foreground/40",
-            )}
-            title="Direct presigned URL upload & fetch"
-          >
-            <Link2 size={10} />
-            <span>Presign</span>
-          </span>
-        </div>
-      </div>
+      {/* Environment Variables (.env) */}
+      <NodeEnvVarsSection nodeId={id} />
     </div>
   );
 };

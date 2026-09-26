@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Database, Key, Server, Plus, Table2, Trash, CheckCircle2, DatabaseZap, HardDrive, Radio, AlertTriangle, Eye, EyeOff, Lock } from "lucide-react";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
@@ -13,9 +13,11 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
-import { BackendNode, DEFAULT_DATABASE_ENV_VARS, getUniqueNodeLabel } from "@workspace/canvas";
+import { BackendNode, DEFAULT_DATABASE_ENV_VARS, getUniqueNodeLabel, getDefaultNodeEnvVars } from "@workspace/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { DatabaseConnectionCheckCard } from "./database-config/DatabaseConnectionCheckCard";
+import { NodeEnvVarsSection } from "./NodeEnvVarsSection";
+import type { EnvVarEntry } from "./NodeEnvVarsSection";
 
 interface DatabaseConfigProps {
   id: string;
@@ -72,6 +74,16 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
   const dbFilePathEnv = data.dbFilePathEnv || DEFAULT_DATABASE_ENV_VARS.dbFilePathEnv;
 
   const [showPassword, setShowPassword] = useState(false);
+
+  // Auto-seed default env vars if missing
+  useEffect(() => {
+    if (data.envVars === undefined) {
+      const defaults = getDefaultNodeEnvVars("database", data);
+      updateNode(nodeId, {
+        data: { ...dbNode.data, envVars: defaults },
+      });
+    }
+  }, [nodeId, data.envVars, dbNode?.data, updateNode]);
 
   const isRedis = dbNode.type === "redis_instance" || engine === "redis";
   const isSqlite = engine === "sqlite";
@@ -727,6 +739,26 @@ export function DatabaseConfig({ id, nodeId }: DatabaseConfigProps) {
             ))}
           </div>
         )}
+      </div>
+
+      {/* Environment Variables (package mode — injected into connecting apps) */}
+      <div className="flex flex-col gap-3 rounded-xl border bg-card/50 p-4 shadow-sm backdrop-blur-sm">
+        <NodeEnvVarsSection
+          mode="package"
+          nodeKindLabel="database"
+          envVars={(data.envVars as EnvVarEntry[] | undefined) ?? []}
+          defaultEnvVars={getDefaultNodeEnvVars("database", data)}
+          onLoadDefaults={() =>
+            updateNode(nodeId, {
+              data: { ...dbNode.data, envVars: getDefaultNodeEnvVars("database", data) },
+            })
+          }
+          onChange={(updated) =>
+            updateNode(nodeId, {
+              data: { ...dbNode.data, envVars: updated },
+            })
+          }
+        />
       </div>
     </div>
   );

@@ -15,6 +15,7 @@ import {
   webPageDataSchema,
   edgeDataSchema,
   stateStoreNodeDataSchema,
+  databaseDataSchema,
 } from "@workspace/canvas/schemas";
 
 describe("Convex canvasValidators exact schema", () => {
@@ -856,6 +857,47 @@ describe("Convex canvasValidators exact schema", () => {
     expect(backendTypesNodeDataValidator.fields.sourceEntityName).toBeDefined();
     expect(backendTypesNodeDataValidator.fields.entityUpdatedAt).toBeDefined();
     expect(backendTypesNodeDataValidator.fields.entitySyncWarning).toBeDefined();
+  });
+
+  it("successfully parses database node with envVars and connection status", () => {
+    const dbPayload = {
+      color: "#f59e0b",
+      connectionStringEnv: "DATABASE_URL",
+      database: "postgres",
+      dbCategory: "sql" as const,
+      dbConnectionType: "env_var" as const,
+      dbEngine: "postgres",
+      dbFilePathEnv: "DB_FILE_PATH",
+      dbType: "relational" as const,
+      envVars: [
+        {
+          description: "POSTGRES database connection URL",
+          id: "db-url",
+          name: "DATABASE_URL",
+        },
+      ],
+      isDefault: true,
+      label: "postgres",
+      lastConnectionStatus: {
+        checkedAt: "1:42:59 PM",
+        connected: true,
+        latencyMs: 4.0,
+        serverInfo: {
+          exists: true,
+          path: "D:\\ai\\dezign2app\\dev.db",
+          readable: true,
+          sizeBytes: 20480.0,
+          status: "Connected (SQLite DB)",
+        },
+      },
+    };
+
+    const parsed = databaseDataSchema.safeParse(dbPayload);
+    expect(parsed.success).toBe(true);
+
+    // Also verify backendDatabaseDataValidator has envVars field
+    expect(backendDatabaseDataValidator).toBeDefined();
+    expect(backendDatabaseDataValidator.fields.envVars).toBeDefined();
   });
 });
 

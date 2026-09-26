@@ -220,4 +220,6 @@ export interface CanvasDatabaseNodeData {
     serverInfo?: Record<string, unknown>;
     error?: string;
   };
+  /** Env vars declared on this DB node — merged into any consuming app's .env at compile time. */
+  envVars?: Array<{ id: string; name: string; description?: string }>;
 }

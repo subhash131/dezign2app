@@ -6,6 +6,7 @@ import {
   Palette,
   Radio,
   Key,
+  KeyRound,
   ShieldCheck,
   HardDrive,
 } from "lucide-react";
@@ -14,6 +15,7 @@ import { cn } from "@workspace/ui/lib/utils";
 import { Badge } from "@workspace/ui/components/badge";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { NodeHeader } from "../graph-nodes/common";
+import { NodeEnvVarsSection } from "../graph-nodes/nodes/ai-security/ExternalEnvVarsDrawer";
 
 export const REDIS_COLOR_PRESETS = [
   { name: "Crimson", hex: "#ef4444" },
@@ -56,6 +58,7 @@ export const RedisInstanceNode = React.memo(({ id, data, selected }: NodeProps<B
   const connStringEnv = data.connectionStringEnv || "REDIS_URL";
   const maxmemoryPolicy = data.maxmemoryPolicy || "volatile-lru";
   const persistenceMode = data.persistenceMode || "RDB+AOF";
+  const envVarsCount = data.envVars?.length || 0;
 
   return (
     <div
@@ -98,7 +101,7 @@ export const RedisInstanceNode = React.memo(({ id, data, selected }: NodeProps<B
         selected={selected}
         placeholder="Enter Redis instance name..."
         badges={
-          <>
+          <div className="flex items-center gap-1">
             <Badge
               variant="outline"
               className="text-[10px] px-1.5 py-0 font-mono font-bold"
@@ -121,7 +124,16 @@ export const RedisInstanceNode = React.memo(({ id, data, selected }: NodeProps<B
             >
               REDIS 7.x
             </Badge>
-          </>
+            {envVarsCount > 0 && (
+              <Badge
+                variant="outline"
+                className="text-[9px] px-1.5 py-0 font-mono bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 flex items-center gap-1"
+              >
+                <KeyRound size={9} />
+                <span>{envVarsCount} env</span>
+              </Badge>
+            )}
+          </div>
         }
         rightElement={
           <div
@@ -239,6 +251,9 @@ export const RedisInstanceNode = React.memo(({ id, data, selected }: NodeProps<B
           </span>
         </div>
       </div>
+
+      {/* Environment Variables (.env) Section */}
+      <NodeEnvVarsSection nodeId={id} />
 
       {/* Outgoing Handle to Hanging Redis Schema Nodes */}
       <Handle

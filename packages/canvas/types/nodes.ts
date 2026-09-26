@@ -262,6 +262,8 @@ export interface CanvasStorageNodeData {
   storageNodeId?: string;
   bucketId?: string;
   bucketName?: string;
+  /** Env vars declared on this Storage node — merged into any consuming app's .env at compile time. */
+  envVars?: Array<{ id: string; name: string; description?: string }>;
 }
 
 /**

@@ -935,6 +935,15 @@ export const backendNodeDataValidator = v.union(
     sourceEntityName: v.optional(v.string()),
     entityUpdatedAt: v.optional(v.number()),
     entitySyncWarning: v.optional(v.any()),
+    envVars: v.optional(
+      v.array(
+        v.object({
+          id: v.string(),
+          name: v.string(),
+          description: v.optional(v.string()),
+        }),
+      ),
+    ),
   }),
 );
 

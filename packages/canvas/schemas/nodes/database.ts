@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { baseNodeDataSchema } from "./base";
+import { baseNodeDataSchema, envVarItemSchema } from "./base";
 
 export const databaseConnectionStatusSchema = z.object({
   connected: z.boolean(),
@@ -73,4 +73,5 @@ export const databaseDataSchema = baseNodeDataSchema.extend({
   redisVersion: z.string().optional(),
   lastConnectionStatus: databaseConnectionStatusSchema.optional(),
   tables: z.array(databaseTableDefinitionSchema).optional(),
+  envVars: z.array(envVarItemSchema).optional(),
 });
