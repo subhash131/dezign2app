@@ -8,6 +8,7 @@ import {
 } from "@workspace/canvas/types";
 import { sqlColumnToTsType, isSqlNumericType, isSqlBooleanType } from "@workspace/canvas/constants";
 import { toTableName, toVarName, toSqlIdentifier, toSingular, toPlural } from "../../utils";
+import { generateDatabaseConnectionTest } from "../../generators/databaseTestGenerator";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -261,7 +262,10 @@ export function compileConvexDatabase(
     ].join("\n"),
   });
 
-  // 5. package.json
+  // 5. tests/connection.test.ts
+  files.push(generateDatabaseConnectionTest("convex", packageName));
+
+  // 6. package.json
   files.push({
     filename: "package.json",
     language: "json",
@@ -282,6 +286,7 @@ export function compileConvexDatabase(
           dev: "convex dev",
           build: "tsc",
           "check-types": "tsc --noEmit",
+          test: "vitest run",
         },
         dependencies: {
           convex: "^1.13.0",
@@ -290,6 +295,7 @@ export function compileConvexDatabase(
           "@workspace/typescript-config": "workspace:*",
           "@types/node": "^20.11.0",
           typescript: "^5.3.3",
+          vitest: "^1.6.0",
         },
       },
       null,
@@ -297,7 +303,7 @@ export function compileConvexDatabase(
     ),
   });
 
-  // 6. tsconfig.json
+  // 7. tsconfig.json
   files.push({
     filename: "tsconfig.json",
     language: "json",
@@ -305,7 +311,7 @@ export function compileConvexDatabase(
       {
         extends: "@workspace/typescript-config/base.json",
         compilerOptions: { outDir: "dist" },
-        include: ["index.ts", "client.ts", "convex/**/*"],
+        include: ["index.ts", "client.ts", "convex/**/*", "tests/**/*"],
       },
       null,
       2,

@@ -8,6 +8,7 @@ import {
 import { sqlColumnToTsType, isSqlNumericType, isSqlBooleanType } from "@workspace/canvas/constants";
 import { toTableName, toVarName, toSqlIdentifier, toSingular, toPlural } from "../../../utils";
 import { generateDefaultDbOperations, getEntityDbOperations } from "@/lib/utils/entityOperationsHelper";
+import { generateDatabaseConnectionTest, generateTableHelperTest } from "../../../generators/databaseTestGenerator";
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -916,7 +917,11 @@ export function compileRawSqliteDatabase(
     if (uniqueValueExports.length > 0) {
       helperBarrel.push(`export { ${uniqueValueExports.join(", ")} } from "./${varName}";`);
     }
+
+    files.push(generateTableHelperTest(tableNode, tables, "sqlite"));
   });
+
+  files.push(generateDatabaseConnectionTest("sqlite", options.packageName || "@workspace/db"));
 
   // ── helpers/index.ts ─────────────────────────────────────────────────────
   files.push({
@@ -1068,7 +1073,7 @@ export function compileRawSqliteDatabase(
           "./helpers": "./helpers/index.ts",
           "./helpers/*": "./helpers/*.ts",
         },
-        scripts: { build: "tsc", "check-types": "tsc --noEmit" },
+        scripts: { build: "tsc", "check-types": "tsc --noEmit", test: "vitest run" },
         dependencies: {
           "@workspace/logger": "workspace:*",
           "better-sqlite3": "^12.0.0",
@@ -1078,6 +1083,7 @@ export function compileRawSqliteDatabase(
           "@types/better-sqlite3": "^7.6.12",
           "@types/node": "^20.11.0",
           typescript: "^5.3.3",
+          vitest: "^1.6.0",
         },
       },
       null,
@@ -1093,7 +1099,7 @@ export function compileRawSqliteDatabase(
       {
         extends: "@workspace/typescript-config/base.json",
         compilerOptions: { outDir: "dist" },
-        include: ["index.ts", "connection.ts", "helpers/**/*"],
+        include: ["index.ts", "connection.ts", "helpers/**/*", "tests/**/*"],
       },
       null,
       2,

@@ -157,6 +157,7 @@ export function generatePackageJson(packageName: string): string {
       scripts: {
         build: "tsc",
         "check-types": "tsc --noEmit",
+        test: "vitest run",
       },
       dependencies: {
         "@workspace/logger": "workspace:*",
@@ -167,6 +168,7 @@ export function generatePackageJson(packageName: string): string {
         "@types/pg": "^8.11.0",
         "@types/node": "^20.11.0",
         typescript: "^5.3.3",
+        vitest: "^1.6.0",
       },
     },
     null,
@@ -182,7 +184,7 @@ export function generateTsConfig(): string {
     {
       extends: "@workspace/typescript-config/base.json",
       compilerOptions: { outDir: "dist" },
-      include: ["index.ts", "connection.ts", "helpers/**/*"],
+      include: ["index.ts", "connection.ts", "helpers/**/*", "tests/**/*"],
     },
     null,
     2,

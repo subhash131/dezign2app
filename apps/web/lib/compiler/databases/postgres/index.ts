@@ -23,6 +23,10 @@ import {
   generateIndexBarrel,
   generateHelpersBarrel,
 } from "./templates";
+import {
+  generateDatabaseConnectionTest,
+  generateTableHelperTest,
+} from "../../generators/databaseTestGenerator";
 
 // Re-export all modular components for external consumption
 export * from "./types";
@@ -171,7 +175,12 @@ export function compilePostgresDatabase(
         `export { ${uniqueValueExports.join(", ")} } from "./${varName}";`,
       );
     }
+
+    files.push(generateTableHelperTest(tableNode, tables, "postgres", varName));
   });
+
+  // ── tests/connection.test.ts ──────────────────────────────────────────────
+  files.push(generateDatabaseConnectionTest("postgres", packageName));
 
   // ── 6. helpers/index.ts ───────────────────────────────────────────────────
   files.push({

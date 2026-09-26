@@ -16,6 +16,7 @@ import { compileRawSqliteDatabase } from "./databases/sqlite/raw";
 import { compilePostgresDatabase } from "./databases/postgres";
 import { compileMysqlDatabase } from "./databases/mysql";
 import { compileConvexDatabase } from "./databases/convex";
+import { generateCentralDbTest } from "./generators/databaseTestGenerator";
 
 /**
  * Normalizes a database engine string.
@@ -398,9 +399,8 @@ export function compileDatabaseNodes(
       dbNode.data?.provider ||
       dbNode.data?.dbType,
     );
-    const isSingleDb = dbNodes.length === 1;
-    const folderName = isSingleDb ? "" : resolveDbFolderName(dbNode, existingFolders);
-    const packageName = isSingleDb ? "@workspace/db" : `@workspace/db-${folderName}`;
+    const folderName = resolveDbFolderName(dbNode, existingFolders);
+    const packageName = `@workspace/db-${folderName}`;
 
     // Pass only the entities for this DB along with other non-entity nodes (for reference)
     const scopedNodes = [
@@ -464,9 +464,9 @@ export function compileDatabaseNodes(
     mergedReusableFunctions.push(...pkgResult.reusableFunctions);
   });
 
-  // If multiple database nodes exist, generate the unified central @workspace/db package
+  // Generate the unified central @workspace/db package
   // so that all microservices and web clients can seamlessly depend on @workspace/db
-  if (dbNodes.length > 1 && packages.length > 0) {
+  if (dbNodes.length >= 1 && packages.length > 0) {
     const primaryFolder =
       packages.find((p) => p.databaseNodeId === primaryDbNode.id)?.packageFolder ||
       packages[0]!.packageFolder;
@@ -496,6 +496,7 @@ export function compileDatabaseNodes(
         scripts: {
           build: "tsc",
           "check-types": "tsc --noEmit",
+          test: "vitest run",
         },
         dependencies: {
           "@workspace/logger": "workspace:*",
@@ -505,6 +506,7 @@ export function compileDatabaseNodes(
           "@workspace/typescript-config": "workspace:*",
           "@types/node": "^20.11.0",
           typescript: "^5.3.3",
+          vitest: "^1.6.0",
         },
       },
       null,
@@ -515,7 +517,7 @@ export function compileDatabaseNodes(
       {
         extends: "@workspace/typescript-config/base.json",
         compilerOptions: { outDir: "dist" },
-        include: ["index.ts", "connection.ts", "helpers/**/*"],
+        include: ["index.ts", "connection.ts", "helpers/**/*", "tests/**/*"],
       },
       null,
       2,
@@ -539,6 +541,7 @@ export function compileDatabaseNodes(
       " * @workspace/db/connection — Central database connection pool & runner.",
       " * Re-exports connection from primary database.",
       " */",
+      "/* turbopackIgnore: true */",
       `export * from "./${primaryFolder}/connection";`,
     ].join("\n");
 
@@ -555,6 +558,7 @@ export function compileDatabaseNodes(
       { filename: "index.ts", language: "typescript", content: rootIndex },
       { filename: "connection.ts", language: "typescript", content: rootConnection },
       { filename: "helpers/index.ts", language: "typescript", content: rootHelpersIndex },
+      generateCentralDbTest(packages, primaryFolder),
     ];
 
     // Helper forwarders for every helper file in child packages
