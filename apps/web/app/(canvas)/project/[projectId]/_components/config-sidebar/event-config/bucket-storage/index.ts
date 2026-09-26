@@ -3,6 +3,7 @@ export * from "./constants";
 export * from "./snippetUtils";
 export * from "./BucketStatusBar";
 export * from "./BucketTierSection";
+export * from "./BucketConnectionSection";
 export * from "./StorageProviderSection";
 export * from "./AccessPolicySection";
 export * from "./BucketOperationsSection";

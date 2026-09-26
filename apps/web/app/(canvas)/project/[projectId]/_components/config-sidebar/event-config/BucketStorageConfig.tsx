@@ -12,6 +12,7 @@ import {
 import {
   BucketStatusBar,
   BucketTierSection,
+  BucketConnectionSection,
   AccessPolicySection,
   CorsConfigSection,
   ObjectConstraintsSection,
@@ -117,7 +118,10 @@ export const BucketStorageConfig: React.FC<BucketStorageConfigProps> = ({
       {/* ─── 2. Storage Tier & Host Node ─── */}
       <BucketTierSection item={item} handleUpdate={handleUpdate} />
 
-      {/* ─── 3. Connectability & Access Policy (Core) ─── */}
+      {/* ─── 3. Connection & Network ─── */}
+      <BucketConnectionSection item={item} handleUpdate={handleUpdate} />
+
+      {/* ─── 4. Connectability & Access Policy (Core) ─── */}
       <AccessPolicySection item={item} handleUpdate={handleUpdate} />
 
       {/* ─── 4. CORS & Web Client Ingress ─── */}
