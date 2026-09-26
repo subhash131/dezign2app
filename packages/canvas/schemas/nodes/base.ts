@@ -7,6 +7,12 @@ import {
   ALL_DATABASE_ENGINE_VERSION_VALUES,
 } from "../../techStack";
 
+export const envVarItemSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string().optional(),
+});
+
 export const baseNodeDataSchema = z.object({
   label: z.string().optional(),
   position: z.object({ x: z.number(), y: z.number() }).optional(),
@@ -26,6 +32,7 @@ export const baseNodeDataSchema = z.object({
   color: z.string().optional(),
   pageSourceCode: z.string().optional(),
   aiEditing: z.boolean().optional(),
+  envVars: z.array(envVarItemSchema).optional(),
 });
 
 export const resourceItemSchema = z.object({

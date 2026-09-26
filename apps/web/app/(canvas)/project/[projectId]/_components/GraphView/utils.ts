@@ -4,9 +4,24 @@ import type {
   BackendNode,
   PageSection,
 } from "@workspace/canvas/types";
-import { parsePageRoute, DEFAULT_ZONES } from "@workspace/canvas";
+import { parsePageRoute, DEFAULT_ZONES, getDefaultNodeEnvVars } from "@workspace/canvas";
 
 export function createGraphNodeData(
+  type: BackendNodeType,
+  label: string,
+  existingNodes: BackendNode[],
+): BackendNodeData {
+  const data = getRawGraphNodeData(type, label, existingNodes);
+  if (!data.envVars || data.envVars.length === 0) {
+    const defaults = getDefaultNodeEnvVars(type, data);
+    if (defaults.length > 0) {
+      data.envVars = defaults;
+    }
+  }
+  return data;
+}
+
+function getRawGraphNodeData(
   type: BackendNodeType,
   label: string,
   existingNodes: BackendNode[],

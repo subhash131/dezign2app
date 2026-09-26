@@ -15,6 +15,7 @@ import {
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { generateId } from "../../common";
 import { toast } from "sonner";
+import { getDefaultNodeEnvVars } from "@workspace/canvas";
 
 interface ExternalEnvVarsDrawerProps {
   nodeId: string;
@@ -255,6 +256,21 @@ export const ExternalEnvVarsDrawer: React.FC<ExternalEnvVarsDrawerProps> = ({
         ? "Service"
         : "External API");
 
+  // Auto-seed default env vars if this node has never had envVars defined
+  useEffect(() => {
+    if (node?.data && node.data.envVars === undefined) {
+      const defaults = getDefaultNodeEnvVars(node.type, node.data);
+      if (defaults.length > 0) {
+        updateNode(nodeId, {
+          data: {
+            ...node.data,
+            envVars: defaults,
+          },
+        });
+      }
+    }
+  }, [nodeId, node?.type, node?.data, updateNode]);
+
   const handleAddVariable = useCallback(() => {
     const newId = generateId();
     const updated = [...envVars, { id: newId, name: "" }];
@@ -268,6 +284,21 @@ export const ExternalEnvVarsDrawer: React.FC<ExternalEnvVarsDrawerProps> = ({
     setEditingId(newId);
     setEditingName("");
   }, [node, nodeId, envVars, updateNode, nodeLabel]);
+
+  const handleLoadDefaults = useCallback(() => {
+    const defaults = getDefaultNodeEnvVars(node?.type, node?.data);
+    if (defaults.length > 0) {
+      updateNode(nodeId, {
+        data: {
+          ...node?.data,
+          label: nodeLabel,
+          envVars: defaults,
+        },
+      });
+    } else {
+      handleAddVariable();
+    }
+  }, [node, nodeId, nodeLabel, updateNode, handleAddVariable]);
 
   const handleDeleteVariable = useCallback(
     async (varId: string) => {
@@ -329,22 +360,35 @@ export const ExternalEnvVarsDrawer: React.FC<ExternalEnvVarsDrawerProps> = ({
 
       {/* List of variables */}
       <div className="flex flex-col">
-        {envVars.map((v) => (
-          <EnvVarRow
-            key={v.id}
-            id={v.id}
-            name={v.name}
-            projectId={projectId}
-            isEditing={editingId === v.id}
-            onStartEdit={() => {
-              setEditingId(v.id);
-              setEditingName(v.name);
-            }}
-            onSaveName={(name) => handleUpdateName(v.id, name)}
-            onCancelEdit={() => setEditingId(null)}
-            onDelete={() => handleDeleteVariable(v.id)}
-          />
-        ))}
+        {envVars.length === 0 ? (
+          <div className="flex items-center justify-between px-3 py-2 text-[10px] text-muted-foreground/75 bg-muted/10 border-b border-dashed border-border/60">
+            <span>No env vars configured</span>
+            <button
+              type="button"
+              onClick={handleLoadDefaults}
+              className="text-[10px] text-primary hover:underline font-medium cursor-pointer"
+            >
+              + Load defaults
+            </button>
+          </div>
+        ) : (
+          envVars.map((v) => (
+            <EnvVarRow
+              key={v.id}
+              id={v.id}
+              name={v.name}
+              projectId={projectId}
+              isEditing={editingId === v.id}
+              onStartEdit={() => {
+                setEditingId(v.id);
+                setEditingName(v.name);
+              }}
+              onSaveName={(name) => handleUpdateName(v.id, name)}
+              onCancelEdit={() => setEditingId(null)}
+              onDelete={() => handleDeleteVariable(v.id)}
+            />
+          ))
+        )}
       </div>
     </div>
   );

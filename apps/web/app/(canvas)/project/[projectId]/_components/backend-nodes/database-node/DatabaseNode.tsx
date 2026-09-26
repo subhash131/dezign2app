@@ -1,6 +1,6 @@
 import React from "react";
 import { NodeProps, Handle, Position } from "@xyflow/react";
-import { Database, Trash, Settings, Server, Palette, Key, Table2 } from "lucide-react";
+import { Database, Trash, Settings, Server, Palette, Key, Table2, KeyRound } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { Badge } from "@workspace/ui/components/badge";
@@ -8,6 +8,7 @@ import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { DEFAULT_DATABASE_NODE_LABEL } from "@workspace/canvas";
 
 import { NodeHeader } from "../graph-nodes/common";
+import { NodeEnvVarsSection } from "../graph-nodes/nodes/ai-security/ExternalEnvVarsDrawer";
 
 export const DB_COLOR_PRESETS = [
   { name: "Amber", hex: "#f59e0b" },
@@ -41,6 +42,7 @@ export const DatabaseNode = ({ id, data, selected }: NodeProps<BackendNode>) => 
 
   const connStringEnv = data.connectionStringEnv || "DATABASE_URL";
   const dbFilePathEnv = data.dbFilePathEnv || "DB_FILE_PATH";
+  const envVarsCount = data.envVars?.length || 0;
 
   return (
     <div
@@ -83,17 +85,28 @@ export const DatabaseNode = ({ id, data, selected }: NodeProps<BackendNode>) => 
         selected={selected}
         placeholder="Enter database name..."
         badges={
-          <Badge
-            variant="outline"
-            className="text-[10px] px-1.5 py-0 font-mono uppercase"
-            style={{
-              backgroundColor: `${color}15`,
-              borderColor: `${color}40`,
-              color: color,
-            }}
-          >
-            {engine}
-          </Badge>
+          <div className="flex items-center gap-1">
+            <Badge
+              variant="outline"
+              className="text-[10px] px-1.5 py-0 font-mono uppercase"
+              style={{
+                backgroundColor: `${color}15`,
+                borderColor: `${color}40`,
+                color: color,
+              }}
+            >
+              {engine}
+            </Badge>
+            {envVarsCount > 0 && (
+              <Badge
+                variant="outline"
+                className="text-[9px] px-1.5 py-0 font-mono bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 flex items-center gap-1"
+              >
+                <KeyRound size={9} />
+                <span>{envVarsCount} env</span>
+              </Badge>
+            )}
+          </div>
         }
         rightElement={
           <div
@@ -186,6 +199,9 @@ export const DatabaseNode = ({ id, data, selected }: NodeProps<BackendNode>) => 
           </span>
         </div>
       </div>
+
+      {/* Environment Variables (.env) Section */}
+      <NodeEnvVarsSection nodeId={id} />
 
       {/* Outgoing Handle to Hanging Entity Nodes */}
       <Handle

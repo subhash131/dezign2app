@@ -4,6 +4,7 @@ import {
   DEFAULT_LLM_MODEL,
   DEFAULT_LLM_TEMPERATURE,
   DEFAULT_ZONES,
+  getDefaultNodeEnvVars,
 } from "@workspace/canvas/constants";
 import { getUniqueNodeLabel } from "@workspace/canvas";
 import type { PageSection } from "@workspace/canvas/types";
@@ -138,6 +139,20 @@ export function prepareNodeForAddition(
         label: existingData?.label || "Creem Payments",
       },
     };
+  }
+
+  // 3.6 Default environment variables assignment
+  if (!finalNode.data?.envVars || finalNode.data.envVars.length === 0) {
+    const defaultEnvs = getDefaultNodeEnvVars(finalNode.type, finalNode.data);
+    if (defaultEnvs.length > 0) {
+      finalNode = {
+        ...finalNode,
+        data: {
+          ...finalNode.data,
+          envVars: defaultEnvs,
+        },
+      };
+    }
   }
 
   // 4. Fractional index assignment
