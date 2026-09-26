@@ -248,11 +248,17 @@ export function compileSharedPackages(
       });
     });
   } else if (compiledStorage.files.length > 0) {
-    const folderPath = `packages/${compiledStorage.packageFolder || "storage"}`;
+    const defaultFolder = compiledStorage.packageFolder || "storage";
+    const folderPath = `packages/${defaultFolder}`;
     storagePackageFolders.push(folderPath);
     compiledStorage.files.forEach((f) => {
+      const targetPath = f.filename.startsWith("packages/")
+        ? f.filename
+        : f.filename.startsWith("storage/")
+          ? `packages/${f.filename}`
+          : `${folderPath}/${f.filename}`;
       files.push({
-        filename: `${folderPath}/${f.filename}`,
+        filename: targetPath,
         language: f.language,
         content: f.content,
       });

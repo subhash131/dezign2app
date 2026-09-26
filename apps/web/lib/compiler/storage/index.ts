@@ -60,13 +60,16 @@ export function compileStorageNodes(
       isServiceConnectedToStorage(srv, allNodes, allEdges, endpoints, events),
     );
     if (!isAnyStorageConnected) {
-      const firstLabel = storageNodes[0]?.data?.label || "storage";
+      const firstLabel =
+        storageNodes[0]?.data?.label ||
+        (storageNodes[0]?.data as any)?.title ||
+        "storage";
       const folder = toStorageFolderName(firstLabel) || "storage";
       return {
         files: [],
         reusableFunctions: [],
-        packageFolder: folder,
-        packageName: `@workspace/${folder}`,
+        packageFolder: `storage/${folder}`,
+        packageName: `@workspace/storage-${folder}`,
       };
     }
   }
@@ -76,8 +79,10 @@ export function compileStorageNodes(
 
   if (!isMultiStorage) {
     const node = storageNodes[0]!;
-    const label = node.data?.label || "Storage";
-    const packageFolder = "storage";
+    const label =
+      node.data?.label || (node.data as any)?.title || "Storage";
+    const folder = toStorageFolderName(label);
+    const packageFolder = `storage/${folder}`;
     const packageName = "@workspace/storage";
 
     const packageFiles: CompiledFile[] = [
@@ -105,8 +110,17 @@ export function compileStorageNodes(
       reusableFunctions,
     };
 
+    const allFiles: CompiledFile[] = [];
+    packageFiles.forEach((f) => {
+      allFiles.push({
+        filename: `storage/${folder}/${f.filename}`,
+        language: f.language,
+        content: f.content,
+      });
+    });
+
     return {
-      files: packageFiles,
+      files: allFiles,
       packages: [singlePkg],
       packageFolder,
       packageName,
@@ -120,7 +134,8 @@ export function compileStorageNodes(
   const seenFolders = new Set<string>();
 
   for (const node of storageNodes) {
-    const rawLabel = node.data?.label || "storage";
+    const rawLabel =
+      node.data?.label || (node.data as any)?.title || "storage";
     let folder = toStorageFolderName(rawLabel);
     if (seenFolders.has(folder)) {
       let c = 2;
@@ -169,7 +184,7 @@ export function compileStorageNodes(
   return {
     files: allFiles,
     packages: compiledPackages,
-    packageFolder: "storage",
+    packageFolder: compiledPackages[0]?.packageFolder || "storage",
     packageName: "@workspace/storage",
     reusableFunctions: allReusable,
   };

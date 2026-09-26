@@ -53,6 +53,7 @@ export function generateRootFiles(projectName: string): CompiledFile[] {
   - "packages/*"
   - "packages/grpc/*"
   - "packages/db/*"
+  - "packages/storage/*"
 
 onlyBuiltDependencies:
   - better-sqlite3
