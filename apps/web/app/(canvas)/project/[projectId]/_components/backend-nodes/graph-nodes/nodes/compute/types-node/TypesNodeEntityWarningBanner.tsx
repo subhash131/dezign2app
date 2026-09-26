@@ -107,11 +107,6 @@ export const TypesNodeEntityWarningBanner: React.FC<
 
       {isExpanded && (
         <div className="flex flex-col gap-1 pt-1 border-t border-amber-500/20">
-          <p className="text-[9.5px] text-amber-300/80 leading-snug">
-            Column changes in <strong>{sourceEntityName}</strong> automatically
-            update this contract.
-          </p>
-
           {affectedNodes.length > 0 ? (
             <div className="flex flex-col gap-1 mt-0.5">
               <span className="text-[9px] font-semibold text-amber-400 flex items-center gap-1">

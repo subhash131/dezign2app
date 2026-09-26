@@ -60,12 +60,14 @@ describe("compileStorageNodes", () => {
 
     const result = compileStorageNodes(nodes);
 
-    expect(result.packageFolder).toBe("storage");
+    expect(result.packageFolder).toBe("storage/media-storage");
     expect(result.packageName).toBe("@workspace/storage");
+    expect(result.packages?.[0]?.packageFolder).toBe("storage/media-storage");
     expect(result.files.length).toBeGreaterThan(0);
+    expect(result.files.some((f) => f.filename.startsWith("storage/media-storage/src/"))).toBe(true);
 
     // 1. package.json
-    const pkgJson = result.files.find((f) => f.filename === "package.json");
+    const pkgJson = result.files.find((f) => f.filename.endsWith("package.json"));
     expect(pkgJson).toBeDefined();
     const pkgParsed = JSON.parse(pkgJson!.content);
     expect(pkgParsed.name).toBe("@workspace/storage");
@@ -73,30 +75,30 @@ describe("compileStorageNodes", () => {
     expect(pkgParsed.dependencies["@aws-sdk/s3-request-presigner"]).toBeDefined();
 
     // 2. tsconfig.json
-    const tsconfig = result.files.find((f) => f.filename === "tsconfig.json");
+    const tsconfig = result.files.find((f) => f.filename.endsWith("tsconfig.json"));
     expect(tsconfig).toBeDefined();
     expect(tsconfig!.content).toContain("@workspace/typescript-config/base.json");
 
     // 3. config.ts
-    const config = result.files.find((f) => f.filename === "src/config.ts");
+    const config = result.files.find((f) => f.filename.endsWith("src/config.ts"));
     expect(config).toBeDefined();
     expect(config!.content).toContain('"us-west-2"');
     expect(config!.content).toContain('"s3"');
 
     // 4. client.ts
-    const client = result.files.find((f) => f.filename === "src/client.ts");
+    const client = result.files.find((f) => f.filename.endsWith("src/client.ts"));
     expect(client).toBeDefined();
     expect(client!.content).toContain("new S3Client");
 
     // 5. buckets.ts
-    const buckets = result.files.find((f) => f.filename === "src/buckets.ts");
+    const buckets = result.files.find((f) => f.filename.endsWith("src/buckets.ts"));
     expect(buckets).toBeDefined();
     expect(buckets!.content).toContain("USER_AVATARS: process.env.STORAGE_BUCKET_USER_AVATARS || \"user-avatars\"");
     expect(buckets!.content).toContain("PRIVATE_DOCUMENTS: process.env.STORAGE_BUCKET_PRIVATE_DOCUMENTS || \"private-documents\"");
     expect(buckets!.content).toContain('"https://cdn.example.com"');
 
     // 6. operations.ts
-    const ops = result.files.find((f) => f.filename === "src/operations.ts");
+    const ops = result.files.find((f) => f.filename.endsWith("src/operations.ts"));
     expect(ops).toBeDefined();
     expect(ops!.content).toContain("export async function getUploadPresignedUrl");
     expect(ops!.content).toContain("export async function getDownloadPresignedUrl");
@@ -131,7 +133,7 @@ describe("compileStorageNodes", () => {
     ];
 
     const result = compileStorageNodes(nodes);
-    const config = result.files.find((f) => f.filename === "src/config.ts");
+    const config = result.files.find((f) => f.filename.endsWith("src/config.ts"));
     expect(config).toBeDefined();
     expect(config!.content).toContain('"http://localhost:9000"');
     expect(config!.content).toContain('process.env["MINIO_ROOT_USER"]');
@@ -218,9 +220,13 @@ describe("compileStorageNodes", () => {
 
     const monorepo = compileMonorepo(nodes, [], [], edges, [], "StorageTestProject");
 
-    // 1. Storage package files are present under packages/storage/
-    const storagePkgJson = monorepo.files.find((f) => f.filename === "packages/storage/package.json");
+    // 1. Storage package files are present under packages/storage/<title/label>/
+    const storagePkgJson = monorepo.files.find((f) => f.filename === "packages/storage/media-storage/package.json");
     expect(storagePkgJson).toBeDefined();
+
+    // 1.1 Storage src files are present under packages/storage/<title/label>/src/
+    const storageSrcFile = monorepo.files.find((f) => f.filename.startsWith("packages/storage/media-storage/src/"));
+    expect(storageSrcFile).toBeDefined();
 
     // 2. Service package.json depends on @workspace/storage
     const srvPkgJson = monorepo.files.find((f) => f.filename === "apps/upload-service/package.json");
@@ -228,11 +234,11 @@ describe("compileStorageNodes", () => {
     const parsedSrvPkg = JSON.parse(srvPkgJson!.content);
     expect(parsedSrvPkg.dependencies["@workspace/storage"]).toBe("workspace:*");
 
-    // 3. Root tsconfig references packages/storage
+    // 3. Root tsconfig references packages/storage/media-storage
     const rootTsconfig = monorepo.files.find((f) => f.filename === "tsconfig.json");
     expect(rootTsconfig).toBeDefined();
     const parsedTsconfig = JSON.parse(rootTsconfig!.content);
-    expect(parsedTsconfig.references.some((ref: { path: string }) => ref.path === "packages/storage")).toBe(true);
+    expect(parsedTsconfig.references.some((ref: { path: string }) => ref.path === "packages/storage/media-storage")).toBe(true);
 
     // 4. Root README documents Object Storage Package
     const readme = monorepo.files.find((f) => f.filename === "README.md");
