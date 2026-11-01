@@ -40,6 +40,7 @@ export interface TopbarPropsConfigProps extends BasePropsConfigProps {
 
 export interface ChatPropsConfigProps extends BasePropsConfigProps {
   onCreateChatMessageStateVariable?: (preferredStoreId?: string) => void;
+  onQuickWireChatActions?: () => void;
 }
 
 export interface SidebarStaticItemRowProps {

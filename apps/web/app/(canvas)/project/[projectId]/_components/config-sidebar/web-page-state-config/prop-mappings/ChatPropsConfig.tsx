@@ -20,6 +20,7 @@ export const ChatPropsConfig: React.FC<ChatPropsConfigProps> = React.memo(({
   effectiveStoreName,
   effectiveStoreId,
   onCreateChatMessageStateVariable,
+  onQuickWireChatActions,
 }) => {
   return (
     <div className="flex flex-col gap-3.5 p-3.5 rounded-xl bg-muted/20 border border-border/50 text-xs">
@@ -58,6 +59,34 @@ export const ChatPropsConfig: React.FC<ChatPropsConfigProps> = React.memo(({
           Create &amp; Bind
         </Button>
       </div>
+
+      {/* 1-Click Action Wiring Banner for History & Send Message */}
+      {onQuickWireChatActions && (
+        <div className="flex items-center justify-between p-3 rounded-xl bg-amber-500/[0.08] border border-amber-500/25">
+          <div className="flex items-center gap-2.5">
+            <div className="p-1.5 rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-400 shrink-0">
+              <Zap size={14} />
+            </div>
+            <div>
+              <div className="text-xs font-semibold text-foreground">
+                ⚡ Quick-Wire Chat Action Pipeline
+              </div>
+              <div className="text-[11px] text-muted-foreground">
+                Auto-wires fetchConversationHistory (onMount) &amp; sendMessage (onSend)
+              </div>
+            </div>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            onClick={onQuickWireChatActions}
+            className="h-7 text-xs font-medium bg-amber-600 hover:bg-amber-500 text-white cursor-pointer shrink-0 ml-2 shadow-xs"
+          >
+            <Zap size={11} className="mr-1" />
+            Wire Actions
+          </Button>
+        </div>
+      )}
 
       {/* State Store Variable Picker for Chat Messages History */}
       <StateStoreVariablePicker

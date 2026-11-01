@@ -252,6 +252,9 @@ export interface ComponentPropMappings {
   chatInputStoreId?: string;
   chatInputStoreName?: string;
   chatOnSendActionId?: string;
+  chatOnSendActionName?: string;
+  chatOnFetchActionId?: string;
+  chatOnFetchActionName?: string;
 
   // Custom props
   customProps?: Record<string, string>;

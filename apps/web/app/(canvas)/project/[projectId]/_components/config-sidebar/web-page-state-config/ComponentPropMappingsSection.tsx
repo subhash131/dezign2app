@@ -49,6 +49,7 @@ export interface ComponentPropMappingsSectionProps {
   onCreateAction?: (name?: string, eventType?: string) => void;
   onCreateNavStateVariable?: (preferredStoreId?: string) => void;
   onCreateChatMessageStateVariable?: (preferredStoreId?: string) => void;
+  onQuickWireChatActions?: () => void;
 }
 
 export const ComponentPropMappingsSection: React.FC<ComponentPropMappingsSectionProps> = React.memo(({
@@ -68,6 +69,7 @@ export const ComponentPropMappingsSection: React.FC<ComponentPropMappingsSection
   onCreateAction,
   onCreateNavStateVariable,
   onCreateChatMessageStateVariable,
+  onQuickWireChatActions,
 }) => {
   // Local optimistic state for prop mappings so all switches, selectors and inputs react instantaneously with 0ms lag
   const [optimisticProps, setOptimisticProps] = React.useState<ComponentPropMappings>(rawPropMappings);
@@ -247,6 +249,7 @@ export const ComponentPropMappingsSection: React.FC<ComponentPropMappingsSection
         <ChatPropsConfig
           {...baseConfigProps}
           onCreateChatMessageStateVariable={onCreateChatMessageStateVariable}
+          onQuickWireChatActions={onQuickWireChatActions}
         />
       )}
 
