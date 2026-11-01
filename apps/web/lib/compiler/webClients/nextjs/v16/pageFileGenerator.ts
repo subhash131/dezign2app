@@ -11,7 +11,7 @@ import {
   EventComponentMeta,
   SectionMeta,
 } from "./componentTemplates";
-import type { StorageUploadConfig } from "./event-generators";
+import { resolveBaseUrlInfo, type StorageUploadConfig } from "./event-generators";
 import { isAuthPage, isAuthLoginPage, isAuthRegisterPage } from "../../../compileAuth";
 import { typeStrToTsAndZod } from "../../../generators/schemaToTypeScript";
 import { generateApiClientFile } from "./apiClientTemplate";
@@ -305,6 +305,8 @@ export function generatePageAndComponentFiles({
           const headersEntries = Object.entries(nodeHeaders)
             .map(([k, v]) => `"${k}": "${v}",`)
             .join("\n          ");
+          const linkUrlInfo = resolveBaseUrlInfo(link.fullUrl, link.serviceName || link.targetNodeName);
+          const fetchUrlExpr = linkUrlInfo.hasBaseUrl ? linkUrlInfo.urlExpression : `"${link.fullUrl}"`;
 
           statements.push(`const headers${suffix}: Record<string, string> = {
           "Content-Type": "application/json",
@@ -314,7 +316,7 @@ export function generatePageAndComponentFiles({
         if (token${suffix}) {
           headers${suffix}["Authorization"] = token${suffix};
         }` : ""}
-        const res${suffix} = await fetch("${link.fullUrl}", {
+        ${linkUrlInfo.hasBaseUrl ? `${linkUrlInfo.baseUrlDeclaration}\n        ` : ""}const res${suffix} = await fetch(${fetchUrlExpr}, {
           method: "${link.method || "GET"}",
           headers: headers${suffix},
           ${link.method === "POST" || link.method === "PUT" || link.method === "PATCH" ? `body: JSON.stringify(${nodeRequestBody !== undefined ? JSON.stringify(nodeRequestBody) : `{ eventName: "${evt.name || "pageLoad"}", eventType: "pageLoad" }`}),` : ""}
@@ -414,7 +416,7 @@ export function generatePageAndComponentFiles({
               eventName: "${pageLoadEvents[0]?.name || "pageLoad"}",
               eventType: "pageLoad",
               timestamp: new Date().toLocaleTimeString(),
-              url: "${firstPageLoadLink?.fullUrl || "N/A"}",
+              url: ${firstPageLoadLink ? (resolveBaseUrlInfo(firstPageLoadLink.fullUrl, firstPageLoadLink.serviceName || firstPageLoadLink.targetNodeName).hasBaseUrl ? resolveBaseUrlInfo(firstPageLoadLink.fullUrl, firstPageLoadLink.serviceName || firstPageLoadLink.targetNodeName).urlExpression : `"${firstPageLoadLink.fullUrl}"`) : `"N/A"`},
               method: "${firstPageLoadLink?.method || "GET"}",
               status: res.status,
               data: data,
@@ -439,7 +441,7 @@ export function generatePageAndComponentFiles({
               eventName: "${evt.name || "pageLoad"}",
               eventType: "pageLoad",
               timestamp: new Date().toLocaleTimeString(),
-              url: "${link?.fullUrl || "N/A"}",
+              url: ${link ? (resolveBaseUrlInfo(link.fullUrl, link.serviceName || link.targetNodeName).hasBaseUrl ? resolveBaseUrlInfo(link.fullUrl, link.serviceName || link.targetNodeName).urlExpression : `"${link.fullUrl}"`) : `"N/A"`},
               method: "${link?.method || "LOAD"}",
               ${link ? `status: res${suffix}.status,` : ""}
               data: results["${evtKey}"],
@@ -807,6 +809,7 @@ export function generatePageAndComponentFiles({
           requestBody: nodeRequestBody,
           eventItem: evt,
           endpoint: link?.endpoint,
+          serviceName: link?.serviceName || link?.targetNodeName,
         };
         secActionMetas.push(actionMeta);
 

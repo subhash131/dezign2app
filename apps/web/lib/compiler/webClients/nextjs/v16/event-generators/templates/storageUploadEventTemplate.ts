@@ -1,5 +1,6 @@
 import { StoreActionBinding } from "@workspace/canvas/types";
 import { resolveStoreActionMethodName } from "../../storeActionResolver";
+import { resolveBaseUrlInfo } from "../paramUtils";
 
 export interface StorageUploadConfig {
   /** Maximum file size in megabytes derived from the connected bucket config */
@@ -30,6 +31,7 @@ export function generateStorageUploadEventTemplate({
   storageConfig,
   storeActionBinding,
   storeActionBindings,
+  serviceName,
 }: {
   componentName: string;
   eventName: string;
@@ -41,8 +43,10 @@ export function generateStorageUploadEventTemplate({
   storageConfig: StorageUploadConfig;
   storeActionBinding?: StoreActionBinding;
   storeActionBindings?: StoreActionBinding[];
+  serviceName?: string;
 }): string {
   const { maxSizeMb, acceptedMimeTypes, showPreview } = storageConfig;
+  const urlInfo = resolveBaseUrlInfo(url, serviceName);
 
   const bindings: StoreActionBinding[] =
     Array.isArray(storeActionBindings) && storeActionBindings.length > 0
@@ -156,10 +160,10 @@ ${previewLogic}  };
     setWarning(null);
     try {
       // Step 1: Request a presigned upload URL from the backend
-      const presignResult = await onTrigger?.(
+${urlInfo.baseUrlDeclaration ? `      ${urlInfo.baseUrlDeclaration}\n` : ""}      const presignResult = await onTrigger?.(
         "${eventName}",
         "${eventType}",
-        "${url}",
+        ${urlInfo.urlExpression},
         "${upperMethod}",
         ${requireAuthStr},
         undefined,
@@ -186,7 +190,7 @@ ${previewLogic}  };
           ? nestedData.uploadUrl
           : typeof nestedData.url === "string"
           ? nestedData.url
-          : typeof presignObj.url === "string" && presignObj.url !== "${url}"
+          : typeof presignObj.url === "string" && presignObj.url !== ${urlInfo.urlExpression}
           ? presignObj.url
           : undefined;
       const objectKey: string | undefined =

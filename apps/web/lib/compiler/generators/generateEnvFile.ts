@@ -24,7 +24,7 @@ import {
   PipelineStepDraft,
   INTER_SERVICE_PROTOCOL_GRPC,
 } from "@workspace/canvas";
-import { toEnvVarName } from "../utils";
+import { toEnvVarName, toServiceBaseUrlEnvName } from "../utils";
 
 export interface EnvVarEntry {
   name: string;
@@ -624,6 +624,69 @@ export function getDetectedPackageEnvVars(
     });
   });
 
+  // E. Connected services for webApp or service
+  const serviceNodes = allNodes.filter(
+    (n) => n.type === "service" && n.id !== appNode.id,
+  );
+  serviceNodes.forEach((srvNode) => {
+    if (seenPackageNodeIds.has(srvNode.id)) return;
+    const isConnected =
+      checkNodes.some((cn) =>
+        allEdges.some(
+          (e) =>
+            (e.source === cn.id && e.target === srvNode.id) ||
+            (e.target === cn.id && e.source === srvNode.id),
+        ),
+      ) ||
+      (appNode.type === "webApp" && srvNode.data?.targetWebAppId === appNode.id) ||
+      (appNode.type === "webApp" &&
+        allNodes.filter((n) => n.type === "webApp").length <= 1 &&
+        allEdges.some(
+          (e) =>
+            allNodes.some(
+              (an) =>
+                (an.type === "webPage" || an.type === "webApp") &&
+                (an.id === e.source || an.id === e.target),
+            ) &&
+            (e.source === srvNode.id || e.target === srvNode.id),
+        ));
+
+    if (isConnected) {
+      seenPackageNodeIds.add(srvNode.id);
+      const srvLabel = srvNode.data?.label || "Service";
+      const srvPort =
+        String(srvNode.data?.port ?? srvNode.data?.server?.port ?? "8080").trim() ||
+        "8080";
+      const { envVarName, publicEnvVarName } = toServiceBaseUrlEnvName(srvLabel);
+
+      if (appNode.type === "webApp") {
+        if (!seenNames.has(publicEnvVarName)) {
+          seenNames.add(publicEnvVarName);
+          detected.push({
+            name: publicEnvVarName,
+            description: `Public HTTP base URL for ${srvLabel}`,
+            exampleValue: `http://localhost:${srvPort}`,
+            sourceNodeType: "service",
+            sourceNodeLabel: srvLabel,
+            sourceNodeId: srvNode.id,
+          });
+        }
+      } else {
+        if (!seenNames.has(envVarName)) {
+          seenNames.add(envVarName);
+          detected.push({
+            name: envVarName,
+            description: `HTTP base URL for ${srvLabel}`,
+            exampleValue: `http://localhost:${srvPort}`,
+            sourceNodeType: "service",
+            sourceNodeLabel: srvLabel,
+            sourceNodeId: srvNode.id,
+          });
+        }
+      }
+    }
+  });
+
   return detected;
 }
 
@@ -902,9 +965,11 @@ export function collectEnvSections(
     >();
 
     allEdges.forEach((edge) => {
-      if (edge.source === appNode.id) {
+      const checkNodeIds = new Set([appNode.id, ...(associatedNodes || []).map((n) => n.id)]);
+      const targetId = checkNodeIds.has(edge.source) ? edge.target : (checkNodeIds.has(edge.target) ? edge.source : undefined);
+      if (targetId) {
         const targetNode = allNodes.find(
-          (n) => n.id === edge.target && n.type === "service",
+          (n) => n.id === targetId && n.type === "service" && n.id !== appNode.id,
         );
         if (targetNode && !connectedServicesMap.has(targetNode.id)) {
           const tgtData = targetNode.data;
@@ -926,6 +991,40 @@ export function collectEnvSections(
       }
     });
 
+    if (appNode.type === "webApp") {
+      allNodes.forEach((node) => {
+        if (node.type !== "service" || node.id === appNode.id || connectedServicesMap.has(node.id)) return;
+        const isTargeted = node.data?.targetWebAppId === appNode.id;
+        const isOnlyWebApp = allNodes.filter((n) => n.type === "webApp").length <= 1;
+        const hasAnyWebEdge = allEdges.some(
+          (e) =>
+            allNodes.some(
+              (an) =>
+                (an.type === "webPage" || an.type === "webApp") &&
+                (an.id === e.source || an.id === e.target),
+            ) &&
+            (e.source === node.id || e.target === node.id),
+        );
+        if (isTargeted || (isOnlyWebApp && hasAnyWebEdge)) {
+          const tgtData = node.data;
+          const tgtServer = tgtData?.server || tgtData?.serverConfig;
+          const tgtLabel = tgtData?.label || node.id;
+          const tgtPort = String(tgtData?.port ?? tgtServer?.port ?? "8080").trim() || "8080";
+          const tgtGrpcPort = String(tgtData?.grpcPort ?? tgtServer?.grpcPort ?? "50051").trim() || "50051";
+          const usesGrpc =
+            appNode.data?.interServiceProtocol === INTER_SERVICE_PROTOCOL_GRPC ||
+            appNode.data?.server?.interServiceProtocol === INTER_SERVICE_PROTOCOL_GRPC;
+
+          connectedServicesMap.set(node.id, {
+            label: tgtLabel,
+            port: tgtPort,
+            grpcPort: tgtGrpcPort,
+            usesGrpc,
+          });
+        }
+      });
+    }
+
     if (connectedServicesMap.size > 0) {
       const serviceVars: EnvVarEntry[] = [];
       connectedServicesMap.forEach(
@@ -939,15 +1038,25 @@ export function collectEnvSections(
                 exampleValue: `localhost:${tgtGrpcPort}`,
               });
             }
-          } else {
-            const envVarName = `${toEnvVarName(label)}_BASE_URL`;
-            if (!ownVarNames.has(envVarName)) {
-              serviceVars.push({
-                name: envVarName,
-                description: `HTTP base URL for ${label}`,
-                exampleValue: `http://localhost:${tgtPort}`,
-              });
-            }
+          } else {
+            const { envVarName, publicEnvVarName } = toServiceBaseUrlEnvName(label);
+            if (appNode.type === "webApp") {
+              if (!ownVarNames.has(publicEnvVarName)) {
+                serviceVars.push({
+                  name: publicEnvVarName,
+                  description: `Public HTTP base URL for ${label}`,
+                  exampleValue: `http://localhost:${tgtPort}`,
+                });
+              }
+            } else {
+              if (!ownVarNames.has(envVarName)) {
+                serviceVars.push({
+                  name: envVarName,
+                  description: `HTTP base URL for ${label}`,
+                  exampleValue: `http://localhost:${tgtPort}`,
+                });
+              }
+            }
           }
         },
       );

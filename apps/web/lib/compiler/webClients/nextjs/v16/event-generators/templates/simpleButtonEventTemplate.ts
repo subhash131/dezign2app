@@ -1,5 +1,6 @@
 import { StoreActionBinding } from "@workspace/canvas/types";
 import { resolveStoreActionMethodName } from "../../storeActionResolver";
+import { resolveBaseUrlInfo } from "../paramUtils";
 
 function resolveActionLibImports(libraries?: string[]): string {
   if (!libraries || libraries.length === 0) return "";
@@ -24,6 +25,7 @@ export function generateSimpleButtonEventTemplate({
   libraries = [],
   storeActionBinding,
   storeActionBindings,
+  serviceName,
 }: {
   componentName: string;
   eventName: string;
@@ -35,6 +37,7 @@ export function generateSimpleButtonEventTemplate({
   libraries?: string[];
   storeActionBinding?: StoreActionBinding;
   storeActionBindings?: StoreActionBinding[];
+  serviceName?: string;
 }): string {
   const libImports = resolveActionLibImports(libraries);
 
@@ -214,6 +217,7 @@ export function generateSimpleButtonEventTemplate({
     return { preTrigger, postTrigger };
   };
 
+  const urlInfo = resolveBaseUrlInfo(url, serviceName);
   const storeSnippet = generateStoreUpdates();
 
   return `"use client";
@@ -230,10 +234,10 @@ export function ${componentName}({ onTrigger }: ${componentName}Props) {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-${storeSnippet.preTrigger}      const triggerResult = await onTrigger?.(
+${urlInfo.baseUrlDeclaration ? `      ${urlInfo.baseUrlDeclaration}\n` : ""}${storeSnippet.preTrigger}      const triggerResult = await onTrigger?.(
         "${eventName}",
         "${eventType}",
-        "${url}",
+        ${urlInfo.urlExpression},
         "${upperMethod}",
         ${Boolean(requireAuth)},
       );

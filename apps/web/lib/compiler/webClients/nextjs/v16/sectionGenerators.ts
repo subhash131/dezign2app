@@ -1,4 +1,5 @@
 import { PageSection, ComponentPropMappings } from "@workspace/canvas/types";
+import { toEnvVarName, toServiceBaseUrlEnvName } from "@/lib/compiler/utils";
 import { EventComponentMeta } from "./eventGenerators";
 import { resolveSidebarItemHref } from "./layoutGenerators";
 
@@ -146,6 +147,29 @@ function resolveReadOnlyAttr(props?: {
     return isInverted ? ` readOnly={!${cleanVar}}` : ` readOnly={Boolean(${cleanVar})}`;
   }
   return props.readOnly ? " readOnly" : "";
+}
+
+function resolveActionTriggerUrl(
+  actUrl: string,
+  actName?: string,
+  actions: EventComponentMeta[] = [],
+): string {
+  if (!actUrl || !actUrl.includes("://")) {
+    return `"${actUrl || ""}"`;
+  }
+  const meta = actions.find(
+    (a) => a.eventName === actName || a.componentName === actName,
+  );
+  const serviceName = meta?.serviceName;
+  const cleanServiceName = serviceName?.trim();
+  const { envVarName, publicEnvVarName } = toServiceBaseUrlEnvName(cleanServiceName || "SERVICE");
+  const rawPrefix = toEnvVarName(cleanServiceName || "SERVICE");
+  const legacyPublicName = `NEXT_PUBLIC_${rawPrefix}_BASE_URL`;
+  const match = actUrl.match(/^([a-zA-Z]+:\/\/[^/]+)(.*)$/);
+  if (!match) return `"${actUrl}"`;
+  const origin = match[1] || "";
+  const rest = match[2] || "";
+  return `\`\${(process.env.${publicEnvVarName} || process.env.${legacyPublicName} || process.env.${envVarName} || "${origin}").replace(/\\/$/, "")}${rest}\``;
 }
 
 export function generateSectionComponent(
@@ -727,7 +751,7 @@ export default ${sectionCompName};
             const actEvent = act?.event || "click";
             const actUrl = act?.url || "";
             const actMethod = act?.method || "POST";
-            clickAttr = ` onClick={() => onTrigger?.("${actName}", "${actEvent}", "${actUrl}", "${actMethod}")}`;
+            clickAttr = ` onClick={() => onTrigger?.("${actName}", "${actEvent}", ${resolveActionTriggerUrl(actUrl, actName, eventComponents)}, "${actMethod}")}`;
           } else if (cfg?.clickAction === "navigate" && cfg.targetRoute) {
             clickAttr = ` onClick={() => { window.location.href = "${cfg.targetRoute}"; }}`;
           }
@@ -753,7 +777,7 @@ export default ${sectionCompName};
             const actEvent = primaryItemAct.event || "click";
             const actUrl = primaryItemAct.url || "";
             const actMethod = primaryItemAct.method || "POST";
-            const itemClickAttr = ` onClick={() => onTrigger?.("${actName}", "${actEvent}", "${actUrl}", "${actMethod}", false, undefined, undefined, { ${keyField}: item?.${keyField} ?? item })}`;
+            const itemClickAttr = ` onClick={() => onTrigger?.("${actName}", "${actEvent}", ${resolveActionTriggerUrl(actUrl, actName, eventComponents)}, "${actMethod}", false, undefined, undefined, { ${keyField}: item?.${keyField} ?? item })}`;
 
             if (comp === "badge") {
               neededShadcnImports.add('import { Badge } from "@workspace/ui/components/badge";');
@@ -877,7 +901,7 @@ export default ${sectionCompName};
               const actName = act?.name || "inputChange";
               const actUrl = act?.url || "";
               const actMethod = act?.method || "POST";
-              return `          <Input key="${st.id}" type="${inType}" value={${valExpr}} onChange={(e) => onTrigger?.("${actName}", "change", "${actUrl}", "${actMethod}", false, undefined, undefined, { value: e.target.value })}${ph}${readOnlyAttr}${dis}${uxAttrs} className="h-8 text-xs max-w-xs" />`;
+              return `          <Input key="${st.id}" type="${inType}" value={${valExpr}} onChange={(e) => onTrigger?.("${actName}", "change", ${resolveActionTriggerUrl(actUrl, actName, eventComponents)}, "${actMethod}", false, undefined, undefined, { value: e.target.value })}${ph}${readOnlyAttr}${dis}${uxAttrs} className="h-8 text-xs max-w-xs" />`;
             }
 
             if (props?.onChangeMode === "custom" && props?.customOnChange) {
@@ -935,7 +959,7 @@ export default ${sectionCompName};
     const hasAction = Boolean(item.actionId || item.actionName);
 
     const clickAttr = hasAction
-      ? ` onClick={() => onTrigger?.("${actName}", "${actEvent}", "${actUrl}", "${actMethod}")}`
+      ? ` onClick={() => onTrigger?.("${actName}", "${actEvent}", ${resolveActionTriggerUrl(actUrl, actName, eventComponents)}, "${actMethod}")}`
       : "";
 
     const disabledAttr = item.disabledStateName
@@ -960,7 +984,7 @@ export default ${sectionCompName};
       if (valVar && hasSetter) {
         let changeAttr = ` onChange={(e) => ${setterVar}(e.target.value)}`;
         if (hasAction) {
-          changeAttr = ` onChange={(e) => { ${setterVar}(e.target.value); onTrigger?.("${actName}", "change", "${actUrl}", "${actMethod}", false, undefined, undefined, { value: e.target.value }); }}`;
+          changeAttr = ` onChange={(e) => { ${setterVar}(e.target.value); onTrigger?.("${actName}", "change", ${resolveActionTriggerUrl(actUrl, actName, eventComponents)}, "${actMethod}", false, undefined, undefined, { value: e.target.value }); }}`;
         }
         return `<Input key="${item.id}" placeholder="${ph}" value={String(${valVar} ?? "")}${changeAttr}${disabledAttr} className="h-8 text-xs max-w-xs" />`;
       }
@@ -975,7 +999,7 @@ export default ${sectionCompName};
       if (valVar && hasSetter) {
         let changeAttr = ` onCheckedChange={(checked) => ${setterVar}(checked)}`;
         if (hasAction) {
-          changeAttr = ` onCheckedChange={(checked) => { ${setterVar}(checked); onTrigger?.("${actName}", "change", "${actUrl}", "${actMethod}", false, undefined, undefined, { checked }); }}`;
+          changeAttr = ` onCheckedChange={(checked) => { ${setterVar}(checked); onTrigger?.("${actName}", "change", ${resolveActionTriggerUrl(actUrl, actName, eventComponents)}, "${actMethod}", false, undefined, undefined, { checked }); }}`;
         }
         return `<div key="${item.id}" className="flex items-center gap-2 text-xs"><Switch checked={Boolean(${valVar})}${changeAttr}${disabledAttr} /><span>${labelText}</span></div>`;
       }

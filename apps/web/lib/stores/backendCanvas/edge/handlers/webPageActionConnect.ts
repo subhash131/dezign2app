@@ -9,7 +9,11 @@ import {
 } from "@/types/canvas";
 import { ConnectionContext } from "../types";
 import { buildInitialBindingsFromEndpoint } from "@/app/(canvas)/project/[projectId]/_components/config-sidebar/web-page-event-config/action-flow/utils";
-import { isStorageRefNode } from "../utils";
+import {
+  isStorageRefNode,
+  findTargetWebAppsForPage,
+  syncServiceBaseUrlToWebApp,
+} from "../utils";
 import { toast } from "sonner";
 import { toVarName } from "@/lib/compiler/utils";
 
@@ -459,6 +463,21 @@ export function handleWebPageActionConnect({
         e.id === newEdge.id ? updatedEdge : e,
       ),
     });
+
+    if (isServiceTarget) {
+      const targetWebApps = findTargetWebAppsForPage(
+        webPageNode.id,
+        get().nodes,
+        get().edges,
+      );
+      for (const webApp of targetWebApps) {
+        syncServiceBaseUrlToWebApp({
+          webAppNode: webApp,
+          serviceNode: otherNode,
+          updateNode: get().updateNode,
+        });
+      }
+    }
 
     toast.success(
       `Configured request step for "${actionName}" calling ${targetDesc}`,

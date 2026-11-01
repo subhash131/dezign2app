@@ -15,6 +15,7 @@ export interface EventComponentMeta {
   requestBody?: unknown;
   eventItem?: UIEventItem;
   endpoint?: Endpoint;
+  serviceName?: string;
 }
 
 export const METHOD_BADGE_CLASSES: Record<string, string> = {

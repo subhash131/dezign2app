@@ -1,6 +1,7 @@
 import { StoreActionBinding } from "@workspace/canvas/types";
 import { ResolvedEventParameters } from "../types";
 import { resolveStoreActionMethodName } from "../../storeActionResolver";
+import { resolveBaseUrlInfo } from "../paramUtils";
 
 function resolveActionLibImports(libraries?: string[]): string {
   if (!libraries || libraries.length === 0) return "";
@@ -31,6 +32,7 @@ export function generateInteractiveFormEventTemplate({
   libraries = [],
   storeActionBinding,
   storeActionBindings,
+  serviceName,
 }: {
   componentName: string;
   eventName: string;
@@ -43,6 +45,7 @@ export function generateInteractiveFormEventTemplate({
   libraries?: string[];
   storeActionBinding?: StoreActionBinding;
   storeActionBindings?: StoreActionBinding[];
+  serviceName?: string;
 }): string {
   const {
     mergedPathParams,
@@ -62,6 +65,7 @@ export function generateInteractiveFormEventTemplate({
   } = params;
 
   const libImports = resolveActionLibImports(libraries);
+  const urlInfo = resolveBaseUrlInfo(url, serviceName);
 
   const bindings: StoreActionBinding[] =
     Array.isArray(storeActionBindings) && storeActionBindings.length > 0
@@ -330,7 +334,7 @@ ${hasPathParams ? `  useEffect(() => {
     let pathnameAndRest = currentUrl;
     const matchOrigin = currentUrl.match(/^([a-zA-Z]+:\\/\\/[^/]+)(.*)$/);
     if (matchOrigin) {
-      origin = matchOrigin[1] || "";
+      origin = ${urlInfo.hasBaseUrl ? `(process.env.${urlInfo.publicEnvVarName} || process.env.${urlInfo.envVarName} || matchOrigin[1] || "").replace(/\\/$/, "")` : `matchOrigin[1] || ""`};
       pathnameAndRest = matchOrigin[2] || "";
     }
 ${hasPathParams ? `    Object.entries(pathParams).forEach(([key, val]) => {

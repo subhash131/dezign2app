@@ -1,6 +1,7 @@
 import { BackendNode, BackendEdge } from "@/types/canvas";
 import { Endpoint } from "@workspace/canvas/types";
 import { pageRouteToUrl } from "@workspace/canvas";
+import { toEnvVarName, toServiceBaseUrlEnvName } from "@/lib/compiler/utils";
 import { LinkedEndpointInfo } from "./types";
 
 export function getServicePort(targetNode: BackendNode): string {
@@ -155,6 +156,8 @@ export function resolveLinkedEndpoint(
       targetNode.data?.techStack === "nextjs" &&
       allNodes.some((n) => n.type === "webApp");
     const fullUrl = isColocated ? path : `http://localhost:${targetPort}${path}`;
+    const baseUrl = isColocated ? "" : `http://localhost:${targetPort}`;
+    const { envVarName, publicEnvVarName } = toServiceBaseUrlEnvName(targetServiceName);
 
     const requireAuth = ep ? ep.requireAuth !== false : true;
 
@@ -168,6 +171,9 @@ export function resolveLinkedEndpoint(
       method,
       path,
       fullUrl,
+      baseUrl,
+      envVarName,
+      publicEnvVarName,
       requireAuth,
       endpoint: ep,
     };
@@ -202,6 +208,8 @@ export function resolveLinkedEndpoint(
           method: "GET",
           path: "/api/v1",
           fullUrl: `http://localhost:${downstreamPort}/api/v1`,
+          baseUrl: `http://localhost:${downstreamPort}`,
+          ...toServiceBaseUrlEnvName(downstreamNode.data?.label || "Service"),
           requireAuth: true,
         };
       }
@@ -215,6 +223,8 @@ export function resolveLinkedEndpoint(
       method: "GET",
       path: "/api/gateway",
       fullUrl: `http://localhost:${gatewayPort}/api/gateway`,
+      baseUrl: `http://localhost:${gatewayPort}`,
+      ...toServiceBaseUrlEnvName(targetNode.data?.label || "API_Gateway"),
       requireAuth: true,
     };
   }
@@ -239,6 +249,8 @@ export function resolveLinkedEndpoint(
     const resourceName = resource?.name || targetNode.data?.label || "topic";
     const path = `/api/messages/${resourceName}`;
     const fullUrl = `http://localhost:8080${path}`;
+    const baseUrl = "http://localhost:8080";
+    const { envVarName, publicEnvVarName } = toServiceBaseUrlEnvName(targetNode.data?.label || "Broker");
 
     return {
       targetNodeId: targetNode.id,
@@ -248,6 +260,9 @@ export function resolveLinkedEndpoint(
       method: "POST",
       path,
       fullUrl,
+      baseUrl,
+      envVarName,
+      publicEnvVarName,
       requireAuth: false,
     };
   }
@@ -334,6 +349,8 @@ export function resolveLinkedEndpoint(
         const fullUrl = isColocated
           ? path
           : `http://localhost:${targetPort}${path}`;
+        const baseUrl = isColocated ? "" : `http://localhost:${targetPort}`;
+        const { envVarName, publicEnvVarName } = toServiceBaseUrlEnvName(targetServiceName);
 
         return {
           targetNodeId: downstreamNode.id,
@@ -345,6 +362,9 @@ export function resolveLinkedEndpoint(
           method,
           path,
           fullUrl,
+      baseUrl,
+      envVarName,
+      publicEnvVarName,
           requireAuth: ep ? ep.requireAuth !== false : false,
           endpoint: ep,
         };

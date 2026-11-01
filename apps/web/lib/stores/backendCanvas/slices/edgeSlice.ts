@@ -1,4 +1,4 @@
-import { BackendEdge } from "@/types/canvas";
+import { BackendEdge, FrontendActionStepDraft } from "@/types/canvas";
 import { isValidConnection, normalizePageRoute, isBackendEdgeType } from "@workspace/canvas";
 import { toast } from "sonner";
 import {
@@ -25,6 +25,7 @@ import {
   handleRedisCacheConnect,
   handleStorageConnect,
   handleWebPageActionConnect,
+  syncServiceBaseUrlToWebApp,
 } from "../edge";
 
 export interface EdgeSlice {
@@ -294,6 +295,44 @@ export const createEdgeSlice = (
 
     // 9. Handle Storage bucket to StorageBucketRefNode reference connections
     handleStorageConnect(context);
+
+    // 10. Sync Service base URL env vars if connecting WebApp <-> Service or WebApp <-> WebPage
+    if (
+      (sourceNode.type === "webApp" && (targetNode.type === "service" || targetNode.type === "serverless" || targetNode.type === "langgraph")) ||
+      (targetNode.type === "webApp" && (sourceNode.type === "service" || sourceNode.type === "serverless" || sourceNode.type === "langgraph"))
+    ) {
+      const webApp = sourceNode.type === "webApp" ? sourceNode : targetNode;
+      const srv = sourceNode.type === "webApp" ? targetNode : sourceNode;
+      syncServiceBaseUrlToWebApp({
+        webAppNode: webApp,
+        serviceNode: srv,
+        updateNode: get().updateNode,
+      });
+    } else if (
+      (sourceNode.type === "webApp" && targetNode.type === "webPage") ||
+      (targetNode.type === "webApp" && sourceNode.type === "webPage")
+    ) {
+      const webApp = sourceNode.type === "webApp" ? sourceNode : targetNode;
+      const pageNode = sourceNode.type === "webApp" ? targetNode : sourceNode;
+      const allSteps: FrontendActionStepDraft[] = [
+        ...(pageNode.data?.sections || []).flatMap((s) => (s.actions || []).flatMap((a) => a.actionSteps || [])),
+        ...(pageNode.data?.events || []).flatMap((e) => e.actionSteps || []),
+        ...(pageNode.data?.realtimeConnections || []).flatMap((c) => c.actionSteps || []),
+      ];
+      const allNodes = get().nodes;
+      for (const step of allSteps) {
+        if (step?.type === "api_call" && step?.serviceNodeId) {
+          const srvNode = allNodes.find((n) => n.id === step.serviceNodeId);
+          if (srvNode) {
+            syncServiceBaseUrlToWebApp({
+              webAppNode: webApp,
+              serviceNode: srvNode,
+              updateNode: get().updateNode,
+            });
+          }
+        }
+      }
+    }
   },
 
   addEdge: (edgeWithoutIndex) => {
@@ -368,6 +407,44 @@ export const createEdgeSlice = (
       handleRedisCacheConnect(connContext);
       handleWebPageActionConnect(connContext);
       handleDatabaseRefConnect(connContext);
+
+      // Sync Service base URL env vars if connecting WebApp <-> Service or WebApp <-> WebPage
+      if (
+        (sourceNode.type === "webApp" && (targetNode.type === "service" || targetNode.type === "serverless" || targetNode.type === "langgraph")) ||
+        (targetNode.type === "webApp" && (sourceNode.type === "service" || sourceNode.type === "serverless" || sourceNode.type === "langgraph"))
+      ) {
+        const webApp = sourceNode.type === "webApp" ? sourceNode : targetNode;
+        const srv = sourceNode.type === "webApp" ? targetNode : sourceNode;
+        syncServiceBaseUrlToWebApp({
+          webAppNode: webApp,
+          serviceNode: srv,
+          updateNode: get().updateNode,
+        });
+      } else if (
+        (sourceNode.type === "webApp" && targetNode.type === "webPage") ||
+        (targetNode.type === "webApp" && sourceNode.type === "webPage")
+      ) {
+        const webApp = sourceNode.type === "webApp" ? sourceNode : targetNode;
+        const pageNode = sourceNode.type === "webApp" ? targetNode : sourceNode;
+        const allSteps: FrontendActionStepDraft[] = [
+          ...(pageNode.data?.sections || []).flatMap((s) => (s.actions || []).flatMap((a) => a.actionSteps || [])),
+          ...(pageNode.data?.events || []).flatMap((e) => e.actionSteps || []),
+          ...(pageNode.data?.realtimeConnections || []).flatMap((c) => c.actionSteps || []),
+        ];
+        const allNodes = get().nodes;
+        for (const step of allSteps) {
+          if (step?.type === "api_call" && step?.serviceNodeId) {
+            const srvNode = allNodes.find((n) => n.id === step.serviceNodeId);
+            if (srvNode) {
+              syncServiceBaseUrlToWebApp({
+                webAppNode: webApp,
+                serviceNode: srvNode,
+                updateNode: get().updateNode,
+              });
+            }
+          }
+        }
+      }
     }
   },
 
