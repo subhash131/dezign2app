@@ -922,6 +922,34 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
 
     const allActions = [...existingActions, ...newActionsToAdd];
 
+    // 3. Realtime SSE streaming connection
+    const existingConnections = currentParent.data?.realtimeConnections || [];
+    let streamConn = existingConnections.find(
+      (c: any) =>
+        c.eventName === "chat_stream" ||
+        c.eventName === "agent_stream" ||
+        c.storeActionBinding?.targetFieldName === "messages",
+    );
+    let nextRealtimeConnections = [...existingConnections];
+    if (!streamConn) {
+      const newConnId = `rtc-chat-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`;
+      streamConn = {
+        id: newConnId,
+        protocol: "SSE",
+        eventName: "chat_stream",
+        streamUrl: "/api/chat/stream",
+        description: "AI Assistant Response Stream",
+        storeActionBinding: {
+          storeNodeId: activeSelectedStore?.id,
+          storeName: activeElement.valueStoreName || "ChatStore",
+          targetFieldName: activeElement.valueStateName || "messages",
+          actionType: "append",
+          updateSource: "full_message",
+        },
+      };
+      nextRealtimeConnections.push(streamConn);
+    }
+
     const currentProps = {
       ...(componentBinding?.propMappings || {}),
       ...(activeElement.propMappings || {}),
@@ -933,6 +961,9 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
       chatOnSendActionName: sendAct.name,
       chatOnFetchActionId: fetchAct.id,
       chatOnFetchActionName: fetchAct.name,
+      chatStreamConnectionId: streamConn.id,
+      chatStreamProtocol: streamConn.protocol as any,
+      chatStreamEventName: streamConn.eventName,
     };
 
     const updatedElements = currentElements.map((el) => {
@@ -969,13 +1000,94 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
       data: {
         ...currentParent.data,
         sections: updatedSections,
+        realtimeConnections: nextRealtimeConnections,
       },
     });
 
     toast.success(
-      `Wired Chat Actions: "${fetchAct.name}" (onMount) & "${sendAct.name}" (onSend)!`,
+      `Wired Complete Chat Pipeline: "${fetchAct.name}" (onMount), "${sendAct.name}" (onSend), & SSE Stream!`,
     );
-  }, [nodeId, id, sectionId, activeElement, currentElements, componentBinding, updateNode]);
+  }, [nodeId, id, sectionId, activeElement, currentElements, componentBinding, activeSelectedStore, updateNode]);
+
+  const handleQuickWireChatStreamConnection = useCallback(() => {
+    const currentParent = useBackendCanvasStore
+      .getState()
+      .nodes.find((n) => n.id === nodeId);
+    if (!currentParent) return;
+
+    const existingConnections = currentParent.data?.realtimeConnections || [];
+    let streamConn = existingConnections.find(
+      (c: any) =>
+        c.id === activePropMappings.chatStreamConnectionId ||
+        c.eventName === "chat_stream" ||
+        c.eventName === "agent_stream" ||
+        c.storeActionBinding?.targetFieldName === "messages" ||
+        c.description?.toLowerCase().includes("chat"),
+    );
+
+    let updatedConnections = [...existingConnections];
+
+    if (!streamConn) {
+      const newConnId = `rtc-chat-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`;
+      streamConn = {
+        id: newConnId,
+        protocol: "SSE",
+        eventName: "chat_stream",
+        streamUrl: "/api/chat/stream",
+        description: "AI Assistant Response Stream",
+        storeActionBinding: {
+          storeNodeId: activeSelectedStore?.id,
+          storeName: activeElement.valueStoreName || "ChatStore",
+          targetFieldName: activeElement.valueStateName || "messages",
+          actionType: "append",
+          updateSource: "full_message",
+        },
+      };
+      updatedConnections.push(streamConn);
+    }
+
+    handleUpdateActivePropMapping({
+      chatStreamConnectionId: streamConn.id,
+      chatStreamProtocol: streamConn.protocol as any,
+      chatStreamEventName: streamConn.eventName,
+    });
+
+    updateNode(nodeId, {
+      data: {
+        ...currentParent.data,
+        realtimeConnections: updatedConnections,
+      },
+    });
+
+    toast.success(`Wired Realtime SSE stream "${streamConn.eventName}" to messages!`);
+  }, [nodeId, activePropMappings.chatStreamConnectionId, activeSelectedStore, activeElement, handleUpdateActivePropMapping, updateNode]);
+
+  const handleUpdateChatStreamConnection = useCallback(
+    (connId?: string) => {
+      const currentParent = useBackendCanvasStore
+        .getState()
+        .nodes.find((n) => n.id === nodeId);
+      const conn = (currentParent?.data?.realtimeConnections || []).find((c: any) => c.id === connId);
+      handleUpdateActivePropMapping({
+        chatStreamConnectionId: connId,
+        chatStreamProtocol: conn?.protocol as any,
+        chatStreamEventName: conn?.eventName,
+      });
+      toast.success(connId ? `Linked stream "${conn?.eventName || conn?.protocol || "stream"}"` : "Detached stream connection");
+    },
+    [nodeId, handleUpdateActivePropMapping],
+  );
+
+  const handleOpenRealtimeConnectionConfig = useCallback(
+    (connId: string) => {
+      setActiveConfigItem({
+        type: "realtimeConnection",
+        id: connId,
+        nodeId,
+      });
+    },
+    [setActiveConfigItem, nodeId],
+  );
 
   const handleCreateNavStateVariable = useCallback(
     (preferredStoreId?: string) => {
@@ -1622,6 +1734,11 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
         chatOnSendActionName={activePropMappings.chatOnSendActionName || activeElement.actionName}
         onUpdateChatAction={handleUpdateChatAction}
         onQuickWireChatActions={handleQuickWireChatActions}
+        realtimeConnections={parentNode.data?.realtimeConnections || []}
+        chatStreamConnectionId={activePropMappings.chatStreamConnectionId}
+        onUpdateChatStreamConnection={handleUpdateChatStreamConnection}
+        onQuickWireChatStreamConnection={handleQuickWireChatStreamConnection}
+        onOpenRealtimeConnectionConfig={handleOpenRealtimeConnectionConfig}
       />
 
       <Separator className="bg-border/50" />

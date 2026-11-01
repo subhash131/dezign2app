@@ -21,7 +21,8 @@ import {
   Pencil,
   PanelLeft,
   PanelTop,
-  MessageSquare
+  MessageSquare,
+  Radio,
 } from "lucide-react";
 import {
   PageSection,
@@ -514,7 +515,7 @@ export const SectionComponentBindingsList: React.FC<SectionComponentBindingsList
                 </div>
 
                 {/* Bottom Row: State & Action Mapping Badges (wrapping cleanly without overflowing) */}
-                {(comp.actionId || comp.propMappings?.chatOnFetchActionId || comp.valueStateName || comp.disabledStateName || comp.propMappings?.sidebarNavBinding || comp.propMappings?.topbarNavBinding || comp.propMappings?.sidebarNavMode || comp.propMappings?.topbarNavMode) && (
+                {(comp.actionId || comp.propMappings?.chatOnFetchActionId || comp.propMappings?.chatStreamConnectionId || comp.valueStateName || comp.disabledStateName || comp.propMappings?.sidebarNavBinding || comp.propMappings?.topbarNavBinding || comp.propMappings?.sidebarNavMode || comp.propMappings?.topbarNavMode) && (
                   <div className="flex items-center gap-1 text-[8.5px] font-mono flex-wrap pl-4 w-full">
                     {/* Bound History Hydration Action for Chat */}
                     {comp.componentType === "chat" && comp.propMappings?.chatOnFetchActionId && (
@@ -540,6 +541,26 @@ export const SectionComponentBindingsList: React.FC<SectionComponentBindingsList
                         <span className="font-semibold truncate">{comp.actionName || boundAction?.name || "action"}</span>
                       </span>
                     ) : null}
+
+                    {/* Bound Realtime Stream for Chat */}
+                    {comp.componentType === "chat" && comp.propMappings?.chatStreamConnectionId && (
+                      <span
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveConfigItem({
+                            type: "realtimeConnection",
+                            id: comp.propMappings!.chatStreamConnectionId!,
+                            nodeId,
+                          });
+                        }}
+                        title={`Realtime Stream: ${comp.propMappings?.chatStreamProtocol || "SSE"} (${comp.propMappings?.chatStreamEventName || "stream"})`}
+                        className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/30 transition-colors cursor-pointer max-w-[140px] truncate"
+                      >
+                        <Radio size={7} />
+                        <span className="text-[7.5px] text-muted-foreground">{comp.propMappings?.chatStreamProtocol || "SSE"}:</span>
+                        <span className="font-semibold truncate">{comp.propMappings?.chatStreamEventName || "stream"}</span>
+                      </span>
+                    )}
 
                     {/* Bound Nav State for Sidebar / Topbar */}
                     {(comp.componentType === "sidebar" || comp.componentType === "topbar") && (
