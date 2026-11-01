@@ -21,6 +21,10 @@ ${hasAuth ? `import { getAuthBearerToken } from "./auth-token";\n` : ""}export i
   queryParams?: Record<string, string>;
   requestBody?: TBody;
   onStream?: (streamResult: ApiStreamResult) => void;
+  onStreamStart?: (info: { threadId?: string }) => void;
+  onStreamEnd?: (finalResult: ApiStreamResult) => void;
+  onStreamError?: (error: unknown) => void;
+  onToolCall?: (toolCall: any) => void;
 }
 
 export interface ApiStreamResult {
@@ -32,10 +36,13 @@ export interface ApiStreamResult {
   updates?: Array<{ node?: string; data: any }>;
   custom?: any[];
   values?: any;
+  toolCalls?: any[];
+  usage?: { input_tokens: number; output_tokens: number; total_tokens: number };
   threadId?: string;
   streamed: true;
   statusText?: string;
   raw?: string;
+  done?: boolean;
 }
 
 export interface ApiActionResult<TData = unknown> {
@@ -65,6 +72,10 @@ export async function executeApiAction<TData = unknown, TBody = unknown>(
     queryParams,
     requestBody,
     onStream,
+    onStreamStart,
+    onStreamEnd,
+    onStreamError,
+    onToolCall,
   } = options;
 
   const timestamp = new Date().toLocaleTimeString();
@@ -145,8 +156,11 @@ export async function executeApiAction<TData = unknown, TBody = unknown>(
         const reasoningTokens: string[] = [];
         const updates: Array<{ node?: string; data: any }> = [];
         const custom: any[] = [];
+        const toolCalls: any[] = [];
+        let latestUsage: { input_tokens: number; output_tokens: number; total_tokens: number } | undefined = undefined;
         let latestValues: any = undefined;
         let lastSessionId: string | undefined = undefined;
+        let isDone = false;
         let rawAccumulated = "";
 
         const buildStreamData = (): ApiStreamResult => {
@@ -193,25 +207,37 @@ export async function executeApiAction<TData = unknown, TBody = unknown>(
             updates: [...updates],
             custom: [...custom],
             values: latestValues,
+            toolCalls: [...toolCalls],
+            usage: latestUsage,
             threadId: lastSessionId,
             streamed: true,
             statusText: res.statusText,
             raw: rawAccumulated,
+            done: isDone,
           };
         };
 
         const processSseLine = (trimmed: string) => {
           if (!trimmed.startsWith("data: ")) return;
           const dataStr = trimmed.slice(6).trim();
-          if (dataStr === "[DONE]") return;
+          if (dataStr === "[DONE]") {
+            isDone = true;
+            return;
+          }
           try {
             const parsed = JSON.parse(dataStr);
             if (!parsed || typeof parsed !== "object") {
               tokens.push(String(parsed));
               return;
             }
-            if (parsed.type === "session" && parsed.thread_id) {
-              lastSessionId = parsed.thread_id;
+            if (parsed.type === "stream_start") {
+              if (parsed.threadId || parsed.thread_id) {
+                lastSessionId = parsed.threadId || parsed.thread_id;
+              }
+              onStreamStart?.({ threadId: lastSessionId });
+            }
+            if (parsed.type === "session" && (parsed.thread_id || parsed.threadId)) {
+              lastSessionId = parsed.thread_id || parsed.threadId;
             }
             if (parsed.type === "reasoning" || parsed.reasoning !== undefined) {
               const rText = typeof parsed.reasoning === "string" ? parsed.reasoning : JSON.stringify(parsed.reasoning);
@@ -226,11 +252,36 @@ export async function executeApiAction<TData = unknown, TBody = unknown>(
             if (parsed.type === "values" || parsed.mode === "values") {
               latestValues = parsed.data ?? parsed;
             }
+            if (
+              parsed.type === "tool_call" ||
+              parsed.type === "tool_call_chunk" ||
+              parsed.tool_call !== undefined ||
+              parsed.tool_calls !== undefined
+            ) {
+              const tc = parsed.data ?? parsed.tool_call ?? parsed.tool_calls ?? parsed;
+              toolCalls.push(tc);
+              onToolCall?.(tc);
+            }
+            if (parsed.type === "usage" || parsed.usage !== undefined) {
+              latestUsage = parsed.usage ?? parsed.data ?? parsed;
+            }
+            if (parsed.type === "stream_end") {
+              isDone = true;
+              if (parsed.threadId || parsed.thread_id) {
+                lastSessionId = parsed.threadId || parsed.thread_id;
+              }
+              if (parsed.usage) {
+                latestUsage = parsed.usage;
+              }
+            }
+            if (parsed.type === "stream_error" || parsed.type === "error") {
+              onStreamError?.(parsed.error ?? parsed.data ?? parsed);
+            }
             if (typeof parsed.token === "string") {
               tokens.push(parsed.token);
             } else if (parsed.token && typeof parsed.token === "object" && typeof parsed.token.content === "string") {
               tokens.push(parsed.token.content);
-            } else if (typeof parsed.content === "string" && parsed.type !== "reasoning") {
+            } else if (typeof parsed.content === "string" && parsed.type !== "reasoning" && parsed.type !== "stream_end") {
               tokens.push(parsed.content);
             } else if (parsed.type === "token" && parsed.token !== undefined) {
               tokens.push(typeof parsed.token === "object" ? JSON.stringify(parsed.token) : String(parsed.token));
@@ -271,16 +322,20 @@ export async function executeApiAction<TData = unknown, TBody = unknown>(
           if (lineBuffer.trim()) {
             processSseLine(lineBuffer.trim());
           }
+          isDone = true;
           resData = buildStreamData();
           onStream?.(resData as ApiStreamResult);
+          onStreamEnd?.(resData as ApiStreamResult);
         } else {
           const rawText = await res.text();
           rawAccumulated = rawText;
           for (const line of rawText.split("\\n")) {
             processSseLine(line.trim());
           }
+          isDone = true;
           resData = buildStreamData();
           onStream?.(resData as ApiStreamResult);
+          onStreamEnd?.(resData as ApiStreamResult);
         }
       } else if (cType.includes("text/plain")) {
         let textAccumulated = "";
@@ -303,6 +358,7 @@ export async function executeApiAction<TData = unknown, TBody = unknown>(
               streamed: true,
               statusText: res.statusText,
               raw: textAccumulated,
+              done: false,
             };
             onStream?.(resData as ApiStreamResult);
           }
@@ -319,8 +375,10 @@ export async function executeApiAction<TData = unknown, TBody = unknown>(
           streamed: true,
           statusText: res.statusText,
           raw: textAccumulated,
+          done: true,
         };
         onStream?.(resData as ApiStreamResult);
+        onStreamEnd?.(resData as ApiStreamResult);
       } else {
         const text = await res.text().catch(() => "");
         if (!text) {
@@ -354,6 +412,7 @@ export async function executeApiAction<TData = unknown, TBody = unknown>(
       data: resData as TData,
     };
   } catch (err) {
+    onStreamError?.(err);
     const errorMessage = err instanceof Error ? err.message : "Request failed";
     return {
       id: logId,

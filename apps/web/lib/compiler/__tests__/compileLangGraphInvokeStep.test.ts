@@ -78,7 +78,9 @@ describe("LangGraph Invoke Pipeline Step Compiler", () => {
       expect(code).toContain("await agentWsGraph.stream(");
       expect(code).toContain('wsBroadcast("agent_stream", { token, node: nodeName, done: false }, "chat-room-42")');
       expect(code).toContain('wsBroadcast("agent_stream", { done: true }, "chat-room-42")');
-      expect(code).toContain('const wsResult = { streamed: true, protocol: "websocket", room: "chat-room-42" }');
+      expect(code).toContain('const wsResult = {');
+      expect(code).toContain('protocol: "websocket"');
+      expect(code).toContain('room: "chat-room-42"');
     });
 
     it("renders streaming to Kafka topic with publishKafkaEvent", () => {
@@ -103,7 +105,9 @@ describe("LangGraph Invoke Pipeline Step Compiler", () => {
       expect(code).toContain("await agentKafkaGraph.stream(");
       expect(code).toContain('await publishKafkaEvent("ai-tokens-stream", { token, node: nodeName, done: false }, body.thread_id)');
       expect(code).toContain('await publishKafkaEvent("ai-tokens-stream", { done: true }, body.thread_id)');
-      expect(code).toContain('const kafkaResult = { streamed: true, protocol: "kafka", topic: "ai-tokens-stream" }');
+      expect(code).toContain('const kafkaResult = {');
+      expect(code).toContain('protocol: "kafka"');
+      expect(code).toContain('topic: "ai-tokens-stream"');
     });
 
     it("renders streaming to Redis Stream with xadd", () => {
@@ -128,7 +132,9 @@ describe("LangGraph Invoke Pipeline Step Compiler", () => {
       expect(code).toContain("await agentRedisGraph.stream(");
       expect(code).toContain('await redisClient.xadd("stream:chat:123", "*", "token", String(token), "node", String(nodeName || ""), "done", "false")');
       expect(code).toContain('await redisClient.xadd("stream:chat:123", "*", "token", "", "done", "true")');
-      expect(code).toContain('const redisResult = { streamed: true, protocol: "redis_stream", streamKey: "stream:chat:123" }');
+      expect(code).toContain('const redisResult = {');
+      expect(code).toContain('protocol: "redis_stream"');
+      expect(code).toContain('streamKey: "stream:chat:123"');
     });
 
     it("renders dynamic field-mapped WebSocket room and Redis stream key", () => {
@@ -821,6 +827,57 @@ describe("LangGraph Invoke Pipeline Step Compiler", () => {
       expect(res.code).toContain("export interface ConversationsPostSimpleChatResponse {");
       expect(res.code).not.toContain("streamed: true;");
       expect(res.code).toContain("response: string;");
+    });
+  });
+
+  describe("Token Usage Tracking (langGraphTrackTokenUsage)", () => {
+    it("extracts and tracks token usage in non-streaming invoke mode when langGraphTrackTokenUsage is true", () => {
+      const step: PipelineStep = {
+        id: "step-token-agent",
+        name: "UsageAgent",
+        type: "langgraph_invoke",
+        outputVariable: "agentResult",
+        langGraphTargetNodeId: "agentUsage",
+        langGraphStreamingEnabled: false,
+        langGraphTrackTokenUsage: true,
+      };
+
+      const lines = renderPipelineStep(step, {
+        priorOutputs: new Map(),
+        bodyVar: "body",
+      });
+      const code = lines.join("\n");
+
+      expect(code).toContain("const agentResultUsage = { input_tokens: 0, output_tokens: 0, total_tokens: 0");
+      expect(code).toContain("usage_metadata || _m?.response_metadata?.token_usage");
+      expect(code).toContain('res.setHeader("X-Input-Tokens", String(agentResultUsage.input_tokens))');
+      expect(code).toContain('res.setHeader("X-Output-Tokens", String(agentResultUsage.output_tokens))');
+      expect(code).toContain('res.setHeader("X-Total-Tokens", String(agentResultUsage.total_tokens))');
+      expect(code).toContain("usage: agentResultUsage");
+    });
+
+    it("tracks token usage and emits usage SSE event when langGraphStreamingEnabled and langGraphTrackTokenUsage are true", () => {
+      const step: PipelineStep = {
+        id: "step-token-stream",
+        name: "StreamUsageAgent",
+        type: "langgraph_invoke",
+        outputVariable: "streamResult",
+        langGraphTargetNodeId: "agentStreamUsage",
+        langGraphStreamingEnabled: true,
+        langGraphStreamingProtocol: "sse",
+        langGraphTrackTokenUsage: true,
+      };
+
+      const lines = renderPipelineStep(step, {
+        priorOutputs: new Map(),
+        bodyVar: "body",
+      });
+      const code = lines.join("\n");
+
+      expect(code).toContain("const streamUsageAgentTokenUsage = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };");
+      expect(code).toContain("_chunkUsage");
+      expect(code).toContain('data: ${JSON.stringify({ type: "usage", usage: streamUsageAgentTokenUsage })}\\n\\n');
+      expect(code).toContain('data: [DONE]\\n\\n');
     });
   });
 });

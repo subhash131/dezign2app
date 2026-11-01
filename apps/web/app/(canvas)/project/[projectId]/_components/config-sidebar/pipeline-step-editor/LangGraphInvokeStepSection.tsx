@@ -290,6 +290,8 @@ export const LangGraphInvokeStepSection: React.FC<
         onResetKafkaKeyBinding={realtimeStreaming.handleResetKafkaKeyBinding}
         onRedisKeyBindingChange={realtimeStreaming.handleRedisKeyBindingChange}
         onResetRedisKeyBinding={realtimeStreaming.handleResetRedisKeyBinding}
+        trackTokenUsage={realtimeStreaming.trackTokenUsage}
+        onToggleTrackTokenUsage={realtimeStreaming.handleToggleTrackTokenUsage}
       />
 
       {children}

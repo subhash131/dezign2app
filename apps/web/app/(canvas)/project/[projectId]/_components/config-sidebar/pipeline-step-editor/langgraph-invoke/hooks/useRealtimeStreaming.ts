@@ -554,6 +554,18 @@ export function useRealtimeStreaming({
     [outputFields, step, onChange],
   );
 
+  const trackTokenUsage = Boolean(step.langGraphTrackTokenUsage);
+
+  const handleToggleTrackTokenUsage = useCallback(
+    (enabled: boolean) => {
+      onChange({
+        ...step,
+        langGraphTrackTokenUsage: enabled,
+      });
+    },
+    [step, onChange],
+  );
+
   const kafkaKeyBinding = useMemo(() => {
     return getArgBinding(
       step,
@@ -656,6 +668,8 @@ export function useRealtimeStreaming({
     hasCustomRedisStreamKey,
     roomBinding,
     hasCustomRoom,
+    trackTokenUsage,
+    handleToggleTrackTokenUsage,
   };
 }
 

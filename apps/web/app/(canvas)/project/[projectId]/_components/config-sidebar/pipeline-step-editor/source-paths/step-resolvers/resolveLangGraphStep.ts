@@ -46,6 +46,20 @@ export function resolveLangGraphStepPaths(
       description: "Latest assistant message text response",
     });
   }
+  if (!stepPaths.some((p) => p.path === "content")) {
+    stepPaths.push({
+      path: "content",
+      type: "string",
+      description: "Accumulated assistant text content",
+    });
+  }
+  if (!stepPaths.some((p) => p.path === "toolCalls")) {
+    stepPaths.push({
+      path: "toolCalls",
+      type: "any[]",
+      description: "Tool calls executed during agent run",
+    });
+  }
 
   // 2. Custom state channels from the LangGraph node
   if (channels.length > 0) {
@@ -89,8 +103,68 @@ export function resolveLangGraphStepPaths(
     });
   }
 
+  // 5. Token usage metrics
+  if (step.langGraphTrackTokenUsage) {
+    if (!stepPaths.some((p) => p.path === "usage")) {
+      stepPaths.push({
+        path: "usage",
+        type: "object",
+        description: "Token usage metrics (input, output, and total tokens)",
+      });
+    }
+    if (!stepPaths.some((p) => p.path === "usage.input_tokens")) {
+      stepPaths.push({
+        path: "usage.input_tokens",
+        type: "number",
+        description: "Input / prompt tokens consumed",
+      });
+    }
+    if (!stepPaths.some((p) => p.path === "usage.output_tokens")) {
+      stepPaths.push({
+        path: "usage.output_tokens",
+        type: "number",
+        description: "Output / completion tokens consumed",
+      });
+    }
+    if (!stepPaths.some((p) => p.path === "usage.total_tokens")) {
+      stepPaths.push({
+        path: "usage.total_tokens",
+        type: "number",
+        description: "Total tokens consumed",
+      });
+    }
+    if (!stepPaths.some((p) => p.path === "usage.inputTokens")) {
+      stepPaths.push({
+        path: "usage.inputTokens",
+        type: "number",
+        description: "Input / prompt tokens consumed (camelCase alias)",
+      });
+    }
+    if (!stepPaths.some((p) => p.path === "usage.outputTokens")) {
+      stepPaths.push({
+        path: "usage.outputTokens",
+        type: "number",
+        description: "Output / completion tokens consumed (camelCase alias)",
+      });
+    }
+    if (!stepPaths.some((p) => p.path === "usage.totalTokens")) {
+      stepPaths.push({
+        path: "usage.totalTokens",
+        type: "number",
+        description: "Total tokens consumed (camelCase alias)",
+      });
+    }
+  }
+
   // Streaming transport metadata
   if (step.langGraphStreamingEnabled) {
+    if (!stepPaths.some((p) => p.path === "done")) {
+      stepPaths.push({
+        path: "done",
+        type: "boolean",
+        description: "Indicates streaming reached completion",
+      });
+    }
     if (!stepPaths.some((p) => p.path === "streamed")) {
       stepPaths.push({
         path: "streamed",

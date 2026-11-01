@@ -252,6 +252,7 @@ export const safePipelineStepSchema = z.object({
     .enum(["full_state", "specific_fields", "last_message"])
     .optional(),
   langGraphOutputFields: z.array(z.string()).optional(),
+  langGraphTrackTokenUsage: z.boolean().optional(),
   langGraphMessagesConfig: z
     .object({
       mode: z.enum(["single", "bulk"]).optional(),
