@@ -49,6 +49,12 @@ export function generatePageCode(
   const hasApiActions = allActions.some(
     (a) => a.eventType !== "navigateToPage" && ((a.url && a.url !== "#") || Boolean(a.eventName)),
   );
+  // Only generate streaming plumbing when at least one action uses SSE / WebSocket / WebRTC.
+  // Plain REST actions do not need it.
+  const STREAMING_EVENT_TYPES = new Set(["SSE", "WebSocket", "WebRTC"]);
+  const hasStreamingActions =
+    (pageMeta.realtimeConnections || []).some((c) => Boolean(c.streamUrl)) ||
+    allActions.some((a) => STREAMING_EVENT_TYPES.has(a.eventType));
 
   const sectionsJsx = sectionsMeta
     .map((s) => `        <${s.componentName}${hasApiActions ? " onTrigger={handleTriggerAction}" : ""} />`)
@@ -116,14 +122,15 @@ export function generatePageCode(
   const mediaSectionJsx = generateMediaSectionJsx(mediaCaps);
 
   // Trigger Actions & Output Logs
-  const triggerLogsStateJsx = generateTriggerLogsState(hasLogsSection);
-  const triggerHandlerJsx = generateTriggerHandler(hasApiActions);
+  const triggerLogsStateJsx = generateTriggerLogsState(hasLogsSection, hasStreamingActions);
+  const triggerHandlerJsx = generateTriggerHandler(hasApiActions, hasStreamingActions);
   const triggerLogsSectionJsx = generateTriggerLogsSection({
     hasLogsSection,
     hasSse,
     hasWs,
     hasWebRtc,
     hasRealtime,
+    hasStreamingActions,
   });
 
   // Assemble UI Imports
