@@ -14,9 +14,12 @@ import {
   deleteLocalEnvVariable,
 } from "@/lib/utils/localEnvSync";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import type { BackendNode, FrontendActionStepDraft } from "@/types/canvas";
+import type { EnvVarTemplate } from "@workspace/canvas";
 import { generateId } from "../../common";
 import { toast } from "sonner";
 import { getDefaultNodeEnvVars } from "@workspace/canvas";
+import { toEnvVarName, toServiceBaseUrlEnvName } from "@/lib/compiler/utils";
 
 export interface ExternalEnvVarsDrawerProps {
   nodeId: string;
@@ -25,7 +28,7 @@ export interface ExternalEnvVarsDrawerProps {
   className?: string;
 }
 
-export function getFallbackEnvVarValue(node: any, varName: string): string {
+export function getFallbackEnvVarValue(node: BackendNode | null | undefined, varName: string): string {
   if (!node || !node.data || !varName) return "";
   const name = cleanEnvVarName(varName);
 
@@ -57,6 +60,34 @@ export function getFallbackEnvVarValue(node: any, varName: string): string {
   if (node.type === "external") {
     const apiKeyEnv = cleanEnvVarName(node.data.apiKeyEnv || "API_KEY");
     if (name === apiKeyEnv || name === "API_KEY") return node.data.apiKey || "";
+  }
+
+  if (node.type === "webApp") {
+    if (name === "PORT") return String(node.data.port || "3000");
+    if (name === "NEXT_PUBLIC_APP_URL") return `http://localhost:${node.data.port || 3000}`;
+    if (name.endsWith("_BASE_URL")) {
+      const cleanPrefix = name
+        .replace(/^NEXT_PUBLIC_/, "")
+        .replace(/_BASE_URL$/, "")
+        .replace(/_SERVICE$/, "");
+      try {
+        const allNodes = useBackendCanvasStore.getState().nodes;
+        const matchedService = allNodes.find((n) => {
+          if (n.type !== "service" && n.type !== "serverless" && n.type !== "langgraph") return false;
+          const sLabel = (n.data?.label || n.id || "").trim();
+          const p = toEnvVarName(sLabel).replace(/_SERVICE$/, "");
+          return p === cleanPrefix;
+        });
+        if (matchedService) {
+          const sPort =
+            matchedService.data?.port ||
+            matchedService.data?.server?.port ||
+            matchedService.data?.serverConfig?.port ||
+            8080;
+          return `http://localhost:${sPort}`;
+        }
+      } catch {}
+    }
   }
 
   return "";
@@ -340,14 +371,108 @@ export const ExternalEnvVarsDrawer: React.FC<ExternalEnvVarsDrawerProps> = ({
             },
           });
         }
-      } else if (node.type === "webApp" && defaults.length > 0) {
-        const existingNames = new Set((node.data.envVars || []).map((v) => v.name));
+      } else if (node.type === "webApp") {
+        const allCanvasNodes = useBackendCanvasStore.getState().nodes;
+        const allCanvasEdges = useBackendCanvasStore.getState().edges;
+        const connectedServiceNodes: BackendNode[] = [];
+        const seenSrvIds = new Set<string>();
+
+        allCanvasEdges.forEach((e) => {
+          if (e.source === nodeId || e.target === nodeId) {
+            const otherId = e.source === nodeId ? e.target : e.source;
+            const other = allCanvasNodes.find((n) => n.id === otherId);
+            if (other && (other.type === "service" || other.type === "serverless" || other.type === "langgraph") && !seenSrvIds.has(other.id)) {
+              seenSrvIds.add(other.id);
+              connectedServiceNodes.push(other);
+            }
+          }
+        });
+
+        const isSingleWebApp = allCanvasNodes.filter((x) => x.type === "webApp").length === 1;
+        const pageIds = new Set<string>();
+        allCanvasEdges.forEach((e) => {
+          if (e.source === nodeId || e.target === nodeId) {
+            const otherId = e.source === nodeId ? e.target : e.source;
+            const other = allCanvasNodes.find((n) => n.id === otherId);
+            if (other && other.type === "webPage") {
+              pageIds.add(other.id);
+            }
+          }
+        });
+
+        allCanvasNodes.forEach((n) => {
+          if (n.type === "webPage" && (pageIds.has(n.id) || (pageIds.size === 0 && isSingleWebApp))) {
+            const allSteps: FrontendActionStepDraft[] = [
+              ...(n.data?.sections || []).flatMap((s) => (s.actions || []).flatMap((a) => a.actionSteps || [])),
+              ...(n.data?.events || []).flatMap((e) => e.actionSteps || []),
+              ...(n.data?.realtimeConnections || []).flatMap((c) => c.actionSteps || []),
+            ];
+            allSteps.forEach((st) => {
+              if (st?.type === "api_call" && st?.serviceNodeId && !seenSrvIds.has(st.serviceNodeId)) {
+                const sNode = allCanvasNodes.find((x) => x.id === st.serviceNodeId);
+                if (sNode) {
+                  seenSrvIds.add(sNode.id);
+                  connectedServiceNodes.push(sNode);
+                }
+              }
+            });
+
+            allCanvasEdges.forEach((e) => {
+              if (e.source === n.id || e.target === n.id) {
+                const oId = e.source === n.id ? e.target : e.source;
+                const oNode = allCanvasNodes.find((x) => x.id === oId);
+                if (oNode && (oNode.type === "service" || oNode.type === "serverless" || oNode.type === "langgraph") && !seenSrvIds.has(oNode.id)) {
+                  seenSrvIds.add(oNode.id);
+                  connectedServiceNodes.push(oNode);
+                }
+              }
+            });
+          }
+        });
+
+        // Clean up redundant non-public base URLs and legacy base URLs (e.g. without _SERVICE)
+        const redundantBaseNames = new Set(
+          connectedServiceNodes.flatMap((s) => {
+            const lbl = (s.data?.label || s.id || "service").trim();
+            const { envVarName, publicEnvVarName } = toServiceBaseUrlEnvName(lbl);
+            const rawPfx = toEnvVarName(lbl);
+            const legacyPub = `NEXT_PUBLIC_${rawPfx}_BASE_URL`;
+            const legacyNonPub = `${rawPfx}_BASE_URL`;
+            const toRemove = [envVarName, legacyNonPub];
+            if (legacyPub !== publicEnvVarName) {
+              toRemove.push(legacyPub);
+            }
+            return toRemove;
+          }),
+        );
+
+        const rawVars = node.data.envVars !== undefined ? node.data.envVars : defaults;
+        const currentVars = rawVars.filter((v: { name?: string }) => !redundantBaseNames.has(v.name || ""));
+        const hadRedundant = rawVars.length !== currentVars.length;
+        const existingNames = new Set(currentVars.map((v: { name?: string }) => v.name || ""));
         const missingDefaults = defaults.filter((d) => !existingNames.has(d.name));
-        if (missingDefaults.length > 0) {
+
+        const serviceVarsToAdd: { id: string; name: string; description?: string }[] = [];
+        connectedServiceNodes.forEach((srv) => {
+          const sLabel = (srv.data?.label || srv.id || "service").trim();
+          const { publicEnvVarName: pubName } = toServiceBaseUrlEnvName(sLabel);
+
+          if (!existingNames.has(pubName)) {
+            serviceVarsToAdd.push({
+              id: `env-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              name: pubName,
+              description: `Public base URL for ${sLabel}`,
+            });
+            existingNames.add(pubName);
+          }
+        });
+
+        const combinedToAdd = [...missingDefaults, ...serviceVarsToAdd];
+        if (combinedToAdd.length > 0 || hadRedundant) {
           updateNode(nodeId, {
             data: {
               ...node.data,
-              envVars: [...(node.data.envVars || []), ...missingDefaults],
+              envVars: [...currentVars, ...combinedToAdd],
             },
           });
         }
@@ -526,7 +651,7 @@ export const ExternalEnvVarsDrawer: React.FC<ExternalEnvVarsDrawerProps> = ({
                           const partnerNode = allCanvasNodes.find((n) => n.id === partnerId);
                           if (partnerNode) {
                             const partnerVars = partnerNode.data?.envVars || [];
-                            if (!partnerVars.some((pv: any) => pv.name === clean)) {
+                            if (!partnerVars.some((pv: { name?: string }) => pv.name === clean)) {
                               updateNode(partnerNode.id, {
                                 data: {
                                   ...partnerNode.data,

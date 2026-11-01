@@ -156,6 +156,9 @@ export interface LinkedEndpointInfo {
   method: string;
   path: string;
   fullUrl: string;
+  baseUrl?: string;
+  envVarName?: string;
+  publicEnvVarName?: string;
   requireAuth?: boolean;
   endpoint?: Endpoint;
 }

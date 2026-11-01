@@ -207,6 +207,15 @@ export function toEnvVarName(str: string): string {
   return env || "SERVICE";
 }
 
+export function toServiceBaseUrlEnvName(serviceName: string): { envVarName: string; publicEnvVarName: string } {
+  const raw = toEnvVarName(serviceName || "SERVICE");
+  const prefix = raw.endsWith("_SERVICE") ? raw : `${raw}_SERVICE`;
+  return {
+    envVarName: `${prefix}_BASE_URL`,
+    publicEnvVarName: `NEXT_PUBLIC_${prefix}_BASE_URL`,
+  };
+}
+
 export function toFolderName(label: string): string {
   if (!label) return "item";
   return label

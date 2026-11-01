@@ -110,6 +110,7 @@ export function generateEventComponent(
       storageConfig: resolvedStorageConfig,
       storeActionBinding: eventItem?.storeActionBinding,
       storeActionBindings: eventItem?.storeActionBindings,
+    serviceName,
     });
   }
 
@@ -126,6 +127,7 @@ export function generateEventComponent(
       libraries: eventItem?.libraries || [],
       storeActionBinding: eventItem?.storeActionBinding,
       storeActionBindings: eventItem?.storeActionBindings,
+    serviceName,
     });
   }
 
@@ -142,6 +144,7 @@ export function generateEventComponent(
     libraries: eventItem?.libraries || [],
     storeActionBinding: eventItem?.storeActionBinding,
     storeActionBindings: eventItem?.storeActionBindings,
+    serviceName,
   });
 }
 
