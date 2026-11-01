@@ -1,5 +1,6 @@
-export function generateTriggerLogsState(hasLogsSection: boolean): string {
+export function generateTriggerLogsState(hasLogsSection: boolean, hasStreamingActions: boolean): string {
   if (!hasLogsSection) return "";
+  const streamingField = hasStreamingActions ? `\n    isStreaming?: boolean;` : "";
   return `  const showDebugLogs =
     process.env.NEXT_PUBLIC_ENABLE_DEBUG_LOGS?.trim().toLowerCase() === "true" ||
     process.env.NEXT_PUBLIC_ENABLE_DEBUG_UI?.trim().toLowerCase() === "true";
@@ -13,15 +14,79 @@ export function generateTriggerLogsState(hasLogsSection: boolean): string {
     status?: number;
     payload?: unknown;
     data: unknown;
-    error?: string;
-    isStreaming?: boolean;
+    error?: string;${streamingField}
   }>>([]);
 
 `;
 }
 
-export function generateTriggerHandler(hasApiActions: boolean): string {
+export function generateTriggerHandler(hasApiActions: boolean, hasStreamingActions: boolean): string {
   if (!hasApiActions) return "";
+
+  if (!hasStreamingActions) {
+    // Slim handler for plain REST actions — no streaming callbacks
+    return `  const handleTriggerAction = async (
+    eventName: string,
+    eventType: string,
+    url: string,
+    method: string,
+    requireAuth?: boolean,
+    customHeaders?: Record<string, string>,
+    queryParams?: Record<string, string>,
+    requestBody?: Record<string, string | number | boolean | null | undefined>,
+  ): Promise<Record<string, string | number | boolean | null | undefined> | void> => {
+    const timestamp = new Date().toLocaleTimeString();
+    const logId = Math.random().toString(36).substring(2, 9);
+    try {
+      const result = await executeApiAction({
+        eventName,
+        eventType,
+        url,
+        method,
+        requireAuth,
+        customHeaders,
+        queryParams,
+        requestBody,
+      });
+      setTriggerLogs((prev) => [
+        {
+          id: logId,
+          eventName,
+          eventType,
+          timestamp,
+          url: result.url || result.targetUrl || url || "N/A",
+          method: method || "TRIGGER",
+          status: result.status,
+          payload: requestBody,
+          data: result.data,
+          error: result.error,
+        },
+        ...prev,
+      ]);
+      return (result.data && typeof result.data === "object" ? { ...result, ...(result.data as object) } : result) as unknown as Record<string, string | number | boolean | null | undefined>;
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Request failed";
+      setTriggerLogs((prev) => [
+        {
+          id: logId,
+          eventName,
+          eventType,
+          timestamp,
+          url: url || "N/A",
+          method: method || "TRIGGER",
+          error: errorMessage,
+          data: null,
+        },
+        ...prev,
+      ]);
+      return { error: errorMessage } as unknown as Record<string, string | number | boolean | null | undefined>;
+    }
+  };
+
+`;
+  }
+
+  // Full handler with streaming callbacks (SSE / LangGraph / WebSocket)
   return `  const handleTriggerAction = async (
     eventName: string,
     eventType: string,
@@ -177,9 +242,65 @@ export function generateTriggerLogsSection(options: {
   hasWs: boolean;
   hasWebRtc: boolean;
   hasRealtime: boolean;
+  hasStreamingActions: boolean;
 }): string {
-  const { hasLogsSection, hasSse, hasWs, hasWebRtc, hasRealtime } = options;
+  const { hasLogsSection, hasSse, hasWs, hasWebRtc, hasRealtime, hasStreamingActions } = options;
   if (!hasLogsSection) return "";
+
+  // Badge label in the log entry: streaming-aware vs simple REST
+  const logEntryBadge = hasStreamingActions
+    ? `{log.isStreaming ? (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded font-mono uppercase bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                            <span className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" />
+                            STREAMING
+                          </span>
+                        ) : log.eventType === "pageLoad" ? (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded font-mono uppercase bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30">
+                            PAGE LOAD
+                          </span>
+                        ) : log.eventType === "SSE" || (log.data && typeof log.data === "object" && "streamed" in log.data && Boolean(log.data.streamed)) ? (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded font-mono uppercase bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                            STREAM
+                          </span>
+                        ) : log.eventType === "WebSocket" ? (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded font-mono uppercase bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30">
+                            WS
+                          </span>
+                        ) : log.eventType === "WebRTC" ? (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded font-mono uppercase bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/30">
+                            RTC
+                          </span>
+                        ) : (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded font-mono uppercase bg-primary/10 text-primary border border-primary/20">
+                            {log.method || "API"}
+                          </span>
+                        )}`
+    : `{log.eventType === "pageLoad" ? (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded font-mono uppercase bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30">
+                            PAGE LOAD
+                          </span>
+                        ) : (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded font-mono uppercase bg-primary/10 text-primary border border-primary/20">
+                            {log.method || "API"}
+                          </span>
+                        )}`;
+
+  // Streaming cursor in the pre block — only when streaming is possible
+  const streamingCursor = hasStreamingActions
+    ? `
+                        {log.isStreaming && (
+                          <span className="inline-block w-1.5 h-3.5 ml-0.5 bg-primary animate-pulse align-middle" />
+                        )}`
+    : "";
+
+  // Data display — streaming responses may have a `.raw` field
+  const dataDisplay = hasStreamingActions
+    ? `{log.data && typeof log.data === "object" && "raw" in log.data && typeof log.data.raw === "string" && log.data.raw
+                          ? log.data.raw
+                          : typeof log.data === "string"
+                          ? log.data
+                          : JSON.stringify(log.data, null, 2)}`
+    : `{typeof log.data === "string" ? log.data : JSON.stringify(log.data, null, 2)}`;
 
   return `        {/* Section: Trigger Output Logs */}
         {showDebugLogs && (
@@ -223,32 +344,7 @@ export function generateTriggerLogsSection(options: {
                     <div className="flex items-center justify-between text-muted-foreground border-b border-border pb-2">
                       <div className="flex items-center gap-2">
                         <span className="font-semibold text-foreground">{log.eventName}</span>
-                        {log.isStreaming ? (
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded font-mono uppercase bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                            <span className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" />
-                            STREAMING
-                          </span>
-                        ) : log.eventType === "pageLoad" ? (
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded font-mono uppercase bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30">
-                            PAGE LOAD
-                          </span>
-                        ) : log.eventType === "SSE" || (log.data && typeof log.data === "object" && "streamed" in log.data && Boolean(log.data.streamed)) ? (
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded font-mono uppercase bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
-                            STREAM
-                          </span>
-                        ) : log.eventType === "WebSocket" ? (
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded font-mono uppercase bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30">
-                            WS
-                          </span>
-                        ) : log.eventType === "WebRTC" ? (
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded font-mono uppercase bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/30">
-                            RTC
-                          </span>
-                        ) : (
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded font-mono uppercase bg-primary/10 text-primary border border-primary/20">
-                            {log.method || "API"}
-                          </span>
-                        )}
+                        ${logEntryBadge}
                         {log.status && (
                           <span className="text-[10px] text-muted-foreground font-mono">
                             {log.status}
@@ -263,14 +359,7 @@ export function generateTriggerLogsSection(options: {
                       </div>
                     ) : (
                       <pre className="text-foreground/90 bg-background/80 p-3 rounded border border-border/50 overflow-x-auto whitespace-pre-wrap font-mono text-xs">
-                        {log.data && typeof log.data === "object" && "raw" in log.data && typeof log.data.raw === "string" && log.data.raw
-                          ? log.data.raw
-                          : typeof log.data === "string"
-                          ? log.data
-                          : JSON.stringify(log.data, null, 2)}
-                        {log.isStreaming && (
-                          <span className="inline-block w-1.5 h-3.5 ml-0.5 bg-primary animate-pulse align-middle" />
-                        )}
+                        ${dataDisplay}${streamingCursor}
                       </pre>
                     )}
                   </div>
