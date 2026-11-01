@@ -692,24 +692,54 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
         actionSteps: [],
       };
 
+      const isPageLoad = eventType === "pageLoad";
+      const isSubmit = eventType === "submit";
+
       const updatedActions = [...(currentTargetSec.actions || []), newAction];
-      const updatedElements = currentElements.map((el) =>
-        el.id === elId
-          ? {
-              ...el,
-              actionId: newActId,
-              actionName,
-            }
-          : el,
-      );
+      const updatedElements = currentElements.map((el) => {
+        if (el.id !== elId) return el;
+        const currentPropMappings = { ...(el.propMappings || {}) };
+        if (isPageLoad) {
+          currentPropMappings.chatOnFetchActionId = newActId;
+          currentPropMappings.chatOnFetchActionName = actionName;
+          return {
+            ...el,
+            propMappings: currentPropMappings,
+          };
+        } else {
+          if (isSubmit || el.elementType === "chat") {
+            currentPropMappings.chatOnSendActionId = newActId;
+            currentPropMappings.chatOnSendActionName = actionName;
+          }
+          return {
+            ...el,
+            actionId: newActId,
+            actionName,
+            triggerEvent: eventType || el.triggerEvent || "click",
+            propMappings: currentPropMappings,
+          };
+        }
+      });
 
       const updatedBindings = (currentTargetSec.componentBindings || []).map((c) =>
         c.id === id
           ? {
               ...c,
               elements: updatedElements,
-              actionId: updatedElements[0]?.actionId,
-              actionName: updatedElements[0]?.actionName,
+              propMappings: {
+                ...(c.propMappings || {}),
+                ...(isPageLoad
+                  ? {
+                      chatOnFetchActionId: newActId,
+                      chatOnFetchActionName: actionName,
+                    }
+                  : {
+                      chatOnSendActionId: newActId,
+                      chatOnSendActionName: actionName,
+                    }),
+              },
+              actionId: isPageLoad ? c.actionId : (updatedElements[0]?.actionId || newActId),
+              actionName: isPageLoad ? c.actionName : (updatedElements[0]?.actionName || actionName),
             }
           : c,
       );
@@ -737,6 +767,326 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
       handleCreateActionForElement(activeElement.id, name, eventType);
     },
     [activeElement.id, handleCreateActionForElement],
+  );
+
+  const handleUpdateChatAction = useCallback(
+    (slot: "fetch" | "send", actId?: string, actName?: string) => {
+      const currentParent = useBackendCanvasStore
+        .getState()
+        .nodes.find((n) => n.id === nodeId);
+      if (!currentParent) return;
+
+      const currentSections: PageSection[] = currentParent.data?.sections || [];
+      const currentTargetSec =
+        currentSections.find((s) => (s.componentBindings || []).some((c) => c.id === id)) ||
+        currentSections.find((s) => s.id === sectionId) ||
+        currentSections[0];
+      if (!currentTargetSec) return;
+
+      const currentProps = {
+        ...(componentBinding?.propMappings || {}),
+        ...(activeElement.propMappings || {}),
+      };
+
+      const updatedProps: ComponentPropMappings =
+        slot === "fetch"
+          ? {
+              ...currentProps,
+              chatOnFetchActionId: actId,
+              chatOnFetchActionName: actName,
+            }
+          : {
+              ...currentProps,
+              chatOnSendActionId: actId,
+              chatOnSendActionName: actName,
+            };
+
+      const updatedElements = currentElements.map((el) => {
+        if (el.id !== activeElement.id) return el;
+        if (slot === "fetch") {
+          return {
+            ...el,
+            propMappings: updatedProps,
+          };
+        } else {
+          return {
+            ...el,
+            actionId: actId,
+            actionName: actName,
+            triggerEvent: "submit",
+            propMappings: updatedProps,
+          };
+        }
+      });
+
+      const updatedBindings = (currentTargetSec.componentBindings || []).map((c) =>
+        c.id === id
+          ? {
+              ...c,
+              elements: updatedElements,
+              propMappings: updatedProps,
+              ...(slot === "send"
+                ? {
+                    actionId: actId,
+                    actionName: actName,
+                    triggerEvent: "submit",
+                  }
+                : {}),
+            }
+          : c,
+      );
+
+      const updatedSections = currentSections.map((sec) =>
+        sec.id === currentTargetSec.id
+          ? { ...sec, componentBindings: updatedBindings }
+          : sec,
+      );
+
+      updateNode(nodeId, {
+        data: {
+          ...currentParent.data,
+          sections: updatedSections,
+        },
+      });
+
+      toast.success(
+        slot === "fetch"
+          ? actName
+            ? `Bound history hydration to "${actName}"`
+            : "Removed history hydration action"
+          : actName
+          ? `Bound prompt submission to "${actName}"`
+          : "Removed prompt submission action",
+      );
+    },
+    [nodeId, id, sectionId, activeElement, currentElements, componentBinding?.propMappings, updateNode],
+  );
+
+  const handleQuickWireChatActions = useCallback(() => {
+    const currentParent = useBackendCanvasStore
+      .getState()
+      .nodes.find((n) => n.id === nodeId);
+    if (!currentParent) return;
+
+    const currentSections: PageSection[] = currentParent.data?.sections || [];
+    const currentTargetSec =
+      currentSections.find((s) => (s.componentBindings || []).some((c) => c.id === id)) ||
+      currentSections.find((s) => s.id === sectionId) ||
+      currentSections[0];
+    if (!currentTargetSec) return;
+
+    const currentBinding = currentTargetSec.componentBindings?.find((c) => c.id === id);
+    if (!currentBinding) return;
+
+    const existingActions = [...(currentTargetSec.actions || [])];
+    const newActionsToAdd: UIEventItem[] = [];
+
+    // 1. Fetch History action (pageLoad)
+    let fetchAct = existingActions.find(
+      (a) => a.name === "fetchConversationHistory" || (a.event === "pageLoad" && a.name.toLowerCase().includes("chat")),
+    );
+    if (!fetchAct) {
+      const anyPageLoad = existingActions.find((a) => a.name === "pageLoad" || a.event === "pageLoad");
+      if (anyPageLoad) {
+        fetchAct = anyPageLoad;
+      } else {
+        const fetchActId = `act-${Date.now()}-fetch-${Math.random().toString(36).substring(2, 5)}`;
+        fetchAct = {
+          id: fetchActId,
+          name: "fetchConversationHistory",
+          event: "pageLoad",
+          actionSteps: [],
+        };
+        newActionsToAdd.push(fetchAct);
+      }
+    }
+
+    // 2. Send Message action (submit)
+    let sendAct = existingActions.find(
+      (a) =>
+        a.id === activeElement.actionId ||
+        a.name === "sendMessage" ||
+        a.name === "chatSubmit" ||
+        (a.event === "submit" && a.name.toLowerCase().includes("message")),
+    );
+    if (!sendAct) {
+      const sendActId = `act-${Date.now()}-send-${Math.random().toString(36).substring(2, 5)}`;
+      sendAct = {
+        id: sendActId,
+        name: "sendMessage",
+        event: "submit",
+        actionSteps: [],
+      };
+      newActionsToAdd.push(sendAct);
+    }
+
+    const allActions = [...existingActions, ...newActionsToAdd];
+
+    // 3. Realtime SSE streaming connection
+    const existingConnections = currentParent.data?.realtimeConnections || [];
+    let streamConn = existingConnections.find(
+      (c: any) =>
+        c.eventName === "chat_stream" ||
+        c.eventName === "agent_stream" ||
+        c.storeActionBinding?.targetFieldName === "messages",
+    );
+    let nextRealtimeConnections = [...existingConnections];
+    if (!streamConn) {
+      const newConnId = `rtc-chat-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`;
+      streamConn = {
+        id: newConnId,
+        protocol: "SSE",
+        eventName: "chat_stream",
+        streamUrl: "/api/chat/stream",
+        description: "AI Assistant Response Stream",
+        storeActionBinding: {
+          storeNodeId: activeSelectedStore?.id,
+          storeName: activeElement.valueStoreName || "ChatStore",
+          targetFieldName: activeElement.valueStateName || "messages",
+          actionType: "append",
+          updateSource: "full_message",
+        },
+      };
+      nextRealtimeConnections.push(streamConn);
+    }
+
+    const currentProps = {
+      ...(componentBinding?.propMappings || {}),
+      ...(activeElement.propMappings || {}),
+    };
+
+    const updatedProps: ComponentPropMappings = {
+      ...currentProps,
+      chatOnSendActionId: sendAct.id,
+      chatOnSendActionName: sendAct.name,
+      chatOnFetchActionId: fetchAct.id,
+      chatOnFetchActionName: fetchAct.name,
+      chatStreamConnectionId: streamConn.id,
+      chatStreamProtocol: streamConn.protocol as any,
+      chatStreamEventName: streamConn.eventName,
+    };
+
+    const updatedElements = currentElements.map((el) => {
+      if (el.id !== activeElement.id) return el;
+      return {
+        ...el,
+        actionId: sendAct!.id,
+        actionName: sendAct!.name,
+        triggerEvent: "submit",
+        propMappings: updatedProps,
+      };
+    });
+
+    const updatedBindings = (currentTargetSec.componentBindings || []).map((c) =>
+      c.id === id
+        ? {
+            ...c,
+            actionId: sendAct!.id,
+            actionName: sendAct!.name,
+            triggerEvent: "submit",
+            elements: updatedElements,
+            propMappings: updatedProps,
+          }
+        : c,
+    );
+
+    const updatedSections = currentSections.map((sec) =>
+      sec.id === currentTargetSec.id
+        ? { ...sec, actions: allActions, componentBindings: updatedBindings }
+        : sec,
+    );
+
+    updateNode(nodeId, {
+      data: {
+        ...currentParent.data,
+        sections: updatedSections,
+        realtimeConnections: nextRealtimeConnections,
+      },
+    });
+
+    toast.success(
+      `Wired Complete Chat Pipeline: "${fetchAct.name}" (onMount), "${sendAct.name}" (onSend), & SSE Stream!`,
+    );
+  }, [nodeId, id, sectionId, activeElement, currentElements, componentBinding, activeSelectedStore, updateNode]);
+
+  const handleQuickWireChatStreamConnection = useCallback(() => {
+    const currentParent = useBackendCanvasStore
+      .getState()
+      .nodes.find((n) => n.id === nodeId);
+    if (!currentParent) return;
+
+    const existingConnections = currentParent.data?.realtimeConnections || [];
+    let streamConn = existingConnections.find(
+      (c: any) =>
+        c.id === activePropMappings.chatStreamConnectionId ||
+        c.eventName === "chat_stream" ||
+        c.eventName === "agent_stream" ||
+        c.storeActionBinding?.targetFieldName === "messages" ||
+        c.description?.toLowerCase().includes("chat"),
+    );
+
+    let updatedConnections = [...existingConnections];
+
+    if (!streamConn) {
+      const newConnId = `rtc-chat-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`;
+      streamConn = {
+        id: newConnId,
+        protocol: "SSE",
+        eventName: "chat_stream",
+        streamUrl: "/api/chat/stream",
+        description: "AI Assistant Response Stream",
+        storeActionBinding: {
+          storeNodeId: activeSelectedStore?.id,
+          storeName: activeElement.valueStoreName || "ChatStore",
+          targetFieldName: activeElement.valueStateName || "messages",
+          actionType: "append",
+          updateSource: "full_message",
+        },
+      };
+      updatedConnections.push(streamConn);
+    }
+
+    handleUpdateActivePropMapping({
+      chatStreamConnectionId: streamConn.id,
+      chatStreamProtocol: streamConn.protocol as any,
+      chatStreamEventName: streamConn.eventName,
+    });
+
+    updateNode(nodeId, {
+      data: {
+        ...currentParent.data,
+        realtimeConnections: updatedConnections,
+      },
+    });
+
+    toast.success(`Wired Realtime SSE stream "${streamConn.eventName}" to messages!`);
+  }, [nodeId, activePropMappings.chatStreamConnectionId, activeSelectedStore, activeElement, handleUpdateActivePropMapping, updateNode]);
+
+  const handleUpdateChatStreamConnection = useCallback(
+    (connId?: string) => {
+      const currentParent = useBackendCanvasStore
+        .getState()
+        .nodes.find((n) => n.id === nodeId);
+      const conn = (currentParent?.data?.realtimeConnections || []).find((c: any) => c.id === connId);
+      handleUpdateActivePropMapping({
+        chatStreamConnectionId: connId,
+        chatStreamProtocol: conn?.protocol as any,
+        chatStreamEventName: conn?.eventName,
+      });
+      toast.success(connId ? `Linked stream "${conn?.eventName || conn?.protocol || "stream"}"` : "Detached stream connection");
+    },
+    [nodeId, handleUpdateActivePropMapping],
+  );
+
+  const handleOpenRealtimeConnectionConfig = useCallback(
+    (connId: string) => {
+      setActiveConfigItem({
+        type: "realtimeConnection",
+        id: connId,
+        nodeId,
+      });
+    },
+    [setActiveConfigItem, nodeId],
   );
 
   const handleCreateNavStateVariable = useCallback(
@@ -1362,6 +1712,7 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
         onCreateAction={handleCreateActiveElementAction}
         onCreateNavStateVariable={handleCreateNavStateVariable}
         onCreateChatMessageStateVariable={handleCreateChatMessageStateVariable}
+        onQuickWireChatActions={handleQuickWireChatActions}
       />
 
       <Separator className="bg-border/50" />
@@ -1377,6 +1728,17 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
         onUpdate={(changes) => handleUpdateElement(activeElement.id, changes)}
         onCreateAction={handleCreateActiveElementAction}
         onOpenActionFlow={handleOpenActionFlow}
+        chatOnFetchActionId={activePropMappings.chatOnFetchActionId}
+        chatOnFetchActionName={activePropMappings.chatOnFetchActionName}
+        chatOnSendActionId={activePropMappings.chatOnSendActionId || activeElement.actionId}
+        chatOnSendActionName={activePropMappings.chatOnSendActionName || activeElement.actionName}
+        onUpdateChatAction={handleUpdateChatAction}
+        onQuickWireChatActions={handleQuickWireChatActions}
+        realtimeConnections={parentNode.data?.realtimeConnections || []}
+        chatStreamConnectionId={activePropMappings.chatStreamConnectionId}
+        onUpdateChatStreamConnection={handleUpdateChatStreamConnection}
+        onQuickWireChatStreamConnection={handleQuickWireChatStreamConnection}
+        onOpenRealtimeConnectionConfig={handleOpenRealtimeConnectionConfig}
       />
 
       <Separator className="bg-border/50" />

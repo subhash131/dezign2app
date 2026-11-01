@@ -252,6 +252,12 @@ export interface ComponentPropMappings {
   chatInputStoreId?: string;
   chatInputStoreName?: string;
   chatOnSendActionId?: string;
+  chatOnSendActionName?: string;
+  chatOnFetchActionId?: string;
+  chatOnFetchActionName?: string;
+  chatStreamConnectionId?: string;
+  chatStreamProtocol?: "SSE" | "WEBSOCKET";
+  chatStreamEventName?: string;
 
   // Custom props
   customProps?: Record<string, string>;

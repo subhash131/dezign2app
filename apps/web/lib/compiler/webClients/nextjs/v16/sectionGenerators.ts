@@ -1475,8 +1475,9 @@ ${authButtonsJsx}
       const autoScroll = item.propMappings?.chatAutoScroll !== false ? "true" : "false";
       const showAvatars = item.propMappings?.chatShowAvatars !== false ? "true" : "false";
 
-      const onSendProp = item.actionName
-        ? `\n          onSendMessage={async (text) => {\n            if (typeof onTrigger === "function") {\n              await onTrigger("${item.actionName}", "submit", "", "POST", false, {}, {}, { message: text });\n            }\n          }}`
+      const sendActionName = item.propMappings?.chatOnSendActionName || item.actionName;
+      const onSendProp = sendActionName
+        ? `\n          onSendMessage={async (text) => {\n            if (typeof onTrigger === "function") {\n              await onTrigger("${sendActionName}", "submit", "", "POST", false, {}, {}, { message: text });\n            }\n          }}`
         : "";
 
       const messagesProp = valVar ? `\n          messages={Array.isArray(${valVar}) ? ${valVar} : undefined}` : "";
