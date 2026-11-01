@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Brain, Compass, Database, Flame, Key, Layers, Plus, Radio, Sparkles, Trash2 } from "lucide-react";
+import { Brain, Coins, Compass, Database, Flame, Key, Layers, Plus, Radio, Sparkles, Trash2 } from "lucide-react";
 import { BackendNode } from "@workspace/canvas/types";
 import { Button } from "@workspace/ui/components/button";
 import { Label } from "@workspace/ui/components/label";
@@ -78,6 +78,8 @@ export interface StreamingAndOutputSectionProps {
   onResetKafkaKeyBinding: () => void;
   onRedisKeyBindingChange: (updated: StepBinding) => void;
   onResetRedisKeyBinding: () => void;
+  trackTokenUsage?: boolean;
+  onToggleTrackTokenUsage?: (enabled: boolean) => void;
 }
 
 export const StreamingAndOutputSection: React.FC<StreamingAndOutputSectionProps> = ({
@@ -132,6 +134,8 @@ export const StreamingAndOutputSection: React.FC<StreamingAndOutputSectionProps>
   onResetKafkaKeyBinding,
   onRedisKeyBindingChange,
   onResetRedisKeyBinding,
+  trackTokenUsage = false,
+  onToggleTrackTokenUsage,
 }) => {
   const effectiveStreamModes = streamModes && streamModes.length > 0 ? streamModes : ["messages"];
 
@@ -844,6 +848,50 @@ export const StreamingAndOutputSection: React.FC<StreamingAndOutputSectionProps>
           )}
         </div>
       )}
+
+      {/* Token Usage Tracking */}
+      <div className="flex flex-col gap-2 pt-2.5 border-t border-border/30">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Coins
+              className={`w-3.5 h-3.5 ${
+                trackTokenUsage ? "text-amber-400" : "text-muted-foreground"
+              }`}
+            />
+            <div className="flex flex-col">
+              <Label className="text-[11px] font-medium text-foreground cursor-pointer">
+                Track Token Usage
+              </Label>
+              <span className="text-[9.5px] text-muted-foreground leading-tight">
+                Extract input, output, and total tokens per invocation
+              </span>
+            </div>
+          </div>
+          <Switch
+            checked={Boolean(trackTokenUsage)}
+            onCheckedChange={(checked) => onToggleTrackTokenUsage?.(checked)}
+          />
+        </div>
+
+        {trackTokenUsage && (
+          <div className="flex flex-col gap-1.5 p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[10px] text-amber-200">
+            <div className="flex items-center justify-between font-medium">
+              <span>Available in step output & downstream steps:</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5 font-mono text-[9px]">
+              <span className="px-1.5 py-0.5 rounded bg-background/60 border border-amber-500/30 text-amber-300">
+                usage.input_tokens
+              </span>
+              <span className="px-1.5 py-0.5 rounded bg-background/60 border border-amber-500/30 text-amber-300">
+                usage.output_tokens
+              </span>
+              <span className="px-1.5 py-0.5 rounded bg-background/60 border border-amber-500/30 text-amber-300">
+                usage.total_tokens
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

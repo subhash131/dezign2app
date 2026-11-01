@@ -213,15 +213,26 @@ export function resolveRealtimePayloadPaths({
       addPath("mode", "string", "Stream mode ('custom')");
     }
 
-    // Multi-mode metadata
-    if (activeModes.length > 1) {
-      addPath("type", "string", "Chunk type ('token' | 'reasoning' | 'update' | 'values' | 'custom')");
-      addPath("mode", "string", "Active stream mode");
-    }
+    // Event & Chunk metadata
+    addPath("type", "string", "Chunk/event type ('stream_start' | 'token' | 'reasoning' | 'tool_call' | 'update' | 'values' | 'custom' | 'usage' | 'stream_end')");
+    addPath("mode", "string", "Active stream mode");
+
+    // Tool calls
+    addPath("tool_call", "any", "Invoked tool call metadata");
+    addPath("tool_calls", "any[]", "List of tool calls executed during streaming");
+
+    // Token usage metrics
+    addPath("usage", "object", "Token usage metrics ({ input_tokens, output_tokens, total_tokens })");
+    addPath("usage.input_tokens", "number", "Input / prompt tokens consumed");
+    addPath("usage.output_tokens", "number", "Output / completion tokens consumed");
+    addPath("usage.total_tokens", "number", "Total tokens consumed");
 
     // Stream status & convenience helpers
     addPath("done", "boolean", "Stream completion indicator (true when done)");
     addPath("content", "string", "Accumulated text content from streamed tokens");
+    addPath("response", "string", "Accumulated text response");
+    addPath("threadId", "string", "Active session / conversation thread ID");
+    addPath("thread_id", "string", "Active session / conversation thread ID");
     addPath("raw", "string", "Raw incoming stream event chunk");
 
     return paths;

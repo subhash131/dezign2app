@@ -45,6 +45,26 @@ export function generateTriggerHandler(hasApiActions: boolean): string {
         customHeaders,
         queryParams,
         requestBody,
+        onStreamStart: (info) => {
+          if (!streamInitialized) {
+            streamInitialized = true;
+            setTriggerLogs((prev) => [
+              {
+                id: logId,
+                eventName,
+                eventType: "SSE",
+                timestamp,
+                url: url || "N/A",
+                method: method || "TRIGGER",
+                status: 200,
+                payload: requestBody,
+                data: { streamed: true, threadId: info?.threadId, done: false },
+                isStreaming: true,
+              },
+              ...prev,
+            ]);
+          }
+        },
         onStream: (streamData) => {
           if (!streamInitialized) {
             streamInitialized = true;
@@ -72,6 +92,24 @@ export function generateTriggerHandler(hasApiActions: boolean): string {
               ),
             );
           }
+        },
+        onStreamEnd: (finalData) => {
+          setTriggerLogs((prev) =>
+            prev.map((log) =>
+              log.id === logId
+                ? { ...log, data: finalData, isStreaming: false }
+                : log,
+            ),
+          );
+        },
+        onStreamError: (err) => {
+          setTriggerLogs((prev) =>
+            prev.map((log) =>
+              log.id === logId
+                ? { ...log, error: err instanceof Error ? err.message : String(err), isStreaming: false }
+                : log,
+            ),
+          );
         },
       });
 

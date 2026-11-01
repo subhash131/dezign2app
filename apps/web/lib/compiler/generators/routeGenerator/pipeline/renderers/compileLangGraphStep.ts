@@ -124,6 +124,7 @@ export function renderLangGraphInvokeStep(
     langGraphOutputMode = "full_state",
     langGraphOutputFields = [],
     langGraphTargetNodeId,
+    langGraphTrackTokenUsage,
   } = step;
 
   const rawLines: string[] = [];
@@ -306,6 +307,15 @@ export function renderLangGraphInvokeStep(
       rawLines.push(`  res.flushHeaders();`);
       rawLines.push(`}`);
       rawLines.push(
+        `const ${stepPrefix}TokenUsage = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };`,
+        `let ${outputVariable}Content = "";`,
+      );
+      if (!isRaw) {
+        rawLines.push(
+          `res.write(\`${sseEvt}data: \${JSON.stringify({ type: "stream_start", threadId: ${threadIdExpr || "undefined"} })}\\n\\n\`);`,
+        );
+      }
+      rawLines.push(
         `const stream = await ${graphVar}.stream(agentState, ${streamConfigOptions});`,
       );
       rawLines.push(`for await (const chunk of stream) {`);
@@ -376,6 +386,21 @@ export function renderLangGraphInvokeStep(
       rawLines.push(
         `    const token = textToken ?? (typeof payload === "string" ? payload : (typeof payload === "object" && payload !== null && "content" in payload ? payload.content : undefined));`,
       );
+      if (langGraphTrackTokenUsage) {
+        rawLines.push(
+          `    const _chunkUsage = (messageChunk as any)?.usage_metadata || (messageChunk as any)?.response_metadata?.token_usage;`,
+          `    if (_chunkUsage) {`,
+          `      const _in = Number(_chunkUsage.input_tokens ?? _chunkUsage.prompt_tokens ?? 0) || 0;`,
+          `      const _out = Number(_chunkUsage.output_tokens ?? _chunkUsage.completion_tokens ?? 0) || 0;`,
+          `      if (_in > 0) ${stepPrefix}TokenUsage.input_tokens = _in;`,
+          `      if (_out > 0) ${stepPrefix}TokenUsage.output_tokens = _out;`,
+          `      ${stepPrefix}TokenUsage.total_tokens = ${stepPrefix}TokenUsage.input_tokens + ${stepPrefix}TokenUsage.output_tokens;`,
+          `    } else if (token !== undefined && token !== "") {`,
+          `      ${stepPrefix}TokenUsage.output_tokens += 1;`,
+          `      ${stepPrefix}TokenUsage.total_tokens = ${stepPrefix}TokenUsage.input_tokens + ${stepPrefix}TokenUsage.output_tokens;`,
+          `    }`,
+        );
+      }
       if (langGraphStreamingFields.length > 0) {
         const allowedFields = JSON.stringify(langGraphStreamingFields);
         rawLines.push(`    if (${allowedFields}.includes(nodeName || "")) {`);
@@ -389,6 +414,7 @@ export function renderLangGraphInvokeStep(
           rawLines.push(`      }`);
         }
         rawLines.push(`      if (token !== undefined && token !== "") {`);
+        rawLines.push(`        ${outputVariable}Content += typeof token === "string" ? token : JSON.stringify(token);`);
         rawLines.push(`        ${isRaw ? 'res.write(typeof token === "string" ? token : JSON.stringify(token));' : `res.write(\`${sseEvt}data: \${JSON.stringify({ token, node: nodeName })}\\n\\n\`);`}`);
         rawLines.push(`      }`);
         rawLines.push(`    }`);
@@ -403,9 +429,18 @@ export function renderLangGraphInvokeStep(
           rawLines.push(`    }`);
         }
         rawLines.push(`    if (token !== undefined && token !== "") {`);
+        rawLines.push(`      ${outputVariable}Content += typeof token === "string" ? token : JSON.stringify(token);`);
         rawLines.push(`      ${isRaw ? 'res.write(typeof token === "string" ? token : JSON.stringify(token));' : `res.write(\`${sseEvt}data: \${JSON.stringify({ token, node: nodeName })}\\n\\n\`);`}`);
         rawLines.push(`    }`);
       }
+      rawLines.push(
+        `    const _toolCalls = (messageChunk as any)?.tool_calls || (messageChunk as any)?.tool_call_chunks;`,
+        `    if (Array.isArray(_toolCalls) && _toolCalls.length > 0) {`,
+        isRaw
+          ? `      res.write(JSON.stringify({ type: "tool_call", tool_calls: _toolCalls }));`
+          : `      res.write(\`${sseEvt}data: \${JSON.stringify({ type: "tool_call", tool_calls: _toolCalls, node: nodeName })}\\n\\n\`);`,
+        `    }`,
+      );
       rawLines.push(`  } else if (mode === "updates") {`);
       rawLines.push(`    const nodeName = typeof payload === "object" && payload !== null ? Object.keys(payload)[0] : undefined;`);
       if (langGraphStreamingFields.length > 0) {
@@ -443,10 +478,24 @@ export function renderLangGraphInvokeStep(
       rawLines.push(`}`);
       rawLines.push(`if (!res.writableEnded && !res.destroyed) {`);
       if (!isRaw) {
+        if (langGraphTrackTokenUsage) {
+          rawLines.push(`  res.write(\`${sseEvt}data: \${JSON.stringify({ type: "usage", usage: ${stepPrefix}TokenUsage })}\\n\\n\`);`);
+        }
+        rawLines.push(`  res.write(\`${sseEvt}data: \${JSON.stringify({ type: "stream_end", done: true, content: ${outputVariable}Content, usage: ${stepPrefix}TokenUsage, threadId: ${threadIdExpr || "undefined"} })}\\n\\n\`);`);
         rawLines.push(`  res.write("${sseEvt}data: [DONE]\\n\\n");`);
       }
       rawLines.push(`  res.end();`);
       rawLines.push(`}`);
+      if (outputVariable) {
+        rawLines.push(`const ${outputVariable} = {
+  streamed: true,
+  protocol: "${streamProtocol}",
+  response: ${outputVariable}Content,
+  content: ${outputVariable}Content,
+  usage: ${stepPrefix}TokenUsage,
+  threadId: ${threadIdExpr || "undefined"},
+};`);
+      }
     } else if (streamProtocol === "websocket") {
       const roomExpr = step.langGraphStreamingRoom
         ? resolvePathAccessor(step.langGraphStreamingRoom, ctx)
@@ -457,6 +506,13 @@ export function renderLangGraphInvokeStep(
         rawLines.push(...messagesInitLines);
       }
       rawLines.push(`const agentState = ${stateInit};`);
+      rawLines.push(
+        `const ${stepPrefix}TokenUsage = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };`,
+        `let ${outputVariable}Content = "";`,
+      );
+      rawLines.push(
+        `wsBroadcast("agent_stream", { type: "stream_start", threadId: ${threadIdExpr || "undefined"}, done: false }, ${roomExpr});`,
+      );
       rawLines.push(
         `const stream = await ${graphVar}.stream(agentState, ${streamConfigOptions});`,
       );
@@ -487,6 +543,21 @@ export function renderLangGraphInvokeStep(
       rawLines.push(
         `    const token = (typeof messageChunk === "object" && messageChunk !== null && "content" in messageChunk && messageChunk.content !== undefined ? messageChunk.content : undefined) ?? (typeof chunk === "string" ? chunk : (typeof chunk === "object" && chunk !== null && "content" in chunk && chunk.content !== undefined ? chunk.content : chunk));`,
       );
+      if (langGraphTrackTokenUsage) {
+        rawLines.push(
+          `    const _chunkUsage = (messageChunk as any)?.usage_metadata || (messageChunk as any)?.response_metadata?.token_usage;`,
+          `    if (_chunkUsage) {`,
+          `      const _in = Number(_chunkUsage.input_tokens ?? _chunkUsage.prompt_tokens ?? 0) || 0;`,
+          `      const _out = Number(_chunkUsage.output_tokens ?? _chunkUsage.completion_tokens ?? 0) || 0;`,
+          `      if (_in > 0) ${stepPrefix}TokenUsage.input_tokens = _in;`,
+          `      if (_out > 0) ${stepPrefix}TokenUsage.output_tokens = _out;`,
+          `      ${stepPrefix}TokenUsage.total_tokens = ${stepPrefix}TokenUsage.input_tokens + ${stepPrefix}TokenUsage.output_tokens;`,
+          `    } else if (token !== undefined && token !== "") {`,
+          `      ${stepPrefix}TokenUsage.output_tokens += 1;`,
+          `      ${stepPrefix}TokenUsage.total_tokens = ${stepPrefix}TokenUsage.input_tokens + ${stepPrefix}TokenUsage.output_tokens;`,
+          `    }`,
+        );
+      }
       rawLines.push(
         `    const nodeName = typeof metadata === "object" && metadata !== null && "langgraph_node" in metadata ? metadata.langgraph_node : undefined;`,
       );
@@ -494,6 +565,7 @@ export function renderLangGraphInvokeStep(
         const allowedFields = JSON.stringify(langGraphStreamingFields);
         rawLines.push(`    if (${allowedFields}.includes(nodeName || "")) {`);
         rawLines.push(`      if (token !== undefined && token !== "") {`);
+        rawLines.push(`        ${outputVariable}Content += typeof token === "string" ? token : JSON.stringify(token);`);
         rawLines.push(
           `        wsBroadcast("agent_stream", { token, node: nodeName, done: false }, ${roomExpr});`,
         );
@@ -501,11 +573,18 @@ export function renderLangGraphInvokeStep(
         rawLines.push(`    }`);
       } else {
         rawLines.push(`    if (token !== undefined && token !== "") {`);
+        rawLines.push(`      ${outputVariable}Content += typeof token === "string" ? token : JSON.stringify(token);`);
         rawLines.push(
           `      wsBroadcast("agent_stream", { token, node: nodeName, done: false }, ${roomExpr});`,
         );
         rawLines.push(`    }`);
       }
+      rawLines.push(
+        `    const _wsToolCalls = (messageChunk as any)?.tool_calls || (messageChunk as any)?.tool_call_chunks;`,
+        `    if (Array.isArray(_wsToolCalls) && _wsToolCalls.length > 0) {`,
+        `      wsBroadcast("agent_stream", { type: "tool_call", tool_calls: _wsToolCalls, node: nodeName, done: false }, ${roomExpr});`,
+        `    }`,
+      );
       rawLines.push(`  } else if (mode === "updates") {`);
       rawLines.push(`    const nodeName = typeof payload === "object" && payload !== null ? Object.keys(payload)[0] : undefined;`);
       rawLines.push(`    wsBroadcast("agent_stream", { type: "update", mode: "updates", node: nodeName, data: payload, done: false }, ${roomExpr});`);
@@ -513,9 +592,25 @@ export function renderLangGraphInvokeStep(
       rawLines.push(`    wsBroadcast("agent_stream", { type: mode, mode, data: payload, done: false }, ${roomExpr});`);
       rawLines.push(`  }`);
       rawLines.push(`}`);
+      if (langGraphTrackTokenUsage) {
+        rawLines.push(
+          `wsBroadcast("agent_stream", { type: "usage", usage: ${stepPrefix}TokenUsage, done: false }, ${roomExpr});`,
+        );
+      }
+      rawLines.push(
+        `wsBroadcast("agent_stream", { type: "stream_end", done: true, content: ${outputVariable}Content, usage: ${stepPrefix}TokenUsage, threadId: ${threadIdExpr || "undefined"} }, ${roomExpr});`,
+      );
       rawLines.push(`wsBroadcast("agent_stream", { done: true }, ${roomExpr});`);
       if (outputVariable) {
-        rawLines.push(`const ${outputVariable} = { streamed: true, protocol: "websocket", room: ${roomExpr} };`);
+        rawLines.push(`const ${outputVariable} = {
+  streamed: true,
+  protocol: "websocket",
+  room: ${roomExpr},
+  response: ${outputVariable}Content,
+  content: ${outputVariable}Content,
+  usage: ${stepPrefix}TokenUsage,
+  threadId: ${threadIdExpr || "undefined"},
+};`);
       }
     } else if (streamProtocol === "kafka") {
       const topicExpr = JSON.stringify(step.langGraphStreamingKafkaTopic || `${toVarName(step.name || "agent")}-tokens`);
@@ -528,6 +623,13 @@ export function renderLangGraphInvokeStep(
         rawLines.push(...messagesInitLines);
       }
       rawLines.push(`const agentState = ${stateInit};`);
+      rawLines.push(
+        `const ${stepPrefix}TokenUsage = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };`,
+        `let ${outputVariable}Content = "";`,
+      );
+      rawLines.push(
+        `await publishKafkaEvent(${topicExpr}, { type: "stream_start", threadId: ${threadIdExpr || "undefined"}, done: false }, ${keyExpr});`,
+      );
       rawLines.push(
         `const stream = await ${graphVar}.stream(agentState, ${streamConfigOptions});`,
       );
@@ -547,6 +649,21 @@ export function renderLangGraphInvokeStep(
       rawLines.push(
         `    const token = (typeof messageChunk === "object" && messageChunk !== null && "content" in messageChunk && messageChunk.content !== undefined ? messageChunk.content : undefined) ?? (typeof chunk === "string" ? chunk : (typeof chunk === "object" && chunk !== null && "content" in chunk && chunk.content !== undefined ? chunk.content : chunk));`,
       );
+      if (langGraphTrackTokenUsage) {
+        rawLines.push(
+          `    const _chunkUsage = (messageChunk as any)?.usage_metadata || (messageChunk as any)?.response_metadata?.token_usage;`,
+          `    if (_chunkUsage) {`,
+          `      const _in = Number(_chunkUsage.input_tokens ?? _chunkUsage.prompt_tokens ?? 0) || 0;`,
+          `      const _out = Number(_chunkUsage.output_tokens ?? _chunkUsage.completion_tokens ?? 0) || 0;`,
+          `      if (_in > 0) ${stepPrefix}TokenUsage.input_tokens = _in;`,
+          `      if (_out > 0) ${stepPrefix}TokenUsage.output_tokens = _out;`,
+          `      ${stepPrefix}TokenUsage.total_tokens = ${stepPrefix}TokenUsage.input_tokens + ${stepPrefix}TokenUsage.output_tokens;`,
+          `    } else if (token !== undefined && token !== "") {`,
+          `      ${stepPrefix}TokenUsage.output_tokens += 1;`,
+          `      ${stepPrefix}TokenUsage.total_tokens = ${stepPrefix}TokenUsage.input_tokens + ${stepPrefix}TokenUsage.output_tokens;`,
+          `    }`,
+        );
+      }
       rawLines.push(
         `    const nodeName = typeof metadata === "object" && metadata !== null && "langgraph_node" in metadata ? metadata.langgraph_node : undefined;`,
       );
@@ -554,6 +671,7 @@ export function renderLangGraphInvokeStep(
         const allowedFields = JSON.stringify(langGraphStreamingFields);
         rawLines.push(`  if (${allowedFields}.includes(nodeName || "")) {`);
         rawLines.push(`    if (token !== undefined && token !== "") {`);
+        rawLines.push(`      ${outputVariable}Content += typeof token === "string" ? token : JSON.stringify(token);`);
         rawLines.push(
           `      await publishKafkaEvent(${topicExpr}, { token, node: nodeName, done: false }, ${keyExpr});`,
         );
@@ -561,11 +679,18 @@ export function renderLangGraphInvokeStep(
         rawLines.push(`  }`);
       } else {
         rawLines.push(`  if (token !== undefined && token !== "") {`);
+        rawLines.push(`    ${outputVariable}Content += typeof token === "string" ? token : JSON.stringify(token);`);
         rawLines.push(
           `    await publishKafkaEvent(${topicExpr}, { token, node: nodeName, done: false }, ${keyExpr});`,
         );
         rawLines.push(`  }`);
       }
+      rawLines.push(
+        `    const _kafkaToolCalls = (messageChunk as any)?.tool_calls || (messageChunk as any)?.tool_call_chunks;`,
+        `    if (Array.isArray(_kafkaToolCalls) && _kafkaToolCalls.length > 0) {`,
+        `      await publishKafkaEvent(${topicExpr}, { type: "tool_call", tool_calls: _kafkaToolCalls, node: nodeName, done: false }, ${keyExpr});`,
+        `    }`,
+      );
       rawLines.push(`  } else if (mode === "updates") {`);
       rawLines.push(`    const nodeName = typeof payload === "object" && payload !== null ? Object.keys(payload)[0] : undefined;`);
       rawLines.push(`    await publishKafkaEvent(${topicExpr}, { type: "update", mode: "updates", node: nodeName, data: payload, done: false }, ${keyExpr});`);
@@ -573,9 +698,25 @@ export function renderLangGraphInvokeStep(
       rawLines.push(`    await publishKafkaEvent(${topicExpr}, { type: mode, mode, data: payload, done: false }, ${keyExpr});`);
       rawLines.push(`  }`);
       rawLines.push(`}`);
+      if (langGraphTrackTokenUsage) {
+        rawLines.push(
+          `await publishKafkaEvent(${topicExpr}, { type: "usage", usage: ${stepPrefix}TokenUsage, done: false }, ${keyExpr});`,
+        );
+      }
+      rawLines.push(
+        `await publishKafkaEvent(${topicExpr}, { type: "stream_end", done: true, content: ${outputVariable}Content, usage: ${stepPrefix}TokenUsage, threadId: ${threadIdExpr || "undefined"} }, ${keyExpr});`,
+      );
       rawLines.push(`await publishKafkaEvent(${topicExpr}, { done: true }, ${keyExpr});`);
       if (outputVariable) {
-        rawLines.push(`const ${outputVariable} = { streamed: true, protocol: "kafka", topic: ${topicExpr} };`);
+        rawLines.push(`const ${outputVariable} = {
+  streamed: true,
+  protocol: "kafka",
+  topic: ${topicExpr},
+  response: ${outputVariable}Content,
+  content: ${outputVariable}Content,
+  usage: ${stepPrefix}TokenUsage,
+  threadId: ${threadIdExpr || "undefined"},
+};`);
       }
     } else if (streamProtocol === "redis_stream") {
       const rawRedisKey = step.langGraphStreamingRedisKey?.trim();
@@ -590,6 +731,13 @@ export function renderLangGraphInvokeStep(
       rawLines.push(`const agentState = ${stateInit};`);
       rawLines.push(`const redisClient = await getRedisClient();`);
       rawLines.push(
+        `const ${stepPrefix}TokenUsage = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };`,
+        `let ${outputVariable}Content = "";`,
+      );
+      rawLines.push(
+        `await redisClient.xadd(${streamKeyExpr}, "*", "type", "stream_start", "thread_id", String(${threadIdExpr || "undefined"}), "done", "false");`,
+      );
+      rawLines.push(
         `const stream = await ${graphVar}.stream(agentState, ${streamConfigOptions});`,
       );
       rawLines.push(`for await (const chunk of stream) {`);
@@ -608,6 +756,21 @@ export function renderLangGraphInvokeStep(
       rawLines.push(
         `    const token = (typeof messageChunk === "object" && messageChunk !== null && "content" in messageChunk && messageChunk.content !== undefined ? messageChunk.content : undefined) ?? (typeof chunk === "string" ? chunk : (typeof chunk === "object" && chunk !== null && "content" in chunk && chunk.content !== undefined ? chunk.content : chunk));`,
       );
+      if (langGraphTrackTokenUsage) {
+        rawLines.push(
+          `    const _chunkUsage = (messageChunk as any)?.usage_metadata || (messageChunk as any)?.response_metadata?.token_usage;`,
+          `    if (_chunkUsage) {`,
+          `      const _in = Number(_chunkUsage.input_tokens ?? _chunkUsage.prompt_tokens ?? 0) || 0;`,
+          `      const _out = Number(_chunkUsage.output_tokens ?? _chunkUsage.completion_tokens ?? 0) || 0;`,
+          `      if (_in > 0) ${stepPrefix}TokenUsage.input_tokens = _in;`,
+          `      if (_out > 0) ${stepPrefix}TokenUsage.output_tokens = _out;`,
+          `      ${stepPrefix}TokenUsage.total_tokens = ${stepPrefix}TokenUsage.input_tokens + ${stepPrefix}TokenUsage.output_tokens;`,
+          `    } else if (token !== undefined && token !== "") {`,
+          `      ${stepPrefix}TokenUsage.output_tokens += 1;`,
+          `      ${stepPrefix}TokenUsage.total_tokens = ${stepPrefix}TokenUsage.input_tokens + ${stepPrefix}TokenUsage.output_tokens;`,
+          `    }`,
+        );
+      }
       rawLines.push(
         `    const nodeName = typeof metadata === "object" && metadata !== null && "langgraph_node" in metadata ? metadata.langgraph_node : undefined;`,
       );
@@ -615,6 +778,7 @@ export function renderLangGraphInvokeStep(
         const allowedFields = JSON.stringify(langGraphStreamingFields);
         rawLines.push(`    if (${allowedFields}.includes(nodeName || "")) {`);
         rawLines.push(`      if (token !== undefined && token !== "") {`);
+        rawLines.push(`        ${outputVariable}Content += typeof token === "string" ? token : JSON.stringify(token);`);
         rawLines.push(
           `        await redisClient.xadd(${streamKeyExpr}, "*", "token", String(token), "node", String(nodeName || ""), "done", "false");`,
         );
@@ -622,11 +786,18 @@ export function renderLangGraphInvokeStep(
         rawLines.push(`    }`);
       } else {
         rawLines.push(`    if (token !== undefined && token !== "") {`);
+        rawLines.push(`      ${outputVariable}Content += typeof token === "string" ? token : JSON.stringify(token);`);
         rawLines.push(
           `      await redisClient.xadd(${streamKeyExpr}, "*", "token", String(token), "node", String(nodeName || ""), "done", "false");`,
         );
         rawLines.push(`    }`);
       }
+      rawLines.push(
+        `    const _redisToolCalls = (messageChunk as any)?.tool_calls || (messageChunk as any)?.tool_call_chunks;`,
+        `    if (Array.isArray(_redisToolCalls) && _redisToolCalls.length > 0) {`,
+        `      await redisClient.xadd(${streamKeyExpr}, "*", "type", "tool_call", "data", JSON.stringify(_redisToolCalls), "done", "false");`,
+        `    }`,
+      );
       rawLines.push(`  } else if (mode === "updates") {`);
       rawLines.push(`    const nodeName = typeof payload === "object" && payload !== null ? Object.keys(payload)[0] : undefined;`);
       rawLines.push(`    await redisClient.xadd(${streamKeyExpr}, "*", "type", "update", "mode", "updates", "node", String(nodeName || ""), "data", JSON.stringify(payload), "done", "false");`);
@@ -634,9 +805,25 @@ export function renderLangGraphInvokeStep(
       rawLines.push(`    await redisClient.xadd(${streamKeyExpr}, "*", "type", mode, "mode", mode, "data", JSON.stringify(payload), "done", "false");`);
       rawLines.push(`  }`);
       rawLines.push(`}`);
+      if (langGraphTrackTokenUsage) {
+        rawLines.push(
+          `await redisClient.xadd(${streamKeyExpr}, "*", "type", "usage", "input_tokens", String(${stepPrefix}TokenUsage.input_tokens), "output_tokens", String(${stepPrefix}TokenUsage.output_tokens), "total_tokens", String(${stepPrefix}TokenUsage.total_tokens), "done", "false");`,
+        );
+      }
+      rawLines.push(
+        `await redisClient.xadd(${streamKeyExpr}, "*", "type", "stream_end", "content", String(${outputVariable}Content), "done", "true");`,
+      );
       rawLines.push(`await redisClient.xadd(${streamKeyExpr}, "*", "token", "", "done", "true");`);
       if (outputVariable) {
-        rawLines.push(`const ${outputVariable} = { streamed: true, protocol: "redis_stream", streamKey: ${streamKeyExpr} };`);
+        rawLines.push(`const ${outputVariable} = {
+  streamed: true,
+  protocol: "redis_stream",
+  streamKey: ${streamKeyExpr},
+  response: ${outputVariable}Content,
+  content: ${outputVariable}Content,
+  usage: ${stepPrefix}TokenUsage,
+  threadId: ${threadIdExpr || "undefined"},
+};`);
       }
     }
   } else {
@@ -652,14 +839,59 @@ export function renderLangGraphInvokeStep(
     rawLines.push(`const agentState = ${stateInit};`);
     rawLines.push(`const ${outputVariable}Raw = await ${graphVar}.invoke(agentState${invokeConfigOptions});`);
 
+    if (langGraphTrackTokenUsage) {
+      rawLines.push(
+        `const ${outputVariable}Usage = { input_tokens: 0, output_tokens: 0, total_tokens: 0, inputTokens: 0, outputTokens: 0, totalTokens: 0 };`,
+        `if (${outputVariable}Raw && typeof ${outputVariable}Raw === "object") {`,
+        `  const _rawMsgs = Array.isArray(${outputVariable}Raw.messages) ? ${outputVariable}Raw.messages : [];`,
+        `  for (const _m of _rawMsgs) {`,
+        `    const _u = _m?.usage_metadata || _m?.response_metadata?.token_usage || _m?.response_metadata?.usage;`,
+        `    if (_u) {`,
+        `      const _in = Number(_u.input_tokens ?? _u.prompt_tokens ?? 0) || 0;`,
+        `      const _out = Number(_u.output_tokens ?? _u.completion_tokens ?? 0) || 0;`,
+        `      const _tot = Number(_u.total_tokens ?? (_in + _out)) || (_in + _out);`,
+        `      ${outputVariable}Usage.input_tokens += _in;`,
+        `      ${outputVariable}Usage.output_tokens += _out;`,
+        `      ${outputVariable}Usage.total_tokens += _tot;`,
+        `    }`,
+        `  }`,
+        `  if (${outputVariable}Usage.total_tokens === 0 && (${outputVariable}Raw.usage || ${outputVariable}Raw.token_usage)) {`,
+        `    const _u = ${outputVariable}Raw.usage || ${outputVariable}Raw.token_usage;`,
+        `    const _in = Number(_u.input_tokens ?? _u.prompt_tokens ?? 0) || 0;`,
+        `    const _out = Number(_u.output_tokens ?? _u.completion_tokens ?? 0) || 0;`,
+        `    ${outputVariable}Usage.input_tokens = _in;`,
+        `    ${outputVariable}Usage.output_tokens = _out;`,
+        `    ${outputVariable}Usage.total_tokens = Number(_u.total_tokens ?? (_in + _out)) || (_in + _out);`,
+        `  }`,
+        `  ${outputVariable}Usage.inputTokens = ${outputVariable}Usage.input_tokens;`,
+        `  ${outputVariable}Usage.outputTokens = ${outputVariable}Usage.output_tokens;`,
+        `  ${outputVariable}Usage.totalTokens = ${outputVariable}Usage.total_tokens;`,
+        `}`,
+        `if (typeof res?.setHeader === "function") {`,
+        `  res.setHeader("X-Input-Tokens", String(${outputVariable}Usage.input_tokens));`,
+        `  res.setHeader("X-Output-Tokens", String(${outputVariable}Usage.output_tokens));`,
+        `  res.setHeader("X-Total-Tokens", String(${outputVariable}Usage.total_tokens));`,
+        `}`,
+      );
+    }
+
     if (langGraphOutputMode === "last_message") {
-      rawLines.push(
-        `const ${outputVariable} = Array.isArray(${outputVariable}Raw?.messages) && ${outputVariable}Raw.messages.length > 0`,
-      );
-      rawLines.push(
-        `  ? ${outputVariable}Raw.messages[${outputVariable}Raw.messages.length - 1]?.content ?? ${outputVariable}Raw`,
-      );
-      rawLines.push(`  : ${outputVariable}Raw;`);
+      if (langGraphTrackTokenUsage) {
+        rawLines.push(
+          `const ${outputVariable}Content = Array.isArray(${outputVariable}Raw?.messages) && ${outputVariable}Raw.messages.length > 0`,
+          `  ? ${outputVariable}Raw.messages[${outputVariable}Raw.messages.length - 1]?.content ?? ${outputVariable}Raw`,
+          `  : ${outputVariable}Raw;`,
+          `const ${outputVariable} = typeof ${outputVariable}Content === "object" && ${outputVariable}Content !== null`,
+          `  ? { ...${outputVariable}Content, usage: ${outputVariable}Usage }`,
+          `  : { response: ${outputVariable}Content, content: ${outputVariable}Content, usage: ${outputVariable}Usage };`,
+        );
+      } else {
+        rawLines.push(
+          `const ${outputVariable} = Array.isArray(${outputVariable}Raw?.messages) && ${outputVariable}Raw.messages.length > 0`,
+          `  ? ${outputVariable}Raw.messages[${outputVariable}Raw.messages.length - 1]?.content ?? ${outputVariable}Raw`,
+          `  : ${outputVariable}Raw;`,
+        );
+      }
     } else if (
       langGraphOutputMode === "specific_fields" &&
       langGraphOutputFields.length > 0
@@ -667,7 +899,7 @@ export function renderLangGraphInvokeStep(
       const fieldPicks = langGraphOutputFields
         .map((f) => `  ${JSON.stringify(f)}: ${outputVariable}Raw?.${f},`)
         .join("\n");
-      rawLines.push(`const ${outputVariable} = {\n${fieldPicks}\n};`);
+      rawLines.push(`const ${outputVariable} = {\n${fieldPicks}${langGraphTrackTokenUsage ? `\n  usage: ${outputVariable}Usage,` : ""}\n};`);
     } else {
       rawLines.push(
         `const ${outputVariable}Messages = Array.isArray(${outputVariable}Raw?.messages) ? ${outputVariable}Raw.messages : [];`,
@@ -683,7 +915,7 @@ export function renderLangGraphInvokeStep(
   response: ${outputVariable}Response,
   content: ${outputVariable}Response,
   threadId: ${threadIdExpr || "undefined"},
-  state: ${outputVariable}Raw,
+  state: ${outputVariable}Raw,${langGraphTrackTokenUsage ? `\n  usage: ${outputVariable}Usage,` : ""}
 };`);
     }
   }

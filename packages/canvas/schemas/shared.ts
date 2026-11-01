@@ -473,6 +473,11 @@ export interface PipelineStep {
   /** State channel keys to include when outputMode = "specific_fields" */
   langGraphOutputFields?: string[];
   /**
+   * Whether to track and extract input/output/total token usage metrics for this invocation.
+   * When enabled, exposes `usage.input_tokens`, `usage.output_tokens`, `usage.total_tokens` on the step output.
+   */
+  langGraphTrackTokenUsage?: boolean;
+  /**
    * Source expression for thread_id when invoking LangGraph agent with memory/checkpointer.
    * Passed as config.configurable.thread_id to graph.invoke() or graph.stream().
    */
@@ -620,6 +625,7 @@ export const pipelineStepSchema: z.ZodType<PipelineStep> = z.lazy(() =>
     langGraphStreamSubgraphs: z.boolean().optional(),
     langGraphOutputMode: z.enum(["full_state", "specific_fields", "last_message"]).optional(),
     langGraphOutputFields: z.array(z.string()).optional(),
+    langGraphTrackTokenUsage: z.boolean().optional(),
     langGraphMessagesConfig: langGraphMessagesConfigSchema.optional(),
   })
 );

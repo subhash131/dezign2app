@@ -2,9 +2,11 @@ import React from "react";
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { LangGraphInvokeStepSection } from "../LangGraphInvokeStepSection";
-import { PipelineStepDraft, AvailableSource } from "../types";
+import { PipelineStepDraft, AvailableSource, AvailablePath } from "../types";
 import { BackendNode, PipelineStep } from "@workspace/canvas/types";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { resolveLangGraphStepPaths } from "../source-paths/step-resolvers/resolveLangGraphStep";
+import { resolveRealtimePayloadPaths } from "../../web-page-realtime-config/resolveRealtimePayloadPaths";
 
 vi.mock("@workspace/ui/components/select", () => ({
   Select: ({ children, value, onValueChange }: any) => (
@@ -470,5 +472,155 @@ describe("LangGraphInvokeStepSection Payload Mapping", () => {
     const updatedStep = handleChange.mock.calls[handleChange.mock.calls.length - 1]![0]!;
     expect(updatedStep.langGraphStateMapping.thread_id).toBeUndefined();
     expect(updatedStep.inputBindings.some((b: any) => b.argName === "thread_id")).toBe(false);
+  });
+
+  it("toggles track token usage switch and updates step draft", () => {
+    const cleanStep: PipelineStepDraft = {
+      id: "step-token-ui",
+      name: "Invoke Agent",
+      type: "langgraph_invoke",
+      langGraphTargetNodeId: "agent-node-1",
+      langGraphTrackTokenUsage: false,
+    };
+
+    const handleChange = vi.fn();
+
+    const { rerender } = render(
+      <LangGraphInvokeStepSection
+        step={cleanStep}
+        allNodes={[mockAgentNode]}
+        availableSources={mockAvailableSources}
+        onChange={handleChange}
+      />
+    );
+
+    expect(screen.getByText("Track Token Usage")).toBeDefined();
+    expect(screen.getByText("Extract input, output, and total tokens per invocation")).toBeDefined();
+
+    const switches = screen.getAllByTestId("switch");
+    const tokenUsageSwitch = switches[switches.length - 1]!;
+    fireEvent.click(tokenUsageSwitch);
+
+    expect(handleChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        langGraphTrackTokenUsage: true,
+      })
+    );
+
+    rerender(
+      <LangGraphInvokeStepSection
+        step={{ ...cleanStep, langGraphTrackTokenUsage: true }}
+        allNodes={[mockAgentNode]}
+        availableSources={mockAvailableSources}
+        onChange={handleChange}
+      />
+    );
+
+    expect(screen.getByText("usage.input_tokens")).toBeDefined();
+    expect(screen.getByText("usage.output_tokens")).toBeDefined();
+    expect(screen.getByText("usage.total_tokens")).toBeDefined();
+  });
+
+  it("resolves token usage paths for downstream steps when langGraphTrackTokenUsage is true", () => {
+    const step: PipelineStepDraft = {
+      id: "step-token-paths",
+      name: "Token Agent",
+      type: "langgraph_invoke",
+      langGraphTargetNodeId: "agent-node-1",
+      langGraphTrackTokenUsage: true,
+    };
+    const stepPaths: AvailablePath[] = [];
+    resolveLangGraphStepPaths(step, [mockAgentNode], stepPaths);
+
+    const paths = stepPaths.map((p) => p.path);
+    expect(paths).toContain("usage");
+    expect(paths).toContain("usage.input_tokens");
+    expect(paths).toContain("usage.output_tokens");
+    expect(paths).toContain("usage.total_tokens");
+    expect(paths).toContain("usage.inputTokens");
+  });
+
+  it("resolves streaming lifecycle and content paths when langGraphStreamingEnabled is true", () => {
+    const step: PipelineStepDraft = {
+      id: "step-stream-paths",
+      name: "Streaming Agent",
+      type: "langgraph_invoke",
+      langGraphTargetNodeId: "agent-node-1",
+      langGraphStreamingEnabled: true,
+      langGraphStreamingProtocol: "sse",
+      langGraphTrackTokenUsage: true,
+    };
+    const stepPaths: AvailablePath[] = [];
+    resolveLangGraphStepPaths(step, [mockAgentNode], stepPaths);
+
+    const paths = stepPaths.map((p) => p.path);
+    expect(paths).toContain("response");
+    expect(paths).toContain("content");
+    expect(paths).toContain("done");
+    expect(paths).toContain("streamed");
+    expect(paths).toContain("protocol");
+    expect(paths).toContain("toolCalls");
+    expect(paths).toContain("usage");
+  });
+
+  it("resolves realtime stream event paths including stream lifecycle, tool calls, and usage", () => {
+    const lgStep: any = {
+      id: "step-lg-stream",
+      type: "langgraph_invoke",
+      name: "Invoke Stream Agent",
+      langGraphStreamingEnabled: true,
+      langGraphStreamingProtocol: "sse",
+      langGraphStreamModes: ["messages"],
+      langGraphStreamIncludeReasoning: true,
+      langGraphTargetNodeId: "agent-1",
+      langGraphTrackTokenUsage: true,
+    };
+
+    const conn: any = {
+      id: "conn-lg",
+      protocol: "SSE",
+      eventName: "message",
+      isLangGraph: true,
+      langGraphStreamModes: ["messages"],
+      langGraphStreamIncludeReasoning: true,
+      langGraphTargetNodeId: "agent-1",
+    };
+
+    const realtimePaths = resolveRealtimePayloadPaths({
+      conn,
+      derivedInfo: {
+        step: lgStep,
+        sourceNode: undefined,
+        sourceEventId: null,
+        sourceEndpointId: "ep-1",
+      },
+      endpoints: [
+        {
+          id: "ep-1",
+          name: "/api/chat",
+          type: "POST",
+          pipelineSteps: [lgStep],
+          nodeId: "srv-1",
+        },
+      ],
+      events: [],
+      nodes: [mockAgentNode],
+      edges: [],
+    });
+
+    const pathKeys = realtimePaths.map((p) => p.path);
+    expect(pathKeys).toContain("type");
+    expect(pathKeys).toContain("token");
+    expect(pathKeys).toContain("reasoning");
+    expect(pathKeys).toContain("tool_call");
+    expect(pathKeys).toContain("tool_calls");
+    expect(pathKeys).toContain("usage");
+    expect(pathKeys).toContain("usage.input_tokens");
+    expect(pathKeys).toContain("usage.output_tokens");
+    expect(pathKeys).toContain("usage.total_tokens");
+    expect(pathKeys).toContain("done");
+    expect(pathKeys).toContain("content");
+    expect(pathKeys).toContain("response");
+    expect(pathKeys).toContain("threadId");
   });
 });
