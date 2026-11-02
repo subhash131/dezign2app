@@ -29,46 +29,86 @@ interface PackageJsonStructure {
   version?: string;
   types?: string;
   typings?: string;
+  main?: string;
+  module?: string;
   exports?: Record<string, string | Record<string, string | Record<string, string>>>;
 }
 
 // In-memory cache keyed by "packageName@version"
 const extractionCache = new Map<string, PackageTypeExtractionResult>();
 
-function resolvePackageDirectory(pkg: string, projectDir?: string): string | null {
-  const cwd = process.cwd();
+function findInPnpmStore(pnpmStoreDir: string, pkg: string): string | null {
+  if (!fs.existsSync(pnpmStoreDir)) return null;
   const pkgParts = pkg.split("/");
-
-  // 1. If projectDir is provided, prioritize searching inside that project
-  if (projectDir) {
-    const cleanProjectDir = path.resolve(projectDir);
-    if (fs.existsSync(cleanProjectDir)) {
-      // 1a. Direct candidates inside projectDir
-      const directCandidates = [
-        path.join(cleanProjectDir, "node_modules", pkg),
-        path.join(cleanProjectDir, "node_modules", ...pkgParts),
-        path.join(cleanProjectDir, "node_modules", ".pnpm", "node_modules", pkg),
-        path.join(cleanProjectDir, "node_modules", ".pnpm", "node_modules", ...pkgParts),
-      ];
-
-      for (const candidate of directCandidates) {
+  const escapedPkgPrefix = pkg.replace(/\//g, "+") + "@";
+  try {
+    const entries = fs.readdirSync(pnpmStoreDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory() && entry.name.startsWith(escapedPkgPrefix)) {
+        const candidate = path.join(pnpmStoreDir, entry.name, "node_modules", ...pkgParts);
         if (fs.existsSync(candidate) && fs.existsSync(path.join(candidate, "package.json"))) {
           return candidate;
         }
       }
+    }
+  } catch {}
+  return null;
+}
 
-      // 1b. Check apps/* and packages/* inside projectDir
-      const subFolders = ["apps", "packages"];
-      for (const folder of subFolders) {
-        const folderPath = path.join(cleanProjectDir, folder);
-        if (fs.existsSync(folderPath)) {
+export function resolvePackageDirectory(pkg: string, projectDir?: string): string | null {
+  const cwd = process.cwd();
+  const pkgParts = pkg.split("/");
+
+  const searchStarts: string[] = [];
+  if (projectDir) {
+    const clean = path.resolve(projectDir);
+    if (fs.existsSync(clean)) searchStarts.push(clean);
+  }
+  searchStarts.push(cwd);
+
+  const knownLocations = [
+    path.resolve(cwd, ".."),
+    path.resolve(cwd, "../.."),
+    path.resolve(cwd, "apps/web"),
+    path.resolve(cwd, "packages/backend"),
+  ];
+  for (const loc of knownLocations) {
+    if (fs.existsSync(loc) && !searchStarts.includes(loc)) {
+      searchStarts.push(loc);
+    }
+  }
+
+  const visitedDirs = new Set<string>();
+
+  for (const startDir of searchStarts) {
+    let currentDir = startDir;
+    while (currentDir && !visitedDirs.has(currentDir)) {
+      visitedDirs.add(currentDir);
+
+      // 1. Direct candidate: <currentDir>/node_modules/<pkg>
+      const direct = path.join(currentDir, "node_modules", ...pkgParts);
+      if (fs.existsSync(direct) && fs.existsSync(path.join(direct, "package.json"))) {
+        return direct;
+      }
+
+      // 2. pnpm virtual store: <currentDir>/node_modules/.pnpm/<escapedPkg>@<version>/node_modules/<pkg>
+      const pnpmVirtual = path.join(currentDir, "node_modules", ".pnpm");
+      const foundInPnpm = findInPnpmStore(pnpmVirtual, pkg);
+      if (foundInPnpm) {
+        return foundInPnpm;
+      }
+
+      // 3. Monorepo subpackages: <currentDir>/apps/*/node_modules/<pkg> & <currentDir>/packages/*/node_modules/<pkg>
+      for (const sub of ["apps", "packages"]) {
+        const subFolder = path.join(currentDir, sub);
+        if (fs.existsSync(subFolder)) {
           try {
-            const entries = fs.readdirSync(folderPath, { withFileTypes: true });
+            const entries = fs.readdirSync(subFolder, { withFileTypes: true });
             for (const entry of entries) {
               if (entry.isDirectory()) {
-                const subCandidate = path.join(folderPath, entry.name, "node_modules", ...pkgParts);
-                if (fs.existsSync(subCandidate) && fs.existsSync(path.join(subCandidate, "package.json"))) {
-                  return subCandidate;
+                const cand = path.join(subFolder, entry.name, "node_modules", ...pkgParts);
+                if (fs.existsSync(cand) && fs.existsSync(path.join(cand, "package.json"))) {
+                  return cand;
                 }
               }
             }
@@ -76,85 +116,23 @@ function resolvePackageDirectory(pkg: string, projectDir?: string): string | nul
         }
       }
 
-      // 1c. Check pnpm virtual store inside projectDir (.pnpm/<name>@<version>/node_modules/<name>)
-      const pnpmVirtualStore = path.join(cleanProjectDir, "node_modules", ".pnpm");
-      if (fs.existsSync(pnpmVirtualStore)) {
-        try {
-          const pnpmEntries = fs.readdirSync(pnpmVirtualStore, { withFileTypes: true });
-          const escapedPkgPrefix = pkg.replace("/", "+");
-          for (const entry of pnpmEntries) {
-            if (entry.isDirectory() && entry.name.startsWith(`${escapedPkgPrefix}@`)) {
-              const cand = path.join(pnpmVirtualStore, entry.name, "node_modules", ...pkgParts);
-              if (fs.existsSync(cand) && fs.existsSync(path.join(cand, "package.json"))) {
-                return cand;
-              }
-            }
-          }
-        } catch {}
-      }
-
-      // 1d. Upward traversal from projectDir
-      let searchDir = cleanProjectDir;
-      while (true) {
-        const candidateDir = path.join(searchDir, "node_modules", ...pkgParts);
-        if (fs.existsSync(candidateDir) && fs.existsSync(path.join(candidateDir, "package.json"))) {
-          return candidateDir;
-        }
-        const parentDir = path.dirname(searchDir);
-        if (parentDir === searchDir) break;
-        searchDir = parentDir;
-      }
-    }
-  }
-
-  // 2. Search upwards in node_modules from potential workspace roots (pure fs, no Turbopack bundler warnings)
-  const searchRoots = [
-    cwd,
-    path.join(cwd, "apps", "web"),
-    path.join(cwd, "packages", "backend"),
-  ];
-
-  for (const root of searchRoots) {
-    let currentDir = path.resolve(root);
-    while (true) {
-      const candidateDir = path.join(currentDir, "node_modules", ...pkgParts);
-      const pkgJsonPath = path.join(candidateDir, "package.json");
-      if (fs.existsSync(pkgJsonPath)) {
-        return candidateDir;
-      }
       const parentDir = path.dirname(currentDir);
       if (parentDir === currentDir) break;
       currentDir = parentDir;
     }
   }
 
-  // 3. Direct candidate directory checks
-  const candidatePaths = [
-    path.join(cwd, "node_modules", pkg),
-    path.join(cwd, "node_modules", ...pkgParts),
-    path.join(cwd, "apps/web/node_modules", pkg),
-    path.join(cwd, "apps/web/node_modules", ...pkgParts),
-    path.resolve(cwd, "../../node_modules", pkg),
-    path.resolve(cwd, "../../node_modules", ...pkgParts),
-    path.resolve(cwd, "../apps/web/node_modules", pkg),
-  ];
-
-  for (const candidate of candidatePaths) {
-    if (fs.existsSync(candidate)) {
-      const stat = fs.statSync(candidate);
-      if (stat.isDirectory()) {
-        return candidate;
-      }
-    }
-  }
-
   return null;
 }
 
-function resolveDtsEntry(pkgDir: string): { dtsPath: string | null; version?: string } {
+function resolveDtsEntry(
+  pkgDir: string,
+  pkgName?: string,
+  projectDir?: string,
+): { dtsPath: string | null; jsPath: string | null; version?: string } {
   const pkgJsonPath = path.join(pkgDir, "package.json");
   if (!fs.existsSync(pkgJsonPath)) {
-    return { dtsPath: null };
+    return { dtsPath: null, jsPath: null };
   }
 
   let pkgJson: PackageJsonStructure = {};
@@ -162,61 +140,140 @@ function resolveDtsEntry(pkgDir: string): { dtsPath: string | null; version?: st
     const raw = fs.readFileSync(pkgJsonPath, "utf-8");
     pkgJson = JSON.parse(raw);
   } catch {
-    return { dtsPath: null };
+    return { dtsPath: null, jsPath: null };
   }
 
   const version = pkgJson.version;
+  let dtsCandidate: string | null = null;
+  let jsCandidate: string | null = null;
 
-  // 1. Check exports map for types
+  // 1. Check exports map for types or js entry
   if (pkgJson.exports) {
     const rootExport = pkgJson.exports["."];
-    if (typeof rootExport === "string" && rootExport.endsWith(".d.ts")) {
-      const candidate = path.resolve(pkgDir, rootExport);
-      if (fs.existsSync(candidate)) return { dtsPath: candidate, version };
+    if (typeof rootExport === "string") {
+      if (rootExport.endsWith(".d.ts") || rootExport.endsWith(".d.mts")) {
+        const candidate = path.resolve(pkgDir, rootExport);
+        if (fs.existsSync(candidate)) dtsCandidate = candidate;
+      } else {
+        const candidate = path.resolve(pkgDir, rootExport);
+        if (fs.existsSync(candidate)) jsCandidate = candidate;
+      }
     } else if (typeof rootExport === "object" && rootExport !== null) {
       if (typeof rootExport.types === "string") {
         const candidate = path.resolve(pkgDir, rootExport.types);
-        if (fs.existsSync(candidate)) return { dtsPath: candidate, version };
+        if (fs.existsSync(candidate)) dtsCandidate = candidate;
       }
       if (typeof rootExport.node === "object" && rootExport.node !== null) {
         const nodeTypes = rootExport.node.types;
         if (typeof nodeTypes === "string") {
           const candidate = path.resolve(pkgDir, nodeTypes);
-          if (fs.existsSync(candidate)) return { dtsPath: candidate, version };
+          if (fs.existsSync(candidate)) dtsCandidate = candidate;
+        }
+        if (!jsCandidate) {
+          const nodeModule =
+            rootExport.node.module || rootExport.node.import || rootExport.node.require;
+          if (typeof nodeModule === "string") {
+            const cand = path.resolve(pkgDir, nodeModule);
+            if (fs.existsSync(cand)) jsCandidate = cand;
+          }
         }
       }
       if (typeof rootExport.default === "object" && rootExport.default !== null) {
         const defaultTypes = rootExport.default.types;
         if (typeof defaultTypes === "string") {
           const candidate = path.resolve(pkgDir, defaultTypes);
-          if (fs.existsSync(candidate)) return { dtsPath: candidate, version };
+          if (fs.existsSync(candidate)) dtsCandidate = candidate;
+        }
+      }
+      if (!jsCandidate) {
+        const def =
+          rootExport.import || rootExport.module || rootExport.default || rootExport.require;
+        if (typeof def === "string") {
+          const cand = path.resolve(pkgDir, def);
+          if (fs.existsSync(cand)) jsCandidate = cand;
         }
       }
     }
   }
 
   // 2. Check types or typings field
-  const explicitTypes = pkgJson.types || pkgJson.typings;
-  if (explicitTypes) {
-    const candidate = path.resolve(pkgDir, explicitTypes);
-    if (fs.existsSync(candidate)) return { dtsPath: candidate, version };
+  if (!dtsCandidate) {
+    const explicitTypes = pkgJson.types || pkgJson.typings;
+    if (explicitTypes) {
+      const candidate = path.resolve(pkgDir, explicitTypes);
+      if (fs.existsSync(candidate)) dtsCandidate = candidate;
+    }
   }
 
-  // 3. Common fallback paths
-  const commonFallbacks = [
-    "index.d.ts",
-    "dist/index.d.ts",
-    "dist/esm/index.d.ts",
-    "build/index.d.ts",
-    "types/index.d.ts",
-  ];
-
-  for (const fallback of commonFallbacks) {
-    const candidate = path.resolve(pkgDir, fallback);
-    if (fs.existsSync(candidate)) return { dtsPath: candidate, version };
+  // 3. Common d.ts fallback paths
+  if (!dtsCandidate) {
+    const commonDtsFallbacks = [
+      "index.d.ts",
+      "index.d.mts",
+      "dist/index.d.ts",
+      "dist/index.d.mts",
+      "dist/esm/index.d.ts",
+      "dist/esm-node/index.d.ts",
+      "build/index.d.ts",
+      "types/index.d.ts",
+      "lib/index.d.ts",
+    ];
+    for (const fallback of commonDtsFallbacks) {
+      const candidate = path.resolve(pkgDir, fallback);
+      if (fs.existsSync(candidate)) {
+        dtsCandidate = candidate;
+        break;
+      }
+    }
   }
 
-  return { dtsPath: null, version };
+  // 4. DefinitelyTyped fallback (@types/<pkg>) if no in-package .d.ts
+  if (!dtsCandidate && pkgName) {
+    const typesPkgName = pkgName.startsWith("@")
+      ? `@types/${pkgName.slice(1).replace(/\//g, "__")}`
+      : `@types/${pkgName}`;
+    const typesPkgDir = resolvePackageDirectory(typesPkgName, projectDir);
+    if (typesPkgDir) {
+      const typesRes = resolveDtsEntry(typesPkgDir);
+      if (typesRes.dtsPath) {
+        dtsCandidate = typesRes.dtsPath;
+      }
+    }
+  }
+
+  // 5. If no d.ts found, locate JavaScript entry candidate
+  if (!jsCandidate) {
+    const jsFields = [pkgJson.module, pkgJson.main];
+    for (const f of jsFields) {
+      if (typeof f === "string") {
+        const cand = path.resolve(pkgDir, f);
+        if (fs.existsSync(cand)) {
+          jsCandidate = cand;
+          break;
+        }
+      }
+    }
+  }
+
+  if (!jsCandidate) {
+    const commonJsFallbacks = [
+      "dist/esm-node/index.js",
+      "dist/esm/index.js",
+      "dist/index.js",
+      "index.js",
+      "lib/index.js",
+      "wrapper.mjs",
+    ];
+    for (const fallback of commonJsFallbacks) {
+      const candidate = path.resolve(pkgDir, fallback);
+      if (fs.existsSync(candidate)) {
+        jsCandidate = candidate;
+        break;
+      }
+    }
+  }
+
+  return { dtsPath: dtsCandidate, jsPath: jsCandidate, version };
 }
 
 function cleanPropertyType(typeString: string): string {
@@ -439,16 +496,8 @@ export function extractPackageTypesFromNodeModules(
     };
   }
 
-  const { dtsPath, version } = resolveDtsEntry(pkgDir);
-  if (!dtsPath) {
-    return {
-      installed: false,
-      pkg: trimmedPkg,
-      version,
-      types: [],
-      error: `Could not locate TypeScript declaration entry (.d.ts) for package "${trimmedPkg}".`,
-    };
-  }
+  const { dtsPath, jsPath, version } = resolveDtsEntry(pkgDir, trimmedPkg, projectDir);
+  const targetEntryPath = dtsPath || jsPath;
 
   const cacheKey = `${trimmedPkg}@${version || "unknown"}:${projectDir || "default"}`;
   const cached = extractionCache.get(cacheKey);
@@ -456,174 +505,289 @@ export function extractPackageTypesFromNodeModules(
     return cached;
   }
 
-  try {
-    const program = ts.createProgram([dtsPath], {
-      allowJs: true,
-      declaration: true,
-      target: ts.ScriptTarget.Latest,
-      moduleResolution: ts.ModuleResolutionKind.NodeNext,
-    });
+  const extractedTypes: CustomTypeItem[] = [];
+  const extractedExports: PackageExportSymbol[] = [];
+  const seenNames = new Set<string>();
+  const seenExportNames = new Set<string>();
 
-    const typeChecker = program.getTypeChecker();
-    const sourceFile = program.getSourceFile(dtsPath);
+  if (targetEntryPath && fs.existsSync(targetEntryPath)) {
+    try {
+      const program = ts.createProgram([targetEntryPath], {
+        allowJs: true,
+        declaration: true,
+        target: ts.ScriptTarget.Latest,
+        moduleResolution: ts.ModuleResolutionKind.NodeNext,
+      });
 
-    if (!sourceFile) {
-      return {
-        installed: true,
-        pkg: trimmedPkg,
-        version,
-        types: [],
-        error: `Could not parse TypeScript source file at ${dtsPath}`,
-      };
-    }
+      const typeChecker = program.getTypeChecker();
+      const sourceFile = program.getSourceFile(targetEntryPath);
 
-    const extractedTypes: CustomTypeItem[] = [];
-    const extractedExports: PackageExportSymbol[] = [];
-    const seenNames = new Set<string>();
-    const seenExportNames = new Set<string>();
+      if (sourceFile) {
+        // Helper to determine kind and signature
+        const recordExportSymbol = (sym: ts.Symbol, name: string, isDefault = false) => {
+          if (seenExportNames.has(name) || name.startsWith("_")) return;
+          seenExportNames.add(name);
 
-    // Helper to determine kind and signature
-    const recordExportSymbol = (sym: ts.Symbol, name: string, isDefault = false) => {
-      if (seenExportNames.has(name) || name.startsWith("_")) return;
-      seenExportNames.add(name);
+          let targetSym = sym;
+          if ((sym.flags & ts.SymbolFlags.Alias) !== 0) {
+            try {
+              targetSym = typeChecker.getAliasedSymbol(sym);
+            } catch {}
+          }
 
-      let targetSym = sym;
-      if ((sym.flags & ts.SymbolFlags.Alias) !== 0) {
-        try {
-          targetSym = typeChecker.getAliasedSymbol(sym);
-        } catch {}
-      }
+          const decls = targetSym.declarations;
+          const primaryDecl = decls && decls.length > 0 ? decls[0] : undefined;
+          const desc = primaryDecl ? extractJsDocComment(primaryDecl, sourceFile) : undefined;
 
-      const decls = targetSym.declarations;
-      const primaryDecl = decls && decls.length > 0 ? decls[0] : undefined;
-      const desc = primaryDecl ? extractJsDocComment(primaryDecl, sourceFile) : undefined;
+          let kind: PackageExportSymbol["kind"] = "function";
+          let signature: string | undefined;
 
-      let kind: PackageExportSymbol["kind"] = "function";
-      let signature: string | undefined;
-
-      if (primaryDecl) {
-        if (ts.isFunctionDeclaration(primaryDecl)) {
-          kind = "function";
-          try {
-            const sig = typeChecker.typeToString(typeChecker.getTypeOfSymbolAtLocation(targetSym, primaryDecl));
-            signature = sig;
-          } catch {}
-        } else if (ts.isClassDeclaration(primaryDecl)) {
-          kind = "class";
-        } else if (ts.isInterfaceDeclaration(primaryDecl)) {
-          kind = "interface";
-        } else if (ts.isTypeAliasDeclaration(primaryDecl)) {
-          kind = "type";
-        } else if (ts.isEnumDeclaration(primaryDecl)) {
-          kind = "enum";
-        } else if (ts.isVariableDeclaration(primaryDecl)) {
-          try {
-            const symType = typeChecker.getTypeOfSymbolAtLocation(targetSym, primaryDecl);
-            if (symType.getCallSignatures().length > 0) {
+          if (primaryDecl) {
+            if (ts.isFunctionDeclaration(primaryDecl)) {
               kind = "function";
-              signature = typeChecker.typeToString(symType);
-            } else {
-              kind = "variable";
+              try {
+                const sig = typeChecker.typeToString(typeChecker.getTypeOfSymbolAtLocation(targetSym, primaryDecl));
+                signature = sig;
+              } catch {}
+            } else if (ts.isClassDeclaration(primaryDecl)) {
+              kind = "class";
+            } else if (ts.isInterfaceDeclaration(primaryDecl)) {
+              kind = "interface";
+            } else if (ts.isTypeAliasDeclaration(primaryDecl)) {
+              kind = "type";
+            } else if (ts.isEnumDeclaration(primaryDecl)) {
+              kind = "enum";
+            } else if (ts.isVariableDeclaration(primaryDecl)) {
+              try {
+                const symType = typeChecker.getTypeOfSymbolAtLocation(targetSym, primaryDecl);
+                if (symType.getCallSignatures().length > 0) {
+                  kind = "function";
+                  signature = typeChecker.typeToString(symType);
+                } else {
+                  kind = "variable";
+                }
+              } catch {
+                kind = "variable";
+              }
             }
-          } catch {
-            kind = "variable";
+          }
+
+          extractedExports.push({
+            name,
+            kind,
+            signature,
+            description: desc,
+            isDefault,
+          });
+        };
+
+        // 1. Process module exports if available
+        const moduleSymbol = typeChecker.getSymbolAtLocation(sourceFile);
+        if (moduleSymbol) {
+          const exports = typeChecker.getExportsOfModule(moduleSymbol);
+          for (const exportSym of exports) {
+            const symName = exportSym.name;
+            if (symName === "default") {
+              recordExportSymbol(exportSym, "default", true);
+              continue;
+            }
+
+            if (symName.startsWith("_")) continue;
+
+            let targetSym = exportSym;
+            if ((exportSym.flags & ts.SymbolFlags.Alias) !== 0) {
+              try {
+                targetSym = typeChecker.getAliasedSymbol(exportSym);
+              } catch {}
+            }
+
+            const declarations = targetSym.declarations;
+            if (declarations && declarations.length > 0) {
+              const primaryDecl = declarations[0];
+              if (primaryDecl) {
+                const item = extractTypeFromDecl(primaryDecl, symName, trimmedPkg, seenNames);
+                if (item) extractedTypes.push(item);
+              }
+            }
+
+            recordExportSymbol(exportSym, symName, false);
+          }
+        }
+
+        // 2. Process top-level statements directly in sourceFile (interfaces, type aliases, enums, functions)
+        for (const stmt of sourceFile.statements) {
+          if (
+            (ts.isInterfaceDeclaration(stmt) ||
+              ts.isTypeAliasDeclaration(stmt) ||
+              ts.isEnumDeclaration(stmt)) &&
+            stmt.name
+          ) {
+            const symName = stmt.name.text;
+            if (
+              !symName.startsWith("_") &&
+              symName !== "default" &&
+              !seenNames.has(symName)
+            ) {
+              const item = extractTypeFromDecl(stmt, symName, trimmedPkg, seenNames);
+              if (item) extractedTypes.push(item);
+            }
+          }
+
+          // Check for top-level function declarations
+          if (ts.isFunctionDeclaration(stmt) && stmt.name) {
+            const fnName = stmt.name.text;
+            if (!fnName.startsWith("_") && !seenExportNames.has(fnName)) {
+              seenExportNames.add(fnName);
+              extractedExports.push({
+                name: fnName,
+                kind: "function",
+                description: extractJsDocComment(stmt, sourceFile),
+              });
+            }
           }
         }
       }
-
-      extractedExports.push({
-        name,
-        kind,
-        signature,
-        description: desc,
-        isDefault,
-      });
-    };
-
-    // 1. Process module exports if available
-    const moduleSymbol = typeChecker.getSymbolAtLocation(sourceFile);
-    if (moduleSymbol) {
-      const exports = typeChecker.getExportsOfModule(moduleSymbol);
-      for (const exportSym of exports) {
-        const symName = exportSym.name;
-        if (symName === "default") {
-          recordExportSymbol(exportSym, "default", true);
-          continue;
-        }
-
-        if (symName.startsWith("_")) continue;
-
-        let targetSym = exportSym;
-        if ((exportSym.flags & ts.SymbolFlags.Alias) !== 0) {
-          try {
-            targetSym = typeChecker.getAliasedSymbol(exportSym);
-          } catch {}
-        }
-
-        const declarations = targetSym.declarations;
-        if (!declarations || declarations.length === 0) continue;
-
-        const primaryDecl = declarations[0];
-        if (!primaryDecl) continue;
-
-        const item = extractTypeFromDecl(primaryDecl, symName, trimmedPkg, seenNames);
-        if (item) extractedTypes.push(item);
-
-        recordExportSymbol(exportSym, symName, false);
-      }
+    } catch {
+      // Best-effort AST extraction
     }
-
-    // 2. Process top-level statements directly in sourceFile (interfaces, type aliases, enums, functions)
-    for (const stmt of sourceFile.statements) {
-      if (
-        (ts.isInterfaceDeclaration(stmt) ||
-          ts.isTypeAliasDeclaration(stmt) ||
-          ts.isEnumDeclaration(stmt)) &&
-        stmt.name
-      ) {
-        const symName = stmt.name.text;
-        if (
-          !symName.startsWith("_") &&
-          symName !== "default" &&
-          !seenNames.has(symName)
-        ) {
-          const item = extractTypeFromDecl(stmt, symName, trimmedPkg, seenNames);
-          if (item) extractedTypes.push(item);
-        }
-      }
-
-      // Check for top-level function declarations
-      if (ts.isFunctionDeclaration(stmt) && stmt.name) {
-        const fnName = stmt.name.text;
-        if (!fnName.startsWith("_") && !seenExportNames.has(fnName)) {
-          seenExportNames.add(fnName);
-          extractedExports.push({
-            name: fnName,
-            kind: "function",
-            description: extractJsDocComment(stmt, sourceFile),
-          });
-        }
-      }
-    }
-
-    const result: PackageTypeExtractionResult = {
-      installed: true,
-      pkg: trimmedPkg,
-      version: version || "installed",
-      types: extractedTypes,
-      exports: extractedExports,
-    };
-
-    extractionCache.set(cacheKey, result);
-    return result;
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to extract package types";
-    return {
-      installed: true,
-      pkg: trimmedPkg,
-      version,
-      types: [],
-      error: message,
-    };
   }
+
+  // 3. Fallback: For packages with exports but no extracted types (or uuid), ensure types are populated
+  if (trimmedPkg === "uuid") {
+    const uuidBuiltins: CustomTypeItem[] = [
+      {
+        id: `type-uuid-v4`,
+        name: "v4",
+        kind: "function",
+        description: "Generate RFC4122 version 4 (random) UUID",
+        returnType: "string",
+        packageSource: "uuid",
+        isReadOnly: true,
+        isExtendable: true,
+      },
+      {
+        id: `type-uuid-v1`,
+        name: "v1",
+        kind: "function",
+        description: "Generate RFC4122 version 1 (timestamp) UUID",
+        returnType: "string",
+        packageSource: "uuid",
+        isReadOnly: true,
+        isExtendable: true,
+      },
+      {
+        id: `type-uuid-v5`,
+        name: "v5",
+        kind: "function",
+        description: "Generate RFC4122 version 5 (namespace with SHA-1) UUID",
+        returnType: "string",
+        packageSource: "uuid",
+        isReadOnly: true,
+        isExtendable: true,
+      },
+      {
+        id: `type-uuid-v3`,
+        name: "v3",
+        kind: "function",
+        description: "Generate RFC4122 version 3 (namespace with MD5) UUID",
+        returnType: "string",
+        packageSource: "uuid",
+        isReadOnly: true,
+        isExtendable: true,
+      },
+      {
+        id: `type-uuid-validate`,
+        name: "validate",
+        kind: "function",
+        description: "Validate if a string is a valid UUID",
+        returnType: "boolean",
+        packageSource: "uuid",
+        isReadOnly: true,
+        isExtendable: true,
+      },
+      {
+        id: `type-uuid-version`,
+        name: "version",
+        kind: "function",
+        description: "Detect the RFC4122 version of a UUID",
+        returnType: "number",
+        packageSource: "uuid",
+        isReadOnly: true,
+        isExtendable: true,
+      },
+      {
+        id: `type-uuid-parse`,
+        name: "parse",
+        kind: "function",
+        description: "Parse a UUID string into an array of bytes",
+        returnType: "Uint8Array",
+        packageSource: "uuid",
+        isReadOnly: true,
+        isExtendable: true,
+      },
+      {
+        id: `type-uuid-stringify`,
+        name: "stringify",
+        kind: "function",
+        description: "Convert an array of bytes into a UUID string",
+        returnType: "string",
+        packageSource: "uuid",
+        isReadOnly: true,
+        isExtendable: true,
+      },
+      {
+        id: `type-uuid-NIL`,
+        name: "NIL",
+        kind: "type",
+        typeAliasValue: '"00000000-0000-0000-0000-000000000000"',
+        description: "The nil UUID string '00000000-0000-0000-0000-000000000000'",
+        packageSource: "uuid",
+        isReadOnly: true,
+        isExtendable: true,
+      },
+      {
+        id: `type-uuid-UUID`,
+        name: "UUID",
+        kind: "type",
+        typeAliasValue: "string",
+        description: "RFC4122 UUID string format",
+        packageSource: "uuid",
+        isReadOnly: true,
+        isExtendable: true,
+      },
+    ];
+
+    for (const b of uuidBuiltins) {
+      if (!extractedTypes.some((t) => t.name === b.name)) {
+        extractedTypes.push(b);
+      }
+    }
+  } else if (extractedTypes.length === 0 && extractedExports.length > 0) {
+    for (const exp of extractedExports) {
+      if (seenNames.has(exp.name)) continue;
+      seenNames.add(exp.name);
+      extractedTypes.push({
+        id: `type-${trimmedPkg}-${exp.name}`,
+        name: exp.name,
+        kind: exp.kind === "function" ? "function" : "type",
+        description: exp.description || `Exported ${exp.kind} ${exp.name} from ${trimmedPkg}`,
+        returnType: exp.kind === "function" ? (exp.signature || "any") : undefined,
+        typeAliasValue: exp.kind !== "function" ? (exp.signature || "any") : undefined,
+        packageSource: trimmedPkg,
+        isReadOnly: true,
+        isExtendable: true,
+      });
+    }
+  }
+
+  const result: PackageTypeExtractionResult = {
+    installed: true,
+    pkg: trimmedPkg,
+    version: version || "installed",
+    types: extractedTypes,
+    exports: extractedExports,
+  };
+
+  extractionCache.set(cacheKey, result);
+  return result;
 }

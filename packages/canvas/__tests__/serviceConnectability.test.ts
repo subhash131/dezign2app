@@ -25,8 +25,9 @@ describe("Service and Endpoint Connectability Taxonomy", () => {
     ).toBe("endpoint-in");
   });
 
-  it("verifies connection rules allow event-source to connect to endpoint-in", () => {
+  it("verifies connection rules allow event-source to connect to endpoint-in and transformer-in", () => {
     expect(CONNECTION_RULES["event-source"]).toContain("endpoint-in");
+    expect(CONNECTION_RULES["event-source"]).toContain("transformer-in");
   });
 
   it("validates connections from WebPage action to Service endpoint via isValidConnection", () => {
@@ -52,6 +53,30 @@ describe("Service and Endpoint Connectability Taxonomy", () => {
     expect(resFuncIn.valid).toBe(true);
     if (resFuncIn.valid) {
       expect(resFuncIn.edgeType).toBe("connection");
+    }
+  });
+
+  it("validates connections from WebPage action to Transformer via isValidConnection", () => {
+    const resTransformerIn = isValidConnection(
+      "webPage",
+      "events-action-transform",
+      "transformer",
+      "transformer-in",
+    );
+    expect(resTransformerIn.valid).toBe(true);
+    if (resTransformerIn.valid) {
+      expect(resTransformerIn.edgeType).toBe("connection");
+    }
+
+    const resTransformerRef = isValidConnection(
+      "webPage",
+      "events-action-transform",
+      "transformer_ref",
+      "transformer-in",
+    );
+    expect(resTransformerRef.valid).toBe(true);
+    if (resTransformerRef.valid) {
+      expect(resTransformerRef.edgeType).toBe("connection");
     }
   });
 });

@@ -24,6 +24,7 @@ import { buildCompanionTypesNodeAndEdge } from "@/lib/stores/backendCanvas/node"
 import { generateKeyBetween } from "fractional-indexing";
 import { getLastIndex } from "@/lib/stores/backendCanvas/utils";
 import { z } from "zod";
+import { healDirectTransformerEdges } from "@/lib/stores/backendCanvas/edge/handlers/transformerConnect";
 import {
   endpointSchema,
   publishedEventSchema,
@@ -616,6 +617,25 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
           ...newlyCreatedFkEdges,
         ],
       }));
+    }
+
+    // Auto-heal legacy or direct edges saved between global transformers and WebPages / Services
+    const healedTrans = healDirectTransformerEdges({
+      nodes: nodesToSet,
+      edges: healedEdges,
+      pendingEdgeRemovals: Array.from(pendingEdgeRemovalIds),
+      pendingEdgeUpserts: store.pendingEdgeUpserts,
+      pendingNodeUpserts: store.pendingNodeUpserts,
+    });
+
+    if (healedTrans.changed) {
+      nodesToSet = healedTrans.nodes;
+      healedEdges = healedTrans.edges;
+      useBackendCanvasStore.setState({
+        pendingEdgeRemovals: healedTrans.pendingEdgeRemovals,
+        pendingEdgeUpserts: healedTrans.pendingEdgeUpserts,
+        pendingNodeUpserts: healedTrans.pendingNodeUpserts,
+      });
     }
 
     setNodesAndEdges(

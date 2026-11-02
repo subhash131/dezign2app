@@ -137,14 +137,19 @@ export const TransformerStep: React.FC<TransformerStepProps> = ({
       t.type === "transformer_ref" ? t.data?.transformerRef || t.id : t.id;
 
     let effectiveEdgeId = draft.edgeId;
+    let effectiveRefNodeId = draft.transformerRefNodeId;
     if (webPageNodeId && actionId) {
-      effectiveEdgeId = ensureActionTransformerConnection({
+      const connRes = ensureActionTransformerConnection({
         webPageNodeId,
         actionId,
         transformerNodeId: t.id,
         stepOrder: draft.order,
         previousEdgeId: draft.edgeId,
       });
+      if (connRes) {
+        effectiveEdgeId = connRes.edgeId;
+        effectiveRefNodeId = connRes.refNodeId;
+      }
     }
 
     const currentBindings = draft.transformBindings || [];
@@ -170,7 +175,7 @@ export const TransformerStep: React.FC<TransformerStepProps> = ({
       name: defaultOutputVar,
       outputVariable: defaultOutputVar,
       transformerNodeId: masterId,
-      transformerRefNodeId: t.type === "transformer_ref" ? t.id : undefined,
+      transformerRefNodeId: effectiveRefNodeId || (t.type === "transformer_ref" ? t.id : undefined),
       transformerName: fnName,
       edgeId: effectiveEdgeId,
       functionRef: {
@@ -226,14 +231,19 @@ export const TransformerStep: React.FC<TransformerStepProps> = ({
     });
 
     let effectiveEdgeId = draft.edgeId;
+    let effectiveRefNodeId = draft.transformerRefNodeId;
     if (webPageNodeId && actionId) {
-      effectiveEdgeId = ensureActionTransformerConnection({
+      const connRes = ensureActionTransformerConnection({
         webPageNodeId,
         actionId,
         transformerNodeId: newId,
         stepOrder: draft.order,
         previousEdgeId: draft.edgeId,
       });
+      if (connRes) {
+        effectiveEdgeId = connRes.edgeId;
+        effectiveRefNodeId = connRes.refNodeId;
+      }
     }
 
     const defaultOutputVar = `${cleanFn}Result`;
@@ -243,6 +253,7 @@ export const TransformerStep: React.FC<TransformerStepProps> = ({
       name: defaultOutputVar,
       outputVariable: defaultOutputVar,
       transformerNodeId: newId,
+      transformerRefNodeId: effectiveRefNodeId,
       transformerName: fnName,
       edgeId: effectiveEdgeId,
       functionRef: {

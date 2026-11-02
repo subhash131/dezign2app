@@ -28,6 +28,7 @@ import { useAutoLayoutShortcut } from "../hooks/useAutoLayoutShortcut";
 import { TopToolbarPanel } from "./TopToolbarPanel";
 import { TestCaseDialogs } from "./TestCaseDialogs";
 import { sortZonePages } from "@/app/(canvas)/project/[projectId]/_components/backend-nodes/graph-nodes/nodes/gateway/web-page";
+import { healDirectTransformerEdges, resolveWebPageActionInboundHandle } from "@/lib/stores/backendCanvas/edge/handlers/transformerConnect";
 
 const edgeTypes = {
   "foreign-key": ForeignKeyEdge,
@@ -53,6 +54,60 @@ export function GraphView({ projectId, projectName }: GraphViewProps) {
   useEffect(() => {
     setView("graph");
   }, [setView]);
+
+  // Self-heal any legacy direct edges between global transformers and WebPages / Services,
+  // or unconnected transformer_ref nodes on canvas
+  useEffect(() => {
+    if (nodes.length === 0) return;
+    const hasDirectEdge = edges.some((e) => {
+      if (e.type === "transformer-reference" || e.type === "reference") return false;
+      const src = nodes.find((n) => n.id === e.source);
+      const tgt = nodes.find((n) => n.id === e.target);
+      if (!src || !tgt) return false;
+      return (
+        (src.type === "transformer" && (tgt.type === "webPage" || tgt.type === "service")) ||
+        (tgt.type === "transformer" && (src.type === "webPage" || src.type === "service")) ||
+        (src.type === "webPage" && tgt.type === "transformer_ref")
+      );
+    });
+
+    const hasUnconnectedTransformerRef = nodes.some((n) => {
+      if (n.type !== "transformer_ref") return false;
+      const targetWp = n.data?.targetWebPageId
+        ? nodes.find((node) => node.id === n.data.targetWebPageId)
+        : nodes.find((node) => node.type === "webPage");
+      const targetActionId = n.data?.targetActionId || n.data?.targetActionIds?.[0];
+      const { handle: expectedHandle } = resolveWebPageActionInboundHandle(targetWp, targetActionId);
+
+      const hasValidOutgoing = edges.some(
+        (e) =>
+          e.source === n.id &&
+          e.sourceHandle === "transformer-out" && (e.type === "connection" || !e.type) &&
+          (!targetWp || (e.target === targetWp.id && (!expectedHandle || e.targetHandle === expectedHandle))),
+      );
+      return !hasValidOutgoing;
+    });
+
+    if (hasDirectEdge || hasUnconnectedTransformerRef) {
+      const store = useBackendCanvasStore.getState();
+      const healed = healDirectTransformerEdges({
+        nodes: store.nodes,
+        edges: store.edges,
+        pendingEdgeRemovals: store.pendingEdgeRemovals,
+        pendingEdgeUpserts: store.pendingEdgeUpserts,
+        pendingNodeUpserts: store.pendingNodeUpserts,
+      });
+      if (healed.changed) {
+        useBackendCanvasStore.setState({
+          nodes: healed.nodes,
+          edges: healed.edges,
+          pendingEdgeRemovals: healed.pendingEdgeRemovals,
+          pendingEdgeUpserts: healed.pendingEdgeUpserts,
+          pendingNodeUpserts: healed.pendingNodeUpserts,
+        });
+      }
+    }
+  }, [edges, nodes]);
   const simulation = useSimulationStore();
   const selectedCaseId = useSimulationStore((state) => state.selectedCaseId);
   const testCases = useSimulationStore((state) => state.testCases);

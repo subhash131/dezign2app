@@ -13,7 +13,8 @@ export interface HangingTransformerLayoutParams {
 
 /**
  * Positions hanging transformer nodes (local transformers & global transformer refs)
- * in a dedicated column immediately preceding (to the left of) the service node they connect to.
+ * in a dedicated column immediately preceding (to the left of) the service node they connect to,
+ * or adjacent to the connected WebPage action handle.
  */
 export function layoutHangingTransformerNodes({
   nodes,
@@ -72,8 +73,13 @@ export function layoutHangingTransformerNodes({
       if (r !== undefined) return r;
     }
 
-    if (targetHandle.startsWith("events-")) {
-      const evId = targetHandle.replace("events-", "");
+    if (
+      targetHandle.startsWith("events-") ||
+      targetHandle.startsWith("event-in-") ||
+      targetHandle.startsWith("action-in-") ||
+      targetHandle.startsWith("pageload-in-")
+    ) {
+      const evId = targetHandle.replace(/^(?:events-|event-in-|action-in-|pageload-in-)/, "");
       const r = eventYRatio.get(evId);
       if (r !== undefined) return r;
     }
@@ -81,36 +87,40 @@ export function layoutHangingTransformerNodes({
     return getHandleYRatio(serviceNode, targetHandle);
   };
 
-  // Group hanging transformers by their target service node ID
-  const transformersByService = new Map<string, LayoutNode[]>();
+  // Group hanging transformers by their target service or webPage node ID
+  const transformersByTarget = new Map<string, LayoutNode[]>();
   hangingTransformerNodes.forEach((tNode) => {
-    const edge = hangingEdges.find((e) => e.source === tNode.id);
+    const edge = hangingEdges.find(
+      (e) => e.source === tNode.id || e.target === tNode.id,
+    );
     if (!edge) return;
-    const targetServiceId = edge.target;
-    if (!transformersByService.has(targetServiceId)) {
-      transformersByService.set(targetServiceId, []);
+    const targetId = edge.source === tNode.id ? edge.target : edge.source;
+    if (!transformersByTarget.has(targetId)) {
+      transformersByTarget.set(targetId, []);
     }
-    transformersByService.get(targetServiceId)!.push(tNode);
+    transformersByTarget.get(targetId)!.push(tNode);
   });
 
-  transformersByService.forEach((transformers, serviceId) => {
-    const serviceNode = nodes.find((n) => n.id === serviceId);
-    const servicePos = positionsMap.get(serviceId);
-    if (!serviceNode || !servicePos) return;
+  transformersByTarget.forEach((transformers, targetId) => {
+    const targetNode = nodes.find((n) => n.id === targetId);
+    const targetPos = positionsMap.get(targetId);
+    if (!targetNode || !targetPos) return;
 
-    const { width: serviceW, height: serviceH } = getNodeDimensions(serviceNode);
+    const { width: targetW, height: targetH } = getNodeDimensions(targetNode);
+    const isTargetWebPage = targetNode.type === "webPage";
 
     if (isHorizontal) {
-      // LR Layout: Transformers sit in a column to the left of the service node
+      // LR Layout: Transformers sit in a column next to the target node
       const gapX = 80;
       const minVerticalGap = 16;
 
-      // Find max width among hanging transformers for this service
+      // Find max width among hanging transformers for this target
       const maxTransW = Math.max(
         ...transformers.map((t) => getNodeDimensions(t).width),
       );
 
-      const targetX = servicePos.x - maxTransW - gapX;
+      // LR Layout: Transformers sit in a column to the LEFT of the target node (service or webPage)
+      const targetX = targetPos.x - maxTransW - gapX;
 
       // Compute ideal Y for each transformer aligned with its connected handle
       interface TransItem {
@@ -124,13 +134,14 @@ export function layoutHangingTransformerNodes({
       const items: TransItem[] = transformers.map((tNode) => {
         const { width, height } = getNodeDimensions(tNode);
         const edge = hangingEdges.find(
-          (e) => e.source === tNode.id && e.target === serviceId,
+          (e) =>
+            (e.source === tNode.id && e.target === targetId) ||
+            (e.target === tNode.id && e.source === targetId),
         );
-        const handleRatio = resolveServiceHandleRatio(
-          serviceNode,
-          edge?.targetHandle,
-        );
-        const targetHandleY = servicePos.y + handleRatio * serviceH;
+        const handleId =
+          edge?.source === targetId ? edge.sourceHandle : edge?.targetHandle;
+        const handleRatio = resolveServiceHandleRatio(targetNode, handleId);
+        const targetHandleY = targetPos.y + handleRatio * targetH;
         const idealY = targetHandleY - height / 2;
 
         return {
@@ -182,14 +193,14 @@ export function layoutHangingTransformerNodes({
         });
       });
     } else {
-      // TB Layout: Transformers sit in a row above the service node
+      // TB Layout: Transformers sit in a row above the target node
       const gapY = 60;
       const minHorizontalGap = 20;
 
       const maxTransH = Math.max(
         ...transformers.map((t) => getNodeDimensions(t).height),
       );
-      const targetY = servicePos.y - maxTransH - gapY;
+      const targetY = targetPos.y - maxTransH - gapY;
 
       const items = transformers.map((tNode) => {
         const { width, height } = getNodeDimensions(tNode);
@@ -197,14 +208,14 @@ export function layoutHangingTransformerNodes({
           node: tNode,
           width,
           height,
-          x: servicePos.x + serviceW / 2 - width / 2,
+          x: targetPos.x + targetW / 2 - width / 2,
         };
       });
 
       const totalW =
         items.reduce((s, it) => s + it.width, 0) +
         (items.length - 1) * minHorizontalGap;
-      let startX = servicePos.x + serviceW / 2 - totalW / 2;
+      let startX = targetPos.x + targetW / 2 - totalW / 2;
 
       items.forEach((item) => {
         positionsMap.set(item.node.id, {

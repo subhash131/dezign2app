@@ -99,16 +99,16 @@ export function useServiceStepHandLayout(
   edges: BackendEdge[],
   updateNode: (id: string, changes: Partial<BackendNode>) => void,
 ): ServiceStepHandLayoutInfo {
-  // Find edge connecting this node to a service node
+  // Find edge connecting this node to a service or webPage node
   const serviceEdge = useMemo(() => {
     return edges.find((e) => {
       if (e.source === nodeId) {
         const target = nodes.find((n) => n.id === e.target);
-        return target?.type === "service";
+        return target?.type === "service" || target?.type === "webPage";
       }
       if (e.target === nodeId) {
         const source = nodes.find((n) => n.id === e.source);
-        return source?.type === "service";
+        return source?.type === "service" || source?.type === "webPage";
       }
       return false;
     });
@@ -117,7 +117,7 @@ export function useServiceStepHandLayout(
   const connectedServiceNode = useMemo(() => {
     if (!serviceEdge) return null;
     const sId = serviceEdge.source === nodeId ? serviceEdge.target : serviceEdge.source;
-    return nodes.find((n) => n.id === sId && n.type === "service") || null;
+    return nodes.find((n) => n.id === sId && (n.type === "service" || n.type === "webPage")) || null;
   }, [serviceEdge, nodes, nodeId]);
 
   const targetEndpointId = useMemo(() => {
@@ -128,7 +128,7 @@ export function useServiceStepHandLayout(
         : serviceEdge.targetHandle;
     if (!serviceHandle) return null;
     return serviceHandle.replace(
-      /^(endpoint-in-|endpoint-out-|consumedEvents-in-|consumedEvents-out-)/,
+      /^(endpoint-in-|endpoint-out-|consumedEvents-in-|consumedEvents-out-|events-|event-in-|pageload-in-|action-in-|rtc-out-|rtc-in-)/,
       "",
     );
   }, [serviceEdge, connectedServiceNode]);
