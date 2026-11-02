@@ -695,14 +695,16 @@ export function performSchemaLayout({
 
   // 8. Apply node position changes (only for nodes whose position actually moved or new group containers)
   if (onNodesChange) {
+    const inputNodeMap = new Map<string, LayoutNode>(nodes.map((n) => [n.id, n]));
     const nodeChanges: PositionNodeChange[] = allFinalNodes
       .filter((node) => {
-        if (node.type === "group") return true;
+        const inputNode = inputNodeMap.get(node.id);
+        if (!inputNode) return true;
         const pos = positionsMap.get(node.id);
         if (!pos) return false;
         return (
-          Math.abs(node.position.x - pos.x) > 0.5 ||
-          Math.abs(node.position.y - pos.y) > 0.5
+          Math.abs(inputNode.position.x - pos.x) > 0.5 ||
+          Math.abs(inputNode.position.y - pos.y) > 0.5
         );
       })
       .map((node: LayoutNode) => {

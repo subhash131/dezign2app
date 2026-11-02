@@ -15,6 +15,8 @@ export type LayoutNode = Node<BackendNodeData> & {
   style?: CSSProperties;
   width?: number;
   height?: number;
+  sourcePosition?: string;
+  targetPosition?: string;
 };
 export type LayoutEdge = Edge | BackendEdge;
 
@@ -45,6 +47,8 @@ export interface LayoutNodeLike {
   fractionalIndex?: string;
   nodeId?: string;
   parentId?: string;
+  sourcePosition?: string;
+  targetPosition?: string;
 }
 
 export interface LayoutEdgeLike {

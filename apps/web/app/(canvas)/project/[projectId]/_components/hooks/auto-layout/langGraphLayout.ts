@@ -463,37 +463,68 @@ export function performLangGraphLayout<
     });
   }
 
-  // ── 8. Emit node position changes ─────────────────────────────────────────
-  const nodeChanges: PositionNodeChange[] = nodes.map((node) => {
-    const pos = positionsMap.get(node.id) ?? {
-      x: node.position.x,
-      y: node.position.y,
-    };
-    const isAttachedHead = attachedHeadNodeIdSet.has(node.id);
-    const isDef          = defNodeIdSet.has(node.id);
+  // ── 8. Emit node position changes (only for nodes whose position or handle orientation actually changed) ───
+  const nodeChanges: PositionNodeChange[] = nodes
+    .filter((node) => {
+      const pos = positionsMap.get(node.id);
+      if (!pos) return false;
 
-    return {
-      id: node.id,
-      type: "position",
-      position: pos,
-      sourcePosition: isAttachedHead
+      const isAttachedHead = attachedHeadNodeIdSet.has(node.id);
+      const isDef          = defNodeIdSet.has(node.id);
+      const nextSourcePosition = isAttachedHead
         ? Position.Bottom
         : isDef
           ? Position.Right
           : isHorizontal
             ? Position.Right
-            : Position.Bottom,
-      targetPosition: isAttachedHead
+            : Position.Bottom;
+      const nextTargetPosition = isAttachedHead
         ? Position.Top
         : isDef
           ? Position.Left
           : isHorizontal
             ? Position.Left
-            : Position.Top,
-    };
-  });
+            : Position.Top;
 
-  if (onNodesChange) {
+      const hasPosChanged =
+        Math.abs(node.position.x - pos.x) > 0.5 ||
+        Math.abs(node.position.y - pos.y) > 0.5;
+      const hasHandleChanged =
+        (Boolean(node.sourcePosition) && node.sourcePosition !== nextSourcePosition) ||
+        (Boolean(node.targetPosition) && node.targetPosition !== nextTargetPosition);
+
+      return hasPosChanged || hasHandleChanged;
+    })
+    .map((node) => {
+      const pos = positionsMap.get(node.id) ?? {
+        x: node.position.x,
+        y: node.position.y,
+      };
+      const isAttachedHead = attachedHeadNodeIdSet.has(node.id);
+      const isDef          = defNodeIdSet.has(node.id);
+
+      return {
+        id: node.id,
+        type: "position",
+        position: pos,
+        sourcePosition: isAttachedHead
+          ? Position.Bottom
+          : isDef
+            ? Position.Right
+            : isHorizontal
+              ? Position.Right
+              : Position.Bottom,
+        targetPosition: isAttachedHead
+          ? Position.Top
+          : isDef
+            ? Position.Left
+            : isHorizontal
+              ? Position.Left
+              : Position.Top,
+      };
+    });
+
+  if (onNodesChange && nodeChanges.length > 0) {
     onNodesChange(nodeChanges);
   }
 

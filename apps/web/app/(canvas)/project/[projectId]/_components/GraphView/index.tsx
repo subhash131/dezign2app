@@ -12,15 +12,7 @@ import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useSimulationStore } from "@/lib/stores/simulationStore";
 import { useSidebarStore, getEffectiveConfigSidebarWidth } from "@/lib/stores/sidebarStore";
 import { nodeTypes } from "../backend-nodes/Nodes";
-import { ForeignKeyEdge } from "../backend-nodes/ForeignKeyEdge";
-import {
-  HTTPConnectionEdge,
-  MessagingEdge,
-  IdentityConnectionEdge,
-  TransformerReferenceEdge,
-  StorageReferenceEdge,
-  TypeReferenceEdge,
-} from "../backend-nodes/CustomEdges";
+import { canvasEdgeTypes } from "../backend-nodes/CustomEdges";
 import { isValidConnection, WebAppZone } from "@workspace/canvas";
 import { useCanvasHandlers } from "../hooks/useCanvasHandlers";
 import { useGraphAutoLayout, getGraphFlowNodes } from "../hooks/useAutoLayout";
@@ -31,16 +23,7 @@ import { sortZonePages } from "@/app/(canvas)/project/[projectId]/_components/ba
 import { healDirectTransformerEdges, resolveWebPageActionInboundHandle } from "@/lib/stores/backendCanvas/edge/handlers/transformerConnect";
 import { healOrphanedWebPageEdges } from "@/lib/stores/backendCanvas/edge/handlers/healOrphanedWebPageEdges";
 
-const edgeTypes = {
-  "foreign-key": ForeignKeyEdge,
-  connection: HTTPConnectionEdge,
-  message: MessagingEdge,
-  "identity-connection": IdentityConnectionEdge,
-  "transformer-reference": TransformerReferenceEdge,
-  "storage-reference": StorageReferenceEdge,
-  "type-reference": TypeReferenceEdge,
-  reference: TransformerReferenceEdge,
-};
+// canvasEdgeTypes is imported from CustomEdges
 
 export interface GraphViewProps {
   projectId: string;
@@ -636,7 +619,7 @@ export function GraphView({ projectId, projectName }: GraphViewProps) {
         onConnect={onConnect}
         isValidConnection={handleIsValidConnection}
         nodeTypes={nodeTypes}
-        edgeTypes={edgeTypes}
+        edgeTypes={canvasEdgeTypes}
         onMoveEnd={handleMoveEnd}
         attributionPosition="bottom-right"
         minZoom={0.01}
