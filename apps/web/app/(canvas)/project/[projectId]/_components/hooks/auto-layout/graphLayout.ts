@@ -747,17 +747,6 @@ export function performGraphLayout({
     attachedHeadNodes,
   });
 
-  // 6.5. Layout hanging transformer nodes in a dedicated column right before their connected service node
-  layoutHangingTransformerNodes({
-    nodes: graphNodes,
-    positionsMap,
-    hangingEdges,
-    hangingTransformerNodes,
-    isHorizontal,
-    storeEndpoints,
-    storeEvents,
-  });
-
   // 6.6. Layout hanging reference nodes (Table Ref, Redis Cache Ref, Vector DB Ref, LangGraph, Storage Bucket Ref) in a dedicated column immediately preceding (to the left of) their connected service node
   const { stackedRefDeckGroups = [] } =
     layoutHangingReferenceNodes({
@@ -816,6 +805,18 @@ export function performGraphLayout({
     hangingStateStoreNodes,
     isHorizontal,
     stackedZonesList,
+  });
+
+  // 6.70. Layout hanging transformer nodes in a dedicated column right before their connected service or webPage node
+  layoutHangingTransformerNodes({
+    nodes: graphNodes,
+    positionsMap,
+    hangingEdges,
+    hangingTransformerNodes,
+    isHorizontal,
+    storeEndpoints,
+    storeEvents,
+    secondaryToLeadPageMap,
   });
 
   // 6.695. Final safety overlap resolution pass for all positioned nodes

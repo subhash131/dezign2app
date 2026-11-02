@@ -338,4 +338,126 @@ describe("hangingTransformerLayout - Auto-Layout for Hanging Transformers", () =
     expect(refPos.x).toBeLessThan(pagePos.x);
     expect(pagePos.x - (refPos.x + 260)).toBeCloseTo(80, 0);
   });
+  it("positions transformer_ref between state_store (appstore) and webPage without overlapping state_store", () => {
+    const nodes: LayoutNode[] = [
+      {
+        id: "web-app",
+        type: "webApp",
+        position: { x: 0, y: 0 },
+        data: {
+          label: "web",
+          zones: [
+            { id: "zone-public", handleId: "public-in", name: "Public Section", accessType: "public" },
+          ],
+        },
+      },
+      {
+        id: "store-send-message",
+        type: "state_store",
+        position: { x: 0, y: 0 },
+        data: {
+          label: "SendMessageStore",
+          fields: [{ id: "field-messages", name: "messages", type: "string" }],
+        },
+      },
+      {
+        id: "master-global-trans",
+        type: "transformer",
+        position: { x: 0, y: 0 },
+        data: {
+          label: "chatIdGenerator",
+          scope: "global",
+        },
+      },
+      {
+        id: "trans-ref-chat-id",
+        type: "transformer_ref",
+        position: { x: 0, y: 0 },
+        data: {
+          label: "chatIdGenerator (Ref)",
+          transformerRef: "master-global-trans",
+        },
+      },
+      {
+        id: "web-page-c",
+        type: "webPage",
+        position: { x: 0, y: 0 },
+        data: {
+          label: "/c",
+          sections: [
+            {
+              id: "sec-main",
+              name: "Main Section",
+              actions: [{ id: "act-send", name: "send message" }],
+            },
+          ],
+        },
+      },
+    ];
+
+    const edges: LayoutEdge[] = [
+      {
+        id: "e-app-to-page",
+        source: "web-app",
+        target: "web-page-c",
+        sourceHandle: "public-in",
+        targetHandle: "page-in",
+        type: "connection",
+      },
+      {
+        id: "e-ref-link",
+        source: "master-global-trans",
+        target: "trans-ref-chat-id",
+        type: "transformer-reference",
+      },
+      {
+        id: "e-store-to-trans",
+        source: "store-send-message",
+        target: "trans-ref-chat-id",
+        sourceHandle: "state-var-messages",
+        targetHandle: "transformer-in",
+        type: "connection",
+      },
+      {
+        id: "e-trans-to-page",
+        source: "trans-ref-chat-id",
+        target: "web-page-c",
+        sourceHandle: "transformer-out",
+        targetHandle: "action-in-act-send",
+        type: "connection",
+      },
+    ];
+
+    let appliedChanges: PositionNodeChange[] = [];
+    const onNodesChange = (changes: PositionNodeChange[]) => {
+      appliedChanges = changes;
+    };
+    const fitView = vi.fn();
+
+    performGraphLayout({
+      nodes,
+      edges,
+      onNodesChange,
+      fitView,
+      direction: "LR",
+    });
+
+    const posMap = new Map(
+      appliedChanges.map((c) => [c.id, c.position]),
+    );
+
+    const storePos = posMap.get("store-send-message")!;
+    const transPos = posMap.get("trans-ref-chat-id")!;
+    const pagePos = posMap.get("web-page-c")!;
+
+    // 1. Transformer must sit strictly to the right of the state_store without overlapping
+    expect(transPos.x).toBeGreaterThanOrEqual(storePos.x + 390);
+
+    // 2. Transformer must sit strictly to the left of the webPage without overlapping
+    expect(transPos.x + 260).toBeLessThanOrEqual(pagePos.x);
+
+    // 3. No overlap: transPos.x is cleanly in between store and page
+    expect(transPos.x).toBeGreaterThan(storePos.x);
+    expect(transPos.x).toBeLessThan(pagePos.x);
+  });
 });
