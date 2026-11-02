@@ -6,10 +6,13 @@ on:
       - main
     paths:
       - 'packages/backend/**'
+      - 'packages/canvas/**'
+      - '.github/workflows/deploy-convex.yml'
+  workflow_dispatch:
 
 jobs:
   deploy:
-    if: github.repository == 'dezign2app/dezign2app-prod'
+    if: github.repository == 'dezign2app/dezign2app-prod' || github.repository == 'subhash131/dezign2app'
     runs-on: ubuntu-latest
 
     steps:
