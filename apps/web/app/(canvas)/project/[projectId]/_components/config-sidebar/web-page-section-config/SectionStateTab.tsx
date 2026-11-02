@@ -39,6 +39,7 @@ export const SectionStateTab: React.FC<SectionStateTabProps> = ({
   const nodes = useBackendCanvasStore((s) => s.nodes);
   const edges = useBackendCanvasStore((s) => s.edges);
   const addNode = useBackendCanvasStore((s) => s.addNode);
+  const deleteEdge = useBackendCanvasStore((s) => s.deleteEdge);
 
   // Local state buffering for 0ms instant UI checkbox toggling
   const [localStates, setLocalStates] = useState<PageStateObject[] | null>(null);
@@ -200,11 +201,25 @@ export const SectionStateTab: React.FC<SectionStateTabProps> = ({
 
   const commitStates = React.useCallback(
     (nextStates: PageStateObject[]) => {
+      // Synchronize edges for removed state objects
+      if (nodeId && section?.id) {
+        const currentConfigured = section.stateObjects || [];
+        const nextIds = new Set(nextStates.map((s) => s.id));
+        const removedStates = currentConfigured.filter((s) => !nextIds.has(s.id));
+
+        removedStates.forEach((st) => {
+          const targetHandle = `section-state-in-${section.id}-${st.id}`;
+          edges
+            .filter((e) => e.target === nodeId && e.targetHandle === targetHandle)
+            .forEach((e) => deleteEdge(e.id));
+        });
+      }
+
       if (onUpdateSection) {
         onUpdateSection({ stateObjects: nextStates });
       }
     },
-    [onUpdateSection],
+    [onUpdateSection, nodeId, section?.id, section?.stateObjects, edges, deleteEdge],
   );
 
   const scheduleCommit = (nextStates: PageStateObject[]) => {

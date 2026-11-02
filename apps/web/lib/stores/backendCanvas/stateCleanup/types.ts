@@ -21,6 +21,7 @@ export interface EdgeCleanupContext {
   nodesChanged: boolean;
   endpointsChanged: boolean;
   eventsChanged: boolean;
+  additionalRemovedEdgeIds?: string[];
 }
 
 export interface DeletedNodesMeta {

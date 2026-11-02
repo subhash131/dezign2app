@@ -12,3 +12,4 @@ export * from "./handlers/langGraphConnect";
 export * from "./handlers/redisCacheConnect";
 export * from "./handlers/storageConnect";
 export * from "./handlers/webPageActionConnect";
+export * from "./handlers/healOrphanedWebPageEdges";

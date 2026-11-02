@@ -29,6 +29,7 @@ import { TopToolbarPanel } from "./TopToolbarPanel";
 import { TestCaseDialogs } from "./TestCaseDialogs";
 import { sortZonePages } from "@/app/(canvas)/project/[projectId]/_components/backend-nodes/graph-nodes/nodes/gateway/web-page";
 import { healDirectTransformerEdges, resolveWebPageActionInboundHandle } from "@/lib/stores/backendCanvas/edge/handlers/transformerConnect";
+import { healOrphanedWebPageEdges } from "@/lib/stores/backendCanvas/edge/handlers/healOrphanedWebPageEdges";
 
 const edgeTypes = {
   "foreign-key": ForeignKeyEdge,
@@ -106,6 +107,25 @@ export function GraphView({ projectId, projectName }: GraphViewProps) {
           pendingNodeUpserts: healed.pendingNodeUpserts,
         });
       }
+    }
+
+    // Auto-heal orphaned edges connected to WebPage nodes whose handles were removed
+    const storeAfterTrans = useBackendCanvasStore.getState();
+    const orphanedWp = healOrphanedWebPageEdges({
+      nodes: storeAfterTrans.nodes,
+      edges: storeAfterTrans.edges,
+      pendingEdgeRemovals: storeAfterTrans.pendingEdgeRemovals,
+      pendingEdgeUpserts: storeAfterTrans.pendingEdgeUpserts,
+      pendingNodeUpserts: storeAfterTrans.pendingNodeUpserts,
+    });
+    if (orphanedWp.changed) {
+      useBackendCanvasStore.setState({
+        nodes: orphanedWp.nodes,
+        edges: orphanedWp.edges,
+        pendingEdgeRemovals: orphanedWp.pendingEdgeRemovals,
+        pendingEdgeUpserts: orphanedWp.pendingEdgeUpserts,
+        pendingNodeUpserts: orphanedWp.pendingNodeUpserts,
+      });
     }
   }, [edges, nodes]);
   const simulation = useSimulationStore();
