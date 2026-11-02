@@ -113,7 +113,7 @@ function RedisCacheRefConfigContent({
 
     // 2. Navigate to schema page if projectId available
     if (projectId) {
-      router.push(`/project/${projectId}/schemas`);
+      router.push(`/project/${projectId}?view=schema`);
     }
 
     // 3. Open Redis Schema / Instance config in Schema View

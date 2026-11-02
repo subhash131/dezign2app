@@ -31,7 +31,7 @@ import { renameDbTable } from "@/lib/services/databaseService";
 import { syncDerivedTypesForEntity } from "@/lib/stores/backendCanvas/packageTypesSync";
 import { toast } from "sonner";
 
-export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
+export const EntityNode = React.memo(({ id, data, selected }: NodeProps<BackendNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const setActiveConfigItem = useBackendCanvasStore(
     (s) => s.setActiveConfigItem,
@@ -57,10 +57,13 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
   const isVector = data.dbType === "vector";
 
   // Ensure default columns (id, created_at, updated_at) for relational tables
+  const hasInitializedColumnsRef = useRef(false);
   React.useEffect(() => {
+    if (hasInitializedColumnsRef.current) return;
     if (isVector || data.dbType === "redis" || data.readOnly) return;
 
     if (!data.columns || data.columns.length === 0) {
+      hasInitializedColumnsRef.current = true;
       updateNode(id, {
         data: {
           ...data,
@@ -78,6 +81,7 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
       data.columns.length === 1 &&
       data.columns[0]?.name?.toLowerCase() === "id"
     ) {
+      hasInitializedColumnsRef.current = true;
       updateNode(id, {
         data: {
           ...data,
@@ -561,4 +565,6 @@ export const EntityNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
       <div className="h-2 w-full border-t border-transparent rounded-b-[10px]" />
     </div>
   );
-};
+});
+
+EntityNode.displayName = "EntityNode";

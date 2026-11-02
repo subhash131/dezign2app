@@ -106,7 +106,7 @@ function DatabaseTableRefConfigContent({
 
     // 2. Navigate to schema page if projectId available
     if (projectId) {
-      router.push(`/project/${projectId}/schemas`);
+      router.push(`/project/${projectId}?view=schema`);
     }
 
     // 3. Open target Database config in Schema View

@@ -182,15 +182,18 @@ export const createSyncSlice = (
     }),
 
   setView: (view) =>
-    set((state) => ({
-      canvasView: view,
-      canUndo:
-        (view === "schema" ? state.schemaUndoStack : state.graphUndoStack)
-          .length > 0,
-      canRedo:
-        (view === "schema" ? state.schemaRedoStack : state.graphRedoStack)
-          .length > 0,
-    })),
+    set((state) => {
+      if (state.canvasView === view) return state;
+      return {
+        canvasView: view,
+        canUndo:
+          (view === "schema" ? state.schemaUndoStack : state.graphUndoStack)
+            .length > 0,
+        canRedo:
+          (view === "schema" ? state.schemaRedoStack : state.graphRedoStack)
+            .length > 0,
+      };
+    }),
 
   clearPending: (
     syncedNodes,

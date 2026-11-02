@@ -16,12 +16,13 @@ interface TopToolbarPanelProps {
   projectName?: string;
 }
 
-export const TopToolbarPanel: React.FC<TopToolbarPanelProps> = ({
+export const TopToolbarPanel: React.FC<TopToolbarPanelProps> = React.memo(({
   onLayout,
   projectId,
   projectName,
 }) => {
-  const simulation = useSimulationStore();
+  const isSimulationActive = useSimulationStore((s) => s.status !== "idle");
+  const clearSimulation = useSimulationStore((s) => s.clear);
   const personas = useTestUsersStore((s) => s.personas);
   const setActiveConfigItem = useBackendCanvasStore((s) => s.setActiveConfigItem);
   const paletteOpen = useSidebarStore((s) => s.paletteOpen);
@@ -276,14 +277,14 @@ export const TopToolbarPanel: React.FC<TopToolbarPanelProps> = ({
           </Badge>
         </Button>
 
-        {simulation.status !== "idle" && (
+        {isSimulationActive && (
           <>
             <div className="w-px h-4 bg-sidebar-border mx-0.5" />
             <Button
               variant="destructive"
               size="sm"
               className="h-7 px-2.5 text-xs gap-1.5 shadow-sm"
-              onClick={simulation.clear}
+              onClick={clearSimulation}
               title="Reset simulation state"
             >
               <RotateCcw className="w-3.5 h-3.5" />
@@ -294,4 +295,4 @@ export const TopToolbarPanel: React.FC<TopToolbarPanelProps> = ({
       </div>
     </Panel>
   );
-};
+});

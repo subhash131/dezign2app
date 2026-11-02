@@ -22,6 +22,7 @@ import {
   CANVAS_HANDLE_LEFT_OFFSET_CLASS,
 } from "@workspace/canvas/constants";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { useShallow } from "zustand/react/shallow";
 import { useRouter } from "next/navigation";
 import {
   NodeHeader,
@@ -42,17 +43,14 @@ import { RealtimeConnection, ClientDeliveryProtocol, Endpoint, PageStateObject, 
 import { SectionList, RealtimeConnectionList, useZoneHandLayout } from "./web-page";
 import { NodeDeletionDialog } from "@/app/(canvas)/project/[projectId]/_components/NodeDeletionDialog";
 
-export const WebPageNode = ({
+export const WebPageNode = React.memo(({
   id,
   data,
   selected,
 }: NodeProps<BackendNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const setActiveConfigItem = useBackendCanvasStore((s) => s.setActiveConfigItem);
-  const nodes = useBackendCanvasStore((s) => s.nodes);
-  const edges = useBackendCanvasStore((s) => s.edges);
   const addEdge = useBackendCanvasStore((s) => s.addEdge);
-  const endpoints = useBackendCanvasStore((s) => s.endpoints);
   const simulation = useSimulationNodeState(id);
   const borderClass = getSimulationNodeBorderClass(
     simulation,
@@ -108,6 +106,7 @@ export const WebPageNode = ({
   // Auto-sync canvas edges from state store operations to WebPageNode actions when configured
   React.useEffect(() => {
     if (!data?.sections || data.sections.length === 0) return;
+    const { nodes: currentNodes, edges: currentEdges } = useBackendCanvasStore.getState();
 
     data.sections.forEach((sec) => {
       (sec.actions || []).forEach((act) => {
@@ -138,9 +137,9 @@ export const WebPageNode = ({
           if (!b.storeNodeId && !b.storeName) return;
           if (!b.actionId && !b.actionType) return;
 
-          let storeNode = nodes.find((n) => n.id === b.storeNodeId && n.type === "state_store");
+          let storeNode = currentNodes.find((n) => n.id === b.storeNodeId && n.type === "state_store");
           if (!storeNode && b.storeName) {
-            storeNode = nodes.find(
+            storeNode = currentNodes.find(
               (n) => n.type === "state_store" && (n.data?.storeName === b.storeName || n.data?.label === b.storeName),
             );
           }
@@ -167,7 +166,7 @@ export const WebPageNode = ({
             sourceHandle = `store-action-out-${actId}`;
           }
 
-          const edgeExists = edges.some(
+          const edgeExists = currentEdges.some(
             (e) =>
               e.source === storeNode!.id &&
               e.target === id &&
@@ -202,11 +201,12 @@ export const WebPageNode = ({
         });
       });
     });
-  }, [data?.sections, id, nodes, edges, addEdge]);
+  }, [data?.sections, id, addEdge]);
 
   // Auto-sync canvas edges from transformer_ref nodes to WebPageNode actions when configured in actionSteps
   React.useEffect(() => {
     if (!data?.sections || data.sections.length === 0) return;
+    const { nodes: currentNodes, edges: currentEdges } = useBackendCanvasStore.getState();
 
     const sections: PageSection[] = data.sections;
     sections.forEach((sec: PageSection) => {
@@ -232,7 +232,7 @@ export const WebPageNode = ({
           : `event-in-${act.id}`;
 
         transSteps.forEach((step: FrontendActionStepDraft) => {
-          let refNode: BackendNode | undefined = nodes.find(
+          let refNode: BackendNode | undefined = currentNodes.find(
             (n: BackendNode): boolean =>
               n.type === "transformer_ref" &&
               (n.id === step.transformerRefNodeId ||
@@ -246,11 +246,11 @@ export const WebPageNode = ({
           );
 
           if (!refNode && step.transformerNodeId) {
-            const masterNode = nodes.find(
+            const masterNode = currentNodes.find(
               (n: BackendNode): boolean => n.id === step.transformerNodeId && n.type === "transformer",
             );
             if (masterNode) {
-              refNode = nodes.find(
+              refNode = currentNodes.find(
                 (n: BackendNode): boolean =>
                   n.type === "transformer_ref" &&
                   n.data?.transformerRef === masterNode.id &&
@@ -265,7 +265,7 @@ export const WebPageNode = ({
 
           // Crucial: check that edge is specifically connected to THIS action handle,
           // avoiding false matches across multiple actions using the same refNode
-          const edgeForAction = edges.find(
+          const edgeForAction = currentEdges.find(
             (e) =>
               e.source === refNode!.id &&
               e.target === id &&
@@ -286,7 +286,7 @@ export const WebPageNode = ({
             }
           } else {
             const edgeId = `edge-ref-${refNode.id}-${act.id}`;
-            const alreadyHasEdgeWithId = edges.some((e) => e.id === edgeId);
+            const alreadyHasEdgeWithId = currentEdges.some((e) => e.id === edgeId);
             if (!alreadyHasEdgeWithId) {
               addEdge({
                 id: edgeId,
@@ -305,11 +305,12 @@ export const WebPageNode = ({
         });
       });
     });
-  }, [data?.sections, id, nodes, edges, addEdge]);
+  }, [data?.sections, id, addEdge]);
 
   // Auto-sync Chat component state variables ("messages") into section.stateObjects (Rendered Store State)
   React.useEffect(() => {
     if (!data?.sections || data.sections.length === 0) return;
+    const { nodes: currentNodes } = useBackendCanvasStore.getState();
 
     let hasChanges = false;
     const nextSections = data.sections.map((sec) => {
@@ -338,7 +339,7 @@ export const WebPageNode = ({
         const storeId = cb.propMappings?.chatMessagesStoreId || cb.propMappings?.valueStoreId;
         const storeName = cb.propMappings?.chatMessagesStoreName || cb.propMappings?.valueStoreName || cb.valueStoreName;
 
-        let storeNode = nodes.find(
+        let storeNode = currentNodes.find(
           (n) =>
             n.type === "state_store" &&
             ((storeId && n.id === storeId) ||
@@ -346,7 +347,7 @@ export const WebPageNode = ({
         );
 
         if (!storeNode) {
-          storeNode = nodes.find((n) => {
+          storeNode = currentNodes.find((n) => {
             if (n.type !== "state_store") return false;
             return (n.data?.fields || []).some((f: any) => f.name === messagesVarName);
           });
@@ -391,7 +392,13 @@ export const WebPageNode = ({
         },
       });
     }
-  }, [data?.sections, id, nodes, updateNode]);
+  }, [data?.sections, id, updateNode]);
+
+  // Narrow selector: only subscribe to webApp and webPage nodes so moving other nodes doesn't re-render this page
+  const webPageAndAppNodes = useBackendCanvasStore(
+    useShallow((s) => s.nodes.filter((n) => n.type === "webApp" || n.type === "webPage")),
+  );
+  const edges = useBackendCanvasStore((s) => s.edges);
 
   const {
     cardIndex,
@@ -402,7 +409,7 @@ export const WebPageNode = ({
     selectCard,
     moveCard,
     bringCardToFront,
-  } = useZoneHandLayout(id, nodes, edges, updateNode);
+  } = useZoneHandLayout(id, webPageAndAppNodes, edges, updateNode);
 
   // Find incoming WebApp edge connecting to this page
   const incomingEdge = edges.find((e) => {
@@ -410,12 +417,12 @@ export const WebPageNode = ({
     const isSource = e.source === id;
     if (!isTarget && !isSource) return false;
     const otherId = isSource ? e.target : e.source;
-    const otherNode = nodes.find((n) => n.id === otherId);
+    const otherNode = webPageAndAppNodes.find((n) => n.id === otherId);
     return otherNode?.type === "webApp";
   });
 
   const connectedWebAppNode = incomingEdge
-    ? nodes.find(
+    ? webPageAndAppNodes.find(
         (n) =>
           n.type === "webApp" &&
           (n.id === incomingEdge.source || n.id === incomingEdge.target),
@@ -468,11 +475,12 @@ export const WebPageNode = ({
       // Check if user is trying to rename to "layout"
       if (cleanNew.toLowerCase() === "layout") {
         if (connectedWebAppNode && incomingEdge) {
+          const store = useBackendCanvasStore.getState();
           const handleId =
             incomingEdge.source === connectedWebAppNode.id
               ? incomingEdge.sourceHandle
               : incomingEdge.targetHandle;
-          const alreadyHasOtherLayout = edges.some((e) => {
+          const alreadyHasOtherLayout = store.edges.some((e) => {
             if (e.id === incomingEdge.id) return false;
             const isTarget =
               e.target === connectedWebAppNode.id && e.targetHandle === handleId;
@@ -480,7 +488,7 @@ export const WebPageNode = ({
               e.source === connectedWebAppNode.id && e.sourceHandle === handleId;
             if (!isTarget && !isSource) return false;
             const otherNodeId = isSource ? e.target : e.source;
-            const otherNode = nodes.find((n) => n.id === otherNodeId);
+            const otherNode = store.nodes.find((n) => n.id === otherNodeId);
             return (
               otherNode?.id !== id &&
               (Boolean(otherNode?.data?.isLayout) ||
@@ -578,12 +586,13 @@ export const WebPageNode = ({
 
       // Check if another page in the same WebApp already has this route
       if (cleanNew.toLowerCase() !== "layout" && connectedWebAppNode) {
+        const store = useBackendCanvasStore.getState();
         const normalizedNew = normalizePageRoute(cleanNew);
-        const existingPageEdges = edges.filter(
+        const existingPageEdges = store.edges.filter(
           (e) => e.source === connectedWebAppNode.id || e.target === connectedWebAppNode.id,
         );
         const duplicatePage = existingPageEdges
-          .map((e) => nodes.find((n) => n.id === (e.source === connectedWebAppNode.id ? e.target : e.source)))
+          .map((e) => store.nodes.find((n) => n.id === (e.source === connectedWebAppNode.id ? e.target : e.source)))
           .find(
             (other) =>
               other &&
@@ -694,7 +703,7 @@ export const WebPageNode = ({
       setPendingRename({ oldLabel: cleanOld, newLabel: cleanNew });
       setRenameDialogOpen(true);
     },
-    [data, id, updateNode, connectedWebAppNode, incomingEdge, edges, nodes, connectedZoneName],
+    [data, id, updateNode, connectedWebAppNode, incomingEdge, connectedZoneName],
   );
 
   const isCustomOverride = Boolean(
@@ -925,17 +934,18 @@ export const WebPageNode = ({
       // Determine sibling pages in the same zone for static navigation links
       let navItems: Array<{ id: string; name: string; link: string }> = [];
       if (connectedWebAppNode && incomingEdge) {
+        const store = useBackendCanvasStore.getState();
         const handleId =
           incomingEdge.source === connectedWebAppNode.id
             ? incomingEdge.sourceHandle
             : incomingEdge.targetHandle;
-        const siblingEdges = edges.filter(
+        const siblingEdges = store.edges.filter(
           (e) =>
             (e.source === connectedWebAppNode.id && e.sourceHandle === handleId) ||
             (e.target === connectedWebAppNode.id && e.targetHandle === handleId),
         );
         const siblingPages = siblingEdges
-          .map((e) => nodes.find((n) => n.id === (e.source === connectedWebAppNode.id ? e.target : e.source)))
+          .map((e) => store.nodes.find((n) => n.id === (e.source === connectedWebAppNode.id ? e.target : e.source)))
           .filter((n): n is BackendNode =>
             Boolean(
               n &&
@@ -1045,17 +1055,18 @@ export const WebPageNode = ({
       // Determine sibling pages in the same zone for static navigation links
       let navItems: Array<{ id: string; name: string; link: string }> = [];
       if (connectedWebAppNode && incomingEdge) {
+        const store = useBackendCanvasStore.getState();
         const handleId =
           incomingEdge.source === connectedWebAppNode.id
             ? incomingEdge.sourceHandle
             : incomingEdge.targetHandle;
-        const siblingEdges = edges.filter(
+        const siblingEdges = store.edges.filter(
           (e) =>
             (e.source === connectedWebAppNode.id && e.sourceHandle === handleId) ||
             (e.target === connectedWebAppNode.id && e.targetHandle === handleId),
         );
         const siblingPages = siblingEdges
-          .map((e) => nodes.find((n) => n.id === (e.source === connectedWebAppNode.id ? e.target : e.source)))
+          .map((e) => store.nodes.find((n) => n.id === (e.source === connectedWebAppNode.id ? e.target : e.source)))
           .filter((n): n is BackendNode =>
             Boolean(
               n &&
@@ -1126,46 +1137,68 @@ export const WebPageNode = ({
     connectedZoneName,
     data,
     id,
-    nodes,
-    edges,
-    incomingEdge,
-    connectedWebAppNode,
     updateNode,
   ]);
 
-  // Check if multiple layout nodes are attached to the same section
-  const isDuplicateLayout = isLayout && Boolean(connectedWebAppNode && incomingEdge && (() => {
-    const handleId = incomingEdge.source === connectedWebAppNode.id ? incomingEdge.sourceHandle : incomingEdge.targetHandle;
-    const otherLayoutEdges = edges.filter(e => 
-      e.id !== incomingEdge.id &&
-      ((e.source === connectedWebAppNode.id && e.sourceHandle === handleId) ||
-       (e.target === connectedWebAppNode.id && e.targetHandle === handleId))
-    );
-    return otherLayoutEdges.some(e => {
-      const otherNodeId = e.source === connectedWebAppNode.id ? e.target : e.source;
-      const otherNode = nodes.find(n => n.id === otherNodeId);
-      return otherNode?.id !== id && (Boolean(otherNode?.data?.isLayout) || otherNode?.data?.label?.trim().toLowerCase() === "layout");
-    });
-  })());
-
-  // Check if multiple pages in this WebApp share the same normalized route
+  // Check if multiple layout nodes are attached to the same section or routes collide
   const currentNormalizedRoute = normalizePageRoute(data.label || data.path || "");
-  const duplicateRoutePage = !isLayout && connectedWebAppNode
-    ? (() => {
-        const connectedEdges = edges.filter(
+  const { isDuplicateLayout, isDuplicateRoute, duplicateRouteNodeLabel } = useBackendCanvasStore(
+    useShallow((s) => {
+      let dupLayout = false;
+      let dupRoute = false;
+      let dupRouteLabel: string | null = null;
+
+      if (isLayout && connectedWebAppNode && incomingEdge) {
+        const handleId =
+          incomingEdge.source === connectedWebAppNode.id
+            ? incomingEdge.sourceHandle
+            : incomingEdge.targetHandle;
+        const otherLayoutEdges = s.edges.filter(
+          (e) =>
+            e.id !== incomingEdge.id &&
+            ((e.source === connectedWebAppNode.id && e.sourceHandle === handleId) ||
+              (e.target === connectedWebAppNode.id && e.targetHandle === handleId)),
+        );
+        dupLayout = otherLayoutEdges.some((e) => {
+          const otherNodeId = e.source === connectedWebAppNode.id ? e.target : e.source;
+          const otherNode = s.nodes.find((n) => n.id === otherNodeId);
+          return (
+            otherNode?.id !== id &&
+            (Boolean(otherNode?.data?.isLayout) ||
+              otherNode?.data?.label?.trim().toLowerCase() === "layout")
+          );
+        });
+      }
+
+      if (!isLayout && connectedWebAppNode) {
+        const connectedEdges = s.edges.filter(
           (e) => e.source === connectedWebAppNode.id || e.target === connectedWebAppNode.id,
         );
-        return connectedEdges
-          .map((e) => nodes.find((n) => n.id === (e.source === connectedWebAppNode.id ? e.target : e.source)))
+        const dupNode = connectedEdges
+          .map((e) => {
+            const otherId = e.source === connectedWebAppNode.id ? e.target : e.source;
+            if (otherId === id) return null;
+            return s.nodes.find((n) => n.id === otherId);
+          })
           .find((other) => {
-            if (!other || other.id === id || other.type !== "webPage") return false;
+            if (!other || other.type !== "webPage") return false;
             if (other.data?.isLayout || other.data?.label?.trim().toLowerCase() === "layout") return false;
             return normalizePageRoute(other.data?.label || other.data?.path || "") === currentNormalizedRoute;
           });
-      })()
-    : null;
 
-  const isDuplicateRoute = Boolean(duplicateRoutePage);
+        if (dupNode) {
+          dupRoute = true;
+          dupRouteLabel = dupNode.data?.label || "Page";
+        }
+      }
+
+      return {
+        isDuplicateLayout: dupLayout,
+        isDuplicateRoute: dupRoute,
+        duplicateRouteNodeLabel: dupRouteLabel,
+      };
+    }),
+  );
 
   const isLocked = Boolean(data.aiEditing);
 
@@ -1367,7 +1400,7 @@ export const WebPageNode = ({
           {isDuplicateRoute && (
             <div className="px-3 py-1.5 bg-destructive/10 border-b border-destructive/25 flex items-center gap-1.5 text-[10px] text-destructive font-medium leading-tight nodrag">
               <AlertCircle size={12} className="shrink-0 text-destructive animate-pulse" />
-              <span>Duplicate route: Route "{currentNormalizedRoute}" conflicts with "{duplicateRoutePage?.data?.label || "Page"}"</span>
+              <span>Duplicate route: Route "{currentNormalizedRoute}" conflicts with "{duplicateRouteNodeLabel || "Page"}"</span>
             </div>
           )}
 
@@ -1524,5 +1557,5 @@ export const WebPageNode = ({
       )}
     </div>
   );
-};
+});
 

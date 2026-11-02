@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { NodeProps, Handle, Position, NodeChange } from "@xyflow/react";
 import {
   Globe,
@@ -35,6 +35,7 @@ import {
   AlertDialogTitle,
 } from "@workspace/ui/components/alert-dialog";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { useShallow } from "zustand/react/shallow";
 import { NodeHeader } from "../../common";
 import { NodeEnvVarsSection } from "../ai-security/ExternalEnvVarsDrawer";
 import { toggleZoneHandLayout } from "./web-page";
@@ -79,7 +80,7 @@ const DEFAULT_ZONES: WebAppZone[] = [
   },
 ];
 
-export const WebAppNode = ({
+export const WebAppNode = React.memo(({
   id,
   data,
   selected,
@@ -91,8 +92,6 @@ export const WebAppNode = ({
   const setActiveConfigItem = useBackendCanvasStore(
     (s) => s.setActiveConfigItem,
   );
-  const nodes = useBackendCanvasStore((s) => s.nodes);
-  const edges = useBackendCanvasStore((s) => s.edges);
   const deleteEdge = useBackendCanvasStore((s) => s.deleteEdge);
   const addNode = useBackendCanvasStore((s) => s.addNode);
   const addEdge = useBackendCanvasStore((s) => s.addEdge);
@@ -102,7 +101,7 @@ export const WebAppNode = ({
 
   const selectThisNode = () => {
     const store = useBackendCanvasStore.getState();
-    const selectChanges: NodeChange[] = nodes.map((n) => ({
+    const selectChanges: NodeChange[] = store.nodes.map((n) => ({
       type: "select",
       id: n.id,
       selected: n.id === id,
@@ -115,39 +114,46 @@ export const WebAppNode = ({
     (data.label || "web-app").toLowerCase().replace(/[^a-z0-9]+/g, "-");
   const port = data.port || "3000";
 
-  // Find connected Auth Node (via direct edge, handle, or authNodeId)
-  const connectedAuthNode =
-    (data.authNodeId
-      ? nodes.find((n) => n.id === data.authNodeId && n.type === "auth")
-      : null) ||
-    (() => {
-      const edge = edges.find((e) => {
-        if (e.target === id) {
-          const srcNode = nodes.find((n) => n.id === e.source);
-          return (
-            srcNode?.type === "auth" ||
-            e.targetHandle === "auth-in" ||
-            e.sourceHandle === "auth-out"
-          );
-        }
-        if (e.source === id) {
-          const tgtNode = nodes.find((n) => n.id === e.target);
-          return (
-            tgtNode?.type === "auth" ||
-            e.sourceHandle === "auth-in" ||
-            e.targetHandle === "auth-out"
-          );
-        }
-        return false;
-      });
-      if (!edge) return null;
-      const authId = edge.source === id ? edge.target : edge.source;
-      return nodes.find((n) => n.id === authId && n.type === "auth") || null;
-    })() ||
-    null;
+  // Narrow subscription: Find connected Auth Node info without subscribing to nodes/edges array mutations
+  const { isAuthConnected, authNodeLabel, connectedAuthNodeId } = useBackendCanvasStore(
+    useShallow((s) => {
+      const authNode =
+        (data.authNodeId
+          ? s.nodes.find((n) => n.id === data.authNodeId && n.type === "auth")
+          : null) ||
+        (() => {
+          const edge = s.edges.find((e) => {
+            if (e.target === id) {
+              const srcNode = s.nodes.find((n) => n.id === e.source);
+              return (
+                srcNode?.type === "auth" ||
+                e.targetHandle === "auth-in" ||
+                e.sourceHandle === "auth-out"
+              );
+            }
+            if (e.source === id) {
+              const tgtNode = s.nodes.find((n) => n.id === e.target);
+              return (
+                tgtNode?.type === "auth" ||
+                e.sourceHandle === "auth-in" ||
+                e.targetHandle === "auth-out"
+              );
+            }
+            return false;
+          });
+          if (!edge) return null;
+          const authId = edge.source === id ? edge.target : edge.source;
+          return s.nodes.find((n) => n.id === authId && n.type === "auth") || null;
+        })() ||
+        null;
 
-  const isAuthConnected = Boolean(connectedAuthNode);
-  const authNodeLabel = connectedAuthNode?.data?.label || "Auth";
+      return {
+        isAuthConnected: Boolean(authNode),
+        authNodeLabel: authNode?.data?.label || "Auth",
+        connectedAuthNodeId: authNode?.id || null,
+      };
+    }),
+  );
 
   // User-defined zones or default zones
   const zones: WebAppZone[] = Array.isArray(data.zones) ? data.zones : DEFAULT_ZONES;
@@ -176,7 +182,8 @@ export const WebAppNode = ({
     // Clean up connected edges to all deleted zone handles
     const targetZones = zones.filter((z) => idsToDelete.has(z.id));
     const handleIds = new Set(targetZones.map((z) => z.handleId));
-    const connectedEdges = edges.filter(
+    const currentEdges = useBackendCanvasStore.getState().edges;
+    const connectedEdges = currentEdges.filter(
       (e) =>
         (e.target === id && handleIds.has(e.targetHandle || "")) ||
         (e.source === id && handleIds.has(e.sourceHandle || "")),
@@ -259,27 +266,29 @@ export const WebAppNode = ({
     return <Lock className="w-3.5 h-3.5 text-indigo-500 shrink-0" />;
   };
 
-  // Helper to find connected WebClient page nodes for a given section handle
-  const getConnectedPages = (sectionHandleId: string) => {
-    const incomingEdges = edges.filter(
+  // Helper to find connected WebClient page nodes on demand (read from store state without forcing re-renders)
+  const getConnectedPagesFromStore = (sectionHandleId: string) => {
+    const store = useBackendCanvasStore.getState();
+    const incomingEdges = store.edges.filter(
       (e) =>
         (e.target === id && e.targetHandle === sectionHandleId) ||
         (e.source === id && e.sourceHandle === sectionHandleId),
     );
     return incomingEdges
       .map((e) =>
-        nodes.find((n) => n.id === (e.source === id ? e.target : e.source)),
+        store.nodes.find((n) => n.id === (e.source === id ? e.target : e.source)),
       )
       .filter((n): n is BackendNode => Boolean(n));
   };
 
   const createLayoutNodeForZone = (targetZone: WebAppZone) => {
+    const store = useBackendCanvasStore.getState();
     const newLayoutId = `webPage-layout-${Date.now()}`;
-    const thisNode = nodes.find((n) => n.id === id);
+    const thisNode = store.nodes.find((n) => n.id === id);
     const baseX = thisNode?.position?.x ?? 100;
     const baseY = thisNode?.position?.y ?? 100;
 
-    const connectedPages = getConnectedPages(targetZone.handleId);
+    const connectedPages = getConnectedPagesFromStore(targetZone.handleId);
     let posX = baseX + 420;
     let posY = baseY;
 
@@ -437,7 +446,7 @@ export const WebAppNode = ({
     const targetZone = zones.find((z) => z.id === zoneId);
     if (!targetZone) return;
 
-    const connectedPages = getConnectedPages(targetZone.handleId);
+    const connectedPages = getConnectedPagesFromStore(targetZone.handleId);
     const connectedLayoutNode = connectedPages.find(
       (p) => Boolean(p.data?.isLayout) || p.data?.label?.trim().toLowerCase() === "layout",
     );
@@ -474,13 +483,58 @@ export const WebAppNode = ({
     }
   };
 
-  // Find all connected WebPage nodes across all sections for duplicate route detection
-  const allConnectedPageEdges = edges.filter(
-    (e) => e.source === id || e.target === id,
+  const edges = useBackendCanvasStore((s) => s.edges);
+  const webPageNodes = useBackendCanvasStore(
+    useShallow((s) => s.nodes.filter((n) => n.type === "webPage")),
   );
-  const allConnectedPages = allConnectedPageEdges
-    .map((e) => nodes.find((n) => n.id === (e.source === id ? e.target : e.source)))
-    .filter((n): n is BackendNode => Boolean(n && n.type === "webPage"));
+
+  // Memoized zone-to-pages mapping computed during render (cached cleanly for React)
+  const zonePagesMap = useMemo(() => {
+    const pageEdges = edges.filter((e) => e.source === id || e.target === id);
+    const allPages: Array<{ id: string; label: string; isLayout: boolean; handleId: string }> = [];
+
+    for (const e of pageEdges) {
+      const otherId = e.source === id ? e.target : e.source;
+      const handleId = e.source === id ? (e.sourceHandle || "") : (e.targetHandle || "");
+      const otherNode = webPageNodes.find((n) => n.id === otherId);
+      if (otherNode && otherNode.type === "webPage") {
+        const rawLabel = otherNode.data?.label || otherNode.data?.path || "Page";
+        const isLayout = Boolean(otherNode.data?.isLayout) || rawLabel.trim().toLowerCase() === "layout";
+        allPages.push({
+          id: otherNode.id,
+          label: rawLabel,
+          isLayout,
+          handleId,
+        });
+      }
+    }
+
+    const map: Record<
+      string,
+      Array<{ id: string; label: string; isLayout: boolean; hasDuplicate: boolean }>
+    > = {};
+
+    for (const p of allPages) {
+      const norm = normalizePageRoute(p.label);
+      const hasDuplicate = !p.isLayout && allPages.some(
+        (other) =>
+          other.id !== p.id &&
+          !other.isLayout &&
+          normalizePageRoute(other.label) === norm,
+      );
+      if (!map[p.handleId]) {
+        map[p.handleId] = [];
+      }
+      map[p.handleId]!.push({
+        id: p.id,
+        label: p.label,
+        isLayout: p.isLayout,
+        hasDuplicate,
+      });
+    }
+
+    return map;
+  }, [edges, id, webPageNodes]);
 
   const isDirectActive = Boolean(
     selected ||
@@ -602,11 +656,11 @@ export const WebAppNode = ({
         <div className="flex items-center gap-1 shrink-0">
           <button
             onClick={() => {
-              if (connectedAuthNode) {
+              if (connectedAuthNodeId) {
                 setActiveConfigItem({
                   type: "auth",
-                  id: connectedAuthNode.id,
-                  nodeId: connectedAuthNode.id,
+                  id: connectedAuthNodeId,
+                  nodeId: connectedAuthNodeId,
                 });
               }
             }}
@@ -643,12 +697,9 @@ export const WebAppNode = ({
       {/* Dynamic Protection Sections Container */}
       <div className="p-2.5 flex flex-col gap-2 bg-muted/60 opacity-100 nodrag">
         {buildZoneTree(zones).map(({ zone, depth }) => {
-          const connectedPages = getConnectedPages(zone.handleId);
+          const connectedPages = zonePagesMap[zone.handleId] || [];
           const isPublic = zone.accessType === "public";
-          const connectedLayoutNode = connectedPages.find(
-            (p) => Boolean(p.data?.isLayout) || p.data?.label?.trim().toLowerCase() === "layout",
-          );
-          const isLayoutEnabled = Boolean(connectedLayoutNode);
+          const isLayoutEnabled = connectedPages.some((p) => p.isLayout);
 
           return (
             <div
@@ -750,13 +801,14 @@ export const WebAppNode = ({
                       onClick={(e) => {
                         e.stopPropagation();
                         selectThisNode();
-                        const thisNode = nodes.find((n) => n.id === id);
+                        const store = useBackendCanvasStore.getState();
+                        const thisNode = store.nodes.find((n) => n.id === id);
                         if (!thisNode) return;
                         toggleZoneHandLayout({
                           webAppNode: thisNode,
                           zoneId: zone.id,
-                          allNodes: nodes,
-                          allEdges: edges,
+                          allNodes: store.nodes,
+                          allEdges: store.edges,
                           updateNode,
                         });
                       }}
@@ -825,33 +877,23 @@ export const WebAppNode = ({
                   </span>
                 ) : (
                   connectedPages.map((p) => {
-                    const normalizedRoute = normalizePageRoute(p.data?.label || p.data?.path || "");
-                    const isLayout = Boolean(p.data?.isLayout) || p.data?.label?.trim().toLowerCase() === "layout";
-                    const hasDuplicate = !isLayout && allConnectedPages.some(
-                      (other) =>
-                        other.id !== p.id &&
-                        !other.data?.isLayout &&
-                        other.data?.label?.trim().toLowerCase() !== "layout" &&
-                        normalizePageRoute(other.data?.label || other.data?.path || "") === normalizedRoute,
-                    );
-
                     return (
                       <span
                         key={p.id}
                         className={cn(
                           "text-[10px] px-2 py-0.5 rounded font-mono border transition-colors",
-                          hasDuplicate
+                          p.hasDuplicate
                             ? "bg-destructive/15 text-destructive border-destructive/40 font-semibold"
                             : "bg-secondary text-foreground border-border",
                         )}
                         title={
-                          hasDuplicate
-                            ? `Duplicate route conflict: "${normalizedRoute}" is used by multiple pages in this Web App!`
-                            : `Route: ${normalizedRoute}`
+                          p.hasDuplicate
+                            ? `Duplicate route conflict: "${p.label}" is used by multiple pages in this Web App!`
+                            : `Route: ${p.label}`
                         }
                       >
-                        {hasDuplicate && "⚠️ "}
-                        {p.data.label || "Page"}
+                        {p.hasDuplicate && "⚠️ "}
+                        {p.label}
                       </span>
                     );
                   })
@@ -951,4 +993,4 @@ export const WebAppNode = ({
       </AlertDialog>
     </div>
   );
-};
+});

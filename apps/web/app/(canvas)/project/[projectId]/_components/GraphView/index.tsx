@@ -48,18 +48,18 @@ export interface GraphViewProps {
 }
 
 export function GraphView({ projectId, projectName }: GraphViewProps) {
-  const { nodes, edges, onEdgesChange, onConnect, addNode, setView } =
-    useBackendCanvasStore();
+  const nodes = useBackendCanvasStore((s) => s.nodes);
+  const edges = useBackendCanvasStore((s) => s.edges);
+  const onEdgesChange = useBackendCanvasStore((s) => s.onEdgesChange);
+  const onConnect = useBackendCanvasStore((s) => s.onConnect);
+  const addNode = useBackendCanvasStore((s) => s.addNode);
   const activeConfigItem = useBackendCanvasStore((s) => s.activeConfigItem);
 
+  // Run legacy edge self-healing once on initial load (not on every drag or node movement)
+  const hasRunInitialHealRef = useRef(false);
   useEffect(() => {
-    setView("graph");
-  }, [setView]);
-
-  // Self-heal any legacy direct edges between global transformers and WebPages / Services,
-  // or unconnected transformer_ref nodes on canvas
-  useEffect(() => {
-    if (nodes.length === 0) return;
+    if (hasRunInitialHealRef.current || nodes.length === 0) return;
+    hasRunInitialHealRef.current = true;
     const hasDirectEdge = edges.some((e) => {
       if (e.type === "transformer-reference" || e.type === "reference") return false;
       const src = nodes.find((n) => n.id === e.source);
@@ -127,8 +127,13 @@ export function GraphView({ projectId, projectName }: GraphViewProps) {
         pendingNodeUpserts: orphanedWp.pendingNodeUpserts,
       });
     }
-  }, [edges, nodes]);
-  const simulation = useSimulationStore();
+  }, [nodes.length, edges.length]);
+
+  const simulationStatus = useSimulationStore((s) => s.status);
+  const activeNodeIds = useSimulationStore((s) => s.activeNodeIds);
+  const currentNodeId = useSimulationStore((s) => s.currentNodeId);
+  const simulationTrace = useSimulationStore((s) => s.trace);
+  const simulationActiveIndex = useSimulationStore((s) => s.activeIndex);
   const selectedCaseId = useSimulationStore((state) => state.selectedCaseId);
   const testCases = useSimulationStore((state) => state.testCases);
   const selectTestCase = useSimulationStore((state) => state.selectTestCase);
@@ -156,7 +161,7 @@ export function GraphView({ projectId, projectName }: GraphViewProps) {
     handleSelectionDragStart,
     handleMoveEnd,
   } = useCanvasHandlers(projectId, "graph");
-  const { fitView } = useReactFlow();
+  const { fitView, setViewport } = useReactFlow();
 
   const endpoints = useBackendCanvasStore((s) => s.endpoints);
   const events = useBackendCanvasStore((s) => s.events);
@@ -271,14 +276,18 @@ export function GraphView({ projectId, projectName }: GraphViewProps) {
     });
   }, [edges, graphNodeIds, validEndpointKeys, validEventKeys]);
 
-  const visualGraphEdges = React.useMemo(() => {
-    return graphEdges.map((e) => {
-      const sourceNode = nodes.find((n) => n.id === e.source);
-      const targetNode = nodes.find((n) => n.id === e.target);
-      const isTargetPage = targetNode?.type === "webPage";
-      const isSourcePage = sourceNode?.type === "webPage";
+  const webPageNodeIdsSet = React.useMemo(() => {
+    const set = new Set<string>();
+    for (const n of nodes) {
+      if (n.type === "webPage") set.add(n.id);
+    }
+    return set;
+  }, [nodes]);
 
-      if (isTargetPage || isSourcePage) {
+  const visualGraphEdges = React.useMemo(() => {
+    if (webPageNodeIdsSet.size === 0) return graphEdges;
+    return graphEdges.map((e) => {
+      if (webPageNodeIdsSet.has(e.source) || webPageNodeIdsSet.has(e.target)) {
         return {
           ...e,
           zIndex: 50,
@@ -286,7 +295,7 @@ export function GraphView({ projectId, projectName }: GraphViewProps) {
       }
       return e;
     });
-  }, [graphEdges, nodes]);
+  }, [graphEdges, webPageNodeIdsSet]);
 
   const { handleLayout, panToFlow } = useGraphAutoLayout({
     nodes: graphNodes,
@@ -308,17 +317,24 @@ export function GraphView({ projectId, projectName }: GraphViewProps) {
   useEffect(() => {
     if (graphNodes.length > 0 && !hasFitted.current) {
       hasFitted.current = true;
-      const timer = setTimeout(() => {
-        fitView({
-          nodes: flowNodesToFit.length > 0 ? flowNodesToFit : undefined,
-          duration: 500,
-          padding: 0.35,
-          maxZoom: 0.65,
-        });
-      }, 100);
-      return () => clearTimeout(timer);
+      const savedViewport = localStorage.getItem(`canvas_viewport_${projectId}_graph`);
+      if (savedViewport) {
+        try {
+          const parsed = JSON.parse(savedViewport);
+          setViewport(parsed);
+          return;
+        } catch {
+          // fallback to fitView
+        }
+      }
+      fitView({
+        nodes: flowNodesToFit.length > 0 ? flowNodesToFit : undefined,
+        duration: 0,
+        padding: 0.35,
+        maxZoom: 0.65,
+      });
     }
-  }, [graphNodes.length, flowNodesToFit, fitView]);
+  }, [graphNodes.length, flowNodesToFit, fitView, setViewport, projectId]);
 
 
 
@@ -446,45 +462,46 @@ export function GraphView({ projectId, projectName }: GraphViewProps) {
   }, [graphNodes, graphEdges, activeConfigItem, lastActiveNodeId]);
 
   const visualGraphNodes = React.useMemo(() => {
-    const hasRun = simulation.status !== "idle";
+    const hasRun = simulationStatus !== "idle";
     if (!hasRun) {
-      return sortedGraphNodes.map((node) => ({
-        ...node,
-        style: {
-          ...node.style,
-          zIndex: node.zIndex,
-        },
-      }));
+      return sortedGraphNodes;
     }
 
+    const activeNodeSet = new Set(activeNodeIds);
+    const activeEndpointIds = new Set(
+      simulationTrace
+        .slice(0, simulationActiveIndex + 1)
+        .filter((t) => t.kind === "endpoint")
+        .map((t) => t.id),
+    );
+    const currentEndpointId =
+      simulationTrace[simulationActiveIndex]?.kind === "endpoint"
+        ? simulationTrace[simulationActiveIndex]?.id
+        : null;
+
     return sortedGraphNodes.map((node) => {
-      let isVisited = simulation.activeNodeIds.includes(node.id);
-      let isCurrent = simulation.currentNodeId === node.id;
+      let isVisited = activeNodeSet.has(node.id);
+      let isCurrent = currentNodeId === node.id;
 
       if (
         node.type === "db_ref" ||
         node.type === "vector_db_ref" ||
         node.type === "redis-cache"
       ) {
-        const activeEndpointIds = simulation.trace
-          .slice(0, simulation.activeIndex + 1)
-          .filter((t) => t.kind === "endpoint")
-          .map((t) => t.id);
-
         const connectedToActive = edges.some((edge) => {
           if (
             edge.target === node.id &&
-            simulation.activeNodeIds.includes(edge.source)
+            activeNodeSet.has(edge.source)
           ) {
             if (edge.sourceHandle?.startsWith("endpoint-out-")) {
               const endpointId = edge.sourceHandle.replace("endpoint-out-", "");
-              return activeEndpointIds.includes(endpointId);
+              return activeEndpointIds.has(endpointId);
             }
             return true;
           }
           if (
             edge.source === node.id &&
-            simulation.activeNodeIds.includes(edge.target)
+            activeNodeSet.has(edge.target)
           ) {
             return true;
           }
@@ -492,25 +509,20 @@ export function GraphView({ projectId, projectName }: GraphViewProps) {
         });
         if (connectedToActive) isVisited = true;
 
-        const currentEndpointIds =
-          simulation.trace[simulation.activeIndex]?.kind === "endpoint"
-            ? [simulation.trace[simulation.activeIndex]?.id]
-            : [];
-
         const connectedToCurrent = edges.some((edge) => {
           if (
             edge.target === node.id &&
-            simulation.currentNodeId === edge.source
+            currentNodeId === edge.source
           ) {
             if (edge.sourceHandle?.startsWith("endpoint-out-")) {
               const endpointId = edge.sourceHandle.replace("endpoint-out-", "");
-              return currentEndpointIds.includes(endpointId);
+              return currentEndpointId === endpointId;
             }
             return true;
           }
           if (
             edge.source === node.id &&
-            simulation.currentNodeId === edge.target
+            currentNodeId === edge.target
           ) {
             return true;
           }
@@ -532,8 +544,15 @@ export function GraphView({ projectId, projectName }: GraphViewProps) {
         },
       };
     });
-  }, [sortedGraphNodes, simulation.status, simulation.activeNodeIds, simulation.currentNodeId, simulation.trace, simulation.activeIndex, edges]);
-
+  }, [
+    sortedGraphNodes,
+    simulationStatus,
+    activeNodeIds,
+    currentNodeId,
+    simulationTrace,
+    simulationActiveIndex,
+    edges,
+  ]);
 
   const selectedCaseEntry = testCases.find(
     (testCase) => testCase.id === selectedCaseId,
@@ -545,20 +564,38 @@ export function GraphView({ projectId, projectName }: GraphViewProps) {
     }
   }, [testCases.length, selectedCaseId, selectedCaseEntry, selectTestCase]);
 
+  const fitViewOptions = React.useMemo(
+    () => ({
+      padding: 0.35,
+      maxZoom: 0.65,
+      nodes: flowNodesToFit.length > 0 ? flowNodesToFit : undefined,
+    }),
+    [flowNodesToFit],
+  );
+
+  const handleIsValidConnection = React.useCallback(
+    (connection: Connection) => {
+      const currentNodes = useBackendCanvasStore.getState().nodes;
+      const src = currentNodes.find((n) => n.id === connection.source);
+      const tgt = currentNodes.find((n) => n.id === connection.target);
+      if (!src || !tgt) return false;
+      return isValidConnection(
+        src.type,
+        connection.sourceHandle,
+        tgt.type,
+        connection.targetHandle,
+      ).valid;
+    },
+    [],
+  );
+
   return (
     <div className="w-full h-full bg-muted/20">
       <ReactFlow
         nodes={visualGraphNodes}
         edges={visualGraphEdges}
         fitView
-        fitViewOptions={React.useMemo(
-          () => ({
-            padding: 0.35,
-            maxZoom: 0.65,
-            nodes: flowNodesToFit.length > 0 ? flowNodesToFit : undefined,
-          }),
-          [flowNodesToFit],
-        )}
+        fitViewOptions={fitViewOptions}
         elevateEdgesOnSelect={true}
         onNodesChange={handleNodesChange}
         onEdgesChange={onEdgesChange}
@@ -597,17 +634,7 @@ export function GraphView({ projectId, projectName }: GraphViewProps) {
           return true;
         }}
         onConnect={onConnect}
-        isValidConnection={(connection: Connection) => {
-          const src = nodes.find((n) => n.id === connection.source);
-          const tgt = nodes.find((n) => n.id === connection.target);
-          if (!src || !tgt) return false;
-          return isValidConnection(
-            src.type,
-            connection.sourceHandle,
-            tgt.type,
-            connection.targetHandle,
-          ).valid;
-        }}
+        isValidConnection={handleIsValidConnection}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         onMoveEnd={handleMoveEnd}

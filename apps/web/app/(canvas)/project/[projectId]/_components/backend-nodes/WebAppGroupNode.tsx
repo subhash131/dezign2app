@@ -10,7 +10,7 @@ import { Globe, ShieldCheck, Trash, Layers } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 
-export const WebAppGroupNode = ({
+export const WebAppGroupNode = React.memo(({
   id,
   data,
   selected,
@@ -20,7 +20,6 @@ export const WebAppGroupNode = ({
   const setNodesPendingDeletion = useBackendCanvasStore(
     (s) => s.setNodesPendingDeletion,
   );
-  const nodes = useBackendCanvasStore((s) => s.nodes);
 
   const [isEditing, setIsEditing] = useState(!data.label);
   const [editValue, setEditValue] = useState(data.label || "");
@@ -33,29 +32,23 @@ export const WebAppGroupNode = ({
     data.appSlug ||
     (data.label || "web-app").toLowerCase().replace(/[^a-z0-9]+/g, "-");
 
-  // Check if an AuthNode is connected to this app group
-  const edges = useBackendCanvasStore((s) => s.edges);
-  const isAuthConnected =
-    Boolean(data.authNodeId) ||
-    edges.some((e) => {
+  // Narrow boolean selector: does not re-render when nodes are dragged
+  const isAuthConnected = useBackendCanvasStore((s) => {
+    if (data.authNodeId) return true;
+    return s.edges.some((e) => {
       if (e.target === id) {
-        const srcNode = nodes.find((n) => n.id === e.source);
-        return (
-          srcNode?.type === "auth" ||
-          e.targetHandle === "auth-in" ||
-          e.sourceHandle === "auth-out"
-        );
+        if (e.targetHandle === "auth-in" || e.sourceHandle === "auth-out") return true;
+        const srcNode = s.nodes.find((n) => n.id === e.source);
+        return srcNode?.type === "auth";
       }
       if (e.source === id) {
-        const tgtNode = nodes.find((n) => n.id === e.target);
-        return (
-          tgtNode?.type === "auth" ||
-          e.sourceHandle === "auth-in" ||
-          e.targetHandle === "auth-out"
-        );
+        if (e.sourceHandle === "auth-in" || e.targetHandle === "auth-out") return true;
+        const tgtNode = s.nodes.find((n) => n.id === e.target);
+        return tgtNode?.type === "auth";
       }
       return false;
     });
+  });
 
   useEffect(() => {
     setEditValue(data.label || "");
@@ -96,7 +89,7 @@ export const WebAppGroupNode = ({
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const node = nodes.find((n) => n.id === id);
+    const node = useBackendCanvasStore.getState().nodes.find((n) => n.id === id);
     if (node) setNodesPendingDeletion([node]);
   };
 
@@ -236,4 +229,4 @@ export const WebAppGroupNode = ({
       />
     </>
   );
-};
+});

@@ -243,8 +243,10 @@ export function useZoneHandLayout(
 
   const isStacked = hasMultipleCards && !isZoneExpanded;
 
-  // Auto-pack / re-align legacy projects or cards where indentations or offsets don't match
+  // Auto-pack / re-align legacy projects or cards where indentations or offsets don't match (runs once per hand state, avoiding loops during node drag)
+  const hasAlignedRef = React.useRef(false);
   React.useEffect(() => {
+    if (hasAlignedRef.current) return;
     if (cardIndex !== 0 || !hasMultipleCards || isZoneExpanded || !connectedWebAppNode || !connectedZone) return;
 
     const firstCard = siblingPages[0];
@@ -264,6 +266,7 @@ export function useZoneHandLayout(
     });
 
     if (needsAlignment) {
+      hasAlignedRef.current = true;
       siblingPages.forEach((page, idx) => {
         updateNode(page.id, {
           position: {
@@ -272,6 +275,8 @@ export function useZoneHandLayout(
           },
         });
       });
+    } else {
+      hasAlignedRef.current = true;
     }
   }, [cardIndex, hasMultipleCards, isZoneExpanded, connectedWebAppNode, connectedZone, siblingPages, updateNode]);
 
@@ -282,7 +287,7 @@ export function useZoneHandLayout(
       if (!targetPage) return;
 
       const store = useBackendCanvasStore.getState();
-      const selectChanges: NodeChange[] = nodes
+      const selectChanges: NodeChange[] = store.nodes
         .filter((n) => n.type === "webPage")
         .map((p) => ({
           type: "select",
@@ -291,7 +296,7 @@ export function useZoneHandLayout(
         }));
       store.onNodesChange(selectChanges);
     },
-    [siblingPages, nodes],
+    [siblingPages],
   );
 
   const moveCard = useCallback(

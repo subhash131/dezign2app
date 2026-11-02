@@ -167,7 +167,7 @@ export function useConnectedRoutes(nodeId: string): ConnectedRouteInfo[] {
 }
 
 
-export const LangGraphNode = ({
+export const LangGraphNode = React.memo(({
   id,
   data,
   selected,
@@ -574,4 +574,4 @@ export const LangGraphNode = ({
       <NodeEnvVarsSection nodeId={id} />
     </div>
   );
-};
+});
