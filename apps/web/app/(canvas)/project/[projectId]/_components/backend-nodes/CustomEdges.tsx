@@ -3,18 +3,23 @@ import { BackendEdge } from "@/types/canvas";
 
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useSimulationStore } from "@/lib/stores/simulationStore";
+import { useShallow } from "zustand/react/shallow";
 
 function useSimulationEdgeState(edgeId: string) {
-  const { status, activeEdgeIds, currentEdgeId, trace, activeIndex } =
-    useSimulationStore();
-  const hasRun = status !== "idle";
-  const visitedTrace = trace.slice(0, activeIndex + 1);
-  const isVisited =
-    activeEdgeIds.includes(edgeId) ||
-    visitedTrace.some((t) => t.edgeId === edgeId);
-  const isCurrent = currentEdgeId === edgeId;
-
-  return { hasRun, isVisited, isCurrent };
+  return useSimulationStore(
+    useShallow((s) => {
+      if (s.status === "idle") {
+        return { hasRun: false, isVisited: false, isCurrent: false };
+      }
+      const hasRun = true;
+      const visitedTrace = s.trace.slice(0, s.activeIndex + 1);
+      const isVisited =
+        s.activeEdgeIds.includes(edgeId) ||
+        visitedTrace.some((t) => t.edgeId === edgeId);
+      const isCurrent = s.currentEdgeId === edgeId;
+      return { hasRun, isVisited, isCurrent };
+    }),
+  );
 }
 
 // Inline styles for animations
@@ -104,18 +109,22 @@ export const DatabaseRefEdge = (props: EdgeProps<BackendEdge>) => {
     source,
   } = props;
 
-  const sourceNode = useBackendCanvasStore((s) =>
-    s.nodes.find((n) => n.id === source),
+  const { isDbSelected, dbColor } = useBackendCanvasStore(
+    useShallow((s) => {
+      const src = s.nodes.find((n) => n.id === source);
+      return {
+        isDbSelected: Boolean(src?.selected),
+        dbColor: src?.data?.color || "#f59e0b",
+      };
+    }),
   );
   const simulation = useSimulationEdgeState(props.id);
 
   // Requirement: Show edges ONLY when the database node is selected
-  const isDbSelected = sourceNode?.selected || false;
   if (!isDbSelected) {
     return null;
   }
 
-  const dbColor = sourceNode?.data?.color || "#f59e0b"; // Default amber
   const markerId = `arrow-db-${dbColor.replace("#", "")}`;
 
   const [edgePath] = getBezierPath({
@@ -178,21 +187,17 @@ export const DatabaseRefEdge = (props: EdgeProps<BackendEdge>) => {
 
 // 1. HTTP/API Connection Edge (Blue/Teal)
 export const HTTPConnectionEdge = (props: EdgeProps<BackendEdge>) => {
-  const targetNode = useBackendCanvasStore((s) =>
-    s.nodes.find((n) => n.id === props.target),
-  );
-  const sourceNode = useBackendCanvasStore((s) =>
-    s.nodes.find((n) => n.id === props.source),
-  );
+  const targetType = useBackendCanvasStore((s) => s.nodes.find((n) => n.id === props.target)?.type);
+  const sourceType = useBackendCanvasStore((s) => s.nodes.find((n) => n.id === props.source)?.type);
   const simulation = useSimulationEdgeState(props.id);
 
-  if (targetNode?.type === "database") {
+  if (targetType === "database") {
     return <DatabaseRefEdge {...props} />;
   }
 
   if (
-    sourceNode?.type === "types" ||
-    targetNode?.type === "types" ||
+    sourceType === "types" ||
+    targetType === "types" ||
     props.data?.isTypeReference ||
     props.data?.isExtensionEdge
   ) {
@@ -220,7 +225,7 @@ export const HTTPConnectionEdge = (props: EdgeProps<BackendEdge>) => {
 
   const isStateSubscription = Boolean(
     props.data?.isStateSubscription ||
-      sourceNode?.type === "state_store" ||
+      sourceType === "state_store" ||
       props.sourceHandle?.startsWith("store-field-out-") ||
       props.targetHandle?.startsWith("section-state-in-"),
   );
@@ -431,21 +436,17 @@ export const IdentityConnectionEdge = (props: EdgeProps<BackendEdge>) => {
 // 5. Transformer Reference Edge (Invisible reference edge between master transformer and transformer_ref nodes)
 export const TransformerReferenceEdge = (props: EdgeProps<BackendEdge>) => {
   const isEdgeSelected = props.selected;
-  const sourceNode = useBackendCanvasStore((s) =>
-    s.nodes.find((n) => n.id === props.source),
-  );
-  const targetNode = useBackendCanvasStore((s) =>
-    s.nodes.find((n) => n.id === props.target),
-  );
-  const activeConfigItem = useBackendCanvasStore((s) => s.activeConfigItem);
-
-  const isNodeSelected =
-    Boolean(sourceNode?.selected) ||
-    Boolean(targetNode?.selected) ||
-    activeConfigItem?.nodeId === props.source ||
-    activeConfigItem?.id === props.source ||
-    activeConfigItem?.nodeId === props.target ||
-    activeConfigItem?.id === props.target;
+  const isNodeSelected = useBackendCanvasStore((s) => {
+    const isSourceSelected = Boolean(s.nodes.find((n) => n.id === props.source)?.selected);
+    const isTargetSelected = Boolean(s.nodes.find((n) => n.id === props.target)?.selected);
+    const act = s.activeConfigItem;
+    const isConfigActive =
+      act?.nodeId === props.source ||
+      act?.id === props.source ||
+      act?.nodeId === props.target ||
+      act?.id === props.target;
+    return isSourceSelected || isTargetSelected || isConfigActive;
+  });
 
   const isVisible = isEdgeSelected || isNodeSelected;
 
@@ -515,21 +516,17 @@ export const TransformerReferenceEdge = (props: EdgeProps<BackendEdge>) => {
 // 5b. Storage Reference Edge (Invisible reference edge between bucket on StorageNode and StorageOperationRefNode header)
 export const StorageReferenceEdge = (props: EdgeProps<BackendEdge>) => {
   const isEdgeSelected = props.selected;
-  const sourceNode = useBackendCanvasStore((s) =>
-    s.nodes.find((n) => n.id === props.source),
-  );
-  const targetNode = useBackendCanvasStore((s) =>
-    s.nodes.find((n) => n.id === props.target),
-  );
-  const activeConfigItem = useBackendCanvasStore((s) => s.activeConfigItem);
-
-  const isNodeSelected =
-    Boolean(sourceNode?.selected) ||
-    Boolean(targetNode?.selected) ||
-    activeConfigItem?.nodeId === props.source ||
-    activeConfigItem?.id === props.source ||
-    activeConfigItem?.nodeId === props.target ||
-    activeConfigItem?.id === props.target;
+  const isNodeSelected = useBackendCanvasStore((s) => {
+    const isSourceSelected = Boolean(s.nodes.find((n) => n.id === props.source)?.selected);
+    const isTargetSelected = Boolean(s.nodes.find((n) => n.id === props.target)?.selected);
+    const act = s.activeConfigItem;
+    const isConfigActive =
+      act?.nodeId === props.source ||
+      act?.id === props.source ||
+      act?.nodeId === props.target ||
+      act?.id === props.target;
+    return isSourceSelected || isTargetSelected || isConfigActive;
+  });
 
   const isVisible = isEdgeSelected || isNodeSelected;
 
@@ -613,15 +610,11 @@ export const TypeReferenceEdge = (props: TypeReferenceEdgeProps) => {
     selected,
   } = props;
 
-  const sourceNode = useBackendCanvasStore((s) =>
-    s.nodes.find((n) => n.id === source),
-  );
-  const targetNode = useBackendCanvasStore((s) =>
-    s.nodes.find((n) => n.id === target),
-  );
+  const isSourceSelected = useBackendCanvasStore((s) => Boolean(s.nodes.find((n) => n.id === source)?.selected));
+  const isTargetSelected = useBackendCanvasStore((s) => Boolean(s.nodes.find((n) => n.id === target)?.selected));
 
   const isExtensionEdge = Boolean(data?.isExtensionEdge);
-  const isNodeSelected = Boolean(sourceNode?.selected || targetNode?.selected || selected);
+  const isNodeSelected = Boolean(isSourceSelected || isTargetSelected || selected);
 
   // Hidden when unselected, unless it is a visual extension edge
   if (!isExtensionEdge && !isNodeSelected) {

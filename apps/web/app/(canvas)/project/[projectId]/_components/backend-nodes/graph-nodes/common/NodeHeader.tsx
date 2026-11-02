@@ -9,6 +9,7 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { useShallow } from "zustand/react/shallow";
 import {
   BackendNode,
   BackendEdge,
@@ -149,7 +150,7 @@ export interface NodeHeaderProps {
   onDelete?: () => void;
 }
 
-export const NodeHeader = ({
+export const NodeHeader = React.memo(({
   id,
   data,
   nodeType,
@@ -170,21 +171,23 @@ export const NodeHeader = ({
   const deleteNode = useBackendCanvasStore((s) => s.deleteNode);
   const deleteNodes = useBackendCanvasStore((s) => s.deleteNodes);
   const requestDeleteNode = useBackendCanvasStore((s) => s.requestDeleteNode);
-  const allNodes = useBackendCanvasStore((s) => s.nodes);
-  const edges = useBackendCanvasStore((s) => s.edges);
+
+  // Narrow subscription: duplicate check returns { isDuplicate, conflictType }
+  // useShallow prevents re-renders during dragging when duplicate status has not changed
+  const { isDuplicate, conflictType } = useBackendCanvasStore(
+    useShallow((s) => checkNodeNameDuplicate(id, data.label, nodeType, s.nodes, s.edges)),
+  );
 
   const [isEditing, setIsEditing] = useState(!data.label || data.label.trim() === "");
   const [name, setName] = useState(data.label || "");
   const inputRef = React.useRef<HTMLInputElement>(null);
 
-  const { isDuplicate, conflictType } = useMemo(() => {
-    return checkNodeNameDuplicate(id, data.label, nodeType, allNodes, edges);
-  }, [id, data.label, nodeType, allNodes, edges]);
-
-  const { isDuplicate: isInputDuplicate, conflictType: inputConflictType } = useMemo(() => {
-    if (!isEditing || !name.trim()) return { isDuplicate: false };
-    return checkNodeNameDuplicate(id, name.trim(), nodeType, allNodes, edges);
-  }, [id, name, isEditing, nodeType, allNodes, edges]);
+  const { isInputDuplicate, inputConflictType } = useMemo(() => {
+    if (!isEditing || !name.trim()) return { isInputDuplicate: false, inputConflictType: undefined };
+    const { nodes, edges } = useBackendCanvasStore.getState();
+    const res = checkNodeNameDuplicate(id, name.trim(), nodeType, nodes, edges);
+    return { isInputDuplicate: res.isDuplicate, inputConflictType: res.conflictType };
+  }, [id, name, isEditing, nodeType]);
 
   React.useEffect(() => {
     setName(data.label || "");
@@ -244,6 +247,7 @@ export const NodeHeader = ({
         setIsEditing(false);
         return;
       }
+      const { nodes: currentNodes, edges: currentEdges } = useBackendCanvasStore.getState();
       // If there was no existing label, assign a safe unique default label instead of deleting the node
       const defaultBase =
         nodeType === "database"
@@ -257,14 +261,15 @@ export const NodeHeader = ({
                 : nodeType === "webPage"
                   ? "/page"
                   : title || "Node";
-      trimmed = getUniqueNodeLabel(allNodes, defaultBase, nodeType || "node");
+      trimmed = getUniqueNodeLabel(currentNodes, defaultBase, nodeType || "node");
     }
     let finalLabel = trimmed;
     if (nodeType === "webPage") {
       finalLabel = parsePageRoute(finalLabel) || finalLabel;
     }
 
-    const dupCheck = checkNodeNameDuplicate(id, finalLabel, nodeType, allNodes, edges);
+    const { nodes: latestNodes, edges: latestEdges } = useBackendCanvasStore.getState();
+    const dupCheck = checkNodeNameDuplicate(id, finalLabel, nodeType, latestNodes, latestEdges);
     if (dupCheck.isDuplicate) {
       toast.warning(
         `"${finalLabel}" is already used by a ${dupCheck.conflictType || "node"}. Please change it to avoid conflicts.`,
@@ -500,4 +505,4 @@ export const NodeHeader = ({
       )}
     </div>
   );
-};
+});

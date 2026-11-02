@@ -34,23 +34,24 @@ import { createDefaultHealthEndpoint } from "@/lib/utils/healthCheckEndpoint";
 
 
 
-export const ServiceNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
+export const ServiceNode = React.memo(({ id, data, selected }: NodeProps<BackendNode>) => {
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const addEndpoint = useBackendCanvasStore((s) => s.addEndpoint);
   const addEvent = useBackendCanvasStore((s) => s.addEvent);
   const updateEvent = useBackendCanvasStore((s) => s.updateEvent);
   const deleteEvent = useBackendCanvasStore((s) => s.deleteEvent);
-  const nodes = useBackendCanvasStore((s) => s.nodes);
   const syncServiceTypes = useBackendCanvasStore((s) => s.syncServiceTypes);
   const [isSyncingTypes, setIsSyncingTypes] = useState(false);
 
-  const companionTypesNode = nodes.find(
-    (n) =>
-      n.type === "types" &&
-      (n.data?.sourceServiceId === id ||
-        (n.data?.isServiceEndpointSchemas && n.data?.targetServiceId === id)),
-  );
-  const serviceTypesCount = companionTypesNode?.data?.types?.length || 0;
+  const serviceTypesCount = useBackendCanvasStore((s) => {
+    const companionTypesNode = s.nodes.find(
+      (n) =>
+        n.type === "types" &&
+        (n.data?.sourceServiceId === id ||
+          (n.data?.isServiceEndpointSchemas && n.data?.targetServiceId === id)),
+    );
+    return companionTypesNode?.data?.types?.length || 0;
+  });
 
   const handleSyncTypes = (
     e: React.MouseEvent<HTMLButtonElement | HTMLDivElement>,
@@ -78,18 +79,19 @@ export const ServiceNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
   );
 
   const allEndpoints = useBackendCanvasStore((s) => s.endpoints);
-  const endpointPubEventIds = new Set(
-    allEndpoints.flatMap((ep) => ep.publishedEvents?.map((pe) => pe.id) || []),
+  const endpointPubEventIds = React.useMemo(
+    () => new Set(allEndpoints.flatMap((ep) => ep.publishedEvents?.map((pe) => pe.id) || [])),
+    [allEndpoints],
   );
 
-  const consumedEvents = useBackendCanvasStore((s) => s.events).filter(
-    (e) => e.nodeId === id && e.variant === "consume",
+  const events = useBackendCanvasStore((s) => s.events);
+  const consumedEvents = React.useMemo(
+    () => events.filter((e) => e.nodeId === id && e.variant === "consume"),
+    [events, id],
   );
-  const publishedEvents = useBackendCanvasStore((s) => s.events).filter(
-    (e) =>
-      e.nodeId === id &&
-      e.variant === "publish" &&
-      !endpointPubEventIds.has(e.id),
+  const publishedEvents = React.useMemo(
+    () => events.filter((e) => e.nodeId === id && e.variant === "publish" && !endpointPubEventIds.has(e.id)),
+    [events, id, endpointPubEventIds],
   );
 
   const hasInitializedEndpointsRef = React.useRef(false);
@@ -111,22 +113,28 @@ export const ServiceNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
   const [configOpen, setConfigOpen] = useState(false);
 
   const currentPort = String(data.port ?? "").trim() || "8080";
-  const conflictNode = nodes.find(
-    (n) =>
-      n?.id !== id &&
-      n?.type === "service" &&
-      (String(n.data?.port ?? "").trim() || "8080") === currentPort,
-  );
-  const isPortOccupied = Boolean(conflictNode);
+  const portConflictName = useBackendCanvasStore((s) => {
+    const conflict = s.nodes.find(
+      (n) =>
+        n?.id !== id &&
+        n?.type === "service" &&
+        (String(n.data?.port ?? "").trim() || "8080") === currentPort,
+    );
+    return conflict?.data?.label || null;
+  });
+  const isPortOccupied = Boolean(portConflictName);
 
   const currentGrpcPort = String(data.grpcPort ?? "").trim() || "50051";
-  const grpcConflictNode = nodes.find(
-    (n) =>
-      n?.id !== id &&
-      n?.type === "service" &&
-      (String(n.data?.grpcPort ?? "").trim() || "50051") === currentGrpcPort,
-  );
-  const isGrpcPortOccupied = Boolean(grpcConflictNode);
+  const grpcPortConflictName = useBackendCanvasStore((s) => {
+    const conflict = s.nodes.find(
+      (n) =>
+        n?.id !== id &&
+        n?.type === "service" &&
+        (String(n.data?.grpcPort ?? "").trim() || "50051") === currentGrpcPort,
+    );
+    return conflict?.data?.label || null;
+  });
+  const isGrpcPortOccupied = Boolean(grpcPortConflictName);
 
   // When an error exists, ensure configOpen is set to true so panel doesn't close when typing
   useEffect(() => {
@@ -139,7 +147,7 @@ export const ServiceNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
     const val = e.target.value;
     const trimmedVal = val.trim();
     if (trimmedVal) {
-      const occupiedByNode = nodes.find(
+      const occupiedByNode = useBackendCanvasStore.getState().nodes.find(
         (n) =>
           n?.id !== id &&
           n?.type === "service" &&
@@ -158,7 +166,7 @@ export const ServiceNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
     const val = e.target.value;
     const trimmedVal = val.trim();
     if (trimmedVal) {
-      const occupiedByNode = nodes.find(
+      const occupiedByNode = useBackendCanvasStore.getState().nodes.find(
         (n) =>
           n?.id !== id &&
           n?.type === "service" &&
@@ -435,7 +443,7 @@ export const ServiceNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
                 {isPortOccupied && (
                   <span className="text-[10px] text-destructive text-right font-medium">
                     HTTP Port {currentPort} is already in use by{" "}
-                    {conflictNode?.data?.label || "another service"}
+                    {portConflictName || "another service"}
                   </span>
                 )}
               </div>
@@ -497,7 +505,7 @@ export const ServiceNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
                     {isGrpcPortOccupied && (
                       <span className="text-[10px] text-destructive text-right font-medium">
                         gRPC Port {currentGrpcPort} is already in use by{" "}
-                        {grpcConflictNode?.data?.label || "another service"}
+                        {grpcPortConflictName || "another service"}
                       </span>
                     )}
                   </div>
@@ -512,4 +520,4 @@ export const ServiceNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
     </div>
 
   );
-};
+});
