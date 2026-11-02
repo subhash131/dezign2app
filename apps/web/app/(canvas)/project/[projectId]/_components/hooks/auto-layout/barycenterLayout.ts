@@ -374,7 +374,7 @@ export function runBarycenterRefinement({
           (isHorizontal ? maxNodeWidth : maxNodeHeight) / 2;
 
         const hasHangingTransformersInRank = ids.some((id) =>
-          hangingEdges.some((e) => resolveLeadId(e.target) === id),
+          hangingEdges.some((e) => resolveLeadId(e.source) === id || resolveLeadId(e.target) === id),
         );
         const hasHangingReferencesInRank = ids.some((id) =>
           hangingRefEdges.some((e) => resolveLeadId(e.source) === id || resolveLeadId(e.target) === id),
@@ -493,7 +493,7 @@ export function runBarycenterRefinement({
       );
 
       const hasHangingTransformersInRank = ids.some((id) =>
-        hangingEdges.some((e) => resolveLeadId(e.target) === id),
+        hangingEdges.some((e) => resolveLeadId(e.source) === id || resolveLeadId(e.target) === id),
       );
       const hasHangingReferencesInRank = ids.some((id) =>
         hangingRefEdges.some((e) => resolveLeadId(e.source) === id || resolveLeadId(e.target) === id),

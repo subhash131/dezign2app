@@ -9,6 +9,7 @@ export interface HangingTransformerLayoutParams {
   isHorizontal?: boolean;
   storeEndpoints?: Array<{ id: string; nodeId: string }>;
   storeEvents?: Array<{ id: string; nodeId: string }>;
+  secondaryToLeadPageMap?: Map<string, string>;
 }
 
 /**
@@ -24,6 +25,7 @@ export function layoutHangingTransformerNodes({
   isHorizontal = true,
   storeEndpoints = [],
   storeEvents = [],
+  secondaryToLeadPageMap,
 }: HangingTransformerLayoutParams): void {
   if (hangingTransformerNodes.length === 0) return;
 
@@ -90,11 +92,35 @@ export function layoutHangingTransformerNodes({
   // Group hanging transformers by their target service or webPage node ID
   const transformersByTarget = new Map<string, LayoutNode[]>();
   hangingTransformerNodes.forEach((tNode) => {
-    const edge = hangingEdges.find(
-      (e) => e.source === tNode.id || e.target === tNode.id,
-    );
-    if (!edge) return;
-    const targetId = edge.source === tNode.id ? edge.target : edge.source;
+    // Prioritize edges connecting to a service or webPage node
+    const targetEdge =
+      hangingEdges.find((e) => {
+        const otherId = e.source === tNode.id ? e.target : e.source;
+        const otherNode = nodes.find((n) => n.id === otherId);
+        return (
+          otherNode &&
+          (otherNode.type === "service" ||
+            otherNode.type === "webPage" ||
+            otherNode.type === "microservice" ||
+            otherNode.type === "backend" ||
+            otherNode.type === "api")
+        );
+      }) ||
+      hangingEdges.find((e) => {
+        const otherId = e.source === tNode.id ? e.target : e.source;
+        const otherNode = nodes.find((n) => n.id === otherId);
+        return (
+          otherNode &&
+          otherNode.type !== "state_store" &&
+          otherNode.type !== "types" &&
+          otherNode.type !== "transformer" &&
+          otherNode.type !== "transformer_ref"
+        );
+      }) ||
+      hangingEdges.find((e) => e.source === tNode.id || e.target === tNode.id);
+
+    if (!targetEdge) return;
+    const targetId = targetEdge.source === tNode.id ? targetEdge.target : targetEdge.source;
     if (!transformersByTarget.has(targetId)) {
       transformersByTarget.set(targetId, []);
     }
@@ -103,7 +129,10 @@ export function layoutHangingTransformerNodes({
 
   transformersByTarget.forEach((transformers, targetId) => {
     const targetNode = nodes.find((n) => n.id === targetId);
-    const targetPos = positionsMap.get(targetId);
+    let targetPos = positionsMap.get(targetId);
+    if (!targetPos && secondaryToLeadPageMap?.has(targetId)) {
+      targetPos = positionsMap.get(secondaryToLeadPageMap.get(targetId)!);
+    }
     if (!targetNode || !targetPos) return;
 
     const { width: targetW, height: targetH } = getNodeDimensions(targetNode);
@@ -119,8 +148,46 @@ export function layoutHangingTransformerNodes({
         ...transformers.map((t) => getNodeDimensions(t).width),
       );
 
+      // Find maximum right coordinate of any connected upstream nodes (e.g. state_store / webApp)
+      let upstreamMaxRight = -Infinity;
+      transformers.forEach((tNode) => {
+        const connectedEdges = hangingEdges.filter(
+          (e) => e.source === tNode.id || e.target === tNode.id,
+        );
+        connectedEdges.forEach((e) => {
+          const otherId = e.source === tNode.id ? e.target : e.source;
+          if (otherId === targetId) return;
+          const otherNode = nodes.find((n) => n.id === otherId);
+          const otherPos = positionsMap.get(otherId);
+          if (otherNode && otherPos) {
+            const { width: otherW } = getNodeDimensions(otherNode);
+            const otherRight = otherPos.x + otherW;
+            if (otherRight > upstreamMaxRight) {
+              upstreamMaxRight = otherRight;
+            }
+          }
+        });
+      });
+
       // LR Layout: Transformers sit in a column to the LEFT of the target node (service or webPage)
-      const targetX = targetPos.x - maxTransW - gapX;
+      // and must sit cleanly between any upstream store node and target node without overlap
+      let targetX = targetPos.x - maxTransW - gapX;
+      if (upstreamMaxRight !== -Infinity) {
+        const minGapFromUpstream = 40;
+        const minGapFromTarget = 40;
+        if (targetPos.x - upstreamMaxRight >= maxTransW + minGapFromUpstream + minGapFromTarget) {
+          const defaultTargetX = targetPos.x - maxTransW - gapX;
+          if (defaultTargetX < upstreamMaxRight + minGapFromUpstream) {
+            // Cleanly center in between upstream node and target node
+            targetX = Math.round((upstreamMaxRight + targetPos.x - maxTransW) / 2);
+          } else {
+            targetX = defaultTargetX;
+          }
+        } else {
+          // Space is tight: strictly prevent overlapping upstream store node
+          targetX = Math.max(targetX, upstreamMaxRight + minGapFromUpstream);
+        }
+      }
 
       // Compute ideal Y for each transformer aligned with its connected handle
       interface TransItem {
@@ -200,7 +267,42 @@ export function layoutHangingTransformerNodes({
       const maxTransH = Math.max(
         ...transformers.map((t) => getNodeDimensions(t).height),
       );
-      const targetY = targetPos.y - maxTransH - gapY;
+      let targetY = targetPos.y - maxTransH - gapY;
+
+      let upstreamMaxBottom = -Infinity;
+      transformers.forEach((tNode) => {
+        const connectedEdges = hangingEdges.filter(
+          (e) => e.source === tNode.id || e.target === tNode.id,
+        );
+        connectedEdges.forEach((e) => {
+          const otherId = e.source === tNode.id ? e.target : e.source;
+          if (otherId === targetId) return;
+          const otherNode = nodes.find((n) => n.id === otherId);
+          const otherPos = positionsMap.get(otherId);
+          if (otherNode && otherPos) {
+            const { height: otherH } = getNodeDimensions(otherNode);
+            const otherBottom = otherPos.y + otherH;
+            if (otherBottom > upstreamMaxBottom) {
+              upstreamMaxBottom = otherBottom;
+            }
+          }
+        });
+      });
+
+      if (upstreamMaxBottom !== -Infinity) {
+        const minGapFromUpstream = 30;
+        const minGapFromTarget = 30;
+        if (targetPos.y - upstreamMaxBottom >= maxTransH + minGapFromUpstream + minGapFromTarget) {
+          const defaultTargetY = targetPos.y - maxTransH - gapY;
+          if (defaultTargetY < upstreamMaxBottom + minGapFromUpstream) {
+            targetY = Math.round((upstreamMaxBottom + targetPos.y - maxTransH) / 2);
+          } else {
+            targetY = defaultTargetY;
+          }
+        } else {
+          targetY = Math.max(targetY, upstreamMaxBottom + minGapFromUpstream);
+        }
+      }
 
       const items = transformers.map((tNode) => {
         const { width, height } = getNodeDimensions(tNode);
