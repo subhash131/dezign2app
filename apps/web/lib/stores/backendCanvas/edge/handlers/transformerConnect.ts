@@ -50,10 +50,13 @@ export function handleTransformerConnect({
     const fnName =
       sourceNode.data?.functionName || sourceNode.data?.label || "transformData";
 
-    // 1 Ref per service rule: Check if this service already has a transformer_ref node
+    // 1 Ref per service/transformer rule: Check if this service already has a transformer_ref node for this transformer
     const existingRefNode = currentNodes.find(
       (n) =>
         n.type === "transformer_ref" &&
+        (n.data?.transformerRef === sourceNode.id ||
+          n.data?.transformerRef === sourceNode.data?.functionName ||
+          n.data?.transformerRef === sourceNode.data?.label) &&
         (n.data?.targetServiceId === serviceId ||
           currentEdges.some(
             (e) => e.source === n.id && e.target === serviceId,
@@ -263,12 +266,14 @@ export function handleTransformerConnect({
     const fnName =
       masterNode.data?.functionName || masterNode.data?.label || "transformData";
 
-    // 1 Ref per webPage/master rule: Check if a transformer_ref node already exists
+    // 1 Ref per webPage/master rule: Check if a transformer_ref node already exists for this master transformer
     const existingRefNode = passedRefNode || currentNodes.find(
       (n) =>
         n.type === "transformer_ref" &&
         (n.data?.transformerRef === masterNode.id ||
-          n.data?.targetWebPageId === webPageId ||
+          n.data?.transformerRef === masterNode.data?.functionName ||
+          n.data?.transformerRef === masterNode.data?.label) &&
+        (n.data?.targetWebPageId === webPageId ||
           currentEdges.some(
             (e) =>
               (e.source === n.id && e.target === webPageId) ||
@@ -283,9 +288,18 @@ export function handleTransformerConnect({
       const pageX = webPageNode.position?.x ?? 0;
       const pageY = webPageNode.position?.y ?? 0;
 
-      // Position hanging node to the left of webPage (same as service)
+      const existingRefsForPage = currentNodes.filter(
+        (n) =>
+          n.type === "transformer_ref" &&
+          (n.data?.targetWebPageId === webPageId ||
+            currentEdges.some(
+              (e) => (e.source === n.id && e.target === webPageId) || (e.target === n.id && e.source === webPageId),
+            )),
+      );
+
+      // Position hanging node to the left of webPage (same as service) with vertical offset
       const refX = Math.max(0, pageX - 300);
-      const refY = pageY + 40;
+      const refY = pageY + 40 + existingRefsForPage.length * 80;
 
       const newRefNode: BackendNode = {
         id: refNodeId,
@@ -666,7 +680,12 @@ export function healDirectTransformerEdges({
         e.sourceHandle === "transformer-out" &&
         (e.type === "connection" || !e.type),
     );
-    return !hasOutgoing;
+    const hasIncomingRef = edges.some(
+      (e) =>
+        e.target === n.id &&
+        (e.type === "transformer-reference" || e.type === "reference"),
+    );
+    return !hasOutgoing || !hasIncomingRef;
   });
 
   if (
@@ -715,13 +734,15 @@ export function healDirectTransformerEdges({
       (n) =>
         n.type === "transformer_ref" &&
         (n.data?.transformerRef === masterNode.id ||
-          (isTargetWebPage
-            ? n.data?.targetWebPageId === targetNode.id ||
-              nextEdges.some(
-                (e) => (e.source === n.id && e.target === targetNode.id) || (e.target === n.id && e.source === targetNode.id)
-              )
-            : n.data?.targetServiceId === targetNode.id ||
-              nextEdges.some((e) => e.source === n.id && e.target === targetNode.id)))
+          n.data?.transformerRef === masterNode.data?.functionName ||
+          n.data?.transformerRef === masterNode.data?.label) &&
+        (isTargetWebPage
+          ? n.data?.targetWebPageId === targetNode.id ||
+            nextEdges.some(
+              (e) => (e.source === n.id && e.target === targetNode.id) || (e.target === n.id && e.source === targetNode.id)
+            )
+          : n.data?.targetServiceId === targetNode.id ||
+            nextEdges.some((e) => e.source === n.id && e.target === targetNode.id))
     );
 
     const fnName = masterNode.data?.functionName || masterNode.data?.label || "Transformer";
@@ -730,8 +751,19 @@ export function healDirectTransformerEdges({
       const refNodeId = crypto.randomUUID();
       const targetX = targetNode.position?.x ?? 0;
       const targetY = targetNode.position?.y ?? 0;
+      const existingRefsForTarget = nextNodes.filter(
+        (n) =>
+          n.type === "transformer_ref" &&
+          (isTargetWebPage
+            ? n.data?.targetWebPageId === targetNode.id ||
+              nextEdges.some(
+                (e) => (e.source === n.id && e.target === targetNode.id) || (e.target === n.id && e.source === targetNode.id),
+              )
+            : n.data?.targetServiceId === targetNode.id ||
+              nextEdges.some((e) => e.source === n.id && e.target === targetNode.id)),
+      );
       const refX = Math.max(0, targetX - 300);
-      const refY = targetY + 40;
+      const refY = targetY + 40 + existingRefsForTarget.length * 80;
 
       const newRef: BackendNode = {
         id: refNodeId,
@@ -1040,14 +1072,6 @@ export function healDirectTransformerEdges({
 
   // 5. Heal any unconnected transformer_ref nodes by creating outgoing connection edge
   for (const refNode of unconnectedRefNodes) {
-    const alreadyConnected = nextEdges.some(
-      (e) =>
-        e.source === refNode.id &&
-        e.sourceHandle === "transformer-out" &&
-        (e.type === "connection" || !e.type),
-    );
-    if (alreadyConnected) continue;
-
     const masterId = refNode.data?.transformerRef;
     const masterNode = nextNodes.find(
       (n) =>
@@ -1078,6 +1102,14 @@ export function healDirectTransformerEdges({
         nextEdgeUpserts.push(refEdge);
       }
     }
+
+    const alreadyConnected = nextEdges.some(
+      (e) =>
+        e.source === refNode.id &&
+        e.sourceHandle === "transformer-out" &&
+        (e.type === "connection" || !e.type),
+    );
+    if (alreadyConnected) continue;
 
     // Determine target: WebPage or Service
     let targetWebPage = refNode.data?.targetWebPageId
