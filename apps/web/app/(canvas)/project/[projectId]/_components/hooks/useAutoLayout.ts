@@ -48,7 +48,6 @@ export function useSchemaAutoLayout(options?: UseSchemaAutoLayoutOptions) {
             n.type === "database" ||
             n.type === "redis_instance" ||
             n.type === "redis_schema" ||
-            n.type === "transformer" ||
             n.type === "group",
         );
       const edges: LayoutEdge[] =
@@ -239,7 +238,6 @@ export function useAutoLayout(options?: UseAutoLayoutOptions) {
               n.type === "database" ||
               n.type === "redis_instance" ||
               n.type === "redis_schema" ||
-              n.type === "transformer" ||
               n.type === "group",
           ));
 

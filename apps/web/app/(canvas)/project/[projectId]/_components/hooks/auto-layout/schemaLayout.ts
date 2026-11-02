@@ -301,7 +301,6 @@ export function performSchemaLayout({
       n.type === "database" ||
       n.type === "redis_instance" ||
       n.type === "redis_schema" ||
-      n.type === "transformer" ||
       n.type === "group",
   );
   if (schemaNodes.length === 0) return;
@@ -316,18 +315,16 @@ export function performSchemaLayout({
   const isDatabaseNode = (n: LayoutNode) => n.type === "database";
   const isRedisNode = (n: LayoutNode) => n.type === "redis_instance";
   const isStorageNode = (n: LayoutNode) => isDatabaseNode(n) || isRedisNode(n);
-  const isTransformerNode = (n: LayoutNode) => n.type === "transformer";
   const isGroupNode = (n: LayoutNode) => n.type === "group";
 
   const dbNodes = schemaNodes.filter(isDatabaseNode);
   const redisNodes = schemaNodes.filter(isRedisNode);
-  const transformerNodes = schemaNodes.filter(isTransformerNode);
   const existingGroupNodes = schemaNodes.filter(isGroupNode);
   const storageNodes = [...dbNodes, ...redisNodes];
   const storageNodeIdSet = new Set(storageNodes.map((n) => n.id));
 
   const entityNodes = schemaNodes.filter(
-    (n) => !isStorageNode(n) && !isTransformerNode(n) && !isGroupNode(n),
+    (n) => !isStorageNode(n) && !isGroupNode(n),
   );
 
   // 1. Initialize dedicated cluster for each Database and each Redis instance
@@ -626,26 +623,6 @@ export function performSchemaLayout({
 
   const dbRowEndX = curX;
 
-  // Place Transformer nodes next to the DB nodes row along the top row (y = START_Y) without affecting topology
-  if (transformerNodes.length > 0) {
-    const TRANSFORMER_GAP_X = 60;
-    let transX = wrapRedisToNextRow
-      ? dbRowEndX + (dbResults.length > 0 ? SECTION_GAP_X : 0)
-      : curX + ((dbResults.length > 0 || redisResults.length > 0) ? SECTION_GAP_X : 0);
-
-    transformerNodes.forEach((tNode, idx) => {
-      if (idx > 0) transX += TRANSFORMER_GAP_X;
-      const dim = getNodeDimensions(tNode);
-      positionsMap.set(tNode.id, {
-        x: transX,
-        y: START_Y,
-      });
-      transX += dim.width;
-    });
-
-    curX = Math.max(curX, transX);
-  }
-
   // Place Unassigned entities (if any) to the far right
   if (unassignedResult) {
     curX += SECTION_GAP_X;
@@ -714,7 +691,6 @@ export function performSchemaLayout({
     ...allFinalGroupNodes,
     ...storageNodes,
     ...entityNodes,
-    ...transformerNodes,
   ];
 
   // 8. Apply node position changes (only for nodes whose position actually moved or new group containers)
@@ -732,13 +708,12 @@ export function performSchemaLayout({
       .map((node: LayoutNode) => {
         const pos = positionsMap.get(node.id) ?? node.position;
         const isDb = storageNodeIdSet.has(node.id);
-        const isTrans = node.type === "transformer";
         return {
           id: node.id,
           type: "position",
           position: pos,
-          sourcePosition: isDb ? Position.Bottom : isTrans ? Position.Right : Position.Right,
-          targetPosition: isDb ? Position.Top : isTrans ? Position.Left : Position.Left,
+          sourcePosition: isDb ? Position.Bottom : Position.Right,
+          targetPosition: isDb ? Position.Top : Position.Left,
         };
       });
     if (nodeChanges.length > 0) {
@@ -773,7 +748,6 @@ export function performSchemaLayout({
         if (!pos && !finalData && !groupLayout) return node;
 
         const isDb = storageNodeIdSet.has(node.id);
-        const isTrans = node.type === "transformer";
 
         if (isGroup && groupLayout) {
           return {
@@ -797,8 +771,8 @@ export function performSchemaLayout({
           position: pos ?? node.position,
           data: finalData ?? node.data,
           zIndex: isGroup ? -1 : (node.zIndex ?? 1),
-          sourcePosition: isDb ? Position.Bottom : isTrans ? Position.Right : Position.Right,
-          targetPosition: isDb ? Position.Top : isTrans ? Position.Left : Position.Left,
+          sourcePosition: isDb ? Position.Bottom : Position.Right,
+          targetPosition: isDb ? Position.Top : Position.Left,
         };
       });
 

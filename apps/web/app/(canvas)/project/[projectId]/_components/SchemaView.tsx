@@ -72,7 +72,6 @@ export function SchemaView({ projectId }: SchemaViewProps) {
         n.type === "database" ||
         n.type === "redis_instance" ||
         n.type === "redis_schema" ||
-        n.type === "transformer" ||
         n.type === "group",
     );
     // Sort group nodes to the beginning so they render behind entity nodes,
