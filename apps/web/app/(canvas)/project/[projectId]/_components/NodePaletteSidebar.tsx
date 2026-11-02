@@ -458,7 +458,6 @@ function SchemaViewBody({ nodes, addNode, getCenterPosition }: SchemaViewBodyPro
           n.type === "database" ||
           n.type === "redis_instance" ||
           n.type === "redis_schema" ||
-          n.type === "transformer" ||
           n.type === "group",
       ),
     [nodes],

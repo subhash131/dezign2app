@@ -67,6 +67,7 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
 
   const initialElements = useQuery(api.canvas.getBackendElements, {
     projectId: projectId as Id<"projects">,
+    view,
   });
 
   const upsertNode = useMutation(api.canvas.upsertBackendNode);

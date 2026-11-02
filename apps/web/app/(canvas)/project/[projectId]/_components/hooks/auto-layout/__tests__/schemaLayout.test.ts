@@ -459,7 +459,7 @@ describe("schemaLayout - Isolated Multi-Cluster Auto-Layout for N Databases & M 
     }
   });
 
-  it("aligns TransformerNode next to the db nodes row without affecting entity topology", () => {
+  it("ignores non-schema nodes like TransformerNode without affecting entity topology", () => {
     const recordedChanges: PositionNodeChange[] = [];
     const onNodesChange = (changes: PositionNodeChange[]) => {
       recordedChanges.push(...changes);
@@ -530,7 +530,7 @@ describe("schemaLayout - Isolated Multi-Cluster Auto-Layout for N Databases & M 
     const baselineProfilePos = recordedChanges.find((c) => c.id === "table-profile")!.position;
     const baselineDbPos = recordedChanges.find((c) => c.id === "db-primary")!.position;
 
-    // 2. Run layout with transformer
+    // 2. Run layout with non-schema transformer node
     recordedChanges.length = 0;
     const transformerNode: LayoutNode = {
       id: "transformer-custom",
@@ -552,13 +552,10 @@ describe("schemaLayout - Isolated Multi-Cluster Auto-Layout for N Databases & M 
     const withTransUserPos = recordedChanges.find((c) => c.id === "table-user")!.position;
     const withTransProfilePos = recordedChanges.find((c) => c.id === "table-profile")!.position;
     const withTransDbPos = recordedChanges.find((c) => c.id === "db-primary")!.position;
-    const transChange = recordedChanges.find((c) => c.id === "transformer-custom")!;
+    const transChange = recordedChanges.find((c) => c.id === "transformer-custom");
 
-    // Transformer is in the db nodes row (same Y coordinate)
-    expect(transChange.position.y).toBe(withTransDbPos.y);
-
-    // Transformer is placed to the right of the DB cluster (next to the DB nodes row)
-    expect(transChange.position.x).toBeGreaterThan(withTransDbPos.x);
+    // Non-schema transformer node is ignored by schema layout
+    expect(transChange).toBeUndefined();
 
     // Entity tables and foreign-key topology are completely unaffected
     expect(withTransUserPos.x).toBe(baselineUserPos.x);
@@ -567,10 +564,6 @@ describe("schemaLayout - Isolated Multi-Cluster Auto-Layout for N Databases & M 
     expect(withTransProfilePos.y).toBe(baselineProfilePos.y);
     expect(withTransDbPos.x).toBe(baselineDbPos.x);
     expect(withTransDbPos.y).toBe(baselineDbPos.y);
-
-    // Transformer handles are configured as Right / Left
-    expect(transChange.sourcePosition).toBe(Position.Right);
-    expect(transChange.targetPosition).toBe(Position.Left);
   });
 
   it("groups Auth, LangGraph, and Application tables into distinct side-by-side SchemaGroupNode containers under the database", () => {
