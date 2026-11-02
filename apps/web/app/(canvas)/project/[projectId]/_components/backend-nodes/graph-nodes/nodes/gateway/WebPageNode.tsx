@@ -236,9 +236,13 @@ export const WebPageNode = ({
             (n: BackendNode): boolean =>
               n.type === "transformer_ref" &&
               (n.id === step.transformerRefNodeId ||
-                (step.transformerNodeId !== undefined && n.data?.transformerRef === step.transformerNodeId) ||
-                n.data?.targetActionId === act.id ||
-                (Array.isArray(n.data?.targetActionIds) && n.data.targetActionIds.includes(act.id))),
+                (step.transformerNodeId !== undefined &&
+                  (n.data?.transformerRef === step.transformerNodeId ||
+                    n.data?.transformerRef === step.name ||
+                    n.data?.transformerRef === step.transformerName) &&
+                  (n.data?.targetWebPageId === id ||
+                    n.data?.targetActionId === act.id ||
+                    (Array.isArray(n.data?.targetActionIds) && n.data.targetActionIds.includes(act.id))))),
           );
 
           if (!refNode && step.transformerNodeId) {
@@ -247,41 +251,56 @@ export const WebPageNode = ({
             );
             if (masterNode) {
               refNode = nodes.find(
-                (n: BackendNode): boolean => n.type === "transformer_ref" && n.data?.transformerRef === masterNode.id,
+                (n: BackendNode): boolean =>
+                  n.type === "transformer_ref" &&
+                  n.data?.transformerRef === masterNode.id &&
+                  (n.data?.targetWebPageId === id ||
+                    n.data?.targetActionId === act.id ||
+                    (Array.isArray(n.data?.targetActionIds) && n.data.targetActionIds.includes(act.id))),
               );
             }
           }
 
           if (!refNode) return;
 
-          const existingEdge = edges.find(
+          // Crucial: check that edge is specifically connected to THIS action handle,
+          // avoiding false matches across multiple actions using the same refNode
+          const edgeForAction = edges.find(
             (e) =>
               e.source === refNode!.id &&
               e.target === id &&
-              (e.type === "connection" || !e.type),
+              (e.type === "connection" || !e.type) &&
+              (e.targetHandle === targetHandle ||
+                e.targetHandle === `event-in-${act.id}` ||
+                e.targetHandle === `events-${act.id}` ||
+                e.targetHandle?.endsWith(`-${act.id}`)),
           );
 
-          if (existingEdge) {
-            if (existingEdge.targetHandle !== targetHandle || existingEdge.sourceHandle !== "transformer-out") {
-              useBackendCanvasStore.getState().updateEdge(existingEdge.id, {
+          if (edgeForAction) {
+            if (edgeForAction.targetHandle !== targetHandle || edgeForAction.sourceHandle !== "transformer-out") {
+              useBackendCanvasStore.getState().updateEdge(edgeForAction.id, {
                 sourceHandle: "transformer-out",
                 targetHandle,
                 type: "connection",
               });
             }
           } else {
-            addEdge({
-              id: `edge-ref-${refNode.id}-${act.id}-${Date.now()}`,
-              source: refNode.id,
-              target: id,
-              sourceHandle: "transformer-out",
-              targetHandle,
-              type: "connection",
-              data: {
-                sequenceOrder: step.order || 1,
-                label: String(step.order || 1),
-              },
-            });
+            const edgeId = `edge-ref-${refNode.id}-${act.id}`;
+            const alreadyHasEdgeWithId = edges.some((e) => e.id === edgeId);
+            if (!alreadyHasEdgeWithId) {
+              addEdge({
+                id: edgeId,
+                source: refNode.id,
+                target: id,
+                sourceHandle: "transformer-out",
+                targetHandle,
+                type: "connection",
+                data: {
+                  sequenceOrder: step.order || 1,
+                  label: String(step.order || 1),
+                },
+              });
+            }
           }
         });
       });

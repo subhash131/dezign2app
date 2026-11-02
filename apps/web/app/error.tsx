@@ -73,7 +73,7 @@ export default function Error({
             size="lg"
             className="border-white/10 hover:bg-white/5 h-12 px-8"
           >
-            <Link href="/dashboard" className="flex items-center gap-2">
+            <Link href="/projects" className="flex items-center gap-2">
               <Home size={18} />
               Return Home
             </Link>

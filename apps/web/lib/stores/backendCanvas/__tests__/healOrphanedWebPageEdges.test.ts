@@ -6,6 +6,7 @@ describe("healOrphanedWebPageEdges", () => {
   const webPageNode: BackendNode = {
     id: "page-1",
     type: "webPage",
+    fractionalIndex: "a0",
     position: { x: 0, y: 0 },
     data: {
       label: "/chat",
@@ -35,6 +36,7 @@ describe("healOrphanedWebPageEdges", () => {
   const storeNode: BackendNode = {
     id: "store-1",
     type: "state_store",
+    fractionalIndex: "a1",
     position: { x: -300, y: 0 },
     data: {
       label: "ChatStore",
@@ -51,9 +53,11 @@ describe("healOrphanedWebPageEdges", () => {
   const typesNode: BackendNode = {
     id: "types-1",
     type: "types",
+    fractionalIndex: "a2",
     position: { x: -300, y: 200 },
     data: {
-      types: [{ id: "type-msg", name: "ChatMessage" }],
+      label: "Types",
+      types: [{ id: "type-msg", name: "ChatMessage", kind: "type" as const }],
     },
   };
 
@@ -64,6 +68,8 @@ describe("healOrphanedWebPageEdges", () => {
       target: "page-1",
       sourceHandle: "store-field-out-f-valid",
       targetHandle: "section-state-in-sec-main-st-valid",
+      type: "connection",
+      fractionalIndex: "a0",
     };
 
     const orphanedStoreEdge: BackendEdge = {
@@ -72,6 +78,8 @@ describe("healOrphanedWebPageEdges", () => {
       target: "page-1",
       sourceHandle: "store-field-out-f-valid",
       targetHandle: "section-state-in-sec-main-st-deleted",
+      type: "connection",
+      fractionalIndex: "a1",
     };
 
     const orphanedTypeEdge: BackendEdge = {
@@ -80,6 +88,8 @@ describe("healOrphanedWebPageEdges", () => {
       target: "page-1",
       sourceHandle: "type-out-type-msg",
       targetHandle: "section-state-in-sec-main-st-deleted",
+      type: "connection",
+      fractionalIndex: "a2",
     };
 
     const result = healOrphanedWebPageEdges({
@@ -100,6 +110,8 @@ describe("healOrphanedWebPageEdges", () => {
       target: "store-1",
       sourceHandle: "type-out-type-msg",
       targetHandle: "store-field-in-f-valid",
+      type: "connection",
+      fractionalIndex: "a0",
     };
 
     const orphanedStoreInEdge1: BackendEdge = {
@@ -108,6 +120,8 @@ describe("healOrphanedWebPageEdges", () => {
       target: "store-1",
       sourceHandle: "type-out-type-msg",
       targetHandle: "store-field-in-f-1793085647114",
+      type: "connection",
+      fractionalIndex: "a1",
     };
 
     const orphanedStoreInEdge2: BackendEdge = {
@@ -116,6 +130,8 @@ describe("healOrphanedWebPageEdges", () => {
       target: "store-1",
       sourceHandle: "type-out-type-msg",
       targetHandle: "store-field-in-f-1793085695538",
+      type: "connection",
+      fractionalIndex: "a2",
     };
 
     const orphanedStoreOutEdge: BackendEdge = {
@@ -124,6 +140,8 @@ describe("healOrphanedWebPageEdges", () => {
       target: "page-1",
       sourceHandle: "store-field-out-f-deleted",
       targetHandle: "section-state-in-sec-main-st-valid",
+      type: "connection",
+      fractionalIndex: "a3",
     };
 
     const result = healOrphanedWebPageEdges({
@@ -147,6 +165,7 @@ describe("healOrphanedWebPageEdges", () => {
     const serviceNode: BackendNode = {
       id: "service-1",
       type: "service",
+      fractionalIndex: "a3",
       position: { x: 500, y: 0 },
       data: { label: "ChatService" },
     };
@@ -157,6 +176,8 @@ describe("healOrphanedWebPageEdges", () => {
       target: "service-1",
       sourceHandle: "events-act-valid",
       targetHandle: "endpoint-in-1",
+      type: "connection",
+      fractionalIndex: "a0",
     };
 
     const orphanedOutboundEdge: BackendEdge = {
@@ -165,6 +186,8 @@ describe("healOrphanedWebPageEdges", () => {
       target: "service-1",
       sourceHandle: "events-act-deleted",
       targetHandle: "endpoint-in-1",
+      type: "connection",
+      fractionalIndex: "a1",
     };
 
     const orphanedInboundEdge: BackendEdge = {
@@ -173,6 +196,8 @@ describe("healOrphanedWebPageEdges", () => {
       target: "page-1",
       sourceHandle: "events-out-1",
       targetHandle: "pageload-in-act-deleted",
+      type: "connection",
+      fractionalIndex: "a2",
     };
 
     const result = healOrphanedWebPageEdges({
@@ -193,6 +218,8 @@ describe("healOrphanedWebPageEdges", () => {
       target: "page-1",
       sourceHandle: "store-field-out-f-valid",
       targetHandle: "section-state-in-sec-main-st-valid",
+      type: "connection",
+      fractionalIndex: "a0",
     };
 
     const result = healOrphanedWebPageEdges({

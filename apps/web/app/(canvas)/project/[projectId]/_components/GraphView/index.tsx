@@ -68,25 +68,25 @@ export function GraphView({ projectId, projectName }: GraphViewProps) {
       return (
         (src.type === "transformer" && (tgt.type === "webPage" || tgt.type === "service")) ||
         (tgt.type === "transformer" && (src.type === "webPage" || src.type === "service")) ||
-        (src.type === "webPage" && tgt.type === "transformer_ref")
+        (src.type === "webPage" && tgt.type === "transformer_ref") ||
+        (src.type === "transformer_ref" && tgt.type === "webPage" && e.sourceHandle === "transformer-in")
       );
     });
 
     const hasUnconnectedTransformerRef = nodes.some((n) => {
       if (n.type !== "transformer_ref") return false;
-      const targetWp = n.data?.targetWebPageId
-        ? nodes.find((node) => node.id === n.data.targetWebPageId)
-        : nodes.find((node) => node.type === "webPage");
-      const targetActionId = n.data?.targetActionId || n.data?.targetActionIds?.[0];
-      const { handle: expectedHandle } = resolveWebPageActionInboundHandle(targetWp, targetActionId);
-
-      const hasValidOutgoing = edges.some(
+      const hasOutgoing = edges.some(
         (e) =>
           e.source === n.id &&
-          e.sourceHandle === "transformer-out" && (e.type === "connection" || !e.type) &&
-          (!targetWp || (e.target === targetWp.id && (!expectedHandle || e.targetHandle === expectedHandle))),
+          e.sourceHandle === "transformer-out" &&
+          (e.type === "connection" || !e.type),
       );
-      return !hasValidOutgoing;
+      const hasIncomingRef = edges.some(
+        (e) =>
+          e.target === n.id &&
+          (e.type === "transformer-reference" || e.type === "reference"),
+      );
+      return !hasOutgoing || !hasIncomingRef;
     });
 
     if (hasDirectEdge || hasUnconnectedTransformerRef) {

@@ -84,12 +84,6 @@ export default function NotFound() {
             >
               Projects
             </Link>
-            <Link
-              href="/dashboard"
-              className="block hover:text-white transition-colors"
-            >
-              dashboard
-            </Link>
           </div>
           <div className="space-y-2 text-right">
             <p className="font-semibold text-white/50 uppercase tracking-widest text-xs">

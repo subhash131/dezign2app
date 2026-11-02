@@ -150,9 +150,12 @@ export function healOrphanedWebPageEdges({
           "",
         );
         const sections: PageSection[] = targetNode.data?.sections || [];
-        const actionExists = sections.some((sec) =>
-          (sec.actions || []).some((act) => act.id === actionId),
-        );
+        const actionExists =
+          sections.some((sec) =>
+            (sec.actions || []).some((act) => act.id === actionId),
+          ) ||
+          (targetNode.data?.events || []).some((act) => act.id === actionId) ||
+          (targetNode.data?.realtimeConnections || []).some((c) => c.id === actionId);
         if (!actionExists) {
           orphanedEdgeIds.add(edge.id);
           continue;
@@ -165,9 +168,12 @@ export function healOrphanedWebPageEdges({
       if (sourceNode.type === "webPage") {
         const actionId = edge.sourceHandle.replace(/^events-/, "");
         const sections: PageSection[] = sourceNode.data?.sections || [];
-        const actionExists = sections.some((sec) =>
-          (sec.actions || []).some((act) => act.id === actionId),
-        );
+        const actionExists =
+          sections.some((sec) =>
+            (sec.actions || []).some((act) => act.id === actionId),
+          ) ||
+          (sourceNode.data?.events || []).some((act) => act.id === actionId) ||
+          (sourceNode.data?.realtimeConnections || []).some((c) => c.id === actionId);
         if (!actionExists) {
           orphanedEdgeIds.add(edge.id);
           continue;
