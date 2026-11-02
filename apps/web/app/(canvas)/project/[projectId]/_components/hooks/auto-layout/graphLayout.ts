@@ -923,48 +923,52 @@ export function performGraphLayout({
     });
   }
 
-  // 7. Update node positions atomically
+  // 7. Update node positions atomically (only for nodes whose position or handle orientation actually changed)
   const allLayoutNodes = [...graphNodes, ...typesNodes];
   if (onNodesChange) {
-    const nodeChanges: PositionNodeChange[] = allLayoutNodes.map((node: LayoutNode) => {
-      const pos = positionsMap.get(node.id) ?? {
-        x: node.position.x,
-        y: node.position.y,
-      };
-      const isAttachedHead = attachedHeadNodeIdSet.has(node.id);
-      const isTypesNode = node.type === "types";
-      const isTransformerDef = transformerDefNodeIdSet.has(node.id);
-      return {
-        id: node.id,
-        type: "position",
-        position: pos,
-        sourcePosition: isAttachedHead
+    const nodeChanges: PositionNodeChange[] = allLayoutNodes
+      .filter((node: LayoutNode) => {
+        const pos = positionsMap.get(node.id);
+        if (!pos) return false;
+
+        const isAttachedHead = attachedHeadNodeIdSet.has(node.id);
+        const isTypesNode = node.type === "types";
+        const isTransformerDef = transformerDefNodeIdSet.has(node.id);
+        const nextSourcePosition = isAttachedHead
           ? Position.Bottom
           : isTypesNode || isTransformerDef
             ? Position.Right
             : isHorizontal
               ? Position.Right
-              : Position.Bottom,
-        targetPosition: isAttachedHead
+              : Position.Bottom;
+        const nextTargetPosition = isAttachedHead
           ? Position.Top
           : isTypesNode || isTransformerDef
             ? Position.Left
             : isHorizontal
               ? Position.Left
-              : Position.Top,
-      };
-    });
-    onNodesChange(nodeChanges);
-  } else {
-    useBackendCanvasStore.setState((state) => {
-      const updatedNodes = state.nodes.map((node) => {
-        const pos = positionsMap.get(node.id);
-        if (!pos) return node;
+              : Position.Top;
+
+        const hasPosChanged =
+          Math.abs(node.position.x - pos.x) > 0.5 ||
+          Math.abs(node.position.y - pos.y) > 0.5;
+        const hasHandleChanged =
+          (Boolean(node.sourcePosition) && node.sourcePosition !== nextSourcePosition) ||
+          (Boolean(node.targetPosition) && node.targetPosition !== nextTargetPosition);
+
+        return hasPosChanged || hasHandleChanged;
+      })
+      .map((node: LayoutNode) => {
+        const pos = positionsMap.get(node.id) ?? {
+          x: node.position.x,
+          y: node.position.y,
+        };
         const isAttachedHead = attachedHeadNodeIdSet.has(node.id);
         const isTypesNode = node.type === "types";
         const isTransformerDef = transformerDefNodeIdSet.has(node.id);
         return {
-          ...node,
+          id: node.id,
+          type: "position",
           position: pos,
           sourcePosition: isAttachedHead
             ? Position.Bottom
@@ -982,8 +986,52 @@ export function performGraphLayout({
                 : Position.Top,
         };
       });
+    if (nodeChanges.length > 0) {
+      onNodesChange(nodeChanges);
+    }
+  } else {
+    useBackendCanvasStore.setState((state) => {
+      const movedNodeIds = new Set<string>();
+      const updatedNodes = state.nodes.map((node) => {
+        const pos = positionsMap.get(node.id);
+        if (!pos) return node;
+        const isAttachedHead = attachedHeadNodeIdSet.has(node.id);
+        const isTypesNode = node.type === "types";
+        const isTransformerDef = transformerDefNodeIdSet.has(node.id);
+        const nextSourcePosition = isAttachedHead
+          ? Position.Bottom
+          : isTypesNode || isTransformerDef
+            ? Position.Right
+            : isHorizontal
+              ? Position.Right
+              : Position.Bottom;
+        const nextTargetPosition = isAttachedHead
+          ? Position.Top
+          : isTypesNode || isTransformerDef
+            ? Position.Left
+            : isHorizontal
+              ? Position.Left
+              : Position.Top;
 
-      const movedNodeIds = new Set(positionsMap.keys());
+        const hasPosChanged =
+          Math.abs(node.position.x - pos.x) > 0.5 ||
+          Math.abs(node.position.y - pos.y) > 0.5;
+        const hasHandleChanged =
+          (Boolean(node.sourcePosition) && node.sourcePosition !== nextSourcePosition) ||
+          (Boolean(node.targetPosition) && node.targetPosition !== nextTargetPosition);
+
+        if (hasPosChanged || hasHandleChanged) {
+          movedNodeIds.add(node.id);
+        }
+
+        return {
+          ...node,
+          position: pos,
+          sourcePosition: nextSourcePosition,
+          targetPosition: nextTargetPosition,
+        };
+      });
+
       const upserts = updatedNodes.filter((n) => movedNodeIds.has(n.id));
 
       return {

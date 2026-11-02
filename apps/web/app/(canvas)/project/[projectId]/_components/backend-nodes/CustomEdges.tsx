@@ -1,3 +1,4 @@
+import { ForeignKeyEdge } from "./ForeignKeyEdge";
 import { EdgeProps, getBezierPath, BaseEdge, EdgeLabelRenderer } from "@xyflow/react";
 import { BackendEdge } from "@/types/canvas";
 
@@ -695,3 +696,15 @@ export const TypeReferenceEdge = (props: TypeReferenceEdgeProps) => {
   );
 };
 
+
+export const canvasEdgeTypes = {
+  "foreign-key": ForeignKeyEdge,
+  connection: HTTPConnectionEdge,
+  message: MessagingEdge,
+  "database-connection": DatabaseRefEdge,
+  "identity-connection": IdentityConnectionEdge,
+  "transformer-reference": TransformerReferenceEdge,
+  "storage-reference": StorageReferenceEdge,
+  "type-reference": TypeReferenceEdge,
+  reference: TransformerReferenceEdge,
+};

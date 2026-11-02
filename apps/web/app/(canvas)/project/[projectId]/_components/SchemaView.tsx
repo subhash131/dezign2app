@@ -10,12 +10,7 @@ import {
 } from "@xyflow/react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { nodeTypes } from "./backend-nodes/Nodes";
-import { ForeignKeyEdge } from "./backend-nodes/ForeignKeyEdge";
-import {
-  HTTPConnectionEdge,
-  MessagingEdge,
-  DatabaseRefEdge,
-} from "./backend-nodes/CustomEdges";
+import { canvasEdgeTypes } from "./backend-nodes/CustomEdges";
 import {
   isValidConnection,
 } from "@workspace/canvas";
@@ -26,12 +21,7 @@ import { LayoutTemplate, AlertTriangle } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { useSidebarStore, getEffectiveConfigSidebarWidth } from "@/lib/stores/sidebarStore";
 
-const edgeTypes = {
-  "foreign-key": ForeignKeyEdge,
-  connection: HTTPConnectionEdge,
-  message: MessagingEdge,
-  "database-connection": DatabaseRefEdge,
-};
+// canvasEdgeTypes is imported from CustomEdges
 
 interface SchemaViewProps {
   projectId: string;
@@ -219,7 +209,7 @@ export function SchemaView({ projectId }: SchemaViewProps) {
           ).valid;
         }}
         nodeTypes={nodeTypes}
-        edgeTypes={edgeTypes}
+        edgeTypes={canvasEdgeTypes}
         onMoveEnd={handleMoveEnd}
         attributionPosition="bottom-right"
         minZoom={0.01}
