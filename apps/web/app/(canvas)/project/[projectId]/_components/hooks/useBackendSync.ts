@@ -68,7 +68,6 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
 
   const initialElements = useQuery(api.canvas.getBackendElements, {
     projectId: projectId as Id<"projects">,
-    view,
   });
 
   const upsertNode = useMutation(api.canvas.upsertBackendNode);
@@ -671,7 +670,7 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
     useSimulationStore
       .getState()
       .setTestCases(initialElements.testCases || []);
-  }, [initialElements, setNodesAndEdges, view, projectId]);
+  }, [initialElements, setNodesAndEdges, projectId]);
 
   // Handle view changes: swap active positions for existing nodes
   const prevViewRef = useRef(view);

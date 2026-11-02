@@ -110,7 +110,7 @@ export const LangGraphCanvasMemoryNode = ({
     e?.stopPropagation();
     useBackendCanvasStore.getState().setView("schema");
     if (projectId) {
-      router.push(`/project/${projectId}/schemas`);
+      router.push(`/project/${projectId}?view=schema`);
     }
   };
 

@@ -57,7 +57,7 @@ export function MemoryTabContent({
   const handleOpenSchemaView = () => {
     useBackendCanvasStore.getState().setView("schema");
     if (projectId) {
-      router.push(`/project/${projectId}/schemas`);
+      router.push(`/project/${projectId}?view=schema`);
     }
   };
 

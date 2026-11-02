@@ -76,14 +76,26 @@ export function CanvasToolbar({
   return (
     <div className="flex items-center justify-between h-14 px-4 border-b bg-background shrink-0">
       <div className="flex items-center space-x-3">
-        <Button variant="ghost" size="icon" asChild className="h-8 w-8">
-          <Link
-            href={view === "schema" ? `/project/${projectId}` : "/projects"}
-            title={view === "schema" ? "Back to Graph Canvas" : "Back to Projects"}
+        {view === "schema" && setView ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => setView("graph")}
+            title="Back to Graph Canvas"
           >
             <ArrowLeft className="h-4 w-4" />
-          </Link>
-        </Button>
+          </Button>
+        ) : (
+          <Button variant="ghost" size="icon" asChild className="h-8 w-8">
+            <Link
+              href={view === "schema" ? `/project/${projectId}?view=graph` : "/projects"}
+              title={view === "schema" ? "Back to Graph Canvas" : "Back to Projects"}
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+          </Button>
+        )}
 
         <div className="font-medium text-sm truncate max-w-[180px]">
           {projectName}
@@ -129,30 +141,63 @@ export function CanvasToolbar({
 
       <div className="flex items-center justify-center flex-1">
         <div className="bg-muted text-muted-foreground inline-flex h-9 items-center justify-center rounded-lg p-1">
-          <Link
-            href={`/project/${projectId}`}
-            className={cn(
-              "inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-xs font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-              view === "graph"
-                ? "bg-background text-foreground shadow-sm font-semibold"
-                : "text-muted-foreground hover:text-foreground hover:bg-background/50",
-            )}
-          >
-            <Network className="w-3 h-3 mr-1.5" />
-            Graph
-          </Link>
-          <Link
-            href={`/project/${projectId}/schemas`}
-            className={cn(
-              "inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-xs font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-              view === "schema"
-                ? "bg-background text-foreground shadow-sm font-semibold"
-                : "text-muted-foreground hover:text-foreground hover:bg-background/50",
-            )}
-          >
-            <Database className="w-3 h-3 mr-1.5" />
-            Schema
-          </Link>
+          {setView ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setView("graph")}
+                className={cn(
+                  "inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-xs font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                  view === "graph"
+                    ? "bg-background text-foreground shadow-sm font-semibold"
+                    : "text-muted-foreground hover:text-foreground hover:bg-background/50",
+                )}
+              >
+                <Network className="w-3 h-3 mr-1.5" />
+                Graph
+              </button>
+              <button
+                type="button"
+                onClick={() => setView("schema")}
+                className={cn(
+                  "inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-xs font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                  view === "schema"
+                    ? "bg-background text-foreground shadow-sm font-semibold"
+                    : "text-muted-foreground hover:text-foreground hover:bg-background/50",
+                )}
+              >
+                <Database className="w-3 h-3 mr-1.5" />
+                Schema
+              </button>
+            </>
+          ) : (
+            <>
+              <Link
+                href={`/project/${projectId}?view=graph`}
+                className={cn(
+                  "inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-xs font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                  view === "graph"
+                    ? "bg-background text-foreground shadow-sm font-semibold"
+                    : "text-muted-foreground hover:text-foreground hover:bg-background/50",
+                )}
+              >
+                <Network className="w-3 h-3 mr-1.5" />
+                Graph
+              </Link>
+              <Link
+                href={`/project/${projectId}?view=schema`}
+                className={cn(
+                  "inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-xs font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                  view === "schema"
+                    ? "bg-background text-foreground shadow-sm font-semibold"
+                    : "text-muted-foreground hover:text-foreground hover:bg-background/50",
+                )}
+              >
+                <Database className="w-3 h-3 mr-1.5" />
+                Schema
+              </Link>
+            </>
+          )}
         </div>
       </div>
 

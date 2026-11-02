@@ -51,7 +51,7 @@ export function SchemaView({ projectId }: SchemaViewProps) {
     handleSelectionDragStart,
     handleMoveEnd,
   } = useCanvasHandlers(projectId, "schema");
-  const { fitView } = useReactFlow();
+  const { fitView, setViewport } = useReactFlow();
   const { handleLayout } = useSchemaAutoLayout();
   useAutoLayoutShortcut(React.useCallback(() => handleLayout("LR"), [handleLayout]));
   const aiPanelOpen = useSidebarStore((s) => s.aiPanelOpen);
@@ -151,12 +151,19 @@ export function SchemaView({ projectId }: SchemaViewProps) {
   useEffect(() => {
     if (schemaNodes.length > 0 && !hasFitted.current) {
       hasFitted.current = true;
-      const timer = setTimeout(() => {
-        fitView({ duration: 500, padding: 0.35, maxZoom: 0.65 });
-      }, 100);
-      return () => clearTimeout(timer);
+      const savedViewport = localStorage.getItem(`canvas_viewport_${projectId}_schema`);
+      if (savedViewport) {
+        try {
+          const parsed = JSON.parse(savedViewport);
+          setViewport(parsed);
+          return;
+        } catch {
+          // fallback to fitView
+        }
+      }
+      fitView({ padding: 0.35, maxZoom: 0.65, duration: 0 });
     }
-  }, [schemaNodes.length, fitView]);
+  }, [schemaNodes.length, fitView, setViewport, projectId]);
 
 
   return (
