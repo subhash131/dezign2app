@@ -48,13 +48,12 @@ export interface GraphViewProps {
 }
 
 export function GraphView({ projectId, projectName }: GraphViewProps) {
-  const { nodes, edges, onEdgesChange, onConnect, addNode, setView } =
-    useBackendCanvasStore();
+  const nodes = useBackendCanvasStore((s) => s.nodes);
+  const edges = useBackendCanvasStore((s) => s.edges);
+  const onEdgesChange = useBackendCanvasStore((s) => s.onEdgesChange);
+  const onConnect = useBackendCanvasStore((s) => s.onConnect);
+  const addNode = useBackendCanvasStore((s) => s.addNode);
   const activeConfigItem = useBackendCanvasStore((s) => s.activeConfigItem);
-
-  useEffect(() => {
-    setView("graph");
-  }, [setView]);
 
   // Run legacy edge self-healing once on initial load (not on every drag or node movement)
   const hasRunInitialHealRef = useRef(false);

@@ -58,18 +58,11 @@ export default function ProjectCanvasPage({
   const [previewVersionId, setPreviewVersionId] = useState<Id<"project_versions"> | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
 
-  // Synchronize store canvasView with query state bidirectionally
-  const canvasView = useBackendCanvasStore((s) => s.canvasView);
+  // Synchronize store canvasView with query state
   const setStoreView = useBackendCanvasStore((s) => s.setView);
   React.useEffect(() => {
     setStoreView(view);
   }, [view, setStoreView]);
-
-  React.useEffect(() => {
-    if (canvasView && canvasView !== view) {
-      setView(canvasView);
-    }
-  }, [canvasView, view, setView]);
 
   // Enable global keyboard shortcuts (Ctrl+Z / Ctrl+Y) with input isolation
   useCanvasKeyboardShortcuts(true, view);

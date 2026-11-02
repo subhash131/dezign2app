@@ -38,12 +38,10 @@ interface SchemaViewProps {
 }
 
 export function SchemaView({ projectId }: SchemaViewProps) {
-  const { nodes, edges, onEdgesChange, onConnect, setView } =
-    useBackendCanvasStore();
-
-  useEffect(() => {
-    setView("schema");
-  }, [setView]);
+  const nodes = useBackendCanvasStore((s) => s.nodes);
+  const edges = useBackendCanvasStore((s) => s.edges);
+  const onEdgesChange = useBackendCanvasStore((s) => s.onEdgesChange);
+  const onConnect = useBackendCanvasStore((s) => s.onConnect);
 
   const {
     handleNodesChange,

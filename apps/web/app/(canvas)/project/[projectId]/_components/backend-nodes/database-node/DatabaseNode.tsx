@@ -28,7 +28,7 @@ export const DB_COLOR_PRESETS = [
   { name: "Orange", hex: "#f97316" },
 ];
 
-export const DatabaseNode = ({ id, data, selected }: NodeProps<BackendNode>) => {
+export const DatabaseNode = React.memo(({ id, data, selected }: NodeProps<BackendNode>) => {
   const params = useParams();
   const projectId = (params?.projectId as string) || undefined;
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
@@ -283,4 +283,6 @@ export const DatabaseNode = ({ id, data, selected }: NodeProps<BackendNode>) => 
       />
     </div>
   );
-};
+});
+
+DatabaseNode.displayName = "DatabaseNode";
