@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { NodeProps, Handle, Position, NodeChange } from "@xyflow/react";
 import {
   Globe,
@@ -483,56 +483,58 @@ export const WebAppNode = React.memo(({
     }
   };
 
-  // Narrow selector for connected pages per zone handle + duplicate route warnings.
-  // Using useShallow guarantees this node will NOT re-render during canvas drag events.
-  const zonePagesMap = useBackendCanvasStore(
-    useShallow((s) => {
-      const pageEdges = s.edges.filter((e) => e.source === id || e.target === id);
-      const allPages: Array<{ id: string; label: string; isLayout: boolean; handleId: string }> = [];
+  const edges = useBackendCanvasStore((s) => s.edges);
+  const webPageNodes = useBackendCanvasStore(
+    useShallow((s) => s.nodes.filter((n) => n.type === "webPage")),
+  );
 
-      for (const e of pageEdges) {
-        const otherId = e.source === id ? e.target : e.source;
-        const handleId = e.source === id ? (e.sourceHandle || "") : (e.targetHandle || "");
-        const otherNode = s.nodes.find((n) => n.id === otherId);
-        if (otherNode && otherNode.type === "webPage") {
-          const rawLabel = otherNode.data?.label || otherNode.data?.path || "Page";
-          const isLayout = Boolean(otherNode.data?.isLayout) || rawLabel.trim().toLowerCase() === "layout";
-          allPages.push({
-            id: otherNode.id,
-            label: rawLabel,
-            isLayout,
-            handleId,
-          });
-        }
-      }
+  // Memoized zone-to-pages mapping computed during render (cached cleanly for React)
+  const zonePagesMap = useMemo(() => {
+    const pageEdges = edges.filter((e) => e.source === id || e.target === id);
+    const allPages: Array<{ id: string; label: string; isLayout: boolean; handleId: string }> = [];
 
-      const map: Record<
-        string,
-        Array<{ id: string; label: string; isLayout: boolean; hasDuplicate: boolean }>
-      > = {};
-
-      for (const p of allPages) {
-        const norm = normalizePageRoute(p.label);
-        const hasDuplicate = !p.isLayout && allPages.some(
-          (other) =>
-            other.id !== p.id &&
-            !other.isLayout &&
-            normalizePageRoute(other.label) === norm,
-        );
-        if (!map[p.handleId]) {
-          map[p.handleId] = [];
-        }
-        map[p.handleId]?.push({
-          id: p.id,
-          label: p.label,
-          isLayout: p.isLayout,
-          hasDuplicate,
+    for (const e of pageEdges) {
+      const otherId = e.source === id ? e.target : e.source;
+      const handleId = e.source === id ? (e.sourceHandle || "") : (e.targetHandle || "");
+      const otherNode = webPageNodes.find((n) => n.id === otherId);
+      if (otherNode && otherNode.type === "webPage") {
+        const rawLabel = otherNode.data?.label || otherNode.data?.path || "Page";
+        const isLayout = Boolean(otherNode.data?.isLayout) || rawLabel.trim().toLowerCase() === "layout";
+        allPages.push({
+          id: otherNode.id,
+          label: rawLabel,
+          isLayout,
+          handleId,
         });
       }
+    }
 
-      return map;
-    }),
-  );
+    const map: Record<
+      string,
+      Array<{ id: string; label: string; isLayout: boolean; hasDuplicate: boolean }>
+    > = {};
+
+    for (const p of allPages) {
+      const norm = normalizePageRoute(p.label);
+      const hasDuplicate = !p.isLayout && allPages.some(
+        (other) =>
+          other.id !== p.id &&
+          !other.isLayout &&
+          normalizePageRoute(other.label) === norm,
+      );
+      if (!map[p.handleId]) {
+        map[p.handleId] = [];
+      }
+      map[p.handleId]!.push({
+        id: p.id,
+        label: p.label,
+        isLayout: p.isLayout,
+        hasDuplicate,
+      });
+    }
+
+    return map;
+  }, [edges, id, webPageNodes]);
 
   const isDirectActive = Boolean(
     selected ||
