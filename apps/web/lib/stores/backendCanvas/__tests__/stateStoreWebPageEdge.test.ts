@@ -544,7 +544,7 @@ describe("StateStore <-> WebPage & TypesNode Connection and Cleanup", () => {
         (e) => e.source === "store-conv" && e.target === "page-conv",
       );
       expect(edge).toBeDefined();
-      expect(edge?.sourceHandle).toBe("setter-out-f-msg");
+      expect(edge?.sourceHandle).toBe("store-field-out-f-msg");
       expect(edge?.targetHandle).toBe("event-in-act-update");
     });
 

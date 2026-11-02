@@ -62,6 +62,24 @@ export function cleanStateStoreEdge(
           n.id === pageNode.id ? updatedPage : n,
         );
         ctx.pendingNodeUpserts.push(updatedPage);
+
+        if (!isTypeEdge) {
+          // If the state object was removed, also prune companion edges (e.g. type-reference edges) pointing to this targetHandle
+          const companionEdges = ctx.nextEdges.filter(
+            (e) => e.target === edge.target && e.targetHandle === edge.targetHandle && e.id !== edge.id,
+          );
+          if (companionEdges.length > 0) {
+            const compIds = new Set(companionEdges.map((c) => c.id));
+            ctx.nextEdges = ctx.nextEdges.filter((e) => !compIds.has(e.id));
+            compIds.forEach((id) => {
+              ctx.removedSet.add(id);
+              if (!ctx.additionalRemovedEdgeIds) {
+                ctx.additionalRemovedEdgeIds = [];
+              }
+              ctx.additionalRemovedEdgeIds.push(id);
+            });
+          }
+        }
       }
     }
   }

@@ -25,6 +25,7 @@ import { generateKeyBetween } from "fractional-indexing";
 import { getLastIndex } from "@/lib/stores/backendCanvas/utils";
 import { z } from "zod";
 import { healDirectTransformerEdges } from "@/lib/stores/backendCanvas/edge/handlers/transformerConnect";
+import { healOrphanedWebPageEdges } from "@/lib/stores/backendCanvas/edge/handlers/healOrphanedWebPageEdges";
 import {
   endpointSchema,
   publishedEventSchema,
@@ -636,6 +637,26 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
         pendingEdgeRemovals: healedTrans.pendingEdgeRemovals,
         pendingEdgeUpserts: healedTrans.pendingEdgeUpserts,
         pendingNodeUpserts: healedTrans.pendingNodeUpserts,
+      });
+    }
+
+    // Auto-heal orphaned edges connected to WebPage nodes whose handles were removed
+    const currentRemovals = useBackendCanvasStore.getState().pendingEdgeRemovals || [];
+    const healedWpEdges = healOrphanedWebPageEdges({
+      nodes: nodesToSet,
+      edges: healedEdges,
+      pendingEdgeRemovals: currentRemovals,
+      pendingEdgeUpserts: store.pendingEdgeUpserts,
+      pendingNodeUpserts: store.pendingNodeUpserts,
+    });
+
+    if (healedWpEdges.changed) {
+      nodesToSet = healedWpEdges.nodes;
+      healedEdges = healedWpEdges.edges;
+      useBackendCanvasStore.setState({
+        pendingEdgeRemovals: healedWpEdges.pendingEdgeRemovals,
+        pendingEdgeUpserts: healedWpEdges.pendingEdgeUpserts,
+        pendingNodeUpserts: healedWpEdges.pendingNodeUpserts,
       });
     }
 

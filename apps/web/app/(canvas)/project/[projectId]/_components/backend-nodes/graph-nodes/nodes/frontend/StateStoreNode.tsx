@@ -268,6 +268,30 @@ export const StateStoreNode = ({
   const handleDeleteField = (fieldId: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     const updatedFields = (data.fields || []).filter((f) => f.id !== fieldId);
+
+    const fieldHandles = [
+      `store-field-in-${fieldId}`,
+      `store-field-out-${fieldId}`,
+      `setter-in-left-${fieldId}`,
+      `setter-in-${fieldId}`,
+      `setter-out-${fieldId}`,
+      `append-in-left-${fieldId}`,
+      `append-in-${fieldId}`,
+      `append-out-${fieldId}`,
+      `pop-in-left-${fieldId}`,
+      `pop-in-${fieldId}`,
+      `pop-out-${fieldId}`,
+      `mutate-in-left-${fieldId}`,
+      `mutate-out-${fieldId}`,
+    ];
+    edges
+      .filter(
+        (ed) =>
+          (ed.source === id && fieldHandles.includes(ed.sourceHandle || "")) ||
+          (ed.target === id && fieldHandles.includes(ed.targetHandle || "")),
+      )
+      .forEach((ed) => deleteEdge(ed.id));
+
     updateNode(id, {
       data: {
         ...data,
@@ -330,12 +354,12 @@ export const StateStoreNode = ({
       const expectedSourceHandle = `type-out-${typeItem.id}`;
       const expectedTargetHandle = `store-field-in-${f.id}`;
 
-      // Clean up any stale edge connecting to this field from an erroneous Entity Types node
+      // Clean up any stale edge connecting to this field from an erroneous Entity Types node or old type
       const staleEdges = edges.filter(
         (e) =>
           e.target === id &&
           e.targetHandle === expectedTargetHandle &&
-          e.source !== typesNode.id,
+          (e.source !== typesNode.id || e.sourceHandle !== expectedSourceHandle),
       );
       staleEdges.forEach((e) => deleteEdge(e.id));
 
@@ -577,9 +601,41 @@ export const StateStoreNode = ({
                 return (
                   <div
                     key={f.id}
-                    className="flex flex-col gap-2 p-2.5 rounded-lg bg-secondary/80 border border-indigo-500/50 shadow-md nodrag"
+                    className="flex flex-col gap-2 p-2.5 rounded-lg bg-secondary/80 border border-indigo-500/50 shadow-md nodrag relative"
                     onClick={(e) => e.stopPropagation()}
                   >
+                    {/* Left target handle preserved during editing so edges don't break */}
+                    <Handle
+                      type="target"
+                      position={Position.Left}
+                      id={`store-field-in-${f.id}`}
+                      className={cn(
+                        CANVAS_ROW_HANDLE_CLASS,
+                        CANVAS_ROW_HANDLE_LEFT_OFFSET_CLASS,
+                        "!border-2 !border-background cursor-pointer hover:scale-125 transition-all z-10",
+                        isInputConnected
+                          ? "!bg-indigo-400 ring-2 ring-indigo-500/50 scale-110"
+                          : "!bg-indigo-500 hover:!bg-indigo-400",
+                      )}
+                      style={{ top: "50%" }}
+                      title={`${f.name}: Wire from WebPage action or connect from TypesNode`}
+                    />
+                    {/* Right source handle preserved during editing so edges don't break */}
+                    <Handle
+                      type="source"
+                      position={Position.Right}
+                      id={`store-field-out-${f.id}`}
+                      className={cn(
+                        CANVAS_ROW_HANDLE_CLASS,
+                        CANVAS_ROW_HANDLE_RIGHT_OFFSET_CLASS,
+                        "!border-2 !border-background cursor-pointer hover:scale-125 transition-all z-10",
+                        isOutputConnected
+                          ? "!bg-cyan-400 ring-2 ring-cyan-500/50 scale-110"
+                          : "!bg-cyan-500 hover:!bg-cyan-400",
+                      )}
+                      style={{ top: "50%" }}
+                      title={`${f.name}: Drag to WebPage to read / render state`}
+                    />
                     <div className="flex items-center gap-1.5">
                       <LocalInput
                         className="h-7 text-xs font-mono font-semibold bg-background flex-1"

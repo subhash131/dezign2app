@@ -85,6 +85,7 @@ export function cleanupDeletedEdgesState(
     pendingEdgeRemovals: [
       ...(currentState.pendingEdgeRemovals || []),
       ...removedEdgeIds,
+      ...(ctx.additionalRemovedEdgeIds || []),
     ],
   };
 

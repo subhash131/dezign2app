@@ -582,14 +582,35 @@ export const SectionStateObjectsList: React.FC<SectionStateObjectsListProps> = (
         ) : (
           <div className="flex flex-col gap-1">
             {configuredStates.map((st) => {
+              const isConnected = edges.some(
+                (e) =>
+                  e.target === nodeId &&
+                  e.targetHandle === `section-state-in-${section.id}-${st.id}`,
+              );
               const isEditing = editingStateId === st.id;
 
               if (isEditing) {
                 return (
                   <div
                     key={st.id}
-                    className="flex flex-col gap-1 p-1.5 rounded-md bg-background border border-cyan-500/50 shadow-sm"
+                    className="flex flex-col gap-1 p-1.5 rounded-md bg-background border border-cyan-500/50 shadow-sm relative"
                   >
+                    {/* Left incoming handle preserved during editing so edges don't break */}
+                    <Handle
+                      type="target"
+                      position={Position.Left}
+                      id={`section-state-in-${section.id}-${st.id}`}
+                      className={cn(
+                        CANVAS_HANDLE_CLASS,
+                        CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+                        "border-2 border-background cursor-pointer hover:scale-125 transition-all z-10",
+                        isConnected
+                          ? "!bg-purple-400 ring-2 ring-purple-500/40"
+                          : "!bg-purple-500 hover:!bg-purple-400",
+                      )}
+                      style={{ top: "50%" }}
+                      title={`State subscription: ${st.name} from store ${st.storeName || ""}`}
+                    />
                     <div className="flex items-center gap-1">
                       <Input
                         value={editName}
@@ -647,12 +668,6 @@ export const SectionStateObjectsList: React.FC<SectionStateObjectsListProps> = (
                   </div>
                 );
               }
-
-              const isConnected = edges.some(
-                (e) =>
-                  e.target === nodeId &&
-                  e.targetHandle === `section-state-in-${section.id}-${st.id}`,
-              );
 
               const isArrayState =
                 st.type === "array" ||
