@@ -168,12 +168,14 @@ export const ActionFlowEditor: React.FC<ActionFlowEditorProps> = ({
           firstTransformer.type === "transformer_ref"
             ? firstTransformer.data?.transformerRef || firstTransformer.id
             : firstTransformer.id;
-        const edgeId = ensureActionTransformerConnection({
+        const connRes = ensureActionTransformerConnection({
           webPageNodeId,
           actionId,
           transformerNodeId: firstTransformer.id,
           stepOrder: newOrder,
         });
+        const edgeId = connRes?.edgeId;
+        const refNodeId = connRes?.refNodeId;
         const trName =
           firstTransformer.data?.label ||
           firstTransformer.data?.functionName ||
@@ -189,9 +191,10 @@ export const ActionFlowEditor: React.FC<ActionFlowEditorProps> = ({
           outputVariable: defaultVar,
           transformerNodeId: trNodeId,
           transformerRefNodeId:
-            firstTransformer.type === "transformer_ref"
+            refNodeId ||
+            (firstTransformer.type === "transformer_ref"
               ? firstTransformer.id
-              : undefined,
+              : undefined),
           transformerName: trName,
           edgeId,
           functionRef: {

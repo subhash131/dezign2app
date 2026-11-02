@@ -38,7 +38,7 @@ import {
   pageRouteToFolderPath,
   WebAppZone,
 } from "@workspace/canvas";
-import { RealtimeConnection, ClientDeliveryProtocol, Endpoint, PageStateObject, PageSection, StoreActionBinding, SectionComponentBinding } from "@workspace/canvas/types";
+import { RealtimeConnection, ClientDeliveryProtocol, Endpoint, PageStateObject, PageSection, StoreActionBinding, SectionComponentBinding, FrontendActionStepDraft, UIEventItem } from "@workspace/canvas/types";
 import { SectionList, RealtimeConnectionList, useZoneHandLayout } from "./web-page";
 import { NodeDeletionDialog } from "@/app/(canvas)/project/[projectId]/_components/NodeDeletionDialog";
 
@@ -196,6 +196,90 @@ export const WebPageNode = ({
                 actionType: b.actionType,
                 targetFieldId: b.targetFieldId,
                 targetFieldName: b.targetFieldName,
+              },
+            });
+          }
+        });
+      });
+    });
+  }, [data?.sections, id, nodes, edges, addEdge]);
+
+  // Auto-sync canvas edges from transformer_ref nodes to WebPageNode actions when configured in actionSteps
+  React.useEffect(() => {
+    if (!data?.sections || data.sections.length === 0) return;
+
+    const sections: PageSection[] = data.sections;
+    sections.forEach((sec: PageSection) => {
+      (sec.actions || []).forEach((act: UIEventItem) => {
+        const transSteps: FrontendActionStepDraft[] = (act.actionSteps || []).filter(
+          (step: FrontendActionStepDraft): boolean => step.type === "transform",
+        );
+        if (transSteps.length === 0) return;
+
+        const isPageLoad = act.event === "pageLoad" || act.name === "pageLoad";
+        const isSse = act.event === "sse" || act.event === "sseMessage";
+        const isWebsocket =
+          act.event === "websocket" || act.event === "ws" || act.event === "websocketMessage";
+        const isWebrtc = act.event === "webrtc";
+        const targetHandle = isPageLoad
+          ? `pageload-in-${act.id}`
+          : isSse
+          ? `sse-in-${act.id}`
+          : isWebsocket
+          ? `websocket-in-${act.id}`
+          : isWebrtc
+          ? `webrtc-in-${act.id}`
+          : `event-in-${act.id}`;
+
+        transSteps.forEach((step: FrontendActionStepDraft) => {
+          let refNode: BackendNode | undefined = nodes.find(
+            (n: BackendNode): boolean =>
+              n.type === "transformer_ref" &&
+              (n.id === step.transformerRefNodeId ||
+                (step.transformerNodeId !== undefined && n.data?.transformerRef === step.transformerNodeId) ||
+                n.data?.targetActionId === act.id ||
+                (Array.isArray(n.data?.targetActionIds) && n.data.targetActionIds.includes(act.id))),
+          );
+
+          if (!refNode && step.transformerNodeId) {
+            const masterNode = nodes.find(
+              (n: BackendNode): boolean => n.id === step.transformerNodeId && n.type === "transformer",
+            );
+            if (masterNode) {
+              refNode = nodes.find(
+                (n: BackendNode): boolean => n.type === "transformer_ref" && n.data?.transformerRef === masterNode.id,
+              );
+            }
+          }
+
+          if (!refNode) return;
+
+          const existingEdge = edges.find(
+            (e) =>
+              e.source === refNode!.id &&
+              e.target === id &&
+              (e.type === "connection" || !e.type),
+          );
+
+          if (existingEdge) {
+            if (existingEdge.targetHandle !== targetHandle || existingEdge.sourceHandle !== "transformer-out") {
+              useBackendCanvasStore.getState().updateEdge(existingEdge.id, {
+                sourceHandle: "transformer-out",
+                targetHandle,
+                type: "connection",
+              });
+            }
+          } else {
+            addEdge({
+              id: `edge-ref-${refNode.id}-${act.id}-${Date.now()}`,
+              source: refNode.id,
+              target: id,
+              sourceHandle: "transformer-out",
+              targetHandle,
+              type: "connection",
+              data: {
+                sequenceOrder: step.order || 1,
+                label: String(step.order || 1),
               },
             });
           }

@@ -361,75 +361,189 @@ export interface EnsureActionTransformerConnectionParams {
   previousEdgeId?: string;
 }
 
+export interface EnsureActionTransformerResult {
+  edgeId: string;
+  refNodeId?: string;
+}
+
+export function getWebPageActionInboundHandle(webPageNodeId: string, actionId: string): string {
+  const store = useBackendCanvasStore.getState();
+  const wpNode = store.nodes.find((n) => n.id === webPageNodeId);
+  const sections: PageSection[] = wpNode?.data?.sections || [];
+  const action: UIEventItem | undefined = sections
+    .flatMap((s: PageSection): UIEventItem[] => s.actions || [])
+    .find((a: UIEventItem): boolean => a.id === actionId || a.name === actionId || a.event === actionId);
+  const evtStr = (action?.event || action?.name || "").toLowerCase();
+  const isPageLoad =
+    evtStr === "pageload" ||
+    actionId === "pageLoad" ||
+    actionId.toLowerCase().includes("pageload");
+  const isSse = evtStr === "sse" || evtStr === "ssemessage";
+  const isWebsocket =
+    evtStr === "websocket" ||
+    evtStr === "ws" ||
+    evtStr === "websocketmessage";
+  const isWebrtc = evtStr === "webrtc";
+
+  const resolvedActionId = action?.id || actionId;
+
+  return isPageLoad
+    ? `pageload-in-${resolvedActionId}`
+    : isSse
+    ? `sse-in-${resolvedActionId}`
+    : isWebsocket
+    ? `websocket-in-${resolvedActionId}`
+    : isWebrtc
+    ? `webrtc-in-${resolvedActionId}`
+    : `event-in-${resolvedActionId}`;
+}
+
 export function ensureActionTransformerConnection({
   webPageNodeId,
   actionId,
   transformerNodeId,
   stepOrder,
   previousEdgeId,
-}: EnsureActionTransformerConnectionParams): string | undefined {
+}: EnsureActionTransformerConnectionParams): EnsureActionTransformerResult | undefined {
   if (!webPageNodeId || !actionId || !transformerNodeId) return undefined;
 
   const store = useBackendCanvasStore.getState();
-  const sourceHandle = getWebPageSourceHandle(webPageNodeId, actionId);
-  const targetHandle = "transformer-in";
+  const sourceHandle = "transformer-out";
+  const targetHandle = getWebPageActionInboundHandle(webPageNodeId, actionId);
+
+  const targetNode = store.nodes.find((n) => n.id === transformerNodeId);
+  const isRefNode = targetNode?.type === "transformer_ref";
+  const isGlobal = isRefNode || targetNode?.data?.scope !== "local";
+  const masterId = isRefNode ? targetNode?.data?.transformerRef || targetNode?.id : targetNode?.id;
+
+  let refNode: BackendNode | undefined = undefined;
+
+  if (isRefNode) {
+    refNode = targetNode;
+  } else if (isGlobal && masterId) {
+    // Look for existing transformer_ref node for this master transformer or webPage
+    refNode = store.nodes.find(
+      (n) =>
+        n.type === "transformer_ref" &&
+        (n.data?.transformerRef === masterId ||
+          n.id === transformerNodeId ||
+          n.data?.targetWebPageId === webPageNodeId),
+    );
+
+    // If no ref node exists on canvas, create one!
+    if (!refNode) {
+      const refNodeId = `transformer-ref-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      const wpNode = store.nodes.find((n) => n.id === webPageNodeId);
+      const basePos = wpNode?.position || { x: 300, y: 300 };
+      const existingRefs = store.nodes.filter(
+        (n) =>
+          n.type === "transformer_ref" ||
+          n.type === "storage_operation_ref" ||
+          n.type === "StorageBucketRefNode",
+      );
+      const offset = (existingRefs.length + 1) * 80;
+      const fnName = targetNode?.data?.label || targetNode?.data?.functionName || "Transformer";
+
+      store.addNode({
+        id: refNodeId,
+        type: "transformer_ref",
+        position: {
+          x: Math.max(0, basePos.x - 300),
+          y: basePos.y + offset,
+        },
+        data: {
+          label: `${fnName} (Ref)`,
+          transformerRef: masterId,
+          targetWebPageId: webPageNodeId,
+          targetActionId: actionId,
+          targetActionIds: [actionId],
+        },
+      });
+      refNode = useBackendCanvasStore.getState().nodes.find((n) => n.id === refNodeId);
+    } else {
+      const curActs: string[] = refNode.data?.targetActionIds || (refNode.data?.targetActionId ? [refNode.data.targetActionId] : []);
+      const nextActs = !curActs.includes(actionId) ? [...curActs, actionId] : curActs;
+      store.updateNode(refNode.id, {
+        data: {
+          ...refNode.data,
+          transformerRef: refNode.data?.transformerRef || masterId,
+          targetWebPageId: webPageNodeId,
+          targetActionId: actionId,
+          targetActionIds: nextActs,
+        },
+      });
+    }
+
+    // Ensure invisible reference edge from master global transformer to transformer_ref node
+    if (refNode && masterId && masterId !== refNode.id) {
+      const refEdgeExists = store.edges.some(
+        (e) =>
+          (e.type === "transformer-reference" || e.type === "reference") &&
+          e.source === masterId &&
+          e.target === refNode!.id,
+      );
+      if (!refEdgeExists) {
+        store.addEdge({
+          id: `edge-ref-link-${masterId}-${refNode.id}`,
+          source: masterId,
+          target: refNode.id,
+          sourceHandle: "transformer-out",
+          targetHandle: "transformer-in",
+          type: "transformer-reference",
+        });
+      }
+    }
+  }
+
+  const effectiveSourceId = refNode ? refNode.id : transformerNodeId;
+
+  // Purge any obsolete direct edges between master global transformer and webPage
+  if (masterId && masterId !== effectiveSourceId) {
+    store.edges
+      .filter(
+        (e) =>
+          (e.source === masterId && e.target === webPageNodeId) ||
+          (e.source === webPageNodeId && e.target === masterId),
+      )
+      .forEach((e) => store.deleteEdge(e.id));
+  }
 
   // 1. Identify previous edge for this step (if any)
   const prevEdge =
     (previousEdgeId ? store.edges.find((e) => e.id === previousEdgeId) : undefined) ||
     store.edges.find(
       (e) =>
-        e.source === webPageNodeId &&
-        e.sourceHandle === sourceHandle &&
+        e.target === webPageNodeId &&
+        (e.targetHandle === targetHandle || e.targetHandle?.endsWith(`-${actionId}`)) &&
         (e.data?.sequenceOrder === stepOrder ||
           e.data?.label === String(stepOrder)),
+    ) ||
+    store.edges.find(
+      (e) =>
+        e.source === webPageNodeId &&
+        (e.sourceHandle?.endsWith(`-${actionId}`) || e.sourceHandle === `events-${actionId}`) &&
+        (e.target === effectiveSourceId || (refNode && e.target === refNode.id)),
     );
 
-  // 2. Find existing edge already targeting this transformer
+  // 2. Find existing connection edge between effectiveSourceId and webPage
   const existingTargetEdge = store.edges.find(
     (e) =>
-      e.source === webPageNodeId &&
-      e.target === transformerNodeId &&
-      e.sourceHandle === sourceHandle,
+      e.source === effectiveSourceId &&
+      e.target === webPageNodeId &&
+      e.targetHandle === targetHandle,
+  ) || store.edges.find(
+    (e) =>
+      (e.source === effectiveSourceId && e.target === webPageNodeId) ||
+      (e.source === webPageNodeId && (e.target === effectiveSourceId || (refNode && e.target === refNode.id))),
   );
 
   if (prevEdge) {
     if (existingTargetEdge && existingTargetEdge.id !== prevEdge.id) {
       store.deleteEdge(prevEdge.id);
-      if (
-        existingTargetEdge.data?.sequenceOrder !== stepOrder ||
-        existingTargetEdge.data?.label !== String(stepOrder)
-      ) {
-        store.updateEdge(existingTargetEdge.id, {
-          targetHandle,
-          data: {
-            ...existingTargetEdge.data,
-            sequenceOrder: stepOrder,
-            label: String(stepOrder),
-          },
-        });
-      }
-      return existingTargetEdge.id;
-    }
-
-    store.updateEdge(prevEdge.id, {
-      target: transformerNodeId,
-      targetHandle,
-      data: {
-        ...prevEdge.data,
-        sequenceOrder: stepOrder,
-        label: String(stepOrder),
-      },
-    });
-    return prevEdge.id;
-  }
-
-  if (existingTargetEdge) {
-    if (
-      existingTargetEdge.data?.sequenceOrder !== stepOrder ||
-      existingTargetEdge.data?.label !== String(stepOrder)
-    ) {
       store.updateEdge(existingTargetEdge.id, {
+        source: effectiveSourceId,
+        target: webPageNodeId,
+        sourceHandle,
         targetHandle,
         data: {
           ...existingTargetEdge.data,
@@ -437,16 +551,64 @@ export function ensureActionTransformerConnection({
           label: String(stepOrder),
         },
       });
+      return { edgeId: existingTargetEdge.id, refNodeId: refNode?.id };
     }
-    return existingTargetEdge.id;
+
+    const oldOtherNodeId = prevEdge.source === webPageNodeId ? prevEdge.target : prevEdge.source;
+    store.updateEdge(prevEdge.id, {
+      source: effectiveSourceId,
+      target: webPageNodeId,
+      sourceHandle,
+      targetHandle,
+      data: {
+        ...prevEdge.data,
+        sequenceOrder: stepOrder,
+        label: String(stepOrder),
+      },
+    });
+
+    if (oldOtherNodeId !== effectiveSourceId) {
+      const remainingEdges = store.edges.filter(
+        (e) =>
+          e.id !== prevEdge.id &&
+          (e.target === oldOtherNodeId || e.source === oldOtherNodeId) &&
+          e.type !== "transformer-reference" &&
+          e.type !== "reference",
+      );
+      const oldNode = store.nodes.find((n) => n.id === oldOtherNodeId);
+      if (
+        remainingEdges.length === 0 &&
+        oldNode &&
+        oldNode.type === "transformer_ref"
+      ) {
+        store.deleteNode(oldOtherNodeId);
+      }
+    }
+
+    return { edgeId: prevEdge.id, refNodeId: refNode?.id };
   }
 
-  // Draw new edge automatically on canvas
-  const newEdgeId = `edge-action-${actionId}-${transformerNodeId}-${Date.now()}`;
+  if (existingTargetEdge) {
+    store.updateEdge(existingTargetEdge.id, {
+      source: effectiveSourceId,
+      target: webPageNodeId,
+      sourceHandle,
+      targetHandle,
+      data: {
+        ...existingTargetEdge.data,
+        sequenceOrder: stepOrder,
+        label: String(stepOrder),
+      },
+    });
+    return { edgeId: existingTargetEdge.id, refNodeId: refNode?.id };
+  }
+
+  // Draw new edge automatically on canvas: transformer-out (right) -> webPage left handle
+  const newEdgeId = `edge-action-${actionId}-${effectiveSourceId}-${Date.now()}`;
   store.addEdge({
     id: newEdgeId,
-    source: webPageNodeId,
-    target: transformerNodeId,
+    source: effectiveSourceId,
+    target: webPageNodeId,
     sourceHandle,
     targetHandle,
     type: "connection",
@@ -456,37 +618,7 @@ export function ensureActionTransformerConnection({
     },
   });
 
-  return newEdgeId;
-}
-
-export function getWebPageActionInboundHandle(webPageNodeId: string, actionId: string): string {
-  const store = useBackendCanvasStore.getState();
-  const wpNode = store.nodes.find((n) => n.id === webPageNodeId);
-  const sections: PageSection[] = wpNode?.data?.sections || [];
-  const action: UIEventItem | undefined = sections
-    .flatMap((s: PageSection): UIEventItem[] => s.actions || [])
-    .find((a: UIEventItem): boolean => a.id === actionId);
-  const evtStr = action?.event || action?.name || "";
-  const evtLower = evtStr.toLowerCase();
-  const isPageLoad = evtStr === "pageLoad";
-  const isSse = evtStr === "sse" || evtStr === "sseMessage" || evtLower === "sse";
-  const isWebsocket =
-    evtStr === "websocket" ||
-    evtStr === "ws" ||
-    evtStr === "websocketMessage" ||
-    evtLower === "websocket" ||
-    evtLower === "ws";
-  const isWebrtc = evtStr === "webrtc" || evtLower === "webrtc";
-
-  return isPageLoad
-    ? `pageload-in-${actionId}`
-    : isSse
-    ? `sse-in-${actionId}`
-    : isWebsocket
-    ? `websocket-in-${actionId}`
-    : isWebrtc
-    ? `webrtc-in-${actionId}`
-    : `event-in-${actionId}`;
+  return { edgeId: newEdgeId, refNodeId: refNode?.id };
 }
 
 export interface EnsureActionStateStoreConnectionParams {
@@ -634,7 +766,34 @@ export function ensureActionStateStoreConnection({
 export function cleanupActionStepEdge(edgeId: string): void {
   if (!edgeId) return;
   const store = useBackendCanvasStore.getState();
+  const edge = store.edges.find((e) => e.id === edgeId);
+  if (!edge) return;
+  const sourceId = edge.source;
+  const targetId = edge.target;
   store.deleteEdge(edgeId);
+
+  // If source or target was an orphaned transformer_ref or StorageBucketRefNode, clean it up!
+  for (const candidateId of [sourceId, targetId]) {
+    if (!candidateId) continue;
+    const remainingEdges = store.edges.filter(
+      (e) =>
+        e.id !== edgeId &&
+        (e.target === candidateId || e.source === candidateId) &&
+        e.type !== "transformer-reference" &&
+        e.type !== "reference",
+    );
+    const candidateNode = store.nodes.find((n) => n.id === candidateId);
+    if (
+      remainingEdges.length === 0 &&
+      candidateNode &&
+      (candidateNode.type === "transformer_ref" ||
+        candidateNode.type === "StorageBucketRefNode" ||
+        candidateNode.type === "storage_ref" ||
+        candidateNode.type === "storage_operation_ref")
+    ) {
+      store.deleteNode(candidateId);
+    }
+  }
 }
 
 export function reorderActionStepEdges(

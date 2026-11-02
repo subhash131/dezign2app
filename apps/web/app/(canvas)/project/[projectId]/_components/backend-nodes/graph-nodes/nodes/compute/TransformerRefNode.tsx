@@ -13,7 +13,8 @@ import {
   Maximize2,
   Minimize2,
 } from "lucide-react";
-import { BackendNode } from "@/types/canvas";
+import { BackendNode, PageSection, UIEventItem, FrontendActionStepDraft } from "@/types/canvas";
+import { resolveWebPageActionInboundHandle } from "@/lib/stores/backendCanvas/edge/handlers/transformerConnect";
 import { cn } from "@workspace/ui/lib/utils";
 import {
   CANVAS_HANDLE_CLASS,
@@ -109,6 +110,103 @@ export const TransformerRefNode = ({
       });
     }
   }, [selectedMaster?.id, id, edges, addEdge]);
+
+  // Ensure outgoing connection edge exists between this ref node and target WebPage action
+  React.useEffect(() => {
+    let wp: BackendNode | undefined = data.targetWebPageId
+      ? nodes.find((n: BackendNode): boolean => n.id === data.targetWebPageId)
+      : undefined;
+
+    if (!wp) {
+      wp = nodes.find(
+        (n: BackendNode): boolean =>
+          n.type === "webPage" &&
+          Boolean(
+            (n.data?.sections || []).some((sec: PageSection): boolean =>
+              (sec.actions || []).some((act: UIEventItem): boolean =>
+                (act.actionSteps || []).some(
+                  (s: FrontendActionStepDraft): boolean =>
+                    s.type === "transform" &&
+                    (s.transformerRefNodeId === id ||
+                      (data.transformerRef !== undefined && s.transformerNodeId === data.transformerRef)),
+                ),
+              ),
+            ),
+          ),
+      );
+    }
+
+    if (!wp) {
+      const webPages: BackendNode[] = nodes.filter((n: BackendNode): boolean => n.type === "webPage");
+      if (webPages.length === 1) {
+        wp = webPages[0];
+      }
+    }
+
+    if (!wp) return;
+
+    let targetActId =
+      data.targetActionId ||
+      (Array.isArray(data.targetActionIds) && data.targetActionIds[0] ? data.targetActionIds[0] : "");
+
+    const sections: PageSection[] = wp.data?.sections || [];
+    for (const sec of sections) {
+      for (const act of sec.actions || []) {
+        const hasStep = (act.actionSteps || []).some(
+          (s: FrontendActionStepDraft): boolean =>
+            s.type === "transform" &&
+            (s.transformerRefNodeId === id ||
+              (data.transformerRef !== undefined && s.transformerNodeId === data.transformerRef)),
+        );
+        if (hasStep) {
+          targetActId = act.id;
+          break;
+        }
+      }
+      if (targetActId && targetActId !== data.targetActionId) break;
+    }
+
+    const { handle: targetHandle, actionId } = resolveWebPageActionInboundHandle(wp, targetActId);
+    if (!actionId || !targetHandle) return;
+
+    const existingEdge = edges.find(
+      (e) =>
+        e.source === id &&
+        e.target === wp!.id &&
+        (e.type === "connection" || !e.type),
+    );
+
+    if (existingEdge) {
+      if (existingEdge.targetHandle !== targetHandle || existingEdge.sourceHandle !== "transformer-out") {
+        useBackendCanvasStore.getState().updateEdge(existingEdge.id, {
+          sourceHandle: "transformer-out",
+          targetHandle,
+          type: "connection",
+        });
+      }
+    } else {
+      addEdge({
+        id: `edge-ref-${id}-${actionId}-${Date.now()}`,
+        source: id,
+        target: wp.id,
+        sourceHandle: "transformer-out",
+        targetHandle,
+        type: "connection",
+        data: { sequenceOrder: 1, label: "1" },
+      });
+    }
+
+    if (data.targetWebPageId !== wp.id || data.targetActionId !== actionId) {
+      updateNode(id, {
+        data: {
+          ...data,
+          targetWebPageId: wp.id,
+          targetActionId: actionId,
+          targetActionIds: [actionId],
+        },
+      });
+    }
+  }, [id, data, edges, nodes, addEdge, updateNode]);
 
   const handleMasterChange = (masterId: string) => {
     const master = globalTransformers.find((t) => t.id === masterId);

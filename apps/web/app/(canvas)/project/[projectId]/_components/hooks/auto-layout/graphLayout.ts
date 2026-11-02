@@ -258,11 +258,16 @@ export function performGraphLayout({
     const sourceNode = graphNodes.find((n: LayoutNode) => n.id === edge.source);
     const targetNode = graphNodes.find((n: LayoutNode) => n.id === edge.target);
     if (!sourceNode || !targetNode) return false;
+    if (edge.type === "transformer-reference" || edge.type === "reference") return false;
     const isTransType =
       sourceNode.type === "transformer_ref" ||
       sourceNode.type === "transformer" ||
       sourceNode.type === "hook" ||
-      sourceNode.type === "hook_ref";
+      sourceNode.type === "hook_ref" ||
+      targetNode.type === "transformer_ref" ||
+      targetNode.type === "transformer" ||
+      targetNode.type === "hook" ||
+      targetNode.type === "hook_ref";
     return isTransType;
   };
 
@@ -342,9 +347,17 @@ export function performGraphLayout({
     attachedHeadNodeIdSet.has(n.id),
   );
 
-  const hangingTransformerNodeIdSet = new Set<string>(
-    hangingEdges.map((e: LayoutEdge) => e.source),
-  );
+  const hangingTransformerNodeIdSet = new Set<string>();
+  hangingEdges.forEach((e: LayoutEdge) => {
+    const src = graphNodes.find((n) => n.id === e.source);
+    const tgt = graphNodes.find((n) => n.id === e.target);
+    if (src && (src.type === "transformer_ref" || (src.type === "transformer" && src.data?.scope === "local") || src.type === "hook" || src.type === "hook_ref")) {
+      hangingTransformerNodeIdSet.add(src.id);
+    }
+    if (tgt && (tgt.type === "transformer_ref" || (tgt.type === "transformer" && tgt.data?.scope === "local") || tgt.type === "hook" || tgt.type === "hook_ref")) {
+      hangingTransformerNodeIdSet.add(tgt.id);
+    }
+  });
   const hangingTransformerNodes: LayoutNode[] = graphNodes.filter((n: LayoutNode) =>
     hangingTransformerNodeIdSet.has(n.id),
   );

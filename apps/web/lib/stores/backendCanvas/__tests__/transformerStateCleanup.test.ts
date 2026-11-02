@@ -305,4 +305,97 @@ describe("backendCanvasStore - Transformer state cleanup & synchronization", () 
     expect(connEdges.map((e) => e.targetHandle)).toContain("endpoint-in-ep-invoice");
     expect(connEdges.map((e) => e.targetHandle)).toContain("endpoint-in-ep-receipt");
   });
+  it("automatically creates 1 transformer_ref node per webPage and routes global transformer edges through it", () => {
+    const store = useBackendCanvasStore.getState();
+
+    const webPageNode: BackendNode = {
+      id: "page-chat",
+      type: "webPage",
+      position: { x: 800, y: 100 },
+      data: {
+        label: "/chat/[id]",
+        sections: [
+          {
+            id: "sec-main",
+            name: "Main",
+            renderMode: "client",
+            actions: [
+              {
+                id: "act-send",
+                name: "sendMessage",
+                event: "click",
+              },
+            ],
+            stateObjects: [],
+          },
+        ],
+      },
+      fractionalIndex: "a0",
+    };
+
+    const globalTransNode: BackendNode = {
+      id: "trans-chat-id",
+      type: "transformer",
+      position: { x: 0, y: 100 },
+      data: {
+        label: "generateChatId",
+        functionName: "generateChatId",
+        scope: "global",
+      },
+      fractionalIndex: "a1",
+    };
+
+    store.setNodesAndEdges([webPageNode, globalTransNode], [], [], [], [], "proj-1");
+
+    // Connect from WebPage action handle events-act-send to transformer-in on global transformer
+    useBackendCanvasStore.getState().onConnect({
+      source: "page-chat",
+      target: "trans-chat-id",
+      sourceHandle: "events-act-send",
+      targetHandle: "transformer-in",
+    });
+
+    const state1 = useBackendCanvasStore.getState();
+
+    // Verify exactly 1 transformer_ref node was created for page-chat
+    const refNodes = state1.nodes.filter((n) => n.type === "transformer_ref");
+    expect(refNodes).toHaveLength(1);
+    const refNode = refNodes[0]!;
+    expect(refNode.data?.transformerRef).toBe("trans-chat-id");
+    expect(refNode.data?.targetWebPageId).toBe("page-chat");
+    expect(refNode.data?.targetActionIds).toEqual(["act-send"]);
+
+    // Verify edges: 1 transformer-reference edge (master -> ref) and 1 connection edge (webPage -> ref)
+    expect(state1.edges).toHaveLength(2);
+    const refLinkEdge = state1.edges.find((e) => e.type === "transformer-reference");
+    expect(refLinkEdge).toBeDefined();
+    expect(refLinkEdge?.source).toBe("trans-chat-id");
+    expect(refLinkEdge?.target).toBe(refNode.id);
+    expect(refLinkEdge?.sourceHandle).toBe("transformer-out");
+    expect(refLinkEdge?.targetHandle).toBe("transformer-in");
+
+    const connEdge1 = state1.edges.find((e) => e.type === "connection");
+    expect(connEdge1).toBeDefined();
+    expect(connEdge1?.source).toBe(refNode.id);
+    expect(connEdge1?.target).toBe("page-chat");
+    expect(connEdge1?.sourceHandle).toBe("transformer-out");
+    expect(connEdge1?.targetHandle).toBe("event-in-act-send");
+
+    // Verify NO direct cross-canvas edge between trans-chat-id and page-chat
+    const directEdge = state1.edges.find(
+      (e) =>
+        (e.source === "trans-chat-id" && e.target === "page-chat") ||
+        (e.source === "page-chat" && e.target === "trans-chat-id"),
+    );
+    expect(directEdge).toBeUndefined();
+
+    // Verify action has transform step auto-configured with transformerRefNodeId
+    const updatedPage = state1.nodes.find((n) => n.id === "page-chat");
+    const action = updatedPage?.data?.sections?.[0]?.actions?.[0];
+    expect(action?.actionSteps).toBeDefined();
+    expect(action?.actionSteps).toHaveLength(1);
+    expect(action?.actionSteps?.[0]?.type).toBe("transform");
+    expect(action?.actionSteps?.[0]?.transformerNodeId).toBe("trans-chat-id");
+    expect(action?.actionSteps?.[0]?.transformerRefNodeId).toBe(refNode.id);
+  });
 });

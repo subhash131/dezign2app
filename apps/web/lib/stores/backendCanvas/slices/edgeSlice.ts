@@ -1,5 +1,5 @@
 import { BackendEdge, FrontendActionStepDraft } from "@/types/canvas";
-import { isValidConnection, normalizePageRoute, isBackendEdgeType } from "@workspace/canvas";
+import { isValidConnection, normalizePageRoute, isBackendEdgeType, BackendNode } from "@workspace/canvas";
 import { toast } from "sonner";
 import {
   applyEdgeChanges,
@@ -93,6 +93,28 @@ export const createEdgeSlice = (
     const targetNode = get().nodes.find((n) => n.id === connection.target);
     if (!sourceNode || !targetNode) return;
 
+    const isGlobalTrans = (node?: BackendNode) =>
+      node?.type === "transformer" &&
+      (node.data?.scope === "global" || !node.data?.scope || node.data?.isGlobal === true);
+
+    const isDirectTransConnect =
+      (isGlobalTrans(sourceNode) && (targetNode.type === "webPage" || targetNode.type === "service")) ||
+      (isGlobalTrans(targetNode) && (sourceNode.type === "webPage" || sourceNode.type === "service")) ||
+      (sourceNode.type === "webPage" && targetNode.type === "transformer_ref") ||
+      (sourceNode.type === "transformer_ref" && targetNode.type === "webPage");
+
+    const existingEdgesForValidation = isDirectTransConnect
+      ? get().edges.filter(
+          (e) =>
+            !(
+              (e.source === sourceNode.id && e.target === targetNode.id) ||
+              (e.source === targetNode.id && e.target === sourceNode.id)
+            ) ||
+            e.type === "transformer-reference" ||
+            e.type === "reference",
+        )
+      : get().edges;
+
     const result = isValidConnection(
       sourceNode.type,
       connection.sourceHandle,
@@ -101,7 +123,7 @@ export const createEdgeSlice = (
       {
         sourceNodeId: connection.source!,
         targetNodeId: connection.target!,
-        existingEdges: get().edges,
+        existingEdges: existingEdgesForValidation,
       },
     );
 
@@ -242,12 +264,6 @@ export const createEdgeSlice = (
       data: initialData,
     };
 
-    const next = addReactFlowEdge(newEdge, get().edges);
-    set({
-      edges: next,
-      pendingEdgeUpserts: [...get().pendingEdgeUpserts, newEdge],
-    });
-
     const context = {
       set,
       get,
@@ -266,10 +282,19 @@ export const createEdgeSlice = (
     // 2. Synchronize Event Broker IDs
     handleEventBrokerConnect(context);
 
-    // 3. Handle Transformer connections (returns true if intercepted & direct edge removed)
-    if (handleTransformerConnect(context)) {
+    // 3. Handle Transformer connections (intercepts direct edge, creates transformer_ref & rewires to left handle)
+    if (isDirectTransConnect || handleTransformerConnect(context)) {
+      if (isDirectTransConnect) {
+        handleTransformerConnect(context);
+      }
       return;
     }
+
+    const next = addReactFlowEdge(newEdge, get().edges);
+    set({
+      edges: next,
+      pendingEdgeUpserts: [...get().pendingEdgeUpserts, newEdge],
+    });
 
     // 3.5. Handle WebPage Action -> Endpoint / Storage request step auto-configuration
     handleWebPageActionConnect(context);

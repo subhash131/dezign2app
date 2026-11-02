@@ -34,7 +34,10 @@ export interface TransformerHelperNodeData {
   name: string;             // camelCase function name, e.g. slugifyProductInput
   description?: string;
   scope: "global" | "local";
-  targetServiceId?: string; // For local scope, which service this belongs to
+  targetServiceId?: string;
+  targetWebPageId?: string;
+  targetActionId?: string;
+  targetActionIds?: string[]; // For local scope, which service this belongs to
   targetEndpointId?: string; // Optional: specific endpoint within the service
 
   // Section 1: Input
@@ -159,6 +162,9 @@ export interface CanvasTransformerNodeData {
   scope?: "global" | "local";
   isGlobal?: boolean;
   targetServiceId?: string;
+  targetWebPageId?: string;
+  targetActionId?: string;
+  targetActionIds?: string[];
   targetEndpointId?: string;
   targetEndpointIds?: string[];
   targetEventId?: string;
@@ -189,6 +195,9 @@ export interface CanvasTransformerNodeData {
 export interface CanvasTransformerRefNodeData {
   transformerRef?: string;
   targetServiceId?: string;
+  targetWebPageId?: string;
+  targetActionId?: string;
+  targetActionIds?: string[];
   targetEndpointId?: string;
   targetEndpointIds?: string[];
   targetEventId?: string;
