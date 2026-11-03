@@ -903,8 +903,9 @@ describe("LangGraph Invoke Pipeline Step Compiler", () => {
       expect(code).toContain("const chatHistorySnapshot = await supportAgentGraph.getState({");
       expect(code).toContain("configurable: { thread_id: req.params.threadId }");
       expect(code).toContain("const chatHistoryRawMessages = chatHistorySnapshot?.values?.messages ?? [];");
-      expect(code).toContain('const role = (t === "human" || t === "user") ? "user" : (t === "ai" || t === "assistant") ? "assistant" : String(t || "assistant");');
-      expect(code).toContain("return { id: m.id ||");
+      expect(code).toContain('const role = isTool ? "tool" : (t === "human" || t === "user") ? "user" : (t === "ai" || t === "assistant") ? "assistant" : (t === "system") ? "system" : String(t || "assistant");');
+      expect(code).toContain("...(toolCalls ? { tool_calls: toolCalls } : {})");
+      expect(code).toContain("...(toolCallId ? { tool_call_id: toolCallId } : {})");
     });
 
     it("renders full_state format when langGraphHistoryFormat is full_state", () => {
@@ -932,13 +933,12 @@ describe("LangGraph Invoke Pipeline Step Compiler", () => {
       expect(code).toContain("next: fullStateOutputSnapshot?.next ?? []");
     });
 
-    it("retains tool messages when langGraphHistoryExcludeToolMessages is explicitly false", () => {
+    it("retains all messages including tool messages in chat_messages history mode", () => {
       const step: PipelineStep = {
         id: "step-history-3",
         name: "SupportAgent",
         type: "langgraph_invoke",
         langGraphAction: "history",
-        langGraphHistoryExcludeToolMessages: false,
         outputVariable: "allTurns",
         langGraphTargetNodeId: "supportAgent",
         langGraphThreadIdSource: "headers.x-thread-id",
@@ -951,7 +951,9 @@ describe("LangGraph Invoke Pipeline Step Compiler", () => {
       const code = lines.join("\n");
 
       expect(code).toContain("req.headers[\"x-thread-id\"]");
-      expect(code).not.toContain(".filter((m: any) =>");
+      expect(code).not.toContain(".filter((m) => {");
+      expect(code).toContain("...(toolCalls ? { tool_calls: toolCalls } : {})");
+      expect(code).toContain("...(toolCallId ? { tool_call_id: toolCallId } : {})");
     });
 
     it("falls back to default thread accessor if langGraphThreadIdSource is not set", () => {

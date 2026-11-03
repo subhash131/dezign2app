@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { History, CheckCircle2, ShieldCheck, Database, Layers, SlidersHorizontal } from "lucide-react";
+import { History, CheckCircle2, Database, Layers, SlidersHorizontal } from "lucide-react";
 import { BackendNode, Endpoint, Parameter } from "@workspace/canvas/types";
 import { Label } from "@workspace/ui/components/label";
 import { Badge } from "@workspace/ui/components/badge";
@@ -32,7 +32,6 @@ export const HistoryConfigSection: React.FC<HistoryConfigSectionProps> = ({
   onChange,
 }) => {
   const currentFormat = step.langGraphHistoryFormat || "chat_messages";
-  const excludeTools = step.langGraphHistoryExcludeToolMessages !== false;
 
   // Build binding object for thread ID source
   const currentThreadSource = step.langGraphThreadIdSource || "params.threadId";
@@ -271,29 +270,7 @@ export const HistoryConfigSection: React.FC<HistoryConfigSectionProps> = ({
         </div>
       </div>
 
-      {/* Message Filter Options (Only relevant for chat_messages format) */}
-      {currentFormat === "chat_messages" && (
-        <div className="flex items-center justify-between p-2.5 rounded-lg bg-secondary/30 border border-border/30">
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[11px] font-medium text-foreground flex items-center gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
-              Sanitize for Chat UI
-            </span>
-            <span className="text-[10px] text-muted-foreground">
-              Excludes internal <code className="text-[9px] font-mono">ToolMessage</code> records, returning only User &amp; Assistant speech turns.
-            </span>
-          </div>
-          <Switch
-            checked={excludeTools}
-            onCheckedChange={(checked) =>
-              onChange({
-                ...step,
-                langGraphHistoryExcludeToolMessages: checked,
-              })
-            }
-          />
-        </div>
-      )}
+
 
       {/* Checkpoint Pagination: limit & before cursor */}
       <div className="flex flex-col gap-2.5 p-3 rounded-lg bg-secondary/30 border border-border/30">

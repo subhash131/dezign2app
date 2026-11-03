@@ -188,7 +188,6 @@ export function handleLangGraphConnect({
         outputVariable: outputVar,
         langGraphAction: isGetOrHistory ? "history" : "invoke",
         langGraphHistoryFormat: "chat_messages",
-        langGraphHistoryExcludeToolMessages: true,
         langGraphTargetNodeId: langGraphNode.id,
         langGraphStreamingEnabled: false,
         langGraphStreamingProtocol: "sse",

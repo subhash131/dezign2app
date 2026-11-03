@@ -237,14 +237,14 @@ export function inferBindingType(
         if (step.langGraphAction === "history") {
           if (source.field === "values") return "Record<string, unknown>";
           if (source.field === "next") return "string[]";
-          if (source.field === "messages") return "Array<{ id: string; role: string; content: string }>";
+          if (source.field === "messages") return "Array<{ id: string; role: string; content: string; tool_calls?: Array<{ id?: string; name?: string; args?: Record<string, string> }>; tool_call_id?: string; name?: string; status?: string; artifact?: string }>";
           if (step.langGraphHistoryFormat === "full_state") {
-            return "{ threadId: string; values: Record<string, unknown>; next: string[] }";
+            return "{ threadId: string; values: Record<string, string | number | boolean | null>; next: string[] }";
           }
           if (step.langGraphHistoryPaginationEnabled) {
-            return "{ messages: Array<{ id: string; role: string; content: string }>; pagination: { limit: number; next_cursor: string | null } }";
+            return "{ messages: Array<{ id: string; role: string; content: string; tool_calls?: Array<{ id?: string; name?: string; args?: Record<string, string> }>; tool_call_id?: string; name?: string; status?: string; artifact?: string }>; pagination: { limit: number; next_cursor: string | null } }";
           }
-          return "Array<{ id: string; role: string; content: string }>";
+          return "Array<{ id: string; role: string; content: string; tool_calls?: Array<{ id?: string; name?: string; args?: Record<string, string> }>; tool_call_id?: string; name?: string; status?: string; artifact?: string }>";
         }
         if (source.field) {
           if (
@@ -747,9 +747,9 @@ export interface ${interfaceName}StreamChunk {
         if (lastStep.langGraphHistoryFormat === "full_state") {
           lastDataType = "{\n  threadId: string;\n  values: Record<string, unknown>;\n  next: string[];\n}";
         } else if (lastStep.langGraphHistoryPaginationEnabled) {
-          lastDataType = "{\n  messages: Array<{\n    id: string;\n    role: string;\n    content: string;\n  }>;\n  pagination: {\n    limit: number;\n    next_cursor: string | null;\n  };\n}";
+          lastDataType = "{\n  messages: Array<{\n    id: string;\n    role: string;\n    content: string;\n    tool_calls?: Array<{ id?: string; name?: string; args?: Record<string, string> }>;\n    tool_call_id?: string;\n    name?: string;\n    status?: string;\n    artifact?: string;\n  }>;\n  pagination: {\n    limit: number;\n    next_cursor: string | null;\n  };\n}";
         } else {
-          lastDataType = "Array<{\n  id: string;\n  role: string;\n  content: string;\n}>";
+          lastDataType = "Array<{\n  id: string;\n  role: string;\n  content: string;\n  tool_calls?: Array<{ id?: string; name?: string; args?: Record<string, string> }>;\n  tool_call_id?: string;\n  name?: string;\n  status?: string;\n  artifact?: string;\n}>";
         }
       } else if (lastStep.langGraphOutputMode === "last_message") {
         lastDataType = "string";

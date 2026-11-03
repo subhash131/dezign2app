@@ -498,7 +498,6 @@ export function createDefaultStepDraft({
       outputVariable: isGetOrHistory ? "chatHistory" : varName,
       langGraphAction: isGetOrHistory ? "history" : "invoke",
       langGraphHistoryFormat: "chat_messages",
-      langGraphHistoryExcludeToolMessages: true,
       langGraphTargetNodeId: effectiveLgId,
       langGraphStreamingEnabled: false,
       langGraphStreamingProtocol: "sse",
