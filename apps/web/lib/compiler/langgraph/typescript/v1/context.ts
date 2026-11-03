@@ -175,6 +175,7 @@ export function buildContext(input: CompileLangGraphInput): CompileContext {
     usesStorage:
       agentNodes.some((a) => a.data?.pipelineSteps?.some((s) => s.type === "storage_operation")) ||
       stepNodes.some((s) => s.data?.pipelineSteps?.some((p) => p.type === "storage_operation")),
+    trackTokenUsage: input.trackTokenUsage !== false,
   };
 }
 

@@ -36,8 +36,35 @@ describe("formatStreamingBatch", () => {
       data: {
         delta: " Mahatma",
         content: "Mahatma",
+        usage: {
+          prompt_tokens: 2,
+          completion_tokens: 1,
+          total_tokens: 3,
+        },
       },
     });
+  });
+
+  it("omits usage when includeUsage is false", () => {
+    const formatted = formatStreamingBatch({
+      batch: {
+        index: 0,
+        delta: " Mahatma",
+        content: "Mahatma",
+        timestamp: "2026-10-02T00:15:30.124Z",
+      },
+      nodeName: "Node",
+      runId: "run_7c9e12f0",
+      streamConfig: {
+        enabled: true,
+        envelope: {
+          includeEvent: true,
+          includeUsage: false,
+        },
+      },
+    }) as Record<string, unknown>;
+
+    expect((formatted.data as Record<string, unknown>).usage).toBeUndefined();
   });
 
   it("flattens payload when flattenPayload is enabled", () => {
@@ -68,6 +95,11 @@ describe("formatStreamingBatch", () => {
     expect(formatted.delta).toBe(" Gandhi");
     expect(formatted.content).toBe("Mahatma Gandhi");
     expect(formatted.data).toBeUndefined();
+    expect(formatted.usage).toEqual({
+      prompt_tokens: 4,
+      completion_tokens: 1,
+      total_tokens: 5,
+    });
   });
 
   it("formats for Vercel AI SDK text part protocol", () => {

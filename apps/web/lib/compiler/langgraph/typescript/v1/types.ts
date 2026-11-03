@@ -69,6 +69,8 @@ export interface CompileLangGraphInput {
   dbEngine?: string;
   /** Name of the linked Redis workspace package (e.g. "@workspace/redis"). */
   redisPackageName?: string;
+  /** Whether to track and emit token usage in compiled server and routes. Defaults to true. */
+  trackTokenUsage?: boolean;
 }
 
 export interface LLMMeta {
@@ -107,4 +109,5 @@ export interface CompileContext {
   usesRedis?: boolean;
   usesDb?: boolean;
   usesStorage?: boolean;
+  trackTokenUsage?: boolean;
 }

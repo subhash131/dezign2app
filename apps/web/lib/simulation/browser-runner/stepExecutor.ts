@@ -139,6 +139,22 @@ export async function executeBrowserStepNode(
     } else {
       state[outKey] = responseText;
     }
+
+    const allPromptText =
+      (systemPrompt || "") +
+      " " +
+      msgs
+        .map((m) => (typeof m.content === "string" ? m.content : JSON.stringify(m.content)))
+        .join(" ");
+    const prompt_tokens = Math.max(1, Math.ceil(allPromptText.length / 4));
+    const completion_tokens = Math.max(1, Math.ceil((responseText || "").length / 4));
+    const tokenUsage = {
+      prompt_tokens,
+      completion_tokens,
+      total_tokens: prompt_tokens + completion_tokens,
+    };
+    outputDelta.usage = tokenUsage;
+    outputDelta.tokenUsage = tokenUsage;
     if (streamBatches && streamBatches.length > 0) {
       const runId = `run_${threadId.slice(0, 8)}_${Math.random().toString(36).slice(2, 6)}`;
       const filtered = streamBatches.filter((b) => Boolean(b.delta));

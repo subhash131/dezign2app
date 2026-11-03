@@ -22,6 +22,7 @@ export function compileLangGraphNode(
     dbPackageName?: string;
     dbEngine?: string;
     redisPackageName?: string;
+    trackTokenUsage?: boolean;
   },
 ): CompiledServiceResult {
   const serviceName = node.data?.label || "LangGraph Service";
@@ -32,6 +33,9 @@ export function compileLangGraphNode(
   }
   if (context?.packageName) {
     input.packageName = context.packageName;
+  }
+  if (context?.trackTokenUsage !== undefined) {
+    input.trackTokenUsage = context.trackTokenUsage;
   }
 
   // Resolve dbEngine: from context or infer from canvas nodes

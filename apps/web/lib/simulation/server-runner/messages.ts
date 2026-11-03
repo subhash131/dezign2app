@@ -14,9 +14,9 @@ export function generateId(): string {
   return "cp_" + Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
 }
 
-export function serializeMessages(raw: unknown): Array<{ role: string; content: string; name?: string }> {
+export function serializeMessages(raw: unknown): Array<{ role: string; content: string; name?: string; usage_metadata?: unknown; response_metadata?: unknown }> {
   if (!Array.isArray(raw)) return [];
-  const result: Array<{ role: string; content: string; name?: string }> = [];
+  const result: Array<{ role: string; content: string; name?: string; usage_metadata?: unknown; response_metadata?: unknown }> = [];
   for (const item of raw) {
     if (isBaseMessage(item)) {
       const role =
@@ -27,18 +27,32 @@ export function serializeMessages(raw: unknown): Array<{ role: string; content: 
             : item._getType() === "system"
               ? "system"
               : "user";
-      result.push({
+      const record: { role: string; content: string; name?: string; usage_metadata?: unknown; response_metadata?: unknown } = {
         role,
         content: typeof item.content === "string" ? item.content : JSON.stringify(item.content),
         name: item.name,
-      });
+      };
+      if ("usage_metadata" in item && (item as any).usage_metadata) {
+        record.usage_metadata = (item as any).usage_metadata;
+      }
+      if ("response_metadata" in item && (item as any).response_metadata) {
+        record.response_metadata = (item as any).response_metadata;
+      }
+      result.push(record);
     } else if (item && typeof item === "object") {
       const msg = item as Record<string, unknown>;
-      result.push({
+      const record: { role: string; content: string; name?: string; usage_metadata?: unknown; response_metadata?: unknown } = {
         role: typeof msg.role === "string" ? msg.role : "user",
         content: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content ?? ""),
         name: typeof msg.name === "string" ? msg.name : undefined,
-      });
+      };
+      if (msg.usage_metadata) {
+        record.usage_metadata = msg.usage_metadata;
+      }
+      if (msg.response_metadata) {
+        record.response_metadata = msg.response_metadata;
+      }
+      result.push(record);
     } else if (typeof item === "string") {
       result.push({ role: "user", content: item });
     }
@@ -55,10 +69,16 @@ export function coerceToLangChainMessages(raw: unknown): BaseMessage[] {
     } else if (typeof item === "string") {
       list.push(new HumanMessage(item));
     } else if (item && typeof item === "object") {
-      const m = item as { role?: string; content?: string; text?: string };
+      const m = item as { role?: string; content?: string; text?: string; usage_metadata?: any; response_metadata?: any };
       const content = m.content || m.text || "";
       if (m.role === "assistant" || m.role === "ai") {
-        list.push(new AIMessage(content));
+        list.push(
+          new AIMessage({
+            content,
+            ...(m.usage_metadata ? { usage_metadata: m.usage_metadata } : {}),
+            ...(m.response_metadata ? { response_metadata: m.response_metadata } : {}),
+          }),
+        );
       } else if (m.role === "system") {
         list.push(new SystemMessage(content));
       } else {

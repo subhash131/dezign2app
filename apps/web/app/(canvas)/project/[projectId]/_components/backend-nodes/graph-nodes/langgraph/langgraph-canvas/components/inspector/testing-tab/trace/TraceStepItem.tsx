@@ -12,6 +12,7 @@ import {
   Zap,
   Sparkles,
   Bot,
+  Coins,
 } from "lucide-react";
 import { Badge } from "@workspace/ui/components/badge";
 import { toast } from "sonner";
@@ -70,6 +71,9 @@ export function TraceStepItem({
   const isFailed = t.status === "failed";
   const isNodeExpanded = expandedTraceNodes[idx];
   const outputObj = (t.output && typeof t.output === "object" ? t.output : null) as Record<string, unknown> | null;
+  const nodeUsage = (outputObj?.usage || outputObj?.tokenUsage || (outputObj?.llmRequest as any)?.usage) as
+    | { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number }
+    | undefined;
   const streamBatches = (outputObj?.streamBatches || []) as StreamBatchItem[];
   const hasBatches = streamBatches.length > 0;
   const activeView = traceNodeViews[idx] || (hasBatches ? "batches" : "output");
@@ -452,6 +456,16 @@ export function TraceStepItem({
               <span>{nodeMiddleware.length} Middleware</span>
             </Badge>
           )}
+          {nodeUsage && (nodeUsage.total_tokens || nodeUsage.prompt_tokens || nodeUsage.completion_tokens) ? (
+            <Badge
+              variant="outline"
+              className="text-[8.5px] px-1.5 py-0 h-4 font-mono bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 flex items-center gap-1"
+              title={`Token Usage: ${nodeUsage.prompt_tokens ?? 0} prompt tokens in, ${nodeUsage.completion_tokens ?? 0} completion tokens out`}
+            >
+              <Coins className="w-2.5 h-2.5 text-amber-500" />
+              <span>{nodeUsage.total_tokens ?? ((nodeUsage.prompt_tokens ?? 0) + (nodeUsage.completion_tokens ?? 0))} Tokens</span>
+            </Badge>
+          ) : null}
         </div>
 
         <div className="flex items-center gap-2">
@@ -593,6 +607,20 @@ export function TraceStepItem({
               <span className="text-[8px] font-semibold text-muted-foreground uppercase flex items-center gap-1">Model</span>
               <span className="font-mono text-purple-300 font-medium truncate text-[9px]">
                 {effectiveProvider.toUpperCase()} / {effectiveModel}
+              </span>
+            </div>
+          );
+        }
+
+        // Token Usage — show if usage metadata is available
+        if (nodeUsage && (nodeUsage.total_tokens || nodeUsage.prompt_tokens || nodeUsage.completion_tokens)) {
+          configCells.push(
+            <div key="tokens" className="flex flex-col gap-0.5 p-1.5 rounded bg-amber-500/5 border border-amber-500/20 min-w-0">
+              <span className="text-[8px] font-semibold text-amber-400 uppercase flex items-center gap-1">
+                <Coins className="w-2.5 h-2.5" /> Tokens
+              </span>
+              <span className="text-[8.5px] font-mono text-muted-foreground truncate" title={`Prompt: ${nodeUsage.prompt_tokens ?? 0} | Completion: ${nodeUsage.completion_tokens ?? 0}`}>
+                {nodeUsage.total_tokens ?? ((nodeUsage.prompt_tokens ?? 0) + (nodeUsage.completion_tokens ?? 0))} total ({nodeUsage.prompt_tokens ?? 0} in / {nodeUsage.completion_tokens ?? 0} out)
               </span>
             </div>
           );

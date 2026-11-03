@@ -46,11 +46,31 @@ export function StreamBatchesView({
       </div>
 
       {streamBatches.map((batch) => {
-        const eventData = batch.formatted || {
-          event: "on_chat_model_stream",
-          agent: stepLabel,
-          data: { delta: batch.delta, content: batch.content },
+        const rawUsage = (batch.raw as { usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } })?.usage;
+        const promptTokens = rawUsage?.prompt_tokens ?? Math.max(1, Math.round((batch.content?.length || 1) / 4));
+        const completionTokens = rawUsage?.completion_tokens ?? (batch.index + 1);
+        const fallbackUsage = {
+          prompt_tokens: promptTokens,
+          completion_tokens: completionTokens,
+          total_tokens: promptTokens + completionTokens,
         };
+        const eventData = (batch.formatted && typeof batch.formatted === "object")
+          ? {
+              ...batch.formatted,
+              data: {
+                ...(batch.formatted as any).data,
+                ...((batch.formatted as any).data?.usage ? {} : { usage: fallbackUsage }),
+              },
+            }
+          : batch.formatted || {
+              event: "on_chat_model_stream",
+              agent: stepLabel,
+              data: {
+                delta: batch.delta,
+                content: batch.content,
+                usage: fallbackUsage,
+              },
+            };
 
         return (
           <div
