@@ -995,7 +995,8 @@ describe("LangGraph Invoke Pipeline Step Compiler", () => {
       const code = lines.join("\n");
 
       expect(code).toContain("const paginatedHistoryLimit = Math.max(1, Number(req.query.limit) || 10);");
-      expect(code).toContain("const paginatedHistoryBefore = req.query.before ? { configurable: { checkpoint_id: String(req.query.before) } } : undefined;");
+      expect(code).toContain("const paginatedHistoryBeforeRaw = req.query.before;");
+      expect(code).toContain("const paginatedHistoryBefore = (paginatedHistoryBeforeRaw && paginatedHistoryBeforeRaw !== \"0\" && paginatedHistoryBeforeRaw !== \"null\" && paginatedHistoryBeforeRaw !== \"undefined\") ? { configurable: { checkpoint_id: String(paginatedHistoryBeforeRaw).trim() } } : undefined;");
       expect(code).toContain("for await (const snap of supportAgentGraph.getStateHistory(");
       expect(code).toContain("{ limit: paginatedHistoryLimit, before: paginatedHistoryBefore }");
       expect(code).toContain("next_cursor: paginatedHistoryNextCursor");

@@ -352,7 +352,7 @@ app.get("/api/threads/:threadId/history", async (req: Request, res: Response) =>
   try {
     const { threadId } = req.params;
     const limit = Math.max(1, Number(req.query.limit) || 20);
-    const before = typeof req.query.before === "string" && req.query.before.trim()
+    const before = typeof req.query.before === "string" && req.query.before.trim() && req.query.before !== "0" && req.query.before !== "null" && req.query.before !== "undefined"
       ? { configurable: { checkpoint_id: req.query.before.trim() } }
       : undefined;
 

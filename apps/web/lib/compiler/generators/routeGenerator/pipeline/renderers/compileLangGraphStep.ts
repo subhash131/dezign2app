@@ -162,7 +162,8 @@ export function renderLangGraphInvokeStep(
       beforeAccessor = resolvePathAccessor(beforeSource, ctx);
 
       rawLines.push("const " + outputVariable + "Limit = Math.max(1, Number(" + limitAccessor + ") || " + defaultLimit + ");");
-      rawLines.push("const " + outputVariable + "Before = " + beforeAccessor + " ? { configurable: { checkpoint_id: String(" + beforeAccessor + ") } } : undefined;");
+      rawLines.push("const " + outputVariable + "BeforeRaw = " + beforeAccessor + ";");
+      rawLines.push("const " + outputVariable + "Before = (" + outputVariable + "BeforeRaw && " + outputVariable + "BeforeRaw !== \"0\" && " + outputVariable + "BeforeRaw !== \"null\" && " + outputVariable + "BeforeRaw !== \"undefined\") ? { configurable: { checkpoint_id: String(" + outputVariable + "BeforeRaw).trim() } } : undefined;");
       rawLines.push("const " + outputVariable + "Snapshots: any[] = [];");
       rawLines.push("for await (const snap of " + graphVar + ".getStateHistory(");
       rawLines.push("  { configurable: { thread_id: " + threadAccessor + " } },");
