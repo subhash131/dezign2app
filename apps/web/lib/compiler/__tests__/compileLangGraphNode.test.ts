@@ -699,4 +699,55 @@ describe("compileLangGraph Compiler Fixes", () => {
     expect(reducerFile).toContain('import { addMessages } from "@langchain/langgraph";');
     expect(reducerFile).toContain("export const messagesReducer = addMessages;");
   });
+
+  it("compiles standard messages history endpoint in server.ts", () => {
+    const input: CompileLangGraphInput = {
+      graphLabel: "history-agent",
+      stateChannels: [
+        { key: "messages", type: "messages", reducer: "add_messages" },
+      ],
+      inputChannels: [],
+      memoryConfig: {
+        checkpointer: "memory",
+      },
+      routeEndpoints: [
+        {
+          path: "/api/chat/history",
+          method: "GET",
+          kind: "endpoint",
+          action: "history",
+          historyFormat: "chat_messages",
+          historyPaginationEnabled: true,
+          threadIdSource: "query.thread_id",
+        },
+      ],
+      nodes: [
+        {
+          id: "node_1",
+          type: LANGGRAPH_CANVAS_NODE_NODE,
+          position: { x: 0, y: 0 },
+          data: { name: "bot", label: "bot" },
+        },
+      ],
+      edges: [
+        {
+          id: "e1",
+          source: NODE_ID_START,
+          target: "node_1",
+        },
+      ],
+    };
+
+    const files = compileLangGraph(input);
+    const fileMap = new Map(files.map((f) => [f.filename, f.content]));
+
+    const serverFile = fileMap.get("src/server.ts");
+    expect(serverFile).toBeDefined();
+    expect(serverFile).toContain('app.get("/api/chat/history"');
+    expect(serverFile).toContain('req.query?.["thread_id"]');
+    expect(serverFile).toContain('getStateHistory(');
+    expect(serverFile).toContain('toolCalls');
+    expect(serverFile).toContain('...(toolCalls ? { tool_calls: toolCalls } : {})');
+    expect(serverFile).toContain('...(toolCallId ? { tool_call_id: toolCallId } : {})');
+  });
 });

@@ -72,7 +72,11 @@ export function resolveRouteEndpoints(
 
     if (edge.sourceHandle?.startsWith("endpoint-out-")) {
       const endpointId = edge.sourceHandle.replace("endpoint-out-", "");
-      const ep = endpoints.find((e) => e.id === endpointId);
+      const ep =
+        endpoints.find((e) => e.id === endpointId) ||
+        (sourceNode?.data?.endpoints as Endpoint[] | undefined)?.find(
+          (e) => e.id === endpointId,
+        );
       if (ep) {
         let epMethod: RouteEndpoint["method"] = "POST";
         const rawType = ep.type;
@@ -85,9 +89,30 @@ export function resolveRouteEndpoints(
         ) {
           epMethod = rawType;
         }
+
+        const lgStep = ep.pipelineSteps?.find(
+          (s) =>
+            s.type === "langgraph_invoke" &&
+            (!s.langGraphTargetNodeId || s.langGraphTargetNodeId === nodeId),
+        );
+
+        const action: RouteEndpoint["action"] =
+          lgStep?.langGraphAction === "history"
+            ? "history"
+            : epMethod === "GET" && !lgStep
+              ? "history"
+              : "invoke";
+
+        const historyFormat =
+          lgStep?.langGraphHistoryFormat ||
+          (action === "history" ? "chat_messages" : undefined);
+        const historyPaginationEnabled =
+          lgStep?.langGraphHistoryPaginationEnabled;
+        const threadIdSource = lgStep?.langGraphThreadIdSource;
+
         const epRoute: RouteEndpoint = {
           kind: "endpoint",
-          path: ep.name || "/invoke",
+          path: ep.name || (action === "history" ? "/history" : "/invoke"),
           method: epMethod,
           sourceNodeLabel,
           payloadMapping,
@@ -100,6 +125,10 @@ export function resolveRouteEndpoints(
           postInvokeLogicMode,
           postInvokePrompt,
           postInvokeCode,
+          action,
+          historyFormat,
+          historyPaginationEnabled,
+          threadIdSource,
         };
         return epRoute;
       }

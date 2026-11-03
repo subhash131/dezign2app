@@ -40,7 +40,15 @@ export interface RouteEndpoint {
   responseFields?: string[];
   postInvokeLogicMode?: "natural_language" | "code";
   postInvokePrompt?: string;
-  postInvokeCode?: string;
+    postInvokeCode?: string;
+  /** LangGraph action: invoke (default) vs history */
+  action?: "invoke" | "history";
+  /** History output format: chat_messages (default) vs full_state */
+  historyFormat?: "chat_messages" | "full_state";
+  /** Whether cursor pagination is enabled for history */
+  historyPaginationEnabled?: boolean;
+  /** Source path for thread ID */
+  threadIdSource?: string;
 }
 
 export interface CompileLangGraphInput {
