@@ -6,10 +6,6 @@ import {
   LangGraphMemoryConfig,
 } from "@/types/canvas";
 import { CompileLangGraphInput } from "../langgraph/typescript/v1";
-import type {
-  LangGraphCanvasNode,
-  LangGraphCanvasEdge,
-} from "@/app/(canvas)/project/[projectId]/_components/backend-nodes/graph-nodes/langgraph/langgraph-canvas/types";
 import { reconstructNodes, reconstructEdges } from "./reconstructCanvas";
 
 export function extractLangGraphInput(
@@ -29,30 +25,37 @@ export function extractLangGraphInput(
   const inputChannels: LangGraphInputChannel[] = data.inputChannels || [];
   const memoryConfig: LangGraphMemoryConfig | undefined = data.memoryConfig;
 
-  const rawData = data as {
-    trackTokenUsage?: boolean;
-    langGraphTrackTokenUsage?: boolean;
-    nodes?: LangGraphCanvasNode[];
-  };
-
   let trackTokenUsage: boolean | undefined =
-    rawData.trackTokenUsage ?? rawData.langGraphTrackTokenUsage;
+    data.trackTokenUsage ?? data.langGraphTrackTokenUsage;
 
-  if (trackTokenUsage === undefined && Array.isArray(rawData.nodes)) {
-    const agentNodes = rawData.nodes.filter(
-      (n) => (n as any).type === "langgraph_agent" || (n as any).type === "agent",
-    );
-    for (const an of agentNodes) {
-      const ad = an.data as {
-        trackTokenUsage?: boolean;
-        streamConfig?: { envelope?: { includeUsage?: boolean } };
-      };
-      if (
-        ad?.trackTokenUsage === false ||
-        ad?.streamConfig?.envelope?.includeUsage === false
-      ) {
-        trackTokenUsage = false;
-        break;
+  const canvasNodes = data.nodes;
+  const canvasEdges = data.edges;
+
+  if (trackTokenUsage === undefined && Array.isArray(canvasNodes)) {
+    for (const an of canvasNodes) {
+      if (an && "data" in an && an.data && typeof an.data === "object") {
+        const ad = an.data;
+        if ("trackTokenUsage" in ad && ad.trackTokenUsage === false) {
+          trackTokenUsage = false;
+          break;
+        }
+        if (
+          "streamConfig" in ad &&
+          typeof ad.streamConfig === "object" &&
+          ad.streamConfig !== null
+        ) {
+          const sc = ad.streamConfig;
+          if (
+            "envelope" in sc &&
+            typeof sc.envelope === "object" &&
+            sc.envelope !== null &&
+            "includeUsage" in sc.envelope &&
+            sc.envelope.includeUsage === false
+          ) {
+            trackTokenUsage = false;
+            break;
+          }
+        }
       }
     }
   }
@@ -61,9 +64,6 @@ export function extractLangGraphInput(
   }
 
   // 1. If full canvas nodes & edges are stored directly on node.data
-  const canvasNodes = (data as { nodes?: LangGraphCanvasNode[] }).nodes;
-  const canvasEdges = (data as { edges?: LangGraphCanvasEdge[] }).edges;
-
   if (
     Array.isArray(canvasNodes) &&
     Array.isArray(canvasEdges) &&

@@ -329,7 +329,7 @@ export function ${reducerName}(
       content = `/**
  * Reducer for "${ch.key}" state variable
  */
-export function ${reducerName}(_prev: any, next: any): any {
+export function ${reducerName}<T>(_prev: T, next: T): T {
   return next;
 }
 `;

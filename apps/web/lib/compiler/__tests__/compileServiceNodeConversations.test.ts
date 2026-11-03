@@ -1243,5 +1243,291 @@ app.use(express.json());
 
     expect(routeCode).toContain('"messages": { __overwrite__: supportAgentMessages }');
   });
+
+  it("compiles postSendMessageById with LangGraph token usage tracking without as any, as unknown, or type property access errors", () => {
+    const serviceNode: BackendNode = {
+      id: "srv-conversation",
+      type: "service",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "conversations",
+        techStack: "express",
+        port: "8080",
+      },
+    };
+
+    const langGraphNode: BackendNode = {
+      id: "lg-agent",
+      type: "langgraph",
+      position: { x: 300, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "agent",
+        stateChannels: [
+          { key: "messages", type: "messages", reducer: "add_messages" },
+        ],
+        trackTokenUsage: true,
+      },
+    };
+
+    const endpoint: Endpoint & { nodeId: string } = {
+      id: "ep-send-msg-usage",
+      nodeId: "srv-conversation",
+      name: "/send-message/:id",
+      type: "POST",
+      summary: "Send message with LangGraph invoke step tracking token usage",
+      pathParams: [{ id: "p1", name: "id", type: "string", required: true }],
+      pipelineSteps: [
+        {
+          id: "step-agent",
+          name: "agent",
+          type: "langgraph_invoke",
+          langGraphTargetNodeId: "lg-agent",
+          outputVariable: "langGraphAgentResult",
+          langGraphThreadIdSource: "params.id",
+          langGraphTrackTokenUsage: true,
+          langGraphStateMapping: {
+            messages: "body.message",
+          },
+        },
+        {
+          id: "step-ret",
+          name: "Return Response",
+          type: "return_response",
+          statusCode: 200,
+          inputBindings: [
+            {
+              argName: "result",
+              source: { kind: "step_output", stepId: "step-agent" },
+            },
+          ],
+        },
+      ],
+    };
+
+    const compiledService = compileServiceNode(
+      serviceNode,
+      [endpoint],
+      [],
+      [serviceNode, langGraphNode],
+      [],
+      [],
+      [],
+      [],
+      "conversations",
+    );
+
+    const routeFile = compiledService.files.find((f) =>
+      f.filename.includes("postSendMessageById.ts"),
+    );
+    expect(routeFile).toBeDefined();
+    const routeCode = routeFile!.content;
+
+    // Must NOT have unsafe unchecked property accesses that cause TS2339
+    expect(routeCode).not.toContain("_m?.usage_metadata");
+    expect(routeCode).not.toContain("_m?.response_metadata?.token_usage");
+    expect(routeCode).not.toContain("langGraphAgentResultRaw.usage");
+    expect(routeCode).not.toContain("langGraphAgentResultRaw.token_usage");
+
+    // Must NOT use any, unknown, or as type assertions
+    expect(routeCode).not.toContain("as any");
+    expect(routeCode).not.toContain("as unknown");
+    expect(routeCode).not.toContain("(messageChunk as any)");
+
+    // Must use type-safe guards with the 'in' operator and typeof checks
+    expect(routeCode).toContain('"usage_metadata" in _mObj');
+    expect(routeCode).toContain('"response_metadata" in _mObj');
+    expect(routeCode).toContain('"token_usage" in _rm');
+    expect(routeCode).toContain('"tokenUsage" in _rm');
+    expect(routeCode).toContain('"kwargs" in _mObj');
+    expect(routeCode).toContain('"usage" in _rawObj');
+    expect(routeCode).toContain('"token_usage" in _rawObj');
+    expect(routeCode).toContain('"tokenUsage" in _rawObj');
+    expect(routeCode).toContain("JSON.parse");
+  });
+
+  it("extracts token usage and unwraps response from nested serialized AIMessage payload", () => {
+    // Simulate user's exact runtime result from Groq/LangGraph
+    const userPayloadRaw = {
+      messages: [
+        {
+          lc: 1,
+          type: "constructor",
+          id: ["langchain_core", "messages", "HumanMessage"],
+          kwargs: {
+            content: "hi",
+            additional_kwargs: {},
+            response_metadata: {},
+            id: "77422e4e-b24c-482e-8e49-90e5a08a8002",
+          },
+        },
+        {
+          lc: 1,
+          type: "constructor",
+          id: ["langchain_core", "messages", "AIMessage"],
+          kwargs: {
+            content: JSON.stringify({
+              lc: 1,
+              type: "constructor",
+              id: ["langchain_core", "messages", "AIMessage"],
+              kwargs: {
+                content: "Hello! How can I assist you today?",
+                additional_kwargs: {},
+                tool_calls: [],
+                invalid_tool_calls: [],
+                usage_metadata: { input_tokens: 141, output_tokens: 34, total_tokens: 175 },
+                response_metadata: {
+                  tokenUsage: { completionTokens: 34, promptTokens: 141, totalTokens: 175 },
+                  finish_reason: "stop",
+                  model: "openai/gpt-oss-120b",
+                  usage: {
+                    prompt_tokens: 141,
+                    completion_tokens: 34,
+                    total_tokens: 175,
+                    completion_tokens_details: {
+                      reasoning_tokens: 16,
+                    },
+                  },
+                },
+              },
+            }),
+            tool_calls: [],
+            invalid_tool_calls: [],
+            additional_kwargs: {},
+            response_metadata: {},
+            id: "87b96208-b991-4657-b50f-de85750b922b",
+          },
+        },
+      ],
+    };
+
+    // Execute the exact token usage extraction logic emitted by compileLangGraphStep
+    const usage = { input_tokens: 0, output_tokens: 0, total_tokens: 0, reasoning_tokens: 0 };
+    if (userPayloadRaw && typeof userPayloadRaw === "object") {
+      const _rawObj: object = userPayloadRaw;
+      const _rawMsgs = ("messages" in _rawObj && Array.isArray(_rawObj.messages)) ? _rawObj.messages : [];
+      for (const _m of _rawMsgs) {
+        if (_m && typeof _m === "object") {
+          const _mObj: object = _m;
+          let _u: object | undefined = undefined;
+          let _rm: object | undefined = undefined;
+          if ("response_metadata" in _mObj && typeof _mObj.response_metadata === "object" && _mObj.response_metadata !== null) {
+            _rm = _mObj.response_metadata;
+          } else if ("kwargs" in _mObj && typeof _mObj.kwargs === "object" && _mObj.kwargs !== null && "response_metadata" in _mObj.kwargs && typeof _mObj.kwargs.response_metadata === "object" && _mObj.kwargs.response_metadata !== null) {
+            _rm = _mObj.kwargs.response_metadata;
+          }
+          if ("usage_metadata" in _mObj && typeof _mObj.usage_metadata === "object" && _mObj.usage_metadata !== null) {
+            _u = _mObj.usage_metadata;
+          } else if ("kwargs" in _mObj && typeof _mObj.kwargs === "object" && _mObj.kwargs !== null && "usage_metadata" in _mObj.kwargs && typeof _mObj.kwargs.usage_metadata === "object" && _mObj.kwargs.usage_metadata !== null) {
+            _u = _mObj.kwargs.usage_metadata;
+          } else if (_rm) {
+            if ("token_usage" in _rm && typeof _rm.token_usage === "object" && _rm.token_usage !== null) {
+              _u = _rm.token_usage;
+            } else if ("tokenUsage" in _rm && typeof _rm.tokenUsage === "object" && _rm.tokenUsage !== null) {
+              _u = _rm.tokenUsage;
+            } else if ("usage" in _rm && typeof _rm.usage === "object" && _rm.usage !== null) {
+              _u = _rm.usage;
+            }
+          }
+          if (!_u) {
+            let _strMsg: string | undefined = undefined;
+            if ("content" in _mObj && typeof _mObj.content === "string") {
+              _strMsg = _mObj.content;
+            } else if ("kwargs" in _mObj && typeof _mObj.kwargs === "object" && _mObj.kwargs !== null && "content" in _mObj.kwargs && typeof _mObj.kwargs.content === "string") {
+              _strMsg = _mObj.kwargs.content;
+            }
+            if (_strMsg && _strMsg.startsWith("{")) {
+              try {
+                const _p = JSON.parse(_strMsg);
+                if (typeof _p === "object" && _p !== null) {
+                  if ("response_metadata" in _p && typeof _p.response_metadata === "object" && _p.response_metadata !== null) {
+                    _rm = _p.response_metadata;
+                  } else if ("kwargs" in _p && typeof _p.kwargs === "object" && _p.kwargs !== null && "response_metadata" in _p.kwargs && typeof _p.kwargs.response_metadata === "object" && _p.kwargs.response_metadata !== null) {
+                    _rm = _p.kwargs.response_metadata;
+                  }
+                  if ("usage_metadata" in _p && typeof _p.usage_metadata === "object" && _p.usage_metadata !== null) {
+                    _u = _p.usage_metadata;
+                  } else if ("kwargs" in _p && typeof _p.kwargs === "object" && _p.kwargs !== null && "usage_metadata" in _p.kwargs && typeof _p.kwargs.usage_metadata === "object" && _p.kwargs.usage_metadata !== null) {
+                    _u = _p.kwargs.usage_metadata;
+                  } else if (_rm) {
+                    if ("token_usage" in _rm && typeof _rm.token_usage === "object" && _rm.token_usage !== null) {
+                      _u = _rm.token_usage;
+                    } else if ("tokenUsage" in _rm && typeof _rm.tokenUsage === "object" && _rm.tokenUsage !== null) {
+                      _u = _rm.tokenUsage;
+                    } else if ("usage" in _rm && typeof _rm.usage === "object" && _rm.usage !== null) {
+                      _u = _rm.usage;
+                    }
+                  }
+                }
+              } catch {}
+            }
+          }
+          if (_u) {
+            const _in = ("input_tokens" in _u && typeof _u.input_tokens === "number" ? _u.input_tokens : ("prompt_tokens" in _u && typeof _u.prompt_tokens === "number" ? _u.prompt_tokens : ("promptTokens" in _u && typeof _u.promptTokens === "number" ? _u.promptTokens : ("inputTokens" in _u && typeof _u.inputTokens === "number" ? _u.inputTokens : 0))));
+            const _out = ("output_tokens" in _u && typeof _u.output_tokens === "number" ? _u.output_tokens : ("completion_tokens" in _u && typeof _u.completion_tokens === "number" ? _u.completion_tokens : ("completionTokens" in _u && typeof _u.completionTokens === "number" ? _u.completionTokens : ("outputTokens" in _u && typeof _u.outputTokens === "number" ? _u.outputTokens : 0))));
+            const _tot = ("total_tokens" in _u && typeof _u.total_tokens === "number" ? _u.total_tokens : ("totalTokens" in _u && typeof _u.totalTokens === "number" ? _u.totalTokens : (_in + _out)));
+            let _reas = 0;
+            if ("reasoning_tokens" in _u && typeof _u.reasoning_tokens === "number") {
+              _reas = _u.reasoning_tokens;
+            } else if ("reasoningTokens" in _u && typeof _u.reasoningTokens === "number") {
+              _reas = _u.reasoningTokens;
+            } else if ("completion_tokens_details" in _u && typeof _u.completion_tokens_details === "object" && _u.completion_tokens_details !== null) {
+              const _ctd: object = _u.completion_tokens_details;
+              if ("reasoning_tokens" in _ctd && typeof _ctd.reasoning_tokens === "number") _reas = _ctd.reasoning_tokens;
+              else if ("reasoning" in _ctd && typeof _ctd.reasoning === "number") _reas = _ctd.reasoning;
+            } else if ("output_token_details" in _u && typeof _u.output_token_details === "object" && _u.output_token_details !== null) {
+              const _otd: object = _u.output_token_details;
+              if ("reasoning" in _otd && typeof _otd.reasoning === "number") _reas = _otd.reasoning;
+              else if ("reasoning_tokens" in _otd && typeof _otd.reasoning_tokens === "number") _reas = _otd.reasoning_tokens;
+            }
+            if (_reas === 0 && _rm) {
+              if ("usage" in _rm && typeof _rm.usage === "object" && _rm.usage !== null) {
+                const _rmu: object = _rm.usage;
+                if ("completion_tokens_details" in _rmu && typeof _rmu.completion_tokens_details === "object" && _rmu.completion_tokens_details !== null) {
+                  const _ctd: object = _rmu.completion_tokens_details;
+                  if ("reasoning_tokens" in _ctd && typeof _ctd.reasoning_tokens === "number") _reas = _ctd.reasoning_tokens;
+                  else if ("reasoning" in _ctd && typeof _ctd.reasoning === "number") _reas = _ctd.reasoning;
+                } else if ("reasoning_tokens" in _rmu && typeof _rmu.reasoning_tokens === "number") {
+                  _reas = _rmu.reasoning_tokens;
+                }
+              } else if ("completion_tokens_details" in _rm && typeof _rm.completion_tokens_details === "object" && _rm.completion_tokens_details !== null) {
+                const _ctd: object = _rm.completion_tokens_details;
+                if ("reasoning_tokens" in _ctd && typeof _ctd.reasoning_tokens === "number") _reas = _ctd.reasoning_tokens;
+                else if ("reasoning" in _ctd && typeof _ctd.reasoning === "number") _reas = _ctd.reasoning;
+              }
+            }
+            usage.input_tokens += _in;
+            usage.output_tokens += _out;
+            usage.total_tokens += _tot;
+            usage.reasoning_tokens += _reas;
+          }
+        }
+      }
+    }
+    expect(usage.input_tokens).toBe(141);
+    expect(usage.output_tokens).toBe(34);
+    expect(usage.total_tokens).toBe(175);
+    expect(usage.reasoning_tokens).toBe(16);
+
+    // Execute response unwrapping logic emitted by compileLangGraphStep
+    const messages = Array.isArray(userPayloadRaw?.messages) ? userPayloadRaw.messages : [];
+    const lastMsg = messages.length > 0 ? messages[messages.length - 1] : undefined;
+    let response: string = (typeof lastMsg === "object" && lastMsg !== null) ? (("content" in lastMsg && typeof lastMsg.content === "string") ? lastMsg.content : (("kwargs" in lastMsg && typeof lastMsg.kwargs === "object" && lastMsg.kwargs !== null && "content" in lastMsg.kwargs && typeof lastMsg.kwargs.content === "string") ? lastMsg.kwargs.content : (typeof lastMsg === "string" ? lastMsg : ""))) : (typeof lastMsg === "string" ? lastMsg : "");
+    if (typeof response === "string" && response.startsWith("{")) {
+      try {
+        const _parsedMsg = JSON.parse(response);
+        if (typeof _parsedMsg === "object" && _parsedMsg !== null) {
+          if ("kwargs" in _parsedMsg && typeof _parsedMsg.kwargs === "object" && _parsedMsg.kwargs !== null && "content" in _parsedMsg.kwargs && typeof _parsedMsg.kwargs.content === "string") {
+            response = _parsedMsg.kwargs.content;
+          } else if ("content" in _parsedMsg && typeof _parsedMsg.content === "string") {
+            response = _parsedMsg.content;
+          }
+        }
+      } catch {}
+    }
+
+    expect(response).toBe("Hello! How can I assist you today?");
+  });
 });
 

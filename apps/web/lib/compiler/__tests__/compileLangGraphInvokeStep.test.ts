@@ -532,7 +532,7 @@ describe("LangGraph Invoke Pipeline Step Compiler", () => {
       const code = lines.join("\n");
 
       expect(code).toContain("const bulkAgentMessagesRaw = Array.isArray(body.chatHistory) ? body.chatHistory : [];");
-      expect(code).toContain("...bulkAgentMessagesRaw.map((m: any) => {");
+      expect(code).toContain("...bulkAgentMessagesRaw.map((m) => {");
       expect(code).toContain('if (typeof m === "string") return new HumanMessage(m);');
       expect(code).toContain('if (m?.role === "system") return new SystemMessage(content);');
       expect(code).toContain('if (m?.role === "assistant" || m?.role === "ai") return new AIMessage(content);');
@@ -848,8 +848,9 @@ describe("LangGraph Invoke Pipeline Step Compiler", () => {
       });
       const code = lines.join("\n");
 
-      expect(code).toContain("const agentResultUsage = { input_tokens: 0, output_tokens: 0, total_tokens: 0");
-      expect(code).toContain("usage_metadata || _m?.response_metadata?.token_usage");
+      expect(code).toContain("const agentResultUsage = { input_tokens: 0, output_tokens: 0, total_tokens: 0, reasoning_tokens: 0 };");
+      expect(code).toContain('res.setHeader("X-Reasoning-Tokens", String(agentResultUsage.reasoning_tokens))');
+      expect(code).toContain('"usage_metadata" in _mObj');
       expect(code).toContain('res.setHeader("X-Input-Tokens", String(agentResultUsage.input_tokens))');
       expect(code).toContain('res.setHeader("X-Output-Tokens", String(agentResultUsage.output_tokens))');
       expect(code).toContain('res.setHeader("X-Total-Tokens", String(agentResultUsage.total_tokens))');
@@ -874,7 +875,7 @@ describe("LangGraph Invoke Pipeline Step Compiler", () => {
       });
       const code = lines.join("\n");
 
-      expect(code).toContain("const streamUsageAgentTokenUsage = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };");
+      expect(code).toContain("const streamUsageAgentTokenUsage = { input_tokens: 0, output_tokens: 0, total_tokens: 0, reasoning_tokens: 0 };");
       expect(code).toContain("_chunkUsage");
       expect(code).toContain('data: ${JSON.stringify({ type: "usage", usage: streamUsageAgentTokenUsage })}\\n\\n');
       expect(code).toContain('data: [DONE]\\n\\n');

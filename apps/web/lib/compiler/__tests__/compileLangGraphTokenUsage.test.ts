@@ -69,8 +69,8 @@ describe("compileLangGraphNode Token Usage tracking", () => {
     expect(serverFile).toBeDefined();
     expect(serverFile!.content).toContain("class TokenUsageHandler extends BaseCallbackHandler");
     expect(serverFile!.content).toContain("extractTokenUsage");
-    expect(serverFile!.content).toContain("tokenUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }");
-    expect(serverFile!.content).toContain("tokenUsage.completion_tokens += 1");
+    expect(serverFile!.content).toContain("tokenUsage = { input_tokens: 0, output_tokens: 0, total_tokens: 0, reasoning_tokens: 0 }");
+    expect(serverFile!.content).toContain("tokenUsage.output_tokens += 1");
     expect(serverFile!.content).toContain('{ type: "usage", usage: tokenUsage }');
   });
 

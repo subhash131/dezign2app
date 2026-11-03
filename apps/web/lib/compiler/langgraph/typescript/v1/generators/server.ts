@@ -130,12 +130,12 @@ export function buildServerFile(ctx: CompileContext, routes: RouteEndpoint[]): s
       const streamOptions = { streamMode: "messages"${configLine ? `, ${configLine.replace(/^, /, "")}` : ""} };
       const stream = await ${graphVarName}.stream(state, streamOptions);
       activeStream = stream;
-      ${trackTokenUsage ? `const tokenUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };\n` : ""}
+      ${trackTokenUsage ? `const tokenUsage = { input_tokens: 0, output_tokens: 0, total_tokens: 0, reasoning_tokens: 0 };\n` : ""}
 
       for await (const chunk of stream) {
         if (isAborted) break;
         let mode = "messages";
-        let payload: any = chunk;
+        let payload = chunk;
         if (Array.isArray(chunk) && chunk.length === 2 && typeof chunk[0] === "string" && ["messages", "updates", "custom", "values", "debug"].includes(chunk[0])) {
           mode = chunk[0];
           payload = chunk[1];
@@ -148,11 +148,65 @@ export function buildServerFile(ctx: CompileContext, routes: RouteEndpoint[]): s
           const nodeName = metadata && typeof metadata === "object" && "langgraph_node" in metadata
             ? metadata.langgraph_node
             : undefined;
-          ${trackTokenUsage ? `if (messageChunk && typeof messageChunk === "object" && messageChunk.usage_metadata) {
-            const u = messageChunk.usage_metadata;
-            tokenUsage.prompt_tokens = u.input_tokens ?? tokenUsage.prompt_tokens;
-            tokenUsage.completion_tokens = u.output_tokens ?? tokenUsage.completion_tokens;
-            tokenUsage.total_tokens = u.total_tokens ?? (tokenUsage.prompt_tokens + tokenUsage.completion_tokens);
+          ${trackTokenUsage ? `let _u: object | undefined = undefined;
+          let _rm: object | undefined = undefined;
+          if (messageChunk && typeof messageChunk === "object") {
+            if ("response_metadata" in messageChunk && typeof messageChunk.response_metadata === "object" && messageChunk.response_metadata !== null) {
+              _rm = messageChunk.response_metadata;
+            } else if ("kwargs" in messageChunk && typeof messageChunk.kwargs === "object" && messageChunk.kwargs !== null && "response_metadata" in messageChunk.kwargs && typeof messageChunk.kwargs.response_metadata === "object" && messageChunk.kwargs.response_metadata !== null) {
+              _rm = messageChunk.kwargs.response_metadata;
+            }
+            if ("usage_metadata" in messageChunk && typeof messageChunk.usage_metadata === "object" && messageChunk.usage_metadata !== null) {
+              _u = messageChunk.usage_metadata;
+            } else if ("kwargs" in messageChunk && typeof messageChunk.kwargs === "object" && messageChunk.kwargs !== null && "usage_metadata" in messageChunk.kwargs && typeof messageChunk.kwargs.usage_metadata === "object" && messageChunk.kwargs.usage_metadata !== null) {
+              _u = messageChunk.kwargs.usage_metadata;
+            } else if (_rm) {
+              if ("token_usage" in _rm && typeof _rm.token_usage === "object" && _rm.token_usage !== null) {
+                _u = _rm.token_usage;
+              } else if ("tokenUsage" in _rm && typeof _rm.tokenUsage === "object" && _rm.tokenUsage !== null) {
+                _u = _rm.tokenUsage;
+              } else if ("usage" in _rm && typeof _rm.usage === "object" && _rm.usage !== null) {
+                _u = _rm.usage;
+              }
+            }
+          }
+          if (_u) {
+            const inTok = "input_tokens" in _u && typeof _u.input_tokens === "number" ? _u.input_tokens : ("prompt_tokens" in _u && typeof _u.prompt_tokens === "number" ? _u.prompt_tokens : ("promptTokens" in _u && typeof _u.promptTokens === "number" ? _u.promptTokens : ("inputTokens" in _u && typeof _u.inputTokens === "number" ? _u.inputTokens : 0)));
+            const outTok = "output_tokens" in _u && typeof _u.output_tokens === "number" ? _u.output_tokens : ("completion_tokens" in _u && typeof _u.completion_tokens === "number" ? _u.completion_tokens : ("completionTokens" in _u && typeof _u.completionTokens === "number" ? _u.completionTokens : ("outputTokens" in _u && typeof _u.outputTokens === "number" ? _u.outputTokens : 0)));
+            let reasTok = 0;
+            if ("reasoning_tokens" in _u && typeof _u.reasoning_tokens === "number") {
+              reasTok = _u.reasoning_tokens;
+            } else if ("reasoningTokens" in _u && typeof _u.reasoningTokens === "number") {
+              reasTok = _u.reasoningTokens;
+            } else if ("completion_tokens_details" in _u && typeof _u.completion_tokens_details === "object" && _u.completion_tokens_details !== null) {
+              const ctd: object = _u.completion_tokens_details;
+              if ("reasoning_tokens" in ctd && typeof ctd.reasoning_tokens === "number") reasTok = ctd.reasoning_tokens;
+              else if ("reasoning" in ctd && typeof ctd.reasoning === "number") reasTok = ctd.reasoning;
+            } else if ("output_token_details" in _u && typeof _u.output_token_details === "object" && _u.output_token_details !== null) {
+              const otd: object = _u.output_token_details;
+              if ("reasoning" in otd && typeof otd.reasoning === "number") reasTok = otd.reasoning;
+              else if ("reasoning_tokens" in otd && typeof otd.reasoning_tokens === "number") reasTok = otd.reasoning_tokens;
+            }
+            if (reasTok === 0 && _rm) {
+              if ("usage" in _rm && typeof _rm.usage === "object" && _rm.usage !== null) {
+                const rmu: object = _rm.usage;
+                if ("completion_tokens_details" in rmu && typeof rmu.completion_tokens_details === "object" && rmu.completion_tokens_details !== null) {
+                  const ctd: object = rmu.completion_tokens_details;
+                  if ("reasoning_tokens" in ctd && typeof ctd.reasoning_tokens === "number") reasTok = ctd.reasoning_tokens;
+                  else if ("reasoning" in ctd && typeof ctd.reasoning === "number") reasTok = ctd.reasoning;
+                } else if ("reasoning_tokens" in rmu && typeof rmu.reasoning_tokens === "number") {
+                  reasTok = rmu.reasoning_tokens;
+                }
+              } else if ("completion_tokens_details" in _rm && typeof _rm.completion_tokens_details === "object" && _rm.completion_tokens_details !== null) {
+                const ctd: object = _rm.completion_tokens_details;
+                if ("reasoning_tokens" in ctd && typeof ctd.reasoning_tokens === "number") reasTok = ctd.reasoning_tokens;
+                else if ("reasoning" in ctd && typeof ctd.reasoning === "number") reasTok = ctd.reasoning;
+              }
+            }
+            if (inTok > 0) tokenUsage.input_tokens = inTok;
+            if (outTok > 0) tokenUsage.output_tokens = outTok;
+            if (reasTok > 0) tokenUsage.reasoning_tokens = reasTok;
+            tokenUsage.total_tokens = tokenUsage.input_tokens + tokenUsage.output_tokens;
           }\n          ` : ""}let reasoningToken: string | undefined = undefined;
           let textToken: string | undefined = undefined;
           if (messageChunk && typeof messageChunk === "object") {
@@ -165,10 +219,10 @@ export function buildServerFile(ctx: CompileContext, routes: RouteEndpoint[]): s
                 }
               }
             }
-            if (!reasoningToken && messageChunk.additional_kwargs) {
-              const kw = messageChunk.additional_kwargs as Record<string, any>;
-              if (typeof kw.reasoning_content === "string") reasoningToken = kw.reasoning_content;
-              else if (typeof kw.thinking === "string") reasoningToken = kw.thinking;
+            if (!reasoningToken && "additional_kwargs" in messageChunk && typeof messageChunk.additional_kwargs === "object" && messageChunk.additional_kwargs !== null) {
+              const kw = messageChunk.additional_kwargs;
+              if ("reasoning_content" in kw && typeof kw.reasoning_content === "string") reasoningToken = kw.reasoning_content;
+              else if ("thinking" in kw && typeof kw.thinking === "string") reasoningToken = kw.thinking;
             }
             if (!textToken) {
               if (typeof messageChunk.content === "string") {
@@ -185,7 +239,7 @@ export function buildServerFile(ctx: CompileContext, routes: RouteEndpoint[]): s
             res.write(\`data: \${JSON.stringify({ type: "reasoning", reasoning: reasoningToken, node: nodeName })}\\n\\n\`);
           }
           if (token !== undefined && token !== "") {
-            ${trackTokenUsage ? `tokenUsage.completion_tokens += 1;\n            tokenUsage.total_tokens = tokenUsage.input_tokens + tokenUsage.completion_tokens;\n            ` : ""}res.write(\`data: \${JSON.stringify({ token, node: nodeName })}\\n\\n\`);
+            ${trackTokenUsage ? `tokenUsage.output_tokens += 1;\n            tokenUsage.total_tokens = tokenUsage.input_tokens + tokenUsage.output_tokens;\n            ` : ""}res.write(\`data: \${JSON.stringify({ token, node: nodeName })}\\n\\n\`);
           }
         } else if (mode === "updates") {
           const nodeName = typeof payload === "object" && payload !== null ? Object.keys(payload)[0] : undefined;
@@ -193,8 +247,8 @@ export function buildServerFile(ctx: CompileContext, routes: RouteEndpoint[]): s
         } else if (mode === "custom" || mode === "values") {
           res.write(\`data: \${JSON.stringify({ type: mode, mode, data: payload })}\\n\\n\`);
         }
-        if (typeof (res as any).flush === "function") {
-          (res as any).flush();
+        if ("flush" in res && typeof res.flush === "function") {
+          res.flush();
         }
       }
       if (!isAborted) {
@@ -273,7 +327,7 @@ export function buildServerFile(ctx: CompileContext, routes: RouteEndpoint[]): s
   return `import "dotenv/config";
 import express, { type Request, type Response } from "express";
 ${trackTokenUsage ? `import { BaseCallbackHandler } from "@langchain/core/callbacks/base";\nimport type { LLMResult } from "@langchain/core/outputs";\n` : ""}${hasMemory ? `import crypto from "node:crypto";\n` : ""}import { ${graphVarName} } from "./graph";
-import type { ${toPascalCase(ctx.graphId)}StateUpdateType } from "./state";${trackTokenUsage ? `\n\n/**\n * Captures token usage across all graph LLM calls using LangChain callback handlers.\n */\nclass TokenUsageHandler extends BaseCallbackHandler {\n  name = "token_usage_handler";\n  input_tokens = 0;\n  output_tokens = 0;\n  total_tokens = 0;\n\n  handleLLMEnd(output: LLMResult) {\n    if (!output || !output.generations) return;\n    for (const gens of output.generations) {\n      for (const gen of gens) {\n        const usage = (gen as any).message?.usage_metadata || (gen as any).generationInfo?.usage_metadata;\n        if (usage) {\n          this.input_tokens += usage.input_tokens ?? usage.prompt_tokens ?? 0;\n          this.output_tokens += usage.output_tokens ?? usage.completion_tokens ?? 0;\n          this.total_tokens += usage.total_tokens ?? ((usage.input_tokens ?? 0) + (usage.output_tokens ?? 0));\n        }\n      }\n    }\n  }\n\n  get usage() {\n    return {\n      input_tokens: this.input_tokens,\n      output_tokens: this.output_tokens,\n      total_tokens: this.total_tokens || (this.input_tokens + this.output_tokens),\n      prompt_tokens: this.input_tokens,\n      completion_tokens: this.output_tokens,\n    };\n  }\n}\n\n/**\n * Extracts token usage by combining callback statistics and state AIMessage usage_metadata.\n */\nfunction extractTokenUsage(result: unknown, handler?: TokenUsageHandler) {\n  if (handler && handler.total_tokens > 0) {\n    return handler.usage;\n  }\n  if (!result || typeof result !== "object") return undefined;\n  if ("usage" in result && (result as any).usage) return (result as any).usage;\n  if (Array.isArray((result as any).messages)) {\n    const totals = (result as any).messages\n      .filter((m: any) => m && (m._getType?.() === "ai" || m.role === "assistant"))\n      .reduce(\n        (acc: any, m: any) => {\n          const u = m.usage_metadata || m.response_metadata?.tokenUsage || m.response_metadata?.usage;\n          const inp = u?.input_tokens ?? u?.prompt_tokens ?? 0;\n          const out = u?.output_tokens ?? u?.completion_tokens ?? 0;\n          const tot = u?.total_tokens ?? (inp + out);\n          return {\n            input_tokens: acc.input_tokens + inp,\n            output_tokens: acc.output_tokens + out,\n            total_tokens: acc.total_tokens + tot,\n            prompt_tokens: acc.input_tokens + inp,\n            completion_tokens: acc.output_tokens + out,\n          };\n        },\n        { input_tokens: 0, output_tokens: 0, total_tokens: 0, prompt_tokens: 0, completion_tokens: 0 }\n      );\n    if (totals.total_tokens > 0) return totals;\n  }\n  return undefined;\n}` : ""}
+import type { ${toPascalCase(ctx.graphId)}StateUpdateType } from "./state";${trackTokenUsage ? `\n\n/**\n * Captures token usage across all graph LLM calls using LangChain callback handlers.\n */\nclass TokenUsageHandler extends BaseCallbackHandler {\n  name = "token_usage_handler";\n  input_tokens = 0;\n  output_tokens = 0;\n  total_tokens = 0;\n  reasoning_tokens = 0;\n\n  handleLLMEnd(output: LLMResult) {\n    if (!output || !output.generations) return;\n    for (const gens of output.generations) {\n      for (const gen of gens) {\n        if (!gen || typeof gen !== "object") continue;\n        let u: object | undefined = undefined;\n        let rm: object | undefined = undefined;\n        if ("message" in gen && typeof gen.message === "object" && gen.message !== null) {\n          const msgObj: object = gen.message;\n          if ("response_metadata" in msgObj && typeof msgObj.response_metadata === "object" && msgObj.response_metadata !== null) {\n            rm = msgObj.response_metadata;\n          }\n          if ("usage_metadata" in msgObj && typeof msgObj.usage_metadata === "object" && msgObj.usage_metadata !== null) {\n            u = msgObj.usage_metadata;\n          } else if (rm) {\n            if ("token_usage" in rm && typeof rm.token_usage === "object" && rm.token_usage !== null) {\n              u = rm.token_usage;\n            } else if ("tokenUsage" in rm && typeof rm.tokenUsage === "object" && rm.tokenUsage !== null) {\n              u = rm.tokenUsage;\n            } else if ("usage" in rm && typeof rm.usage === "object" && rm.usage !== null) {\n              u = rm.usage;\n            }\n          }\n        }\n        if (!u && "generationInfo" in gen && typeof gen.generationInfo === "object" && gen.generationInfo !== null) {\n          const gi: object = gen.generationInfo;\n          if ("usage_metadata" in gi && typeof gi.usage_metadata === "object" && gi.usage_metadata !== null) {\n            u = gi.usage_metadata;\n          } else if ("token_usage" in gi && typeof gi.token_usage === "object" && gi.token_usage !== null) {\n            u = gi.token_usage;\n          } else if ("tokenUsage" in gi && typeof gi.tokenUsage === "object" && gi.tokenUsage !== null) {\n            u = gi.tokenUsage;\n          } else if ("usage" in gi && typeof gi.usage === "object" && gi.usage !== null) {\n            u = gi.usage;\n          }\n        }\n        if (u) {\n          const inTok = "input_tokens" in u && typeof u.input_tokens === "number" ? u.input_tokens : ("prompt_tokens" in u && typeof u.prompt_tokens === "number" ? u.prompt_tokens : ("promptTokens" in u && typeof u.promptTokens === "number" ? u.promptTokens : ("inputTokens" in u && typeof u.inputTokens === "number" ? u.inputTokens : 0)));\n          const outTok = "output_tokens" in u && typeof u.output_tokens === "number" ? u.output_tokens : ("completion_tokens" in u && typeof u.completion_tokens === "number" ? u.completion_tokens : ("completionTokens" in u && typeof u.completionTokens === "number" ? u.completionTokens : ("outputTokens" in u && typeof u.outputTokens === "number" ? u.outputTokens : 0)));\n          const totTok = "total_tokens" in u && typeof u.total_tokens === "number" ? u.total_tokens : ("totalTokens" in u && typeof u.totalTokens === "number" ? u.totalTokens : (inTok + outTok));\n          let reasTok = 0;\n          if ("reasoning_tokens" in u && typeof u.reasoning_tokens === "number") {\n            reasTok = u.reasoning_tokens;\n          } else if ("reasoningTokens" in u && typeof u.reasoningTokens === "number") {\n            reasTok = u.reasoningTokens;\n          } else if ("completion_tokens_details" in u && typeof u.completion_tokens_details === "object" && u.completion_tokens_details !== null) {\n            const ctd: object = u.completion_tokens_details;\n            if ("reasoning_tokens" in ctd && typeof ctd.reasoning_tokens === "number") reasTok = ctd.reasoning_tokens;\n            else if ("reasoning" in ctd && typeof ctd.reasoning === "number") reasTok = ctd.reasoning;\n          } else if ("output_token_details" in u && typeof u.output_token_details === "object" && u.output_token_details !== null) {\n            const otd: object = u.output_token_details;\n            if ("reasoning" in otd && typeof otd.reasoning === "number") reasTok = otd.reasoning;\n            else if ("reasoning_tokens" in otd && typeof otd.reasoning_tokens === "number") reasTok = otd.reasoning_tokens;\n          }\n          if (reasTok === 0 && rm) {\n            if ("usage" in rm && typeof rm.usage === "object" && rm.usage !== null) {\n              const rmu: object = rm.usage;\n              if ("completion_tokens_details" in rmu && typeof rmu.completion_tokens_details === "object" && rmu.completion_tokens_details !== null) {\n                const ctd: object = rmu.completion_tokens_details;\n                if ("reasoning_tokens" in ctd && typeof ctd.reasoning_tokens === "number") reasTok = ctd.reasoning_tokens;\n                else if ("reasoning" in ctd && typeof ctd.reasoning === "number") reasTok = ctd.reasoning;\n              } else if ("reasoning_tokens" in rmu && typeof rmu.reasoning_tokens === "number") {\n                reasTok = rmu.reasoning_tokens;\n              }\n            } else if ("completion_tokens_details" in rm && typeof rm.completion_tokens_details === "object" && rm.completion_tokens_details !== null) {\n              const ctd: object = rm.completion_tokens_details;\n              if ("reasoning_tokens" in ctd && typeof ctd.reasoning_tokens === "number") reasTok = ctd.reasoning_tokens;\n              else if ("reasoning" in ctd && typeof ctd.reasoning === "number") reasTok = ctd.reasoning;\n            }\n          }\n          this.input_tokens += inTok;\n          this.output_tokens += outTok;\n          this.total_tokens += totTok;\n          this.reasoning_tokens += reasTok;\n        }\n      }\n    }\n  }\n\n  get usage() {\n    return {\n      input_tokens: this.input_tokens,\n      output_tokens: this.output_tokens,\n      total_tokens: this.total_tokens || (this.input_tokens + this.output_tokens),\n      reasoning_tokens: this.reasoning_tokens,\n    };\n  }\n}\n\n/**\n * Extracts token usage by combining callback statistics and state AIMessage usage_metadata.\n */\nfunction extractTokenUsage(result: object | null | undefined, handler?: TokenUsageHandler) {\n  if (handler && handler.total_tokens > 0) {\n    return handler.usage;\n  }\n  if (!result || typeof result !== "object") return undefined;\n  if ("usage" in result && typeof result.usage === "object" && result.usage !== null) return result.usage;\n  if ("token_usage" in result && typeof result.token_usage === "object" && result.token_usage !== null) return result.token_usage;\n  if ("tokenUsage" in result && typeof result.tokenUsage === "object" && result.tokenUsage !== null) return result.tokenUsage;\n  if ("messages" in result && Array.isArray(result.messages)) {\n    let inTok = 0;\n    let outTok = 0;\n    let totTok = 0;\n    let reasTok = 0;\n    for (const m of result.messages) {\n      if (!m || typeof m !== "object") continue;\n      const isAI = ("_getType" in m && typeof m._getType === "function" && m._getType() === "ai") || ("role" in m && (m.role === "assistant" || m.role === "ai")) || ("id" in m && Array.isArray(m.id) && m.id.includes("AIMessage"));\n      if (!isAI) continue;\n      let u: object | undefined = undefined;\n      let rm: object | undefined = undefined;\n      if ("response_metadata" in m && typeof m.response_metadata === "object" && m.response_metadata !== null) {\n        rm = m.response_metadata;\n      } else if ("kwargs" in m && typeof m.kwargs === "object" && m.kwargs !== null && "response_metadata" in m.kwargs && typeof m.kwargs.response_metadata === "object" && m.kwargs.response_metadata !== null) {\n        rm = m.kwargs.response_metadata;\n      }\n      if ("usage_metadata" in m && typeof m.usage_metadata === "object" && m.usage_metadata !== null) {\n        u = m.usage_metadata;\n      } else if ("kwargs" in m && typeof m.kwargs === "object" && m.kwargs !== null && "usage_metadata" in m.kwargs && typeof m.kwargs.usage_metadata === "object" && m.kwargs.usage_metadata !== null) {\n        u = m.kwargs.usage_metadata;\n      } else if (rm) {\n        if ("token_usage" in rm && typeof rm.token_usage === "object" && rm.token_usage !== null) {\n          u = rm.token_usage;\n        } else if ("tokenUsage" in rm && typeof rm.tokenUsage === "object" && rm.tokenUsage !== null) {\n          u = rm.tokenUsage;\n        } else if ("usage" in rm && typeof rm.usage === "object" && rm.usage !== null) {\n          u = rm.usage;\n        }\n      }\n      if (!u) {\n        let strMsg: string | undefined = undefined;\n        if ("content" in m && typeof m.content === "string") {\n          strMsg = m.content;\n        } else if ("kwargs" in m && typeof m.kwargs === "object" && m.kwargs !== null && "content" in m.kwargs && typeof m.kwargs.content === "string") {\n          strMsg = m.kwargs.content;\n        }\n        if (strMsg && strMsg.startsWith("{")) {\n          try {\n            const p = JSON.parse(strMsg);\n            if (typeof p === "object" && p !== null) {\n              if ("response_metadata" in p && typeof p.response_metadata === "object" && p.response_metadata !== null) {\n                rm = p.response_metadata;\n              } else if ("kwargs" in p && typeof p.kwargs === "object" && p.kwargs !== null && "response_metadata" in p.kwargs && typeof p.kwargs.response_metadata === "object" && p.kwargs.response_metadata !== null) {\n                rm = p.kwargs.response_metadata;\n              }\n              if ("usage_metadata" in p && typeof p.usage_metadata === "object" && p.usage_metadata !== null) {\n                u = p.usage_metadata;\n              } else if ("kwargs" in p && typeof p.kwargs === "object" && p.kwargs !== null && "usage_metadata" in p.kwargs && typeof p.kwargs.usage_metadata === "object" && p.kwargs.usage_metadata !== null) {\n                u = p.kwargs.usage_metadata;\n              } else if (rm) {\n                if ("token_usage" in rm && typeof rm.token_usage === "object" && rm.token_usage !== null) {\n                  u = rm.token_usage;\n                } else if ("tokenUsage" in rm && typeof rm.tokenUsage === "object" && rm.tokenUsage !== null) {\n                  u = rm.tokenUsage;\n                } else if ("usage" in rm && typeof rm.usage === "object" && rm.usage !== null) {\n                  u = rm.usage;\n                }\n              }\n            }\n          } catch {}\n        }\n      }\n      if (u) {\n        const curIn = "input_tokens" in u && typeof u.input_tokens === "number" ? u.input_tokens : ("prompt_tokens" in u && typeof u.prompt_tokens === "number" ? u.prompt_tokens : ("promptTokens" in u && typeof u.promptTokens === "number" ? u.promptTokens : ("inputTokens" in u && typeof u.inputTokens === "number" ? u.inputTokens : 0)));\n        const curOut = "output_tokens" in u && typeof u.output_tokens === "number" ? u.output_tokens : ("completion_tokens" in u && typeof u.completion_tokens === "number" ? u.completion_tokens : ("completionTokens" in u && typeof u.completionTokens === "number" ? u.completionTokens : ("outputTokens" in u && typeof u.outputTokens === "number" ? u.outputTokens : 0)));\n        const curTot = "total_tokens" in u && typeof u.total_tokens === "number" ? u.total_tokens : ("totalTokens" in u && typeof u.totalTokens === "number" ? u.totalTokens : (curIn + curOut));\n        let curReas = 0;\n        if ("reasoning_tokens" in u && typeof u.reasoning_tokens === "number") {\n          curReas = u.reasoning_tokens;\n        } else if ("reasoningTokens" in u && typeof u.reasoningTokens === "number") {\n          curReas = u.reasoningTokens;\n        } else if ("completion_tokens_details" in u && typeof u.completion_tokens_details === "object" && u.completion_tokens_details !== null) {\n          const ctd: object = u.completion_tokens_details;\n          if ("reasoning_tokens" in ctd && typeof ctd.reasoning_tokens === "number") curReas = ctd.reasoning_tokens;\n          else if ("reasoning" in ctd && typeof ctd.reasoning === "number") curReas = ctd.reasoning;\n        } else if ("output_token_details" in u && typeof u.output_token_details === "object" && u.output_token_details !== null) {\n          const otd: object = u.output_token_details;\n          if ("reasoning" in otd && typeof otd.reasoning === "number") curReas = otd.reasoning;\n          else if ("reasoning_tokens" in otd && typeof otd.reasoning_tokens === "number") curReas = otd.reasoning_tokens;\n        }\n        if (curReas === 0 && rm) {\n          if ("usage" in rm && typeof rm.usage === "object" && rm.usage !== null) {\n            const rmu: object = rm.usage;\n            if ("completion_tokens_details" in rmu && typeof rmu.completion_tokens_details === "object" && rmu.completion_tokens_details !== null) {\n              const ctd: object = rmu.completion_tokens_details;\n              if ("reasoning_tokens" in ctd && typeof ctd.reasoning_tokens === "number") curReas = ctd.reasoning_tokens;\n              else if ("reasoning" in ctd && typeof ctd.reasoning === "number") curReas = ctd.reasoning;\n            } else if ("reasoning_tokens" in rmu && typeof rmu.reasoning_tokens === "number") {\n              curReas = rmu.reasoning_tokens;\n            }\n          } else if ("completion_tokens_details" in rm && typeof rm.completion_tokens_details === "object" && rm.completion_tokens_details !== null) {\n            const ctd: object = rm.completion_tokens_details;\n            if ("reasoning_tokens" in ctd && typeof ctd.reasoning_tokens === "number") curReas = ctd.reasoning_tokens;\n            else if ("reasoning" in ctd && typeof ctd.reasoning === "number") curReas = ctd.reasoning;\n          }\n        }\n        inTok += curIn;\n        outTok += curOut;\n        totTok += curTot;\n        reasTok += curReas;\n      }\n    }\n    if (totTok > 0) {\n      return {\n        input_tokens: inTok,\n        output_tokens: outTok,\n        total_tokens: totTok,\n        reasoning_tokens: reasTok,\n      };\n    }\n  }\n  return undefined;\n}` : ""}
 
 /**
  * HTTP Server for ${agentLabel}
@@ -347,6 +401,7 @@ export function buildExpressDtsFile(): string {
     write(chunk: string): boolean;
     end(): this;
     headersSent: boolean;
+    flush?(): void;
   }
   export type RequestHandler = (
     req: Request,

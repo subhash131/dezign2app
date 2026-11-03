@@ -419,7 +419,7 @@ function renderSinglePipelineStep(
 
         const isStructured = Boolean(agentData.responseFormat?.enabled);
         if (isStructured) {
-          bodyLines.push(`  let ${outVar}Parsed: Record<string, any> = {};`);
+          bodyLines.push(`  let ${outVar}Parsed: Record<string, string | number | boolean | object | null> = {};`);
           bodyLines.push(`  try {`);
           bodyLines.push(
             `    const rawContent = typeof ${outVar}?.content === "string" ? ${outVar}.content : (typeof ${outVar} === "object" && ${outVar} !== null ? JSON.stringify(${outVar}) : "{}");`,
@@ -427,7 +427,7 @@ function renderSinglePipelineStep(
           bodyLines.push(`    ${outVar}Parsed = JSON.parse(rawContent);`);
           bodyLines.push(`  } catch {`);
           bodyLines.push(
-            `    ${outVar}Parsed = (typeof ${outVar} === "object" && ${outVar} !== null ? ${outVar} : {}) as Record<string, any>;`,
+            `    ${outVar}Parsed = {};`,
           );
           bodyLines.push(`  }`);
         }

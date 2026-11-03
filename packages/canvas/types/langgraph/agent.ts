@@ -5,6 +5,7 @@ import type {
   OutputChannelConfig,
   LangGraphCustomReducer,
 } from "./channels";
+import type { LangGraphCanvasNode, LangGraphCanvasEdge } from "./canvas-nodes";
 import type {
   McpServerConnection,
   StateUpdateMode,
@@ -227,6 +228,8 @@ export interface CustomTypesRefNodeDefinition {
 
 /** LangGraph Agent node fields — the parent graph node (canvas type). */
 export interface CanvasLangGraphNodeData {
+  nodes?: LangGraphCanvasNode[];
+  edges?: LangGraphCanvasEdge[];
   label?: string;
   description?: string;
   inputChannels?: LangGraphInputChannel[];

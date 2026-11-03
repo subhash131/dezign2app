@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { generateConfigFiles, generateLibFiles, generateServerFile, resolveServiceRealtimeCapabilities } from "../generators/configGenerator";
+import { compileServiceNode, isServiceConnectedToWebSocket } from "../compileServiceNode";
 import { BackendNode, Endpoint, EndpointWithNode } from "@/types/canvas";
 
 describe("Realtime WebSocket Server Generation", () => {
@@ -406,6 +407,69 @@ describe("Realtime WebSocket Server Generation", () => {
     const libFiles = generateLibFiles(true, { sse: caps.hasSse, ws: caps.hasWs });
     expect(libFiles.find((f) => f.filename === "src/lib/websocket.ts")).toBeUndefined();
     expect(libFiles.find((f) => f.filename === "src/lib/sse.ts")).toBeDefined();
+  });
+
+  it("compileServiceNode disables WebSocket and strips ws dependencies when service has no WebSocket connection config even if enableWebSocket is present in node data", () => {
+    const serviceNode: BackendNode = {
+      id: "srv-conversations",
+      type: "service",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "Conversations",
+        port: "8080",
+        enableWebSocket: true, // Stale canvas draft flag without actual WS steps or connections
+        customDependencies: [
+          { name: "ws", version: "^8.18.0", isDev: false },
+          { name: "@types/ws", version: "^8.5.12", isDev: true },
+        ],
+      },
+    };
+
+    const endpoint: Endpoint & { nodeId: string } = {
+      id: "ep-send-msg",
+      nodeId: "srv-conversations",
+      name: "/chat/message",
+      type: "POST",
+      pipelineSteps: [
+        {
+          id: "step-lg",
+          name: "invoke-agent",
+          type: "langgraph_invoke",
+          enabled: true,
+          // No streaming enabled, regular sync invoke
+        },
+      ],
+    };
+
+    // 1. isServiceConnectedToWebSocket returns false
+    const isWs = isServiceConnectedToWebSocket(serviceNode, [serviceNode], [], [endpoint], []);
+    expect(isWs).toBe(false);
+
+    // 2. compileServiceNode cleans up WebSocket
+    const result = compileServiceNode(serviceNode, [endpoint], [], [serviceNode], []);
+    expect(result).toBeDefined();
+
+    const serverFile = result.files.find((f) => f.filename === "src/index.ts");
+    expect(serverFile).toBeDefined();
+    expect(serverFile?.content).toContain("app.listen(PORT, () => {");
+    expect(serverFile?.content).not.toContain("initWebSocketServer");
+    expect(serverFile?.content).not.toContain('import http from "http";');
+    expect(serverFile?.content).not.toContain("WebSocket realtime server");
+    expect(serverFile?.content).not.toContain("ws://localhost:");
+
+    const packageJsonFile = result.files.find((f) => f.filename === "package.json");
+    expect(packageJsonFile).toBeDefined();
+    const pkg = JSON.parse(packageJsonFile!.content);
+    expect(pkg.dependencies).not.toHaveProperty("ws");
+    expect(pkg.devDependencies).not.toHaveProperty("@types/ws");
+
+    const libIndexFile = result.files.find((f) => f.filename === "src/lib/index.ts");
+    expect(libIndexFile).toBeDefined();
+    expect(libIndexFile?.content).not.toContain('export * from "./realtime";');
+
+    const websocketFile = result.files.find((f) => f.filename === "src/lib/websocket.ts");
+    expect(websocketFile).toBeUndefined();
   });
 });
 
