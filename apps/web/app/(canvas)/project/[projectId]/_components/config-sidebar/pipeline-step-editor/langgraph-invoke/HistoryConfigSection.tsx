@@ -110,7 +110,7 @@ export const HistoryConfigSection: React.FC<HistoryConfigSectionProps> = ({
         key: "limit",
         type: "number",
         required: false,
-        defaultValue: String(step.langGraphHistoryLimitDefault ?? 10),
+        defaultValue: String(step.langGraphHistoryLimitDefault ?? 20),
         description: "Maximum history records to return",
       });
       changed = true;
@@ -140,7 +140,7 @@ export const HistoryConfigSection: React.FC<HistoryConfigSectionProps> = ({
       ...step,
       langGraphHistoryPaginationEnabled: checked,
       langGraphHistoryLimitSource: step.langGraphHistoryLimitSource || "query.limit",
-      langGraphHistoryLimitDefault: step.langGraphHistoryLimitDefault ?? 10,
+      langGraphHistoryLimitDefault: step.langGraphHistoryLimitDefault ?? 20,
       langGraphHistoryBeforeSource: step.langGraphHistoryBeforeSource || "query.before",
     });
 
@@ -392,13 +392,13 @@ export const HistoryConfigSection: React.FC<HistoryConfigSectionProps> = ({
                   <Input
                     type="number"
                     className="h-5 w-14 text-[10px] font-mono text-center px-1 py-0"
-                    value={step.langGraphHistoryLimitDefault ?? 10}
+                    value={step.langGraphHistoryLimitDefault ?? 20}
                     min={1}
                     max={100}
                     onChange={(e) =>
                       onChange({
                         ...step,
-                        langGraphHistoryLimitDefault: Number(e.target.value) || 10,
+                        langGraphHistoryLimitDefault: Number(e.target.value) || 20,
                       })
                     }
                   />

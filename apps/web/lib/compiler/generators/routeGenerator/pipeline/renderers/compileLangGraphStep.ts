@@ -156,7 +156,7 @@ export function renderLangGraphInvokeStep(
     if (isPaginated) {
       const limitSource = step.langGraphHistoryLimitSource || "query.limit";
       limitAccessor = resolvePathAccessor(limitSource, ctx);
-      const defaultLimit = step.langGraphHistoryLimitDefault || 10;
+      const defaultLimit = step.langGraphHistoryLimitDefault || 20;
 
       const beforeSource = step.langGraphHistoryBeforeSource || "query.before";
       beforeAccessor = resolvePathAccessor(beforeSource, ctx);

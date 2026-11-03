@@ -351,7 +351,7 @@ ${hasMemory ? `
 app.get("/api/threads/:threadId/history", async (req: Request, res: Response) => {
   try {
     const { threadId } = req.params;
-    const limit = Math.max(1, Number(req.query.limit) || 10);
+    const limit = Math.max(1, Number(req.query.limit) || 20);
     const before = typeof req.query.before === "string" && req.query.before.trim()
       ? { configurable: { checkpoint_id: req.query.before.trim() } }
       : undefined;
