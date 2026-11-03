@@ -469,9 +469,6 @@ export function resolveServiceRealtimeCapabilities(
 
   // Inspect connected WebPage nodes and page_ref nodes on canvas
   if (node) {
-    const serviceNodes = allNodes.filter((n) => n.type === "service");
-    const isSingleService = serviceNodes.length === 1;
-
     // Track webPage IDs directly connected or linked via page_ref nodes to this service
     const connectedPageIds = new Set<string>();
     for (const edge of allEdges) {
@@ -505,8 +502,6 @@ export function resolveServiceRealtimeCapabilities(
             ) ||
             connectedPageIds.has(n.id)
           ) {
-            targetsThisService = true;
-          } else if (isSingleService) {
             targetsThisService = true;
           }
 
