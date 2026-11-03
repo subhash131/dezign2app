@@ -18,13 +18,14 @@ on:
         type: choice
         options:
           - auto
-          - development
-          - production
+          - dev
+          - Production
 
 jobs:
   deploy:
     if: github.repository == 'dezign2app/dezign2app-prod' || github.repository == 'subhash131/dezign2app'
     runs-on: ubuntu-latest
+    environment: ${{ (inputs.target_env == 'Production' || (inputs.target_env != 'dev' && github.ref_name == 'main')) && 'Production' || 'dev' }}
 
     steps:
       - uses: actions/checkout@v6
@@ -40,54 +41,23 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Determine Target Environment
-        id: env-resolver
-        shell: bash
-        run: |
-          INPUT_ENV="${{ inputs.target_env }}"
-          BRANCH="${{ github.ref_name }}"
-          
-          if [ "$INPUT_ENV" = "production" ] || ([ "$INPUT_ENV" != "development" ] && [ "$BRANCH" = "main" ]); then
-            TARGET_ENV="production"
-          else
-            TARGET_ENV="development"
-          fi
-          
-          echo "Target Environment: $TARGET_ENV"
-          echo "target_env=$TARGET_ENV" >> "$GITHUB_OUTPUT"
-
-      # ── Production Convex Deployment (main branch) ─────────────────────────
-      - name: Deploy Convex (Production)
-        if: steps.env-resolver.outputs.target_env == 'production'
+      - name: Deploy Convex
         working-directory: packages/backend
         env:
-          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
-          CONVEX_SITE_URL: ${{ secrets['CONVEX_SITE_URL'] || vars['CONVEX_SITE_URL'] || 'https://gregarious-quail-82.convex.site' }}
-          CONVEX_URL: ${{ secrets['CONVEX_URL'] || vars['CONVEX_URL'] || 'https://gregarious-quail-82.convex.cloud' }}
-        run: |
-          if [ -z "$CONVEX_DEPLOY_KEY" ]; then
-            echo "❌ Error: Production Convex deploy key (CONVEX_DEPLOY_KEY) is not set in repository secrets."
-            exit 1
-          fi
-          echo "🚀 Deploying to Production Convex..."
-          pnpm exec convex deploy
-
-      # ── Development Convex Deployment (dev branch) ─────────────────────────
-      - name: Deploy Convex (Development)
-        if: steps.env-resolver.outputs.target_env == 'development'
-        working-directory: packages/backend
-        env:
-          CONVEX_DEPLOY_KEY: ${{ secrets['CONVEX_DEPLOY_KEY_DEV'] }}
-          CONVEX_SITE_URL: ${{ vars['CONVEX_SITE_URL_DEV'] || 'https://neighborly-setter-541.convex.site' }}
-          CONVEX_URL: ${{ vars['CONVEX_URL_DEV'] || 'https://neighborly-setter-541.convex.cloud' }}
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY || secrets['CONVEX_DEPLOY_KEY_DEV'] }}
+          CONVEX_SITE_URL: ${{ secrets['CONVEX_SITE_URL'] || vars['CONVEX_SITE_URL'] || (github.ref_name == 'main' && 'https://gregarious-quail-82.convex.site' || 'https://neighborly-setter-541.convex.site') }}
+          CONVEX_URL: ${{ secrets['CONVEX_URL'] || vars['CONVEX_URL'] || (github.ref_name == 'main' && 'https://gregarious-quail-82.convex.cloud' || 'https://neighborly-setter-541.convex.cloud') }}
         run: |
           if [ -n "$CONVEX_DEPLOY_KEY" ]; then
-            echo "🚀 Deploying to Development Convex..."
+            echo "🚀 Deploying to Convex (${{ (inputs.target_env == 'Production' || (inputs.target_env != 'dev' && github.ref_name == 'main')) && 'Production' || 'dev' }})..."
             pnpm exec convex deploy
+          elif [ "${{ github.ref_name }}" = "main" ]; then
+            echo "❌ Error: CONVEX_DEPLOY_KEY is not set for the Production environment."
+            exit 1
           else
-            echo "⚠️ Notice: CONVEX_DEPLOY_KEY_DEV is not configured in GitHub Secrets."
+            echo "⚠️ Notice: CONVEX_DEPLOY_KEY is not configured in the 'dev' environment or repository secrets."
             echo "Running 'convex codegen' to validate schema and type generation without deploying..."
             pnpm exec convex codegen
             echo "✅ Backend schema & codegen validated successfully for development."
-            echo "💡 Tip: To auto-deploy to Dev Convex on push to 'dev', add CONVEX_DEPLOY_KEY_DEV in GitHub Settings > Secrets."
+            echo "💡 Tip: Go to GitHub Settings > Environments > 'dev' and add CONVEX_DEPLOY_KEY to auto-deploy."
           fi
