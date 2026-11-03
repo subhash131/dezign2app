@@ -173,7 +173,7 @@ export function renderLangGraphInvokeStep(
       rawLines.push("  " + outputVariable + "Snapshots.push(snap);");
       rawLines.push("}");
       rawLines.push("const " + snapVar + " = " + outputVariable + "Snapshots[0] || (await " + graphVar + ".getState({ configurable: { thread_id: " + threadAccessor + " } }));");
-      rawLines.push("const " + outputVariable + "NextCursor = " + outputVariable + "Snapshots[" + outputVariable + "Snapshots.length - 1]?.config?.configurable?.checkpoint_id ?? null;");
+      rawLines.push("let " + outputVariable + "NextCursor = " + outputVariable + "Snapshots[" + outputVariable + "Snapshots.length - 1]?.config?.configurable?.checkpoint_id ?? null;");
     } else {
       rawLines.push("const " + snapVar + " = await " + graphVar + ".getState({");
       rawLines.push("  configurable: { thread_id: " + threadAccessor + " },");
@@ -235,7 +235,7 @@ export function renderLangGraphInvokeStep(
         rawLines.push("}");
         rawLines.push("const " + outputVariable + "StartIndex = Math.max(0, " + outputVariable + "EndIndex - " + outputVariable + "Limit);");
         rawLines.push("const " + outputVariable + "Messages = " + outputVariable + "AllMessages.slice(" + outputVariable + "StartIndex, " + outputVariable + "EndIndex);");
-        rawLines.push("const " + outputVariable + "NextCursor = " + outputVariable + "StartIndex > 0 ? (" + outputVariable + "Messages[0]?.id ?? null) : null;");
+        rawLines.push(outputVariable + "NextCursor = " + outputVariable + "StartIndex > 0 ? (" + outputVariable + "Messages[0]?.id ?? null) : null;");
         rawLines.push("const " + outputVariable + " = {");
         rawLines.push("  messages: " + outputVariable + "Messages,");
         rawLines.push("  pagination: {");
