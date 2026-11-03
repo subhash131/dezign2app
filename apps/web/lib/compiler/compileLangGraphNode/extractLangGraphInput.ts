@@ -29,6 +29,37 @@ export function extractLangGraphInput(
   const inputChannels: LangGraphInputChannel[] = data.inputChannels || [];
   const memoryConfig: LangGraphMemoryConfig | undefined = data.memoryConfig;
 
+  const rawData = data as {
+    trackTokenUsage?: boolean;
+    langGraphTrackTokenUsage?: boolean;
+    nodes?: LangGraphCanvasNode[];
+  };
+
+  let trackTokenUsage: boolean | undefined =
+    rawData.trackTokenUsage ?? rawData.langGraphTrackTokenUsage;
+
+  if (trackTokenUsage === undefined && Array.isArray(rawData.nodes)) {
+    const agentNodes = rawData.nodes.filter(
+      (n) => (n as any).type === "langgraph_agent" || (n as any).type === "agent",
+    );
+    for (const an of agentNodes) {
+      const ad = an.data as {
+        trackTokenUsage?: boolean;
+        streamConfig?: { envelope?: { includeUsage?: boolean } };
+      };
+      if (
+        ad?.trackTokenUsage === false ||
+        ad?.streamConfig?.envelope?.includeUsage === false
+      ) {
+        trackTokenUsage = false;
+        break;
+      }
+    }
+  }
+  if (trackTokenUsage === undefined) {
+    trackTokenUsage = true;
+  }
+
   // 1. If full canvas nodes & edges are stored directly on node.data
   const canvasNodes = (data as { nodes?: LangGraphCanvasNode[] }).nodes;
   const canvasEdges = (data as { edges?: LangGraphCanvasEdge[] }).edges;
@@ -45,6 +76,7 @@ export function extractLangGraphInput(
       nodes: canvasNodes,
       edges: canvasEdges,
       memoryConfig,
+      trackTokenUsage,
     };
   }
 
@@ -63,5 +95,6 @@ export function extractLangGraphInput(
     nodes: reconstructedNodes,
     edges: reconstructedEdges,
     memoryConfig,
+    trackTokenUsage,
   };
 }

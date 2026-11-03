@@ -53,7 +53,7 @@ const PRESET_ENVELOPE_MAP: Record<
     includeTool: true,
     includeInputs: false,
     includeOutput: true,
-    includeUsage: false,
+    includeUsage: true,
     flattenPayload: false,
     stripEmptyDeltas: true,
   },
@@ -312,6 +312,7 @@ export function AgentEventStreamingSection({
     value: boolean,
   ) => {
     onUpdateAgent({
+      ...(field === "includeUsage" ? { trackTokenUsage: value } : {}),
       streamConfig: {
         ...streamConfig,
         envelope: {
@@ -712,7 +713,7 @@ export function AgentEventStreamingSection({
 
                 <label className="flex items-center gap-2 text-xs text-foreground cursor-pointer hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors">
                   <Checkbox
-                    checked={Boolean(currentEnvelope.includeUsage)}
+                    checked={currentEnvelope.includeUsage !== false}
                     onCheckedChange={(val) =>
                       updateEnvelopeField("includeUsage", Boolean(val))
                     }

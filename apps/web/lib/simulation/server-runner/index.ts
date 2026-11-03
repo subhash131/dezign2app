@@ -384,7 +384,9 @@ export async function executeServerLangGraph(
         const agentData = isAgent ? (nodeObj?.data as AgentNodeData) : undefined;
         const stepData = nodeObj?.data as StepNodeData | undefined;
 
-        if (agentData?.streamConfig) {
+        if (outputDelta.streamConfig) {
+          serializedDelta.streamConfig = outputDelta.streamConfig;
+        } else if (agentData?.streamConfig) {
           serializedDelta.streamConfig = agentData.streamConfig;
         }
 

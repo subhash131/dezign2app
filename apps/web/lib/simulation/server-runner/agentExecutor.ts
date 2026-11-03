@@ -406,6 +406,39 @@ export async function executeAgentNode(
     latestAssistantResponse = responseText;
     addLog("llm", `Received LLM response (${responseText.length} chars, ${streamBatches.length} streaming batch(es))`);
 
+    const isTokenUsageActive =
+      (agentData as any).trackTokenUsage !== false &&
+      (agentData as any).langGraphTrackTokenUsage !== false;
+
+    let tokenUsage: { prompt_tokens: number; completion_tokens: number; total_tokens: number } | undefined;
+
+    if (isTokenUsageActive) {
+      const allPromptText =
+        (effectivePrompt || systemPrompt || "") +
+        " " +
+        messages
+          .map((m) => (typeof m.content === "string" ? m.content : JSON.stringify(m.content)))
+          .join(" ");
+      const prompt_tokens = Math.max(1, Math.ceil(allPromptText.length / 4));
+      const completion_tokens = Math.max(1, Math.ceil((responseText || "").length / 4));
+      tokenUsage = {
+        prompt_tokens,
+        completion_tokens,
+        total_tokens: prompt_tokens + completion_tokens,
+      };
+      outputDelta.usage = tokenUsage;
+      outputDelta.tokenUsage = tokenUsage;
+    }
+
+    const aiMessageUsage =
+      isTokenUsageActive && tokenUsage
+        ? {
+            input_tokens: tokenUsage.prompt_tokens,
+            output_tokens: tokenUsage.completion_tokens,
+            total_tokens: tokenUsage.total_tokens,
+          }
+        : undefined;
+
     if (responseFormat?.enabled) {
       let parsed: Record<string, unknown> | null = extractJsonFromText(responseText);
       if (!parsed) {
@@ -423,13 +456,41 @@ export async function executeAgentNode(
       }
       latestStructuredResponse = parsed ?? undefined;
       outputDelta.structuredResponse = parsed;
-      outputDelta.messages = [new AIMessage(JSON.stringify(parsed, null, 2))];
-      outputDelta.response = JSON.stringify(parsed);
+      const formattedContent = JSON.stringify(parsed, null, 2);
+      outputDelta.messages = [
+        new AIMessage({
+          content: formattedContent,
+          ...(aiMessageUsage ? { usage_metadata: aiMessageUsage } : {}),
+        }),
+      ];
+      outputDelta.response = formattedContent;
       addLog("llm", `Structured Output Parsed: ${JSON.stringify(parsed)}`, { structuredResponse: parsed });
     } else {
-      outputDelta.messages = [new AIMessage(responseText)];
+      outputDelta.messages = [
+        new AIMessage({
+          content: responseText,
+          ...(aiMessageUsage ? { usage_metadata: aiMessageUsage } : {}),
+        }),
+      ];
       outputDelta.response = responseText;
     }
+
+    const effectiveStreamConfig = agentData.streamConfig
+      ? {
+          ...agentData.streamConfig,
+          envelope: {
+            ...agentData.streamConfig.envelope,
+            includeUsage: isTokenUsageActive,
+          },
+        }
+      : isTokenUsageActive
+      ? {
+          enabled: true,
+          envelope: {
+            includeUsage: true,
+          },
+        }
+      : undefined;
 
     outputDelta.llmRequest = {
       provider: effectiveProvider,
@@ -437,27 +498,38 @@ export async function executeAgentNode(
       stream: streamEnabled,
       systemPrompt: effectivePrompt,
       messageCount: messages.length,
+      ...(isTokenUsageActive && tokenUsage ? { usage: tokenUsage } : {}),
     };
     nodeLlmRequestMap.set(node.id, outputDelta.llmRequest);
 
     if (streamBatches && streamBatches.length > 0) {
       const runId = `run_${threadId.slice(0, 8)}_${Math.random().toString(36).slice(2, 6)}`;
-      const stripEmpty = agentData.streamConfig?.envelope?.stripEmptyDeltas !== false;
+      const stripEmpty = effectiveStreamConfig?.envelope?.stripEmptyDeltas !== false;
       const filtered = streamBatches.filter((b) => (stripEmpty ? Boolean(b.delta) : true));
-      const formattedBatches: StreamBatchItem[] = filtered.map((b, newIdx) => ({
-        ...b,
-        index: newIdx,
-        formatted: formatStreamingBatch({
-          batch: b,
-          nodeName,
-          runId,
-          streamConfig: agentData.streamConfig,
-        }),
-      }));
+      const formattedBatches: StreamBatchItem[] = filtered.map((b, newIdx) => {
+        const rawWithUsage =
+          isTokenUsageActive && tokenUsage
+            ? (b.raw && typeof b.raw === "object" ? { ...b.raw, usage: tokenUsage } : { usage: tokenUsage })
+            : b.raw;
+        const batchItem = { ...b, raw: rawWithUsage };
+        return {
+          ...batchItem,
+          index: newIdx,
+          formatted: formatStreamingBatch({
+            batch: batchItem,
+            nodeName,
+            runId,
+            streamConfig: effectiveStreamConfig,
+          }),
+        };
+      });
 
       nodeStreamBatchesMap.set(node.id, formattedBatches);
       outputDelta.streamBatches = formattedBatches;
       outputDelta.streamBatchCount = formattedBatches.length;
+      if (effectiveStreamConfig) {
+        outputDelta.streamConfig = effectiveStreamConfig;
+      }
     }
 
     const llmOut = (outputDelta.structuredResponse || responseText) as StepStateValue;

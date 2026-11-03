@@ -53,6 +53,9 @@ export function buildIndividualLLMFile(
     configLines.push(`  temperature: ${d.temperature},`);
   if (d.maxTokens !== undefined)
     configLines.push(`  maxTokens: ${d.maxTokens},`);
+  if (d.provider === "openai" || d.provider === "groq" || d.provider === "azure") {
+    configLines.push(`  streamUsage: true,`);
+  }
 
   if (
     (d.provider === "ollama" || d.provider === "custom") &&

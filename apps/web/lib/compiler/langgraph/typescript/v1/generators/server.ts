@@ -4,6 +4,7 @@ import { toCamelCase, toPascalCase, escapeStr } from "../utils";
 export function buildServerFile(ctx: CompileContext, routes: RouteEndpoint[]): string {
   const graphVarName = `${toCamelCase(ctx.graphId)}Graph`;
   const hasMemory = ctx.hasMemory;
+  const trackTokenUsage = ctx.trackTokenUsage !== false;
 
   // Deduplicate routes by path+method so we don't emit the same route twice
   const seen = new Set<string>();
@@ -17,6 +18,7 @@ export function buildServerFile(ctx: CompileContext, routes: RouteEndpoint[]): s
   const routeHandlers = deduped
     .map((route) => {
       const isEvent = route.kind === "event";
+      const trackTokenUsage = ctx.trackTokenUsage !== false;
       const payloadMap = route.payloadMapping ?? {};
       const stateChannels = ctx.input.stateChannels || [];
 
@@ -128,6 +130,7 @@ export function buildServerFile(ctx: CompileContext, routes: RouteEndpoint[]): s
       const streamOptions = { streamMode: "messages"${configLine ? `, ${configLine.replace(/^, /, "")}` : ""} };
       const stream = await ${graphVarName}.stream(state, streamOptions);
       activeStream = stream;
+      ${trackTokenUsage ? `const tokenUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };\n` : ""}
 
       for await (const chunk of stream) {
         if (isAborted) break;
@@ -145,7 +148,12 @@ export function buildServerFile(ctx: CompileContext, routes: RouteEndpoint[]): s
           const nodeName = metadata && typeof metadata === "object" && "langgraph_node" in metadata
             ? metadata.langgraph_node
             : undefined;
-          let reasoningToken: string | undefined = undefined;
+          ${trackTokenUsage ? `if (messageChunk && typeof messageChunk === "object" && messageChunk.usage_metadata) {
+            const u = messageChunk.usage_metadata;
+            tokenUsage.prompt_tokens = u.input_tokens ?? tokenUsage.prompt_tokens;
+            tokenUsage.completion_tokens = u.output_tokens ?? tokenUsage.completion_tokens;
+            tokenUsage.total_tokens = u.total_tokens ?? (tokenUsage.prompt_tokens + tokenUsage.completion_tokens);
+          }\n          ` : ""}let reasoningToken: string | undefined = undefined;
           let textToken: string | undefined = undefined;
           if (messageChunk && typeof messageChunk === "object") {
             if (Array.isArray(messageChunk.contentBlocks)) {
@@ -177,7 +185,7 @@ export function buildServerFile(ctx: CompileContext, routes: RouteEndpoint[]): s
             res.write(\`data: \${JSON.stringify({ type: "reasoning", reasoning: reasoningToken, node: nodeName })}\\n\\n\`);
           }
           if (token !== undefined && token !== "") {
-            res.write(\`data: \${JSON.stringify({ token, node: nodeName })}\\n\\n\`);
+            ${trackTokenUsage ? `tokenUsage.completion_tokens += 1;\n            tokenUsage.total_tokens = tokenUsage.input_tokens + tokenUsage.completion_tokens;\n            ` : ""}res.write(\`data: \${JSON.stringify({ token, node: nodeName })}\\n\\n\`);
           }
         } else if (mode === "updates") {
           const nodeName = typeof payload === "object" && payload !== null ? Object.keys(payload)[0] : undefined;
@@ -190,7 +198,7 @@ export function buildServerFile(ctx: CompileContext, routes: RouteEndpoint[]): s
         }
       }
       if (!isAborted) {
-        res.write("data: [DONE]\\n\\n");
+        ${trackTokenUsage ? `res.write(\`data: \${JSON.stringify({ type: "usage", usage: tokenUsage })}\\n\\n\`);\n        ` : ""}res.write("data: [DONE]\\n\\n");
         res.end();
       }
     } catch (err) {
@@ -246,8 +254,8 @@ export function buildServerFile(ctx: CompileContext, routes: RouteEndpoint[]): s
   app.${route.method.toLowerCase()}(${JSON.stringify(normalizedRoutePath)}, async (req: Request, res: Response) => {
     try {${threadIdLine}
       const state: Partial<${toPascalCase(ctx.graphId)}StateUpdateType> = ${stateInit};${preInvokeBlock}
-      const result = await ${graphVarName}.invoke(state${configLine});${postInvokeBlock}
-      res.json({ ok: true, ${hasMemory ? `thread_id: threadId, ` : ""}result: ${resultExpr} });
+      ${trackTokenUsage ? `const tokenHandler = new TokenUsageHandler();\n      ` : ""}const result = await ${graphVarName}.invoke(state${trackTokenUsage ? (configLine ? `, { ...${configLine.replace(/^, /, "")}, callbacks: [tokenHandler] }` : `, { callbacks: [tokenHandler] }`) : configLine});${postInvokeBlock}
+      ${trackTokenUsage ? `const usage = extractTokenUsage(result, tokenHandler);\n      ` : ""}res.json({ ok: true, ${hasMemory ? `thread_id: threadId, ` : ""}result: ${resultExpr}${trackTokenUsage ? `, usage` : ""} });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error("[${route.method} ${normalizedRoutePath}] error:", message);
@@ -264,8 +272,8 @@ export function buildServerFile(ctx: CompileContext, routes: RouteEndpoint[]): s
 
   return `import "dotenv/config";
 import express, { type Request, type Response } from "express";
-${hasMemory ? `import crypto from "node:crypto";\n` : ""}import { ${graphVarName} } from "./graph";
-import type { ${toPascalCase(ctx.graphId)}StateUpdateType } from "./state";
+${trackTokenUsage ? `import { BaseCallbackHandler } from "@langchain/core/callbacks/base";\nimport type { LLMResult } from "@langchain/core/outputs";\n` : ""}${hasMemory ? `import crypto from "node:crypto";\n` : ""}import { ${graphVarName} } from "./graph";
+import type { ${toPascalCase(ctx.graphId)}StateUpdateType } from "./state";${trackTokenUsage ? `\n\n/**\n * Captures token usage across all graph LLM calls using LangChain callback handlers.\n */\nclass TokenUsageHandler extends BaseCallbackHandler {\n  name = "token_usage_handler";\n  input_tokens = 0;\n  output_tokens = 0;\n  total_tokens = 0;\n\n  handleLLMEnd(output: LLMResult) {\n    if (!output || !output.generations) return;\n    for (const gens of output.generations) {\n      for (const gen of gens) {\n        const usage = (gen as any).message?.usage_metadata || (gen as any).generationInfo?.usage_metadata;\n        if (usage) {\n          this.input_tokens += usage.input_tokens ?? usage.prompt_tokens ?? 0;\n          this.output_tokens += usage.output_tokens ?? usage.completion_tokens ?? 0;\n          this.total_tokens += usage.total_tokens ?? ((usage.input_tokens ?? 0) + (usage.output_tokens ?? 0));\n        }\n      }\n    }\n  }\n\n  get usage() {\n    return {\n      input_tokens: this.input_tokens,\n      output_tokens: this.output_tokens,\n      total_tokens: this.total_tokens || (this.input_tokens + this.output_tokens),\n      prompt_tokens: this.input_tokens,\n      completion_tokens: this.output_tokens,\n    };\n  }\n}\n\n/**\n * Extracts token usage by combining callback statistics and state AIMessage usage_metadata.\n */\nfunction extractTokenUsage(result: unknown, handler?: TokenUsageHandler) {\n  if (handler && handler.total_tokens > 0) {\n    return handler.usage;\n  }\n  if (!result || typeof result !== "object") return undefined;\n  if ("usage" in result && (result as any).usage) return (result as any).usage;\n  if (Array.isArray((result as any).messages)) {\n    const totals = (result as any).messages\n      .filter((m: any) => m && (m._getType?.() === "ai" || m.role === "assistant"))\n      .reduce(\n        (acc: any, m: any) => {\n          const u = m.usage_metadata || m.response_metadata?.tokenUsage || m.response_metadata?.usage;\n          const inp = u?.input_tokens ?? u?.prompt_tokens ?? 0;\n          const out = u?.output_tokens ?? u?.completion_tokens ?? 0;\n          const tot = u?.total_tokens ?? (inp + out);\n          return {\n            input_tokens: acc.input_tokens + inp,\n            output_tokens: acc.output_tokens + out,\n            total_tokens: acc.total_tokens + tot,\n            prompt_tokens: acc.input_tokens + inp,\n            completion_tokens: acc.output_tokens + out,\n          };\n        },\n        { input_tokens: 0, output_tokens: 0, total_tokens: 0, prompt_tokens: 0, completion_tokens: 0 }\n      );\n    if (totals.total_tokens > 0) return totals;\n  }\n  return undefined;\n}` : ""}
 
 /**
  * HTTP Server for ${agentLabel}

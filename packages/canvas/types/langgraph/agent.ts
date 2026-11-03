@@ -125,6 +125,8 @@ export interface LangGraphAgentDefinition {
     enabled?: boolean;
   };
   streamConfig?: LangGraphAgentStreamConfig;
+  trackTokenUsage?: boolean;
+  langGraphTrackTokenUsage?: boolean;
   responseFormat?: LangGraphAgentResponseFormatConfig;
   memoryConfig?: LangGraphAgentMemoryConfig;
   stateUpdates?: LangGraphStateUpdateItem[];
@@ -235,6 +237,8 @@ export interface CanvasLangGraphNodeData {
   outputPorts?: LangGraphOutputPort[];
   outputChannels?: OutputChannelConfig[];
   memoryConfig?: LangGraphMemoryConfig;
+  trackTokenUsage?: boolean;
+  langGraphTrackTokenUsage?: boolean;
   customLlmNodes?: {
     id: string;
     label: string;

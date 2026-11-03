@@ -1,5 +1,6 @@
 import React, { useEffect } from "react";
-import { Bot, ChevronsUpDown, ChevronsDownUp, Trash2, Zap } from "lucide-react";
+import { Bot, ChevronsUpDown, ChevronsDownUp, Trash2, Zap, Coins } from "lucide-react";
+import { DEFAULT_STREAM_ENVELOPE } from "../../../constants";
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
 import { LocalInput } from "../../../../../common";
@@ -151,6 +152,37 @@ export function AgentPipelineHeader({
           <span>State Updates</span>
           <span className="text-[9px] opacity-75 font-mono">
             ({isStateUpdatesEnabled ? `${(selectedAgentData.stateUpdates || []).length}` : "off"})
+          </span>
+        </button>
+
+        {/* Token Usage Toggle Pill */}
+        <button
+          type="button"
+          onClick={() => {
+            const nextVal = !(selectedAgentData.trackTokenUsage !== false && selectedAgentData.streamConfig?.envelope?.includeUsage !== false);
+            onUpdateAgent({
+              trackTokenUsage: nextVal,
+              streamConfig: {
+                ...(selectedAgentData.streamConfig || {}),
+                envelope: {
+                  ...DEFAULT_STREAM_ENVELOPE,
+                  ...(selectedAgentData.streamConfig?.envelope || {}),
+                  includeUsage: nextVal,
+                },
+              },
+            });
+          }}
+          className={`flex items-center gap-1 px-1.5 py-0.5 rounded transition-all cursor-pointer shrink-0 border ${
+            selectedAgentData.trackTokenUsage !== false && selectedAgentData.streamConfig?.envelope?.includeUsage !== false
+              ? "bg-amber-500/15 text-amber-300 border-amber-500/30 font-semibold"
+              : "bg-background/40 hover:bg-secondary/40 text-muted-foreground border-border/40 opacity-60"
+          }`}
+          title="Toggle Token Usage Tracking ON/OFF (Click to disable or enable)"
+        >
+          <Coins className="w-2.5 h-2.5 text-amber-400" />
+          <span>Usage</span>
+          <span className="text-[9px] font-mono">
+            ({selectedAgentData.trackTokenUsage !== false && selectedAgentData.streamConfig?.envelope?.includeUsage !== false ? "on" : "off"})
           </span>
         </button>
       </div>

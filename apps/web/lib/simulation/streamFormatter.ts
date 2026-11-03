@@ -41,10 +41,20 @@ export function formatStreamingBatch(args: {
     includeTool: true,
     includeInputs: false,
     includeOutput: true,
-    includeUsage: false,
+    includeUsage: true,
     flattenPayload: false,
     stripEmptyDeltas: true,
     ...streamConfig?.envelope,
+  };
+
+  const rawUsage = (batch.raw as { usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } })?.usage;
+  const promptTokens = rawUsage?.prompt_tokens ?? Math.max(1, Math.round((batch.content?.length || 1) / 4));
+  const completionTokens = rawUsage?.completion_tokens ?? (batch.index + 1);
+  const totalTokens = rawUsage?.total_tokens ?? (promptTokens + completionTokens);
+  const tokenUsage = {
+    prompt_tokens: promptTokens,
+    completion_tokens: completionTokens,
+    total_tokens: totalTokens,
   };
 
   const mode: LangGraphStreamTransformerMode =
@@ -73,6 +83,9 @@ export function formatStreamingBatch(args: {
     }
     if (envelope.includeTimestamp) {
       chunkObj.created = Math.floor(new Date(batch.timestamp).getTime() / 1000);
+    }
+    if (envelope.includeUsage !== false) {
+      chunkObj.usage = tokenUsage;
     }
     return chunkObj;
   }
@@ -112,6 +125,9 @@ export function formatStreamingBatch(args: {
   }
   if (envelope.includeContent) {
     payload.content = batch.content;
+  }
+  if (envelope.includeUsage !== false) {
+    payload.usage = tokenUsage;
   }
 
   if (envelope.flattenPayload) {

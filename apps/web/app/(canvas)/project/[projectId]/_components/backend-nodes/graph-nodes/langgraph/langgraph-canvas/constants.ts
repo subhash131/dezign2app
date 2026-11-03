@@ -210,7 +210,7 @@ export const DEFAULT_STREAM_ENVELOPE = {
   includeTool: true,
   includeInputs: false,
   includeOutput: true,
-  includeUsage: false,
+  includeUsage: true,
   flattenPayload: false,
   stripEmptyDeltas: true,
 };
