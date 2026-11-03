@@ -256,6 +256,11 @@ export const safePipelineStepSchema = z.object({
   langGraphAction: z.enum(["invoke", "history"]).optional(),
   langGraphHistoryFormat: z.enum(["chat_messages", "full_state"]).optional(),
   langGraphHistoryExcludeToolMessages: z.boolean().optional(),
+  langGraphHistoryPaginationEnabled: z.boolean().optional(),
+  langGraphHistoryLimitSource: z.string().optional(),
+  langGraphHistoryLimitDefault: z.number().optional(),
+  langGraphHistoryBeforeSource: z.string().optional(),
+  langGraphHistorySelect: z.array(z.string()).optional(),
   langGraphMessagesConfig: z
     .object({
       mode: z.enum(["single", "bulk"]).optional(),

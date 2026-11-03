@@ -153,6 +153,33 @@ describe("Convex canvasValidators exact schema", () => {
     expect(parsed.success).toBe(true);
   });
 
+  it("successfully parses langgraph_invoke steps with pagination fields in safePipelineStepSchema", () => {
+    const lgHistoryStep = {
+      id: "hist-step-paginated",
+      name: "chatHistory",
+      type: "langgraph_invoke",
+      langGraphAction: "history" as const,
+      langGraphHistoryFormat: "chat_messages" as const,
+      langGraphHistoryExcludeToolMessages: true,
+      langGraphHistoryPaginationEnabled: true,
+      langGraphHistoryLimitSource: "query.limit",
+      langGraphHistoryLimitDefault: 10,
+      langGraphHistoryBeforeSource: "query.before",
+      langGraphTargetNodeId: "agent-node-1",
+      langGraphThreadIdSource: "params.threadId",
+      outputVariable: "chatHistory",
+    };
+
+    const parsed = safePipelineStepSchema.safeParse(lgHistoryStep);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect((parsed.data as any).langGraphHistoryPaginationEnabled).toBe(true);
+      expect((parsed.data as any).langGraphHistoryLimitSource).toBe("query.limit");
+      expect((parsed.data as any).langGraphHistoryLimitDefault).toBe(10);
+      expect((parsed.data as any).langGraphHistoryBeforeSource).toBe("query.before");
+    }
+  });
+
   it("backendEndpointDataValidator, backendEventDataValidator, backendNodeDataValidator are valid Convex validators", () => {
     expect(backendEndpointDataValidator).toBeDefined();
     expect(backendEventDataValidator).toBeDefined();
