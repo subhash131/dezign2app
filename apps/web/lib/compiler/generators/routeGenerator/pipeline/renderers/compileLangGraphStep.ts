@@ -173,7 +173,9 @@ export function renderLangGraphInvokeStep(
       rawLines.push("  " + outputVariable + "Snapshots.push(snap);");
       rawLines.push("}");
       rawLines.push("const " + snapVar + " = " + outputVariable + "Snapshots[0] || (await " + graphVar + ".getState({ configurable: { thread_id: " + threadAccessor + " } }));");
-      rawLines.push("let " + outputVariable + "NextCursor = " + outputVariable + "Snapshots[" + outputVariable + "Snapshots.length - 1]?.config?.configurable?.checkpoint_id ?? null;");
+      if (format === "full_state") {
+        rawLines.push("const " + outputVariable + "NextCursor = " + outputVariable + "Snapshots[" + outputVariable + "Snapshots.length - 1]?.config?.configurable?.checkpoint_id ?? null;");
+      }
     } else {
       rawLines.push("const " + snapVar + " = await " + graphVar + ".getState({");
       rawLines.push("  configurable: { thread_id: " + threadAccessor + " },");
@@ -194,19 +196,13 @@ export function renderLangGraphInvokeStep(
       }
       rawLines.push("};");
     } else {
-      const excludeTools = step.langGraphHistoryExcludeToolMessages !== false;
       rawLines.push("const " + outputVariable + "RawMessages = " + snapVar + "?.values?.messages ?? [];");
       rawLines.push("const " + outputVariable + "AllMessages = (Array.isArray(" + outputVariable + "RawMessages) ? " + outputVariable + "RawMessages : [])");
-      if (excludeTools) {
-        rawLines.push("  .filter((m) => {");
-        rawLines.push("    const t = typeof m.getType === \"function\" ? m.getType() : m.role;");
-        rawLines.push("    return t === \"human\" || t === \"user\" || t === \"ai\" || t === \"assistant\";");
-        rawLines.push("  })");
-      }
       rawLines.push("  .map((m) => {");
-      rawLines.push("    const t = typeof m.getType === \"function\" ? m.getType() : m.role;");
-      rawLines.push("    const role = (t === \"human\" || t === \"user\") ? \"user\" : (t === \"ai\" || t === \"assistant\") ? \"assistant\" : String(t || \"assistant\");");
-            rawLines.push("    let content = \"\";");
+      rawLines.push("    const t = typeof m.getType === \"function\" ? m.getType() : typeof m._getType === \"function\" ? m._getType() : (m.type || m.role);");
+      rawLines.push("    const isTool = t === \"tool\" || t === \"tool_message\" || t === \"ToolMessage\" || Boolean(m.tool_call_id) || m.role === \"tool\";");
+      rawLines.push("    const role = isTool ? \"tool\" : (t === \"human\" || t === \"user\") ? \"user\" : (t === \"ai\" || t === \"assistant\") ? \"assistant\" : (t === \"system\") ? \"system\" : String(t || \"assistant\");");
+      rawLines.push("    let content = \"\";");
       rawLines.push("    if (typeof m.content === \"string\") {");
       rawLines.push("      content = m.content;");
       rawLines.push("    } else if (Array.isArray(m.content)) {");
@@ -222,7 +218,21 @@ export function renderLangGraphInvokeStep(
       rawLines.push("    } else {");
       rawLines.push("      content = String(m.content ?? \"\");");
       rawLines.push("    }");
-      rawLines.push("    return { id: m.id || (typeof crypto !== \"undefined\" && typeof crypto.randomUUID === \"function\" ? crypto.randomUUID() : String(Date.now())), role, content };");
+      rawLines.push("    const id = (typeof m.id === \"string\" && m.id) ? m.id : (typeof crypto !== \"undefined\" && typeof crypto.randomUUID === \"function\" ? crypto.randomUUID() : String(Date.now()));");
+      rawLines.push("    const toolCalls = (m.tool_calls && Array.isArray(m.tool_calls) && m.tool_calls.length > 0) ? m.tool_calls : (m.additional_kwargs?.tool_calls && Array.isArray(m.additional_kwargs.tool_calls) && m.additional_kwargs.tool_calls.length > 0 ? m.additional_kwargs.tool_calls : undefined);");
+      rawLines.push("    const toolCallId = m.tool_call_id || m.toolCallId || m.kwargs?.tool_call_id;");
+      rawLines.push("    const toolName = m.name || m.kwargs?.name;");
+      rawLines.push("    const toolStatus = m.status || m.kwargs?.status;");
+      rawLines.push("    return {");
+      rawLines.push("      id,");
+      rawLines.push("      role,");
+      rawLines.push("      content,");
+      rawLines.push("      ...(toolCalls ? { tool_calls: toolCalls } : {}),");
+      rawLines.push("      ...(toolCallId ? { tool_call_id: toolCallId } : {}),");
+      rawLines.push("      ...(toolName ? { name: toolName } : {}),");
+      rawLines.push("      ...(toolStatus ? { status: toolStatus } : {}),");
+      rawLines.push("      ...(m.artifact !== undefined ? { artifact: m.artifact } : {}),");
+      rawLines.push("    };");
       rawLines.push("  });");
 
       if (isPaginated) {
@@ -235,7 +245,7 @@ export function renderLangGraphInvokeStep(
         rawLines.push("}");
         rawLines.push("const " + outputVariable + "StartIndex = Math.max(0, " + outputVariable + "EndIndex - " + outputVariable + "Limit);");
         rawLines.push("const " + outputVariable + "Messages = " + outputVariable + "AllMessages.slice(" + outputVariable + "StartIndex, " + outputVariable + "EndIndex);");
-        rawLines.push(outputVariable + "NextCursor = " + outputVariable + "StartIndex > 0 ? (" + outputVariable + "Messages[0]?.id ?? null) : null;");
+        rawLines.push("const " + outputVariable + "NextCursor = " + outputVariable + "StartIndex > 0 ? (" + outputVariable + "Messages[0]?.id ?? null) : null;");
         rawLines.push("const " + outputVariable + " = {");
         rawLines.push("  messages: " + outputVariable + "Messages,");
         rawLines.push("  pagination: {");

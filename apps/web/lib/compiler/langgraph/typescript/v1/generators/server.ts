@@ -295,6 +295,129 @@ export function buildServerFile(ctx: CompileContext, routes: RouteEndpoint[]): s
   });`;
       }
 
+      if (route.action === "history") {
+        const isPaginated = Boolean(route.historyPaginationEnabled);
+        const format = route.historyFormat || "chat_messages";
+
+        let threadIdResolution = `const threadId = String(req.params?.threadId ?? req.query?.thread_id ?? req.query?.threadId ?? req.headers?.["x-thread-id"] ?? req.body?.thread_id ?? "");`;
+        if (route.threadIdSource) {
+          if (route.threadIdSource.startsWith("params.")) {
+            const p = route.threadIdSource.replace("params.", "");
+            threadIdResolution = `const threadId = String(req.params?.[${JSON.stringify(p)}] ?? req.params?.threadId ?? req.query?.thread_id ?? req.headers?.["x-thread-id"] ?? "");`;
+          } else if (route.threadIdSource.startsWith("query.")) {
+            const q = route.threadIdSource.replace("query.", "");
+            threadIdResolution = `const threadId = String(req.query?.[${JSON.stringify(q)}] ?? req.query?.thread_id ?? req.params?.threadId ?? req.headers?.["x-thread-id"] ?? "");`;
+          } else if (route.threadIdSource.startsWith("headers.")) {
+            const h = route.threadIdSource.replace("headers.", "").toLowerCase();
+            threadIdResolution = `const threadId = String(req.headers?.[${JSON.stringify(h)}] ?? req.headers?.["x-thread-id"] ?? req.params?.threadId ?? req.query?.thread_id ?? "");`;
+          } else if (route.threadIdSource.startsWith("body.")) {
+            const b = route.threadIdSource.replace("body.", "");
+            threadIdResolution = `const threadId = String(req.body?.[${JSON.stringify(b)}] ?? req.params?.threadId ?? req.query?.thread_id ?? "");`;
+          }
+        }
+
+        return `
+  ${comment}
+  app.${route.method.toLowerCase()}(${JSON.stringify(normalizedRoutePath)}, async (req: Request, res: Response) => {
+    try {
+      ${threadIdResolution}
+      if (!threadId) {
+        return res.status(400).json({ ok: false, error: "Missing thread_id in request" });
+      }
+      ${isPaginated ? `
+      const limit = Math.max(1, Number(req.query.limit) || 20);
+      const beforeRaw = req.query.before;
+      const before = (typeof beforeRaw === "string" && beforeRaw.trim() && beforeRaw !== "0" && beforeRaw !== "null" && beforeRaw !== "undefined")
+        ? { configurable: { checkpoint_id: beforeRaw.trim() } }
+        : undefined;
+
+      const historySnapshots: any[] = [];
+      for await (const snap of ${graphVarName}.getStateHistory(
+        { configurable: { thread_id: threadId } },
+        { limit, before }
+      )) {
+        historySnapshots.push(snap);
+      }
+      const snapshot = historySnapshots[0] || (await ${graphVarName}.getState({ configurable: { thread_id: threadId } }));
+      const nextCursor = historySnapshots[historySnapshots.length - 1]?.config?.configurable?.checkpoint_id ?? null;
+      ` : `
+      const snapshot = await ${graphVarName}.getState({ configurable: { thread_id: threadId } });
+      `}
+      ${format === "full_state" ? `
+      res.json({
+        ok: true,
+        thread_id: threadId,
+        state: snapshot?.values || {},
+        next: snapshot?.next || [],
+        ${isPaginated ? `pagination: { limit, before: req.query.before ?? null, next_cursor: nextCursor },` : ""}
+      });
+      ` : `
+      const rawMessages = (snapshot?.values && typeof snapshot.values === "object")
+        ? Reflect.get(snapshot.values, "messages") ?? []
+        : [];
+
+      const allMessages = (Array.isArray(rawMessages) ? rawMessages : [])
+        .map((m) => {
+          const t = typeof m.getType === "function" ? m.getType() : typeof m._getType === "function" ? m._getType() : (m.type || m.role);
+          const isTool = t === "tool" || t === "tool_message" || t === "ToolMessage" || Boolean(m.tool_call_id) || m.role === "tool";
+          const role = isTool ? "tool" : (t === "human" || t === "user") ? "user" : (t === "ai" || t === "assistant") ? "assistant" : (t === "system") ? "system" : String(t || "assistant");
+          let content = "";
+          if (typeof m.content === "string") {
+            content = m.content;
+          } else if (Array.isArray(m.content)) {
+            for (const item of m.content) {
+              if (typeof item === "string") content += item;
+              else if (item && typeof item === "object" && "text" in item && typeof item.text === "string") content += item.text;
+              else content += JSON.stringify(item);
+            }
+          } else {
+            content = String(m.content ?? "");
+          }
+          const id = (typeof m.id === "string" && m.id) ? m.id : (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : String(Date.now()));
+          const toolCalls = (m.tool_calls && Array.isArray(m.tool_calls) && m.tool_calls.length > 0) ? m.tool_calls : (m.additional_kwargs?.tool_calls && Array.isArray(m.additional_kwargs.tool_calls) && m.additional_kwargs.tool_calls.length > 0 ? m.additional_kwargs.tool_calls : undefined);
+          const toolCallId = m.tool_call_id || m.toolCallId || m.kwargs?.tool_call_id;
+          const toolName = m.name || m.kwargs?.name;
+          const toolStatus = m.status || m.kwargs?.status;
+          return {
+            id,
+            role,
+            content,
+            ...(toolCalls ? { tool_calls: toolCalls } : {}),
+            ...(toolCallId ? { tool_call_id: toolCallId } : {}),
+            ...(toolName ? { name: toolName } : {}),
+            ...(toolStatus ? { status: toolStatus } : {}),
+            ...(m.artifact !== undefined ? { artifact: m.artifact } : {}),
+          };
+        });
+
+      ${isPaginated ? `
+      res.json({
+        ok: true,
+        messages: allMessages,
+        pagination: {
+          limit,
+          before: req.query.before ?? null,
+          next_cursor: nextCursor,
+        },
+      });
+      ` : `
+      res.json({
+        ok: true,
+        thread_id: threadId,
+        messages: allMessages,
+      });
+      `}
+      `}
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("[${route.method} ${normalizedRoutePath}] error:", message);
+      if (!res.headersSent) {
+        res.status(500).json({ ok: false, error: message });
+      }
+    }
+  });`;
+      }
+
       // Default Sync REST Response Mode
       const resultExpr =
         route.responseOutputMode === "selected" &&
@@ -367,14 +490,49 @@ app.get("/api/threads/:threadId/history", async (req: Request, res: Response) =>
     const snapshot = historySnapshots[0] || (await ${graphVarName}.getState({ configurable: { thread_id: threadId } }));
     const nextCursor = historySnapshots[historySnapshots.length - 1]?.config?.configurable?.checkpoint_id ?? null;
 
-    const messages = (snapshot?.values && typeof snapshot.values === "object")
+    const rawMessages = (snapshot?.values && typeof snapshot.values === "object")
       ? Reflect.get(snapshot.values, "messages") ?? []
       : [];
+
+    const formattedMessages = (Array.isArray(rawMessages) ? rawMessages : [])
+      .map((m) => {
+        const t = typeof m.getType === "function" ? m.getType() : typeof m._getType === "function" ? m._getType() : (m.type || m.role);
+        const isTool = t === "tool" || t === "tool_message" || t === "ToolMessage" || Boolean(m.tool_call_id) || m.role === "tool";
+        const role = isTool ? "tool" : (t === "human" || t === "user") ? "user" : (t === "ai" || t === "assistant") ? "assistant" : (t === "system") ? "system" : String(t || "assistant");
+        let content = "";
+        if (typeof m.content === "string") {
+          content = m.content;
+        } else if (Array.isArray(m.content)) {
+          for (const item of m.content) {
+            if (typeof item === "string") content += item;
+            else if (item && typeof item === "object" && "text" in item && typeof item.text === "string") content += item.text;
+            else content += JSON.stringify(item);
+          }
+        } else {
+          content = String(m.content ?? "");
+        }
+        const id = (typeof m.id === "string" && m.id) ? m.id : (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : String(Date.now()));
+        const toolCalls = (m.tool_calls && Array.isArray(m.tool_calls) && m.tool_calls.length > 0) ? m.tool_calls : (m.additional_kwargs?.tool_calls && Array.isArray(m.additional_kwargs.tool_calls) && m.additional_kwargs.tool_calls.length > 0 ? m.additional_kwargs.tool_calls : undefined);
+        const toolCallId = m.tool_call_id || m.toolCallId || m.kwargs?.tool_call_id;
+        const toolName = m.name || m.kwargs?.name;
+        const toolStatus = m.status || m.kwargs?.status;
+        return {
+          id,
+          role,
+          content,
+          ...(toolCalls ? { tool_calls: toolCalls } : {}),
+          ...(toolCallId ? { tool_call_id: toolCallId } : {}),
+          ...(toolName ? { name: toolName } : {}),
+          ...(toolStatus ? { status: toolStatus } : {}),
+          ...(m.artifact !== undefined ? { artifact: m.artifact } : {}),
+        };
+      });
+
     res.json({
       ok: true,
       thread_id: threadId,
       state: snapshot?.values || {},
-      messages: messages || [],
+      messages: formattedMessages,
       next: snapshot?.next || [],
       pagination: {
         limit,
