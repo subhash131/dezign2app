@@ -240,7 +240,7 @@ export function getDb() {
 }
 
 export const db = {
-  query: (sql: string, ...params: unknown[]) => getDb().prepare(sql).all(...params),
+  query: (sql: string, ...params: (string | number | boolean | null | undefined)[]) => getDb().prepare(sql).all(...params),
 };
 `;
   }
@@ -259,7 +259,7 @@ export function getDbPool(): Pool {
 }
 
 export const db = {
-  query: (text: string, params?: unknown[]) => getDbPool().query(text, params),
+  query: (text: string, params?: (string | number | boolean | null | undefined)[]) => getDbPool().query(text, params),
 };
 `;
 }

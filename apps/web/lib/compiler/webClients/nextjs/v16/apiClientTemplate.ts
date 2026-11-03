@@ -37,7 +37,7 @@ export interface ApiStreamResult {
   custom?: any[];
   values?: any;
   toolCalls?: any[];
-  usage?: { input_tokens: number; output_tokens: number; total_tokens: number };
+  usage?: { input_tokens: number; output_tokens: number; total_tokens: number; reasoning_tokens?: number };
   threadId?: string;
   streamed: true;
   statusText?: string;
@@ -157,7 +157,7 @@ export async function executeApiAction<TData = unknown, TBody = unknown>(
         const updates: Array<{ node?: string; data: any }> = [];
         const custom: any[] = [];
         const toolCalls: any[] = [];
-        let latestUsage: { input_tokens: number; output_tokens: number; total_tokens: number } | undefined = undefined;
+        let latestUsage: { input_tokens: number; output_tokens: number; total_tokens: number; reasoning_tokens?: number } | undefined = undefined;
         let latestValues: any = undefined;
         let lastSessionId: string | undefined = undefined;
         let isDone = false;

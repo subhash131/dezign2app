@@ -100,7 +100,7 @@ export function buildAgentNodeFile(
 
     const isStructured = Boolean(d.responseFormat?.enabled);
     if (isStructured && hasLLM) {
-      bodyLines.push(`  let responseParsed: Record<string, any> = {};`);
+      bodyLines.push(`  let responseParsed: Record<string, string | number | boolean | object | null> = {};`);
       bodyLines.push(`  try {`);
       bodyLines.push(
         `    const rawContent = typeof response?.content === "string" ? response.content : (typeof response === "object" && response !== null ? JSON.stringify(response) : "{}");`,
@@ -108,7 +108,7 @@ export function buildAgentNodeFile(
       bodyLines.push(`    responseParsed = JSON.parse(rawContent);`);
       bodyLines.push(`  } catch {`);
       bodyLines.push(
-        `    responseParsed = (typeof response === "object" && response !== null ? response : {}) as Record<string, any>;`,
+        `    responseParsed = {};`,
       );
       bodyLines.push(`  }`);
     }
@@ -239,7 +239,7 @@ export function buildAgentNodeFile(
         val === `${responseVar}Parsed` ||
         su.source === "structured_full"
       ) {
-        val = `[{ role: "assistant", content: JSON.stringify(${parsedVar}) }]`;
+        val = hasLLM ? `[${responseVar}]` : `[{ role: "assistant", content: JSON.stringify(${parsedVar}) }]`;
       } else if (
         val === "response.content" ||
         val === `${responseVar}?.content` ||
@@ -252,7 +252,11 @@ export function buildAgentNodeFile(
       }
     }
 
-    if (su.action && su.action !== "default") {
+    if (key === "messages") {
+      if (!returnEntries.some((e) => e.trim().startsWith("messages:"))) {
+        returnEntries.push(`    messages: ${val},`);
+      }
+    } else if (su.action && su.action !== "default") {
       if (isValueless) {
         returnEntries.push(`    ${key}: { action: "${su.action}" },`);
       } else {

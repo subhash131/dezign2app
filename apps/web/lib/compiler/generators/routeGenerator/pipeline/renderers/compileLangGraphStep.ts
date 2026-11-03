@@ -9,7 +9,7 @@ import { PipelineRenderContext } from "../types";
 import { resolveBinding } from "../sourceResolver";
 import { toVarName } from "../../../../utils";
 
-function isBlankOrQuotes(val: unknown): boolean {
+function isBlankOrQuotes(val: string | number | boolean | object | null | undefined): boolean {
   if (val === undefined || val === null) return true;
   if (typeof val === "string") {
     const trimmed = val.trim();
@@ -164,11 +164,12 @@ export function renderLangGraphInvokeStep(
         ...(systemAccessor
           ? [`  ...(${systemAccessor} ? [new SystemMessage(String(${systemAccessor}))] : []),`]
           : []),
-        `  ...${messagesVarName}Raw.map((m: any) => {`,
+        `  ...${messagesVarName}Raw.map((m) => {`,
         `    if (typeof m === "string") return new HumanMessage(m);`,
-        `    const content = m?.content ?? (typeof m === "object" ? JSON.stringify(m) : String(m ?? ""));`,
+        `    const content = m?.content ?? (typeof m === "object" && m !== null && "kwargs" in m && typeof m.kwargs === "object" && m.kwargs !== null && "content" in m.kwargs && typeof m.kwargs.content === "string" ? m.kwargs.content : (typeof m === "object" ? JSON.stringify(m) : String(m ?? "")));`,
         `    if (m?.role === "system") return new SystemMessage(content);`,
         `    if (m?.role === "assistant" || m?.role === "ai") return new AIMessage(content);`,
+        `    if (m?._getType?.() === "ai" || (Array.isArray(m?.id) && m.id.includes("AIMessage"))) return new AIMessage(content);`,
         `    return new HumanMessage(content);`,
         `  }),`,
         `];`,
@@ -307,7 +308,7 @@ export function renderLangGraphInvokeStep(
       rawLines.push(`  res.flushHeaders();`);
       rawLines.push(`}`);
       rawLines.push(
-        `const ${stepPrefix}TokenUsage = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };`,
+        `const ${stepPrefix}TokenUsage = { input_tokens: 0, output_tokens: 0, total_tokens: 0, reasoning_tokens: 0 };`,
         `let ${outputVariable}Content = "";`,
       );
       if (!isRaw) {
@@ -323,10 +324,8 @@ export function renderLangGraphInvokeStep(
       rawLines.push(`    break;`);
       rawLines.push(`  }`);
       rawLines.push(`  let mode: string = "messages";`);
-      rawLines.push(`  let payload: any = chunk;`);
-      rawLines.push(`  // Cast to any[] to avoid TypeScript strict tuple-length narrowing errors`);
-      rawLines.push(`  // (e.g. when subgraphs:true yields [namespace, mode, data] 3-tuples)`);
-      rawLines.push(`  const _c = chunk as any[];`);
+      rawLines.push(`  let payload = chunk;`);
+      rawLines.push(`  const _c = Array.isArray(chunk) ? chunk : undefined;`);
       rawLines.push(`  if (Array.isArray(_c) && _c.length === 3 && Array.isArray(_c[0]) && typeof _c[1] === "string" && ["messages", "updates", "custom", "values", "debug"].includes(_c[1])) {`);
       rawLines.push(`    // subgraphs:true + multi-mode: [namespace[], mode, data]`);
       rawLines.push(`    mode = _c[1];`);
@@ -360,10 +359,10 @@ export function renderLangGraphInvokeStep(
       rawLines.push(`          }`);
       rawLines.push(`        }`);
       rawLines.push(`      }`);
-      rawLines.push(`      if (!reasoningToken && messageChunk.additional_kwargs) {`);
-      rawLines.push(`        const kw = messageChunk.additional_kwargs as Record<string, any>;`);
-      rawLines.push(`        if (typeof kw.reasoning_content === "string") reasoningToken = kw.reasoning_content;`);
-      rawLines.push(`        else if (typeof kw.thinking === "string") reasoningToken = kw.thinking;`);
+      rawLines.push(`      if (!reasoningToken && typeof messageChunk === "object" && messageChunk !== null && "additional_kwargs" in messageChunk && typeof messageChunk.additional_kwargs === "object" && messageChunk.additional_kwargs !== null) {`);
+      rawLines.push(`        const kw = messageChunk.additional_kwargs;`);
+      rawLines.push(`        if ("reasoning_content" in kw && typeof kw.reasoning_content === "string") reasoningToken = kw.reasoning_content;`);
+      rawLines.push(`        else if ("thinking" in kw && typeof kw.thinking === "string") reasoningToken = kw.thinking;`);
       rawLines.push(`      }`);
       rawLines.push(`      if (!textToken) {`);
       rawLines.push(`        if (typeof messageChunk.content === "string") {`);
@@ -388,12 +387,64 @@ export function renderLangGraphInvokeStep(
       );
       if (langGraphTrackTokenUsage) {
         rawLines.push(
-          `    const _chunkUsage = (messageChunk as any)?.usage_metadata || (messageChunk as any)?.response_metadata?.token_usage;`,
+          `    let _chunkUsage: object | undefined = undefined;`,
+          `    let _rm: object | undefined = undefined;`,
+          `    if (messageChunk && typeof messageChunk === "object") {`,
+          `      if ("response_metadata" in messageChunk && typeof messageChunk.response_metadata === "object" && messageChunk.response_metadata !== null) {`,
+          `        _rm = messageChunk.response_metadata;`,
+          `      } else if ("kwargs" in messageChunk && typeof messageChunk.kwargs === "object" && messageChunk.kwargs !== null && "response_metadata" in messageChunk.kwargs && typeof messageChunk.kwargs.response_metadata === "object" && messageChunk.kwargs.response_metadata !== null) {`,
+          `        _rm = messageChunk.kwargs.response_metadata;`,
+          `      }`,
+          `      if ("usage_metadata" in messageChunk && typeof messageChunk.usage_metadata === "object" && messageChunk.usage_metadata !== null) {`,
+          `        _chunkUsage = messageChunk.usage_metadata;`,
+          `      } else if ("kwargs" in messageChunk && typeof messageChunk.kwargs === "object" && messageChunk.kwargs !== null && "usage_metadata" in messageChunk.kwargs && typeof messageChunk.kwargs.usage_metadata === "object" && messageChunk.kwargs.usage_metadata !== null) {`,
+          `        _chunkUsage = messageChunk.kwargs.usage_metadata;`,
+          `      } else if (_rm) {`,
+          `        if ("token_usage" in _rm && typeof _rm.token_usage === "object" && _rm.token_usage !== null) {`,
+          `          _chunkUsage = _rm.token_usage;`,
+          `        } else if ("tokenUsage" in _rm && typeof _rm.tokenUsage === "object" && _rm.tokenUsage !== null) {`,
+          `          _chunkUsage = _rm.tokenUsage;`,
+          `        } else if ("usage" in _rm && typeof _rm.usage === "object" && _rm.usage !== null) {`,
+          `          _chunkUsage = _rm.usage;`,
+          `        }`,
+          `      }`,
+          `    }`,
           `    if (_chunkUsage) {`,
-          `      const _in = Number(_chunkUsage.input_tokens ?? _chunkUsage.prompt_tokens ?? 0) || 0;`,
-          `      const _out = Number(_chunkUsage.output_tokens ?? _chunkUsage.completion_tokens ?? 0) || 0;`,
+          `      const _in = ("input_tokens" in _chunkUsage && typeof _chunkUsage.input_tokens === "number" ? _chunkUsage.input_tokens : ("prompt_tokens" in _chunkUsage && typeof _chunkUsage.prompt_tokens === "number" ? _chunkUsage.prompt_tokens : ("promptTokens" in _chunkUsage && typeof _chunkUsage.promptTokens === "number" ? _chunkUsage.promptTokens : ("inputTokens" in _chunkUsage && typeof _chunkUsage.inputTokens === "number" ? _chunkUsage.inputTokens : 0))));`,
+          `      const _out = ("output_tokens" in _chunkUsage && typeof _chunkUsage.output_tokens === "number" ? _chunkUsage.output_tokens : ("completion_tokens" in _chunkUsage && typeof _chunkUsage.completion_tokens === "number" ? _chunkUsage.completion_tokens : ("completionTokens" in _chunkUsage && typeof _chunkUsage.completionTokens === "number" ? _chunkUsage.completionTokens : ("outputTokens" in _chunkUsage && typeof _chunkUsage.outputTokens === "number" ? _chunkUsage.outputTokens : 0))));`,
+          `      let _reas = 0;`,
+          `      if ("reasoning_tokens" in _chunkUsage && typeof _chunkUsage.reasoning_tokens === "number") {`,
+          `        _reas = _chunkUsage.reasoning_tokens;`,
+          `      } else if ("reasoningTokens" in _chunkUsage && typeof _chunkUsage.reasoningTokens === "number") {`,
+          `        _reas = _chunkUsage.reasoningTokens;`,
+          `      } else if ("completion_tokens_details" in _chunkUsage && typeof _chunkUsage.completion_tokens_details === "object" && _chunkUsage.completion_tokens_details !== null) {`,
+          `        const _ctd: object = _chunkUsage.completion_tokens_details;`,
+          `        if ("reasoning_tokens" in _ctd && typeof _ctd.reasoning_tokens === "number") _reas = _ctd.reasoning_tokens;`,
+          `        else if ("reasoning" in _ctd && typeof _ctd.reasoning === "number") _reas = _ctd.reasoning;`,
+          `      } else if ("output_token_details" in _chunkUsage && typeof _chunkUsage.output_token_details === "object" && _chunkUsage.output_token_details !== null) {`,
+          `        const _otd: object = _chunkUsage.output_token_details;`,
+          `        if ("reasoning" in _otd && typeof _otd.reasoning === "number") _reas = _otd.reasoning;`,
+          `        else if ("reasoning_tokens" in _otd && typeof _otd.reasoning_tokens === "number") _reas = _otd.reasoning_tokens;`,
+          `      }`,
+          `      if (_reas === 0 && _rm) {`,
+          `        if ("usage" in _rm && typeof _rm.usage === "object" && _rm.usage !== null) {`,
+          `          const _rmu: object = _rm.usage;`,
+          `          if ("completion_tokens_details" in _rmu && typeof _rmu.completion_tokens_details === "object" && _rmu.completion_tokens_details !== null) {`,
+          `            const _ctd: object = _rmu.completion_tokens_details;`,
+          `            if ("reasoning_tokens" in _ctd && typeof _ctd.reasoning_tokens === "number") _reas = _ctd.reasoning_tokens;`,
+          `            else if ("reasoning" in _ctd && typeof _ctd.reasoning === "number") _reas = _ctd.reasoning;`,
+          `          } else if ("reasoning_tokens" in _rmu && typeof _rmu.reasoning_tokens === "number") {`,
+          `            _reas = _rmu.reasoning_tokens;`,
+          `          }`,
+          `        } else if ("completion_tokens_details" in _rm && typeof _rm.completion_tokens_details === "object" && _rm.completion_tokens_details !== null) {`,
+          `          const _ctd: object = _rm.completion_tokens_details;`,
+          `          if ("reasoning_tokens" in _ctd && typeof _ctd.reasoning_tokens === "number") _reas = _ctd.reasoning_tokens;`,
+          `          else if ("reasoning" in _ctd && typeof _ctd.reasoning === "number") _reas = _ctd.reasoning;`,
+          `        }`,
+          `      }`,
           `      if (_in > 0) ${stepPrefix}TokenUsage.input_tokens = _in;`,
           `      if (_out > 0) ${stepPrefix}TokenUsage.output_tokens = _out;`,
+          `      if (_reas > 0) ${stepPrefix}TokenUsage.reasoning_tokens = _reas;`,
           `      ${stepPrefix}TokenUsage.total_tokens = ${stepPrefix}TokenUsage.input_tokens + ${stepPrefix}TokenUsage.output_tokens;`,
           `    } else if (token !== undefined && token !== "") {`,
           `      ${stepPrefix}TokenUsage.output_tokens += 1;`,
@@ -434,7 +485,9 @@ export function renderLangGraphInvokeStep(
         rawLines.push(`    }`);
       }
       rawLines.push(
-        `    const _toolCalls = (messageChunk as any)?.tool_calls || (messageChunk as any)?.tool_call_chunks;`,
+        `    const _toolCalls = (typeof messageChunk === "object" && messageChunk !== null)`,
+        `      ? ("tool_calls" in messageChunk && Array.isArray(messageChunk.tool_calls) ? messageChunk.tool_calls : ("tool_call_chunks" in messageChunk && Array.isArray(messageChunk.tool_call_chunks) ? messageChunk.tool_call_chunks : undefined))`,
+        `      : undefined;`,
         `    if (Array.isArray(_toolCalls) && _toolCalls.length > 0) {`,
         isRaw
           ? `      res.write(JSON.stringify({ type: "tool_call", tool_calls: _toolCalls }));`
@@ -472,8 +525,8 @@ export function renderLangGraphInvokeStep(
         rawLines.push(`    res.write(\`${sseEvt}data: \${JSON.stringify({ type: "values", mode: "values", data: payload })}\\n\\n\`);`);
       }
       rawLines.push(`  }`);
-      rawLines.push(`  if (typeof (res as any).flush === "function") {`);
-      rawLines.push(`    (res as any).flush();`);
+      rawLines.push(`  if ("flush" in res && typeof res.flush === "function") {`);
+      rawLines.push(`    res.flush();`);
       rawLines.push(`  }`);
       rawLines.push(`}`);
       rawLines.push(`if (!res.writableEnded && !res.destroyed) {`);
@@ -507,7 +560,7 @@ export function renderLangGraphInvokeStep(
       }
       rawLines.push(`const agentState = ${stateInit};`);
       rawLines.push(
-        `const ${stepPrefix}TokenUsage = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };`,
+        `const ${stepPrefix}TokenUsage = { input_tokens: 0, output_tokens: 0, total_tokens: 0, reasoning_tokens: 0 };`,
         `let ${outputVariable}Content = "";`,
       );
       rawLines.push(
@@ -518,10 +571,8 @@ export function renderLangGraphInvokeStep(
       );
       rawLines.push(`for await (const chunk of stream) {`);
       rawLines.push(`  let mode: string = "messages";`);
-      rawLines.push(`  let payload: any = chunk;`);
-      rawLines.push(`  // Cast to any[] to avoid TypeScript strict tuple-length narrowing errors`);
-      rawLines.push(`  // (e.g. when subgraphs:true yields [namespace, mode, data] 3-tuples)`);
-      rawLines.push(`  const _c = chunk as any[];`);
+      rawLines.push(`  let payload = chunk;`);
+      rawLines.push(`  const _c = Array.isArray(chunk) ? chunk : undefined;`);
       rawLines.push(`  if (Array.isArray(_c) && _c.length === 3 && Array.isArray(_c[0]) && typeof _c[1] === "string" && ["messages", "updates", "custom", "values", "debug"].includes(_c[1])) {`);
       rawLines.push(`    // subgraphs:true + multi-mode: [namespace[], mode, data]`);
       rawLines.push(`    mode = _c[1];`);
@@ -545,12 +596,64 @@ export function renderLangGraphInvokeStep(
       );
       if (langGraphTrackTokenUsage) {
         rawLines.push(
-          `    const _chunkUsage = (messageChunk as any)?.usage_metadata || (messageChunk as any)?.response_metadata?.token_usage;`,
+          `    let _chunkUsage: object | undefined = undefined;`,
+          `    let _rm: object | undefined = undefined;`,
+          `    if (messageChunk && typeof messageChunk === "object") {`,
+          `      if ("response_metadata" in messageChunk && typeof messageChunk.response_metadata === "object" && messageChunk.response_metadata !== null) {`,
+          `        _rm = messageChunk.response_metadata;`,
+          `      } else if ("kwargs" in messageChunk && typeof messageChunk.kwargs === "object" && messageChunk.kwargs !== null && "response_metadata" in messageChunk.kwargs && typeof messageChunk.kwargs.response_metadata === "object" && messageChunk.kwargs.response_metadata !== null) {`,
+          `        _rm = messageChunk.kwargs.response_metadata;`,
+          `      }`,
+          `      if ("usage_metadata" in messageChunk && typeof messageChunk.usage_metadata === "object" && messageChunk.usage_metadata !== null) {`,
+          `        _chunkUsage = messageChunk.usage_metadata;`,
+          `      } else if ("kwargs" in messageChunk && typeof messageChunk.kwargs === "object" && messageChunk.kwargs !== null && "usage_metadata" in messageChunk.kwargs && typeof messageChunk.kwargs.usage_metadata === "object" && messageChunk.kwargs.usage_metadata !== null) {`,
+          `        _chunkUsage = messageChunk.kwargs.usage_metadata;`,
+          `      } else if (_rm) {`,
+          `        if ("token_usage" in _rm && typeof _rm.token_usage === "object" && _rm.token_usage !== null) {`,
+          `          _chunkUsage = _rm.token_usage;`,
+          `        } else if ("tokenUsage" in _rm && typeof _rm.tokenUsage === "object" && _rm.tokenUsage !== null) {`,
+          `          _chunkUsage = _rm.tokenUsage;`,
+          `        } else if ("usage" in _rm && typeof _rm.usage === "object" && _rm.usage !== null) {`,
+          `          _chunkUsage = _rm.usage;`,
+          `        }`,
+          `      }`,
+          `    }`,
           `    if (_chunkUsage) {`,
-          `      const _in = Number(_chunkUsage.input_tokens ?? _chunkUsage.prompt_tokens ?? 0) || 0;`,
-          `      const _out = Number(_chunkUsage.output_tokens ?? _chunkUsage.completion_tokens ?? 0) || 0;`,
+          `      const _in = ("input_tokens" in _chunkUsage && typeof _chunkUsage.input_tokens === "number" ? _chunkUsage.input_tokens : ("prompt_tokens" in _chunkUsage && typeof _chunkUsage.prompt_tokens === "number" ? _chunkUsage.prompt_tokens : ("promptTokens" in _chunkUsage && typeof _chunkUsage.promptTokens === "number" ? _chunkUsage.promptTokens : ("inputTokens" in _chunkUsage && typeof _chunkUsage.inputTokens === "number" ? _chunkUsage.inputTokens : 0))));`,
+          `      const _out = ("output_tokens" in _chunkUsage && typeof _chunkUsage.output_tokens === "number" ? _chunkUsage.output_tokens : ("completion_tokens" in _chunkUsage && typeof _chunkUsage.completion_tokens === "number" ? _chunkUsage.completion_tokens : ("completionTokens" in _chunkUsage && typeof _chunkUsage.completionTokens === "number" ? _chunkUsage.completionTokens : ("outputTokens" in _chunkUsage && typeof _chunkUsage.outputTokens === "number" ? _chunkUsage.outputTokens : 0))));`,
+          `      let _reas = 0;`,
+          `      if ("reasoning_tokens" in _chunkUsage && typeof _chunkUsage.reasoning_tokens === "number") {`,
+          `        _reas = _chunkUsage.reasoning_tokens;`,
+          `      } else if ("reasoningTokens" in _chunkUsage && typeof _chunkUsage.reasoningTokens === "number") {`,
+          `        _reas = _chunkUsage.reasoningTokens;`,
+          `      } else if ("completion_tokens_details" in _chunkUsage && typeof _chunkUsage.completion_tokens_details === "object" && _chunkUsage.completion_tokens_details !== null) {`,
+          `        const _ctd: object = _chunkUsage.completion_tokens_details;`,
+          `        if ("reasoning_tokens" in _ctd && typeof _ctd.reasoning_tokens === "number") _reas = _ctd.reasoning_tokens;`,
+          `        else if ("reasoning" in _ctd && typeof _ctd.reasoning === "number") _reas = _ctd.reasoning;`,
+          `      } else if ("output_token_details" in _chunkUsage && typeof _chunkUsage.output_token_details === "object" && _chunkUsage.output_token_details !== null) {`,
+          `        const _otd: object = _chunkUsage.output_token_details;`,
+          `        if ("reasoning" in _otd && typeof _otd.reasoning === "number") _reas = _otd.reasoning;`,
+          `        else if ("reasoning_tokens" in _otd && typeof _otd.reasoning_tokens === "number") _reas = _otd.reasoning_tokens;`,
+          `      }`,
+          `      if (_reas === 0 && _rm) {`,
+          `        if ("usage" in _rm && typeof _rm.usage === "object" && _rm.usage !== null) {`,
+          `          const _rmu: object = _rm.usage;`,
+          `          if ("completion_tokens_details" in _rmu && typeof _rmu.completion_tokens_details === "object" && _rmu.completion_tokens_details !== null) {`,
+          `            const _ctd: object = _rmu.completion_tokens_details;`,
+          `            if ("reasoning_tokens" in _ctd && typeof _ctd.reasoning_tokens === "number") _reas = _ctd.reasoning_tokens;`,
+          `            else if ("reasoning" in _ctd && typeof _ctd.reasoning === "number") _reas = _ctd.reasoning;`,
+          `          } else if ("reasoning_tokens" in _rmu && typeof _rmu.reasoning_tokens === "number") {`,
+          `            _reas = _rmu.reasoning_tokens;`,
+          `          }`,
+          `        } else if ("completion_tokens_details" in _rm && typeof _rm.completion_tokens_details === "object" && _rm.completion_tokens_details !== null) {`,
+          `          const _ctd: object = _rm.completion_tokens_details;`,
+          `          if ("reasoning_tokens" in _ctd && typeof _ctd.reasoning_tokens === "number") _reas = _ctd.reasoning_tokens;`,
+          `          else if ("reasoning" in _ctd && typeof _ctd.reasoning === "number") _reas = _ctd.reasoning;`,
+          `        }`,
+          `      }`,
           `      if (_in > 0) ${stepPrefix}TokenUsage.input_tokens = _in;`,
           `      if (_out > 0) ${stepPrefix}TokenUsage.output_tokens = _out;`,
+          `      if (_reas > 0) ${stepPrefix}TokenUsage.reasoning_tokens = _reas;`,
           `      ${stepPrefix}TokenUsage.total_tokens = ${stepPrefix}TokenUsage.input_tokens + ${stepPrefix}TokenUsage.output_tokens;`,
           `    } else if (token !== undefined && token !== "") {`,
           `      ${stepPrefix}TokenUsage.output_tokens += 1;`,
@@ -580,7 +683,9 @@ export function renderLangGraphInvokeStep(
         rawLines.push(`    }`);
       }
       rawLines.push(
-        `    const _wsToolCalls = (messageChunk as any)?.tool_calls || (messageChunk as any)?.tool_call_chunks;`,
+        `    const _wsToolCalls = (typeof messageChunk === "object" && messageChunk !== null)`,
+        `      ? ("tool_calls" in messageChunk && Array.isArray(messageChunk.tool_calls) ? messageChunk.tool_calls : ("tool_call_chunks" in messageChunk && Array.isArray(messageChunk.tool_call_chunks) ? messageChunk.tool_call_chunks : undefined))`,
+        `      : undefined;`,
         `    if (Array.isArray(_wsToolCalls) && _wsToolCalls.length > 0) {`,
         `      wsBroadcast("agent_stream", { type: "tool_call", tool_calls: _wsToolCalls, node: nodeName, done: false }, ${roomExpr});`,
         `    }`,
@@ -624,7 +729,7 @@ export function renderLangGraphInvokeStep(
       }
       rawLines.push(`const agentState = ${stateInit};`);
       rawLines.push(
-        `const ${stepPrefix}TokenUsage = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };`,
+        `const ${stepPrefix}TokenUsage = { input_tokens: 0, output_tokens: 0, total_tokens: 0, reasoning_tokens: 0 };`,
         `let ${outputVariable}Content = "";`,
       );
       rawLines.push(
@@ -635,7 +740,7 @@ export function renderLangGraphInvokeStep(
       );
       rawLines.push(`for await (const chunk of stream) {`);
       rawLines.push(`  let mode: string = "messages";`);
-      rawLines.push(`  let payload: any = chunk;`);
+      rawLines.push(`  let payload = chunk;`);
       rawLines.push(`  if (Array.isArray(chunk) && chunk.length === 2 && typeof chunk[0] === "string" && ["messages", "updates", "custom", "values", "debug"].includes(chunk[0])) {`);
       rawLines.push(`    mode = chunk[0];`);
       rawLines.push(`    payload = chunk[1];`);
@@ -651,12 +756,64 @@ export function renderLangGraphInvokeStep(
       );
       if (langGraphTrackTokenUsage) {
         rawLines.push(
-          `    const _chunkUsage = (messageChunk as any)?.usage_metadata || (messageChunk as any)?.response_metadata?.token_usage;`,
+          `    let _chunkUsage: object | undefined = undefined;`,
+          `    let _rm: object | undefined = undefined;`,
+          `    if (messageChunk && typeof messageChunk === "object") {`,
+          `      if ("response_metadata" in messageChunk && typeof messageChunk.response_metadata === "object" && messageChunk.response_metadata !== null) {`,
+          `        _rm = messageChunk.response_metadata;`,
+          `      } else if ("kwargs" in messageChunk && typeof messageChunk.kwargs === "object" && messageChunk.kwargs !== null && "response_metadata" in messageChunk.kwargs && typeof messageChunk.kwargs.response_metadata === "object" && messageChunk.kwargs.response_metadata !== null) {`,
+          `        _rm = messageChunk.kwargs.response_metadata;`,
+          `      }`,
+          `      if ("usage_metadata" in messageChunk && typeof messageChunk.usage_metadata === "object" && messageChunk.usage_metadata !== null) {`,
+          `        _chunkUsage = messageChunk.usage_metadata;`,
+          `      } else if ("kwargs" in messageChunk && typeof messageChunk.kwargs === "object" && messageChunk.kwargs !== null && "usage_metadata" in messageChunk.kwargs && typeof messageChunk.kwargs.usage_metadata === "object" && messageChunk.kwargs.usage_metadata !== null) {`,
+          `        _chunkUsage = messageChunk.kwargs.usage_metadata;`,
+          `      } else if (_rm) {`,
+          `        if ("token_usage" in _rm && typeof _rm.token_usage === "object" && _rm.token_usage !== null) {`,
+          `          _chunkUsage = _rm.token_usage;`,
+          `        } else if ("tokenUsage" in _rm && typeof _rm.tokenUsage === "object" && _rm.tokenUsage !== null) {`,
+          `          _chunkUsage = _rm.tokenUsage;`,
+          `        } else if ("usage" in _rm && typeof _rm.usage === "object" && _rm.usage !== null) {`,
+          `          _chunkUsage = _rm.usage;`,
+          `        }`,
+          `      }`,
+          `    }`,
           `    if (_chunkUsage) {`,
-          `      const _in = Number(_chunkUsage.input_tokens ?? _chunkUsage.prompt_tokens ?? 0) || 0;`,
-          `      const _out = Number(_chunkUsage.output_tokens ?? _chunkUsage.completion_tokens ?? 0) || 0;`,
+          `      const _in = ("input_tokens" in _chunkUsage && typeof _chunkUsage.input_tokens === "number" ? _chunkUsage.input_tokens : ("prompt_tokens" in _chunkUsage && typeof _chunkUsage.prompt_tokens === "number" ? _chunkUsage.prompt_tokens : ("promptTokens" in _chunkUsage && typeof _chunkUsage.promptTokens === "number" ? _chunkUsage.promptTokens : ("inputTokens" in _chunkUsage && typeof _chunkUsage.inputTokens === "number" ? _chunkUsage.inputTokens : 0))));`,
+          `      const _out = ("output_tokens" in _chunkUsage && typeof _chunkUsage.output_tokens === "number" ? _chunkUsage.output_tokens : ("completion_tokens" in _chunkUsage && typeof _chunkUsage.completion_tokens === "number" ? _chunkUsage.completion_tokens : ("completionTokens" in _chunkUsage && typeof _chunkUsage.completionTokens === "number" ? _chunkUsage.completionTokens : ("outputTokens" in _chunkUsage && typeof _chunkUsage.outputTokens === "number" ? _chunkUsage.outputTokens : 0))));`,
+          `      let _reas = 0;`,
+          `      if ("reasoning_tokens" in _chunkUsage && typeof _chunkUsage.reasoning_tokens === "number") {`,
+          `        _reas = _chunkUsage.reasoning_tokens;`,
+          `      } else if ("reasoningTokens" in _chunkUsage && typeof _chunkUsage.reasoningTokens === "number") {`,
+          `        _reas = _chunkUsage.reasoningTokens;`,
+          `      } else if ("completion_tokens_details" in _chunkUsage && typeof _chunkUsage.completion_tokens_details === "object" && _chunkUsage.completion_tokens_details !== null) {`,
+          `        const _ctd: object = _chunkUsage.completion_tokens_details;`,
+          `        if ("reasoning_tokens" in _ctd && typeof _ctd.reasoning_tokens === "number") _reas = _ctd.reasoning_tokens;`,
+          `        else if ("reasoning" in _ctd && typeof _ctd.reasoning === "number") _reas = _ctd.reasoning;`,
+          `      } else if ("output_token_details" in _chunkUsage && typeof _chunkUsage.output_token_details === "object" && _chunkUsage.output_token_details !== null) {`,
+          `        const _otd: object = _chunkUsage.output_token_details;`,
+          `        if ("reasoning" in _otd && typeof _otd.reasoning === "number") _reas = _otd.reasoning;`,
+          `        else if ("reasoning_tokens" in _otd && typeof _otd.reasoning_tokens === "number") _reas = _otd.reasoning_tokens;`,
+          `      }`,
+          `      if (_reas === 0 && _rm) {`,
+          `        if ("usage" in _rm && typeof _rm.usage === "object" && _rm.usage !== null) {`,
+          `          const _rmu: object = _rm.usage;`,
+          `          if ("completion_tokens_details" in _rmu && typeof _rmu.completion_tokens_details === "object" && _rmu.completion_tokens_details !== null) {`,
+          `            const _ctd: object = _rmu.completion_tokens_details;`,
+          `            if ("reasoning_tokens" in _ctd && typeof _ctd.reasoning_tokens === "number") _reas = _ctd.reasoning_tokens;`,
+          `            else if ("reasoning" in _ctd && typeof _ctd.reasoning === "number") _reas = _ctd.reasoning;`,
+          `          } else if ("reasoning_tokens" in _rmu && typeof _rmu.reasoning_tokens === "number") {`,
+          `            _reas = _rmu.reasoning_tokens;`,
+          `          }`,
+          `        } else if ("completion_tokens_details" in _rm && typeof _rm.completion_tokens_details === "object" && _rm.completion_tokens_details !== null) {`,
+          `          const _ctd: object = _rm.completion_tokens_details;`,
+          `          if ("reasoning_tokens" in _ctd && typeof _ctd.reasoning_tokens === "number") _reas = _ctd.reasoning_tokens;`,
+          `          else if ("reasoning" in _ctd && typeof _ctd.reasoning === "number") _reas = _ctd.reasoning;`,
+          `        }`,
+          `      }`,
           `      if (_in > 0) ${stepPrefix}TokenUsage.input_tokens = _in;`,
           `      if (_out > 0) ${stepPrefix}TokenUsage.output_tokens = _out;`,
+          `      if (_reas > 0) ${stepPrefix}TokenUsage.reasoning_tokens = _reas;`,
           `      ${stepPrefix}TokenUsage.total_tokens = ${stepPrefix}TokenUsage.input_tokens + ${stepPrefix}TokenUsage.output_tokens;`,
           `    } else if (token !== undefined && token !== "") {`,
           `      ${stepPrefix}TokenUsage.output_tokens += 1;`,
@@ -686,7 +843,9 @@ export function renderLangGraphInvokeStep(
         rawLines.push(`  }`);
       }
       rawLines.push(
-        `    const _kafkaToolCalls = (messageChunk as any)?.tool_calls || (messageChunk as any)?.tool_call_chunks;`,
+        `    const _kafkaToolCalls = (typeof messageChunk === "object" && messageChunk !== null)`,
+        `      ? ("tool_calls" in messageChunk && Array.isArray(messageChunk.tool_calls) ? messageChunk.tool_calls : ("tool_call_chunks" in messageChunk && Array.isArray(messageChunk.tool_call_chunks) ? messageChunk.tool_call_chunks : undefined))`,
+        `      : undefined;`,
         `    if (Array.isArray(_kafkaToolCalls) && _kafkaToolCalls.length > 0) {`,
         `      await publishKafkaEvent(${topicExpr}, { type: "tool_call", tool_calls: _kafkaToolCalls, node: nodeName, done: false }, ${keyExpr});`,
         `    }`,
@@ -731,7 +890,7 @@ export function renderLangGraphInvokeStep(
       rawLines.push(`const agentState = ${stateInit};`);
       rawLines.push(`const redisClient = await getRedisClient();`);
       rawLines.push(
-        `const ${stepPrefix}TokenUsage = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };`,
+        `const ${stepPrefix}TokenUsage = { input_tokens: 0, output_tokens: 0, total_tokens: 0, reasoning_tokens: 0 };`,
         `let ${outputVariable}Content = "";`,
       );
       rawLines.push(
@@ -742,7 +901,7 @@ export function renderLangGraphInvokeStep(
       );
       rawLines.push(`for await (const chunk of stream) {`);
       rawLines.push(`  let mode: string = "messages";`);
-      rawLines.push(`  let payload: any = chunk;`);
+      rawLines.push(`  let payload = chunk;`);
       rawLines.push(`  if (Array.isArray(chunk) && chunk.length === 2 && typeof chunk[0] === "string" && ["messages", "updates", "custom", "values", "debug"].includes(chunk[0])) {`);
       rawLines.push(`    mode = chunk[0];`);
       rawLines.push(`    payload = chunk[1];`);
@@ -758,12 +917,64 @@ export function renderLangGraphInvokeStep(
       );
       if (langGraphTrackTokenUsage) {
         rawLines.push(
-          `    const _chunkUsage = (messageChunk as any)?.usage_metadata || (messageChunk as any)?.response_metadata?.token_usage;`,
+          `    let _chunkUsage: object | undefined = undefined;`,
+          `    let _rm: object | undefined = undefined;`,
+          `    if (messageChunk && typeof messageChunk === "object") {`,
+          `      if ("response_metadata" in messageChunk && typeof messageChunk.response_metadata === "object" && messageChunk.response_metadata !== null) {`,
+          `        _rm = messageChunk.response_metadata;`,
+          `      } else if ("kwargs" in messageChunk && typeof messageChunk.kwargs === "object" && messageChunk.kwargs !== null && "response_metadata" in messageChunk.kwargs && typeof messageChunk.kwargs.response_metadata === "object" && messageChunk.kwargs.response_metadata !== null) {`,
+          `        _rm = messageChunk.kwargs.response_metadata;`,
+          `      }`,
+          `      if ("usage_metadata" in messageChunk && typeof messageChunk.usage_metadata === "object" && messageChunk.usage_metadata !== null) {`,
+          `        _chunkUsage = messageChunk.usage_metadata;`,
+          `      } else if ("kwargs" in messageChunk && typeof messageChunk.kwargs === "object" && messageChunk.kwargs !== null && "usage_metadata" in messageChunk.kwargs && typeof messageChunk.kwargs.usage_metadata === "object" && messageChunk.kwargs.usage_metadata !== null) {`,
+          `        _chunkUsage = messageChunk.kwargs.usage_metadata;`,
+          `      } else if (_rm) {`,
+          `        if ("token_usage" in _rm && typeof _rm.token_usage === "object" && _rm.token_usage !== null) {`,
+          `          _chunkUsage = _rm.token_usage;`,
+          `        } else if ("tokenUsage" in _rm && typeof _rm.tokenUsage === "object" && _rm.tokenUsage !== null) {`,
+          `          _chunkUsage = _rm.tokenUsage;`,
+          `        } else if ("usage" in _rm && typeof _rm.usage === "object" && _rm.usage !== null) {`,
+          `          _chunkUsage = _rm.usage;`,
+          `        }`,
+          `      }`,
+          `    }`,
           `    if (_chunkUsage) {`,
-          `      const _in = Number(_chunkUsage.input_tokens ?? _chunkUsage.prompt_tokens ?? 0) || 0;`,
-          `      const _out = Number(_chunkUsage.output_tokens ?? _chunkUsage.completion_tokens ?? 0) || 0;`,
+          `      const _in = ("input_tokens" in _chunkUsage && typeof _chunkUsage.input_tokens === "number" ? _chunkUsage.input_tokens : ("prompt_tokens" in _chunkUsage && typeof _chunkUsage.prompt_tokens === "number" ? _chunkUsage.prompt_tokens : ("promptTokens" in _chunkUsage && typeof _chunkUsage.promptTokens === "number" ? _chunkUsage.promptTokens : ("inputTokens" in _chunkUsage && typeof _chunkUsage.inputTokens === "number" ? _chunkUsage.inputTokens : 0))));`,
+          `      const _out = ("output_tokens" in _chunkUsage && typeof _chunkUsage.output_tokens === "number" ? _chunkUsage.output_tokens : ("completion_tokens" in _chunkUsage && typeof _chunkUsage.completion_tokens === "number" ? _chunkUsage.completion_tokens : ("completionTokens" in _chunkUsage && typeof _chunkUsage.completionTokens === "number" ? _chunkUsage.completionTokens : ("outputTokens" in _chunkUsage && typeof _chunkUsage.outputTokens === "number" ? _chunkUsage.outputTokens : 0))));`,
+          `      let _reas = 0;`,
+          `      if ("reasoning_tokens" in _chunkUsage && typeof _chunkUsage.reasoning_tokens === "number") {`,
+          `        _reas = _chunkUsage.reasoning_tokens;`,
+          `      } else if ("reasoningTokens" in _chunkUsage && typeof _chunkUsage.reasoningTokens === "number") {`,
+          `        _reas = _chunkUsage.reasoningTokens;`,
+          `      } else if ("completion_tokens_details" in _chunkUsage && typeof _chunkUsage.completion_tokens_details === "object" && _chunkUsage.completion_tokens_details !== null) {`,
+          `        const _ctd: object = _chunkUsage.completion_tokens_details;`,
+          `        if ("reasoning_tokens" in _ctd && typeof _ctd.reasoning_tokens === "number") _reas = _ctd.reasoning_tokens;`,
+          `        else if ("reasoning" in _ctd && typeof _ctd.reasoning === "number") _reas = _ctd.reasoning;`,
+          `      } else if ("output_token_details" in _chunkUsage && typeof _chunkUsage.output_token_details === "object" && _chunkUsage.output_token_details !== null) {`,
+          `        const _otd: object = _chunkUsage.output_token_details;`,
+          `        if ("reasoning" in _otd && typeof _otd.reasoning === "number") _reas = _otd.reasoning;`,
+          `        else if ("reasoning_tokens" in _otd && typeof _otd.reasoning_tokens === "number") _reas = _otd.reasoning_tokens;`,
+          `      }`,
+          `      if (_reas === 0 && _rm) {`,
+          `        if ("usage" in _rm && typeof _rm.usage === "object" && _rm.usage !== null) {`,
+          `          const _rmu: object = _rm.usage;`,
+          `          if ("completion_tokens_details" in _rmu && typeof _rmu.completion_tokens_details === "object" && _rmu.completion_tokens_details !== null) {`,
+          `            const _ctd: object = _rmu.completion_tokens_details;`,
+          `            if ("reasoning_tokens" in _ctd && typeof _ctd.reasoning_tokens === "number") _reas = _ctd.reasoning_tokens;`,
+          `            else if ("reasoning" in _ctd && typeof _ctd.reasoning === "number") _reas = _ctd.reasoning;`,
+          `          } else if ("reasoning_tokens" in _rmu && typeof _rmu.reasoning_tokens === "number") {`,
+          `            _reas = _rmu.reasoning_tokens;`,
+          `          }`,
+          `        } else if ("completion_tokens_details" in _rm && typeof _rm.completion_tokens_details === "object" && _rm.completion_tokens_details !== null) {`,
+          `          const _ctd: object = _rm.completion_tokens_details;`,
+          `          if ("reasoning_tokens" in _ctd && typeof _ctd.reasoning_tokens === "number") _reas = _ctd.reasoning_tokens;`,
+          `          else if ("reasoning" in _ctd && typeof _ctd.reasoning === "number") _reas = _ctd.reasoning;`,
+          `        }`,
+          `      }`,
           `      if (_in > 0) ${stepPrefix}TokenUsage.input_tokens = _in;`,
           `      if (_out > 0) ${stepPrefix}TokenUsage.output_tokens = _out;`,
+          `      if (_reas > 0) ${stepPrefix}TokenUsage.reasoning_tokens = _reas;`,
           `      ${stepPrefix}TokenUsage.total_tokens = ${stepPrefix}TokenUsage.input_tokens + ${stepPrefix}TokenUsage.output_tokens;`,
           `    } else if (token !== undefined && token !== "") {`,
           `      ${stepPrefix}TokenUsage.output_tokens += 1;`,
@@ -793,7 +1004,9 @@ export function renderLangGraphInvokeStep(
         rawLines.push(`    }`);
       }
       rawLines.push(
-        `    const _redisToolCalls = (messageChunk as any)?.tool_calls || (messageChunk as any)?.tool_call_chunks;`,
+        `    const _redisToolCalls = (typeof messageChunk === "object" && messageChunk !== null)`,
+        `      ? ("tool_calls" in messageChunk && Array.isArray(messageChunk.tool_calls) ? messageChunk.tool_calls : ("tool_call_chunks" in messageChunk && Array.isArray(messageChunk.tool_call_chunks) ? messageChunk.tool_call_chunks : undefined))`,
+        `      : undefined;`,
         `    if (Array.isArray(_redisToolCalls) && _redisToolCalls.length > 0) {`,
         `      await redisClient.xadd(${streamKeyExpr}, "*", "type", "tool_call", "data", JSON.stringify(_redisToolCalls), "done", "false");`,
         `    }`,
@@ -807,7 +1020,7 @@ export function renderLangGraphInvokeStep(
       rawLines.push(`}`);
       if (langGraphTrackTokenUsage) {
         rawLines.push(
-          `await redisClient.xadd(${streamKeyExpr}, "*", "type", "usage", "input_tokens", String(${stepPrefix}TokenUsage.input_tokens), "output_tokens", String(${stepPrefix}TokenUsage.output_tokens), "total_tokens", String(${stepPrefix}TokenUsage.total_tokens), "done", "false");`,
+          `await redisClient.xadd(${streamKeyExpr}, "*", "type", "usage", "input_tokens", String(${stepPrefix}TokenUsage.input_tokens), "output_tokens", String(${stepPrefix}TokenUsage.output_tokens), "total_tokens", String(${stepPrefix}TokenUsage.total_tokens), "reasoning_tokens", String(${stepPrefix}TokenUsage.reasoning_tokens), "done", "false");`,
         );
       }
       rawLines.push(
@@ -841,55 +1054,202 @@ export function renderLangGraphInvokeStep(
 
     if (langGraphTrackTokenUsage) {
       rawLines.push(
-        `const ${outputVariable}Usage = { input_tokens: 0, output_tokens: 0, total_tokens: 0, inputTokens: 0, outputTokens: 0, totalTokens: 0 };`,
+        `const ${outputVariable}Usage = { input_tokens: 0, output_tokens: 0, total_tokens: 0, reasoning_tokens: 0 };`,
         `if (${outputVariable}Raw && typeof ${outputVariable}Raw === "object") {`,
-        `  const _rawMsgs = Array.isArray(${outputVariable}Raw.messages) ? ${outputVariable}Raw.messages : [];`,
+        `  const _rawObj: object = ${outputVariable}Raw;`,
+        `  const _rawMsgs = ("messages" in _rawObj && Array.isArray(_rawObj.messages)) ? _rawObj.messages : [];`,
         `  for (const _m of _rawMsgs) {`,
-        `    const _u = _m?.usage_metadata || _m?.response_metadata?.token_usage || _m?.response_metadata?.usage;`,
-        `    if (_u) {`,
-        `      const _in = Number(_u.input_tokens ?? _u.prompt_tokens ?? 0) || 0;`,
-        `      const _out = Number(_u.output_tokens ?? _u.completion_tokens ?? 0) || 0;`,
-        `      const _tot = Number(_u.total_tokens ?? (_in + _out)) || (_in + _out);`,
-        `      ${outputVariable}Usage.input_tokens += _in;`,
-        `      ${outputVariable}Usage.output_tokens += _out;`,
-        `      ${outputVariable}Usage.total_tokens += _tot;`,
+        `    if (_m && typeof _m === "object") {`,
+        `      const _mObj: object = _m;`,
+        `      let _u: object | undefined = undefined;`,
+        `      let _rm: object | undefined = undefined;`,
+        `      if ("response_metadata" in _mObj && typeof _mObj.response_metadata === "object" && _mObj.response_metadata !== null) {`,
+        `        _rm = _mObj.response_metadata;`,
+        `      } else if ("kwargs" in _mObj && typeof _mObj.kwargs === "object" && _mObj.kwargs !== null && "response_metadata" in _mObj.kwargs && typeof _mObj.kwargs.response_metadata === "object" && _mObj.kwargs.response_metadata !== null) {`,
+        `        _rm = _mObj.kwargs.response_metadata;`,
+        `      }`,
+        `      if ("usage_metadata" in _mObj && typeof _mObj.usage_metadata === "object" && _mObj.usage_metadata !== null) {`,
+        `        _u = _mObj.usage_metadata;`,
+        `      } else if ("kwargs" in _mObj && typeof _mObj.kwargs === "object" && _mObj.kwargs !== null && "usage_metadata" in _mObj.kwargs && typeof _mObj.kwargs.usage_metadata === "object" && _mObj.kwargs.usage_metadata !== null) {`,
+        `        _u = _mObj.kwargs.usage_metadata;`,
+        `      } else if (_rm) {`,
+        `        if ("token_usage" in _rm && typeof _rm.token_usage === "object" && _rm.token_usage !== null) {`,
+        `          _u = _rm.token_usage;`,
+        `        } else if ("tokenUsage" in _rm && typeof _rm.tokenUsage === "object" && _rm.tokenUsage !== null) {`,
+        `          _u = _rm.tokenUsage;`,
+        `        } else if ("usage" in _rm && typeof _rm.usage === "object" && _rm.usage !== null) {`,
+        `          _u = _rm.usage;`,
+        `        }`,
+        `      }`,
+        `      if (!_u) {`,
+        `        let _strMsg: string | undefined = undefined;`,
+        `        if ("content" in _mObj && typeof _mObj.content === "string") {`,
+        `          _strMsg = _mObj.content;`,
+        `        } else if ("kwargs" in _mObj && typeof _mObj.kwargs === "object" && _mObj.kwargs !== null && "content" in _mObj.kwargs && typeof _mObj.kwargs.content === "string") {`,
+        `          _strMsg = _mObj.kwargs.content;`,
+        `        }`,
+        `        if (_strMsg && _strMsg.startsWith("{")) {`,
+        `          try {`,
+        `            const _p = JSON.parse(_strMsg);`,
+        `            if (typeof _p === "object" && _p !== null) {`,
+        `              if ("response_metadata" in _p && typeof _p.response_metadata === "object" && _p.response_metadata !== null) {`,
+        `                _rm = _p.response_metadata;`,
+        `              } else if ("kwargs" in _p && typeof _p.kwargs === "object" && _p.kwargs !== null && "response_metadata" in _p.kwargs && typeof _p.kwargs.response_metadata === "object" && _p.kwargs.response_metadata !== null) {`,
+        `                _rm = _p.kwargs.response_metadata;`,
+        `              }`,
+        `              if ("usage_metadata" in _p && typeof _p.usage_metadata === "object" && _p.usage_metadata !== null) {`,
+        `                _u = _p.usage_metadata;`,
+        `              } else if ("kwargs" in _p && typeof _p.kwargs === "object" && _p.kwargs !== null && "usage_metadata" in _p.kwargs && typeof _p.kwargs.usage_metadata === "object" && _p.kwargs.usage_metadata !== null) {`,
+        `                _u = _p.kwargs.usage_metadata;`,
+        `              } else if (_rm) {`,
+        `                if ("token_usage" in _rm && typeof _rm.token_usage === "object" && _rm.token_usage !== null) {`,
+        `                  _u = _rm.token_usage;`,
+        `                } else if ("tokenUsage" in _rm && typeof _rm.tokenUsage === "object" && _rm.tokenUsage !== null) {`,
+        `                  _u = _rm.tokenUsage;`,
+        `                } else if ("usage" in _rm && typeof _rm.usage === "object" && _rm.usage !== null) {`,
+        `                  _u = _rm.usage;`,
+        `                }`,
+        `              }`,
+        `            }`,
+        `          } catch {}`,
+        `        }`,
+        `      }`,
+        `      if (_u) {`,
+        `        const _in = ("input_tokens" in _u && typeof _u.input_tokens === "number" ? _u.input_tokens : ("prompt_tokens" in _u && typeof _u.prompt_tokens === "number" ? _u.prompt_tokens : ("promptTokens" in _u && typeof _u.promptTokens === "number" ? _u.promptTokens : ("inputTokens" in _u && typeof _u.inputTokens === "number" ? _u.inputTokens : 0))));`,
+        `        const _out = ("output_tokens" in _u && typeof _u.output_tokens === "number" ? _u.output_tokens : ("completion_tokens" in _u && typeof _u.completion_tokens === "number" ? _u.completion_tokens : ("completionTokens" in _u && typeof _u.completionTokens === "number" ? _u.completionTokens : ("outputTokens" in _u && typeof _u.outputTokens === "number" ? _u.outputTokens : 0))));`,
+        `        const _tot = ("total_tokens" in _u && typeof _u.total_tokens === "number" ? _u.total_tokens : ("totalTokens" in _u && typeof _u.totalTokens === "number" ? _u.totalTokens : (_in + _out)));`,
+        `        let _reas = 0;`,
+        `        if ("reasoning_tokens" in _u && typeof _u.reasoning_tokens === "number") {`,
+        `          _reas = _u.reasoning_tokens;`,
+        `        } else if ("reasoningTokens" in _u && typeof _u.reasoningTokens === "number") {`,
+        `          _reas = _u.reasoningTokens;`,
+        `        } else if ("completion_tokens_details" in _u && typeof _u.completion_tokens_details === "object" && _u.completion_tokens_details !== null) {`,
+        `          const _ctd: object = _u.completion_tokens_details;`,
+        `          if ("reasoning_tokens" in _ctd && typeof _ctd.reasoning_tokens === "number") _reas = _ctd.reasoning_tokens;`,
+        `          else if ("reasoning" in _ctd && typeof _ctd.reasoning === "number") _reas = _ctd.reasoning;`,
+        `        } else if ("output_token_details" in _u && typeof _u.output_token_details === "object" && _u.output_token_details !== null) {`,
+        `          const _otd: object = _u.output_token_details;`,
+        `          if ("reasoning" in _otd && typeof _otd.reasoning === "number") _reas = _otd.reasoning;`,
+        `          else if ("reasoning_tokens" in _otd && typeof _otd.reasoning_tokens === "number") _reas = _otd.reasoning_tokens;`,
+        `        }`,
+        `        if (_reas === 0 && _rm) {`,
+        `          if ("usage" in _rm && typeof _rm.usage === "object" && _rm.usage !== null) {`,
+        `            const _rmu: object = _rm.usage;`,
+        `            if ("completion_tokens_details" in _rmu && typeof _rmu.completion_tokens_details === "object" && _rmu.completion_tokens_details !== null) {`,
+        `              const _ctd: object = _rmu.completion_tokens_details;`,
+        `              if ("reasoning_tokens" in _ctd && typeof _ctd.reasoning_tokens === "number") _reas = _ctd.reasoning_tokens;`,
+        `              else if ("reasoning" in _ctd && typeof _ctd.reasoning === "number") _reas = _ctd.reasoning;`,
+        `            } else if ("reasoning_tokens" in _rmu && typeof _rmu.reasoning_tokens === "number") {`,
+        `              _reas = _rmu.reasoning_tokens;`,
+        `            }`,
+        `          } else if ("completion_tokens_details" in _rm && typeof _rm.completion_tokens_details === "object" && _rm.completion_tokens_details !== null) {`,
+        `            const _ctd: object = _rm.completion_tokens_details;`,
+        `            if ("reasoning_tokens" in _ctd && typeof _ctd.reasoning_tokens === "number") _reas = _ctd.reasoning_tokens;`,
+        `            else if ("reasoning" in _ctd && typeof _ctd.reasoning === "number") _reas = _ctd.reasoning;`,
+        `          }`,
+        `        }`,
+        `        ${outputVariable}Usage.input_tokens += _in;`,
+        `        ${outputVariable}Usage.output_tokens += _out;`,
+        `        ${outputVariable}Usage.total_tokens += _tot;`,
+        `        ${outputVariable}Usage.reasoning_tokens += _reas;`,
+        `      }`,
         `    }`,
         `  }`,
-        `  if (${outputVariable}Usage.total_tokens === 0 && (${outputVariable}Raw.usage || ${outputVariable}Raw.token_usage)) {`,
-        `    const _u = ${outputVariable}Raw.usage || ${outputVariable}Raw.token_usage;`,
-        `    const _in = Number(_u.input_tokens ?? _u.prompt_tokens ?? 0) || 0;`,
-        `    const _out = Number(_u.output_tokens ?? _u.completion_tokens ?? 0) || 0;`,
-        `    ${outputVariable}Usage.input_tokens = _in;`,
-        `    ${outputVariable}Usage.output_tokens = _out;`,
-        `    ${outputVariable}Usage.total_tokens = Number(_u.total_tokens ?? (_in + _out)) || (_in + _out);`,
+        `  if (${outputVariable}Usage.total_tokens === 0) {`,
+        `    let _u: object | undefined = undefined;`,
+        `    let _rm: object | undefined = undefined;`,
+        `    if ("response_metadata" in _rawObj && typeof _rawObj.response_metadata === "object" && _rawObj.response_metadata !== null) {`,
+        `      _rm = _rawObj.response_metadata;`,
+        `    }`,
+        `    if ("usage" in _rawObj && typeof _rawObj.usage === "object" && _rawObj.usage !== null) {`,
+        `      _u = _rawObj.usage;`,
+        `    } else if ("token_usage" in _rawObj && typeof _rawObj.token_usage === "object" && _rawObj.token_usage !== null) {`,
+        `      _u = _rawObj.token_usage;`,
+        `    } else if ("tokenUsage" in _rawObj && typeof _rawObj.tokenUsage === "object" && _rawObj.tokenUsage !== null) {`,
+        `      _u = _rawObj.tokenUsage;`,
+        `    }`,
+        `    if (_u) {`,
+        `      const _in = ("input_tokens" in _u && typeof _u.input_tokens === "number" ? _u.input_tokens : ("prompt_tokens" in _u && typeof _u.prompt_tokens === "number" ? _u.prompt_tokens : ("promptTokens" in _u && typeof _u.promptTokens === "number" ? _u.promptTokens : ("inputTokens" in _u && typeof _u.inputTokens === "number" ? _u.inputTokens : 0))));`,
+        `      const _out = ("output_tokens" in _u && typeof _u.output_tokens === "number" ? _u.output_tokens : ("completion_tokens" in _u && typeof _u.completion_tokens === "number" ? _u.completion_tokens : ("completionTokens" in _u && typeof _u.completionTokens === "number" ? _u.completionTokens : ("outputTokens" in _u && typeof _u.outputTokens === "number" ? _u.outputTokens : 0))));`,
+        `      const _tot = ("total_tokens" in _u && typeof _u.total_tokens === "number" ? _u.total_tokens : ("totalTokens" in _u && typeof _u.totalTokens === "number" ? _u.totalTokens : (_in + _out)));`,
+        `      let _reas = 0;`,
+        `      if ("reasoning_tokens" in _u && typeof _u.reasoning_tokens === "number") {`,
+        `        _reas = _u.reasoning_tokens;`,
+        `      } else if ("reasoningTokens" in _u && typeof _u.reasoningTokens === "number") {`,
+        `        _reas = _u.reasoningTokens;`,
+        `      } else if ("completion_tokens_details" in _u && typeof _u.completion_tokens_details === "object" && _u.completion_tokens_details !== null) {`,
+        `        const _ctd: object = _u.completion_tokens_details;`,
+        `        if ("reasoning_tokens" in _ctd && typeof _ctd.reasoning_tokens === "number") _reas = _ctd.reasoning_tokens;`,
+        `        else if ("reasoning" in _ctd && typeof _ctd.reasoning === "number") _reas = _ctd.reasoning;`,
+        `      } else if ("output_token_details" in _u && typeof _u.output_token_details === "object" && _u.output_token_details !== null) {`,
+        `        const _otd: object = _u.output_token_details;`,
+        `        if ("reasoning" in _otd && typeof _otd.reasoning === "number") _reas = _otd.reasoning;`,
+        `        else if ("reasoning_tokens" in _otd && typeof _otd.reasoning_tokens === "number") _reas = _otd.reasoning_tokens;`,
+        `      }`,
+        `      if (_reas === 0 && _rm) {`,
+        `        if ("usage" in _rm && typeof _rm.usage === "object" && _rm.usage !== null) {`,
+        `          const _rmu: object = _rm.usage;`,
+        `          if ("completion_tokens_details" in _rmu && typeof _rmu.completion_tokens_details === "object" && _rmu.completion_tokens_details !== null) {`,
+        `            const _ctd: object = _rmu.completion_tokens_details;`,
+        `            if ("reasoning_tokens" in _ctd && typeof _ctd.reasoning_tokens === "number") _reas = _ctd.reasoning_tokens;`,
+        `            else if ("reasoning" in _ctd && typeof _ctd.reasoning === "number") _reas = _ctd.reasoning;`,
+        `          } else if ("reasoning_tokens" in _rmu && typeof _rmu.reasoning_tokens === "number") {`,
+        `            _reas = _rmu.reasoning_tokens;`,
+        `          }`,
+        `        } else if ("completion_tokens_details" in _rm && typeof _rm.completion_tokens_details === "object" && _rm.completion_tokens_details !== null) {`,
+        `          const _ctd: object = _rm.completion_tokens_details;`,
+        `          if ("reasoning_tokens" in _ctd && typeof _ctd.reasoning_tokens === "number") _reas = _ctd.reasoning_tokens;`,
+        `          else if ("reasoning" in _ctd && typeof _ctd.reasoning === "number") _reas = _ctd.reasoning;`,
+        `        }`,
+        `      }`,
+        `      ${outputVariable}Usage.input_tokens = _in;`,
+        `      ${outputVariable}Usage.output_tokens = _out;`,
+        `      ${outputVariable}Usage.total_tokens = _tot;`,
+        `      ${outputVariable}Usage.reasoning_tokens = _reas;`,
+        `    }`,
         `  }`,
-        `  ${outputVariable}Usage.inputTokens = ${outputVariable}Usage.input_tokens;`,
-        `  ${outputVariable}Usage.outputTokens = ${outputVariable}Usage.output_tokens;`,
-        `  ${outputVariable}Usage.totalTokens = ${outputVariable}Usage.total_tokens;`,
         `}`,
         `if (typeof res?.setHeader === "function") {`,
         `  res.setHeader("X-Input-Tokens", String(${outputVariable}Usage.input_tokens));`,
         `  res.setHeader("X-Output-Tokens", String(${outputVariable}Usage.output_tokens));`,
         `  res.setHeader("X-Total-Tokens", String(${outputVariable}Usage.total_tokens));`,
+        `  if (${outputVariable}Usage.reasoning_tokens > 0) {`,
+        `    res.setHeader("X-Reasoning-Tokens", String(${outputVariable}Usage.reasoning_tokens));`,
+        `  }`,
         `}`,
       );
     }
 
     if (langGraphOutputMode === "last_message") {
+      rawLines.push(
+        `let ${outputVariable}Content = Array.isArray(${outputVariable}Raw?.messages) && ${outputVariable}Raw.messages.length > 0`,
+        `  ? ${outputVariable}Raw.messages[${outputVariable}Raw.messages.length - 1]?.content ?? ${outputVariable}Raw`,
+        `  : ${outputVariable}Raw;`,
+        `if (typeof ${outputVariable}Content === "object" && ${outputVariable}Content !== null && "kwargs" in ${outputVariable}Content && typeof ${outputVariable}Content.kwargs === "object" && ${outputVariable}Content.kwargs !== null && "content" in ${outputVariable}Content.kwargs && typeof ${outputVariable}Content.kwargs.content === "string") {`,
+        `  ${outputVariable}Content = ${outputVariable}Content.kwargs.content;`,
+        `}`,
+        `if (typeof ${outputVariable}Content === "string" && ${outputVariable}Content.startsWith("{")) {`,
+        `  try {`,
+        `    const _parsedMsg = JSON.parse(${outputVariable}Content);`,
+        `    if (typeof _parsedMsg === "object" && _parsedMsg !== null) {`,
+        `      if ("kwargs" in _parsedMsg && typeof _parsedMsg.kwargs === "object" && _parsedMsg.kwargs !== null && "content" in _parsedMsg.kwargs && typeof _parsedMsg.kwargs.content === "string") {`,
+        `        ${outputVariable}Content = _parsedMsg.kwargs.content;`,
+        `      } else if ("content" in _parsedMsg && typeof _parsedMsg.content === "string") {`,
+        `        ${outputVariable}Content = _parsedMsg.content;`,
+        `      }`,
+        `    }`,
+        `  } catch {}`,
+        `}`,
+      );
       if (langGraphTrackTokenUsage) {
         rawLines.push(
-          `const ${outputVariable}Content = Array.isArray(${outputVariable}Raw?.messages) && ${outputVariable}Raw.messages.length > 0`,
-          `  ? ${outputVariable}Raw.messages[${outputVariable}Raw.messages.length - 1]?.content ?? ${outputVariable}Raw`,
-          `  : ${outputVariable}Raw;`,
           `const ${outputVariable} = typeof ${outputVariable}Content === "object" && ${outputVariable}Content !== null`,
           `  ? { ...${outputVariable}Content, usage: ${outputVariable}Usage }`,
           `  : { response: ${outputVariable}Content, content: ${outputVariable}Content, usage: ${outputVariable}Usage };`,
         );
       } else {
         rawLines.push(
-          `const ${outputVariable} = Array.isArray(${outputVariable}Raw?.messages) && ${outputVariable}Raw.messages.length > 0`,
-          `  ? ${outputVariable}Raw.messages[${outputVariable}Raw.messages.length - 1]?.content ?? ${outputVariable}Raw`,
-          `  : ${outputVariable}Raw;`,
+          `const ${outputVariable} = ${outputVariable}Content;`,
         );
       }
     } else if (
@@ -903,20 +1263,28 @@ export function renderLangGraphInvokeStep(
     } else {
       rawLines.push(
         `const ${outputVariable}Messages = Array.isArray(${outputVariable}Raw?.messages) ? ${outputVariable}Raw.messages : [];`,
-      );
-      rawLines.push(
         `const ${outputVariable}LastMsg = ${outputVariable}Messages.length > 0 ? ${outputVariable}Messages[${outputVariable}Messages.length - 1] : undefined;`,
+        `let ${outputVariable}Response: string = (typeof ${outputVariable}LastMsg === "object" && ${outputVariable}LastMsg !== null) ? (("content" in ${outputVariable}LastMsg && typeof ${outputVariable}LastMsg.content === "string") ? ${outputVariable}LastMsg.content : (("kwargs" in ${outputVariable}LastMsg && typeof ${outputVariable}LastMsg.kwargs === "object" && ${outputVariable}LastMsg.kwargs !== null && "content" in ${outputVariable}LastMsg.kwargs && typeof ${outputVariable}LastMsg.kwargs.content === "string") ? ${outputVariable}LastMsg.kwargs.content : (typeof ${outputVariable}LastMsg === "string" ? ${outputVariable}LastMsg : ""))) : (typeof ${outputVariable}LastMsg === "string" ? ${outputVariable}LastMsg : (typeof ${outputVariable}Raw === "string" ? ${outputVariable}Raw : ""));`,
+        `if (typeof ${outputVariable}Response === "string" && ${outputVariable}Response.startsWith("{")) {`,
+        `  try {`,
+        `    const _parsedMsg = JSON.parse(${outputVariable}Response);`,
+        `    if (typeof _parsedMsg === "object" && _parsedMsg !== null) {`,
+        `      if ("kwargs" in _parsedMsg && typeof _parsedMsg.kwargs === "object" && _parsedMsg.kwargs !== null && "content" in _parsedMsg.kwargs && typeof _parsedMsg.kwargs.content === "string") {`,
+        `        ${outputVariable}Response = _parsedMsg.kwargs.content;`,
+        `      } else if ("content" in _parsedMsg && typeof _parsedMsg.content === "string") {`,
+        `        ${outputVariable}Response = _parsedMsg.content;`,
+        `      }`,
+        `    }`,
+        `  } catch {}`,
+        `}`,
+        `const ${outputVariable} = {`,
+        `  ...${outputVariable}Raw,`,
+        `  response: ${outputVariable}Response,`,
+        `  content: ${outputVariable}Response,`,
+        `  threadId: ${threadIdExpr || "undefined"},`,
+        `  state: ${outputVariable}Raw,${langGraphTrackTokenUsage ? `\n  usage: ${outputVariable}Usage,` : ""}
+};`,
       );
-      rawLines.push(
-        `const ${outputVariable}Response = (typeof ${outputVariable}LastMsg === "object" && ${outputVariable}LastMsg !== null && "content" in ${outputVariable}LastMsg && ${outputVariable}LastMsg.content !== undefined ? (typeof ${outputVariable}LastMsg.content === "string" ? ${outputVariable}LastMsg.content : JSON.stringify(${outputVariable}LastMsg.content)) : undefined) ?? (typeof ${outputVariable}Raw === "string" ? ${outputVariable}Raw : "");`,
-      );
-      rawLines.push(`const ${outputVariable} = {
-  ...${outputVariable}Raw,
-  response: ${outputVariable}Response,
-  content: ${outputVariable}Response,
-  threadId: ${threadIdExpr || "undefined"},
-  state: ${outputVariable}Raw,${langGraphTrackTokenUsage ? `\n  usage: ${outputVariable}Usage,` : ""}
-};`);
     }
   }
 
