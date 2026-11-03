@@ -196,7 +196,7 @@ export function renderLangGraphInvokeStep(
     } else {
       const excludeTools = step.langGraphHistoryExcludeToolMessages !== false;
       rawLines.push("const " + outputVariable + "RawMessages = " + snapVar + "?.values?.messages ?? [];");
-      rawLines.push("const " + outputVariable + "Messages = (Array.isArray(" + outputVariable + "RawMessages) ? " + outputVariable + "RawMessages : [])");
+      rawLines.push("const " + outputVariable + "AllMessages = (Array.isArray(" + outputVariable + "RawMessages) ? " + outputVariable + "RawMessages : [])");
       if (excludeTools) {
         rawLines.push("  .filter((m) => {");
         rawLines.push("    const t = typeof m.getType === \"function\" ? m.getType() : m.role;");
@@ -226,6 +226,16 @@ export function renderLangGraphInvokeStep(
       rawLines.push("  });");
 
       if (isPaginated) {
+        rawLines.push("let " + outputVariable + "EndIndex = " + outputVariable + "AllMessages.length;");
+        rawLines.push("if (" + outputVariable + "BeforeRaw && " + outputVariable + "BeforeRaw !== \"0\" && " + outputVariable + "BeforeRaw !== \"null\" && " + outputVariable + "BeforeRaw !== \"undefined\") {");
+        rawLines.push("  const beforeIdx = " + outputVariable + "AllMessages.findIndex((m) => m.id === String(" + outputVariable + "BeforeRaw).trim());");
+        rawLines.push("  if (beforeIdx !== -1) {");
+        rawLines.push("    " + outputVariable + "EndIndex = beforeIdx;");
+        rawLines.push("  }");
+        rawLines.push("}");
+        rawLines.push("const " + outputVariable + "StartIndex = Math.max(0, " + outputVariable + "EndIndex - " + outputVariable + "Limit);");
+        rawLines.push("const " + outputVariable + "Messages = " + outputVariable + "AllMessages.slice(" + outputVariable + "StartIndex, " + outputVariable + "EndIndex);");
+        rawLines.push("const " + outputVariable + "NextCursor = " + outputVariable + "StartIndex > 0 ? (" + outputVariable + "Messages[0]?.id ?? null) : null;");
         rawLines.push("const " + outputVariable + " = {");
         rawLines.push("  messages: " + outputVariable + "Messages,");
         rawLines.push("  pagination: {");
@@ -235,7 +245,7 @@ export function renderLangGraphInvokeStep(
         rawLines.push("  },");
         rawLines.push("};");
       } else {
-        rawLines.push("const " + outputVariable + " = " + outputVariable + "Messages;");
+        rawLines.push("const " + outputVariable + " = " + outputVariable + "AllMessages;");
       }
     }
 

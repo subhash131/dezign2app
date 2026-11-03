@@ -1001,6 +1001,9 @@ describe("LangGraph Invoke Pipeline Step Compiler", () => {
       expect(code).toContain("{ limit: paginatedHistoryLimit, before: paginatedHistoryBefore }");
       expect(code).toContain("next_cursor: paginatedHistoryNextCursor");
       expect(code).toContain("messages: paginatedHistoryMessages");
+      expect(code).toContain("const paginatedHistoryStartIndex = Math.max(0, paginatedHistoryEndIndex - paginatedHistoryLimit);");
+      expect(code).toContain("const paginatedHistoryMessages = paginatedHistoryAllMessages.slice(paginatedHistoryStartIndex, paginatedHistoryEndIndex);");
+      expect(code).toContain("const paginatedHistoryNextCursor = paginatedHistoryStartIndex > 0 ? (paginatedHistoryMessages[0]?.id ?? null) : null;");
     });
   });
 });
