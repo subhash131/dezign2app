@@ -217,6 +217,7 @@ export const LangGraphInvokeStepSection: React.FC<
           availableSources={availableSources}
           serviceNodeId={serviceNodeId}
           endpoint={endpoint}
+          onEndpointChange={onEndpointChange}
           onChange={onChange}
         />
       ) : (
