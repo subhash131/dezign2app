@@ -62,8 +62,8 @@ jobs:
         working-directory: packages/backend
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
-          CONVEX_SITE_URL: ${{ secrets.CONVEX_SITE_URL || vars.CONVEX_SITE_URL }}
-          CONVEX_URL: ${{ secrets.CONVEX_URL || vars.CONVEX_URL }}
+          CONVEX_SITE_URL: ${{ secrets['CONVEX_SITE_URL'] || vars['CONVEX_SITE_URL'] || 'https://gregarious-quail-82.convex.site' }}
+          CONVEX_URL: ${{ secrets['CONVEX_URL'] || vars['CONVEX_URL'] || 'https://gregarious-quail-82.convex.cloud' }}
         run: |
           if [ -z "$CONVEX_DEPLOY_KEY" ]; then
             echo "❌ Error: Production Convex deploy key (CONVEX_DEPLOY_KEY) is not set in repository secrets."
@@ -78,8 +78,8 @@ jobs:
         working-directory: packages/backend
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets['CONVEX_DEPLOY_KEY_DEV'] }}
-          CONVEX_SITE_URL: ${{ vars.CONVEX_SITE_URL_DEV || 'https://neighborly-setter-541.convex.site' }}
-          CONVEX_URL: ${{ vars.CONVEX_URL_DEV || 'https://neighborly-setter-541.convex.cloud' }}
+          CONVEX_SITE_URL: ${{ vars['CONVEX_SITE_URL_DEV'] || 'https://neighborly-setter-541.convex.site' }}
+          CONVEX_URL: ${{ vars['CONVEX_URL_DEV'] || 'https://neighborly-setter-541.convex.cloud' }}
         run: |
           if [ -n "$CONVEX_DEPLOY_KEY" ]; then
             echo "🚀 Deploying to Development Convex..."
