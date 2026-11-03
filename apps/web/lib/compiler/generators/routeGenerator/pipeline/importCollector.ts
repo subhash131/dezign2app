@@ -45,7 +45,9 @@ export function collectPipelineImports(
         imports.set(importPath, new Set([name]));
       }
     } else if (s.type === "langgraph_invoke" && s.enabled !== false) {
-      const rawLabel = s.name || "agent";
+      // For history steps the name contains " History" suffix — strip it so
+      // the import resolves to the same package as the regular invoke step.
+      const rawLabel = (s.name || "agent").replace(/\s+history$/i, "").trim() || "agent";
       let importPath: string;
       if (s.functionRef?.importPath && s.functionRef.importPath.startsWith("@")) {
         importPath = s.functionRef.importPath;
