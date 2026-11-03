@@ -143,6 +143,92 @@ export function renderLangGraphInvokeStep(
     ? resolvePathAccessor(langGraphThreadIdSource, ctx)
     : undefined;
 
+  // ─── LangGraph Action: History (getState / getStateHistory) ───
+  if (step.langGraphAction === "history") {
+    const threadAccessor = threadIdExpr || "req.params.threadId ?? req.query.thread_id ?? req.headers[\"x-thread-id\"]";
+    const format = step.langGraphHistoryFormat || "chat_messages";
+    const snapVar = outputVariable + "Snapshot";
+    const isPaginated = Boolean(step.langGraphHistoryPaginationEnabled);
+
+    let limitAccessor = "req.query.limit";
+    let beforeAccessor = "req.query.before";
+
+    if (isPaginated) {
+      const limitSource = step.langGraphHistoryLimitSource || "query.limit";
+      limitAccessor = resolvePathAccessor(limitSource, ctx);
+      const defaultLimit = step.langGraphHistoryLimitDefault || 10;
+
+      const beforeSource = step.langGraphHistoryBeforeSource || "query.before";
+      beforeAccessor = resolvePathAccessor(beforeSource, ctx);
+
+      rawLines.push("const " + outputVariable + "Limit = Math.max(1, Number(" + limitAccessor + ") || " + defaultLimit + ");");
+      rawLines.push("const " + outputVariable + "Before = " + beforeAccessor + " ? { configurable: { checkpoint_id: String(" + beforeAccessor + ") } } : undefined;");
+      rawLines.push("const " + outputVariable + "Snapshots: any[] = [];");
+      rawLines.push("for await (const snap of " + graphVar + ".getStateHistory(");
+      rawLines.push("  { configurable: { thread_id: " + threadAccessor + " } },");
+      rawLines.push("  { limit: " + outputVariable + "Limit, before: " + outputVariable + "Before }");
+      rawLines.push(")) {");
+      rawLines.push("  " + outputVariable + "Snapshots.push(snap);");
+      rawLines.push("}");
+      rawLines.push("const " + snapVar + " = " + outputVariable + "Snapshots[0] || (await " + graphVar + ".getState({ configurable: { thread_id: " + threadAccessor + " } }));");
+      rawLines.push("const " + outputVariable + "NextCursor = " + outputVariable + "Snapshots[" + outputVariable + "Snapshots.length - 1]?.config?.configurable?.checkpoint_id ?? null;");
+    } else {
+      rawLines.push("const " + snapVar + " = await " + graphVar + ".getState({");
+      rawLines.push("  configurable: { thread_id: " + threadAccessor + " },");
+      rawLines.push("});");
+    }
+
+    if (format === "full_state") {
+      rawLines.push("const " + outputVariable + " = {");
+      rawLines.push("  threadId: " + threadAccessor + ",");
+      rawLines.push("  values: " + snapVar + "?.values ?? {},");
+      rawLines.push("  next: " + snapVar + "?.next ?? [],");
+      if (isPaginated) {
+        rawLines.push("  pagination: {");
+        rawLines.push("    limit: " + outputVariable + "Limit,");
+        rawLines.push("    before: " + beforeAccessor + " ?? null,");
+        rawLines.push("    next_cursor: " + outputVariable + "NextCursor,");
+        rawLines.push("  },");
+      }
+      rawLines.push("};");
+    } else {
+      const excludeTools = step.langGraphHistoryExcludeToolMessages !== false;
+      rawLines.push("const " + outputVariable + "RawMessages = (" + snapVar + "?.values as any)?.messages ?? [];");
+      rawLines.push("const " + outputVariable + "Messages = (Array.isArray(" + outputVariable + "RawMessages) ? " + outputVariable + "RawMessages : [])");
+      if (excludeTools) {
+        rawLines.push("  .filter((m: any) => {");
+        rawLines.push("    const t = typeof m.getType === \"function\" ? m.getType() : m.role;");
+        rawLines.push("    return t === \"human\" || t === \"user\" || t === \"ai\" || t === \"assistant\";");
+        rawLines.push("  })");
+      }
+      rawLines.push("  .map((m: any) => {");
+      rawLines.push("    const t = typeof m.getType === \"function\" ? m.getType() : m.role;");
+      rawLines.push("    const role = (t === \"human\" || t === \"user\") ? \"user\" : (t === \"ai\" || t === \"assistant\") ? \"assistant\" : String(t || \"assistant\");");
+      rawLines.push("    const content = typeof m.content === \"string\"");
+      rawLines.push("      ? m.content");
+      rawLines.push("      : Array.isArray(m.content)");
+      rawLines.push("        ? m.content.map((b: any) => b.text || \"\").join(\"\")");
+      rawLines.push("        : String(m.content ?? \"\");");
+      rawLines.push("    return { id: m.id || (typeof crypto !== \"undefined\" && typeof crypto.randomUUID === \"function\" ? crypto.randomUUID() : String(Date.now())), role, content };");
+      rawLines.push("  });");
+
+      if (isPaginated) {
+        rawLines.push("const " + outputVariable + " = {");
+        rawLines.push("  messages: " + outputVariable + "Messages,");
+        rawLines.push("  pagination: {");
+        rawLines.push("    limit: " + outputVariable + "Limit,");
+        rawLines.push("    before: " + beforeAccessor + " ?? null,");
+        rawLines.push("    next_cursor: " + outputVariable + "NextCursor,");
+        rawLines.push("  },");
+        rawLines.push("};");
+      } else {
+        rawLines.push("const " + outputVariable + " = " + outputVariable + "Messages;");
+      }
+    }
+
+    return rawLines;
+  }
+
   // Build dedicated messages initialization if langGraphMessagesConfig is defined
   const stepPrefix = toVarName(step.name || step.id || "agent");
   const messagesInitLines: string[] = [];

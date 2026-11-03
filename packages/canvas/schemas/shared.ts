@@ -487,6 +487,22 @@ export interface PipelineStep {
    * Supports single turn (user + dynamic system message) or bulk message array.
    */
   langGraphMessagesConfig?: LangGraphMessagesConfig;
+  /** Execution action: 'invoke' (run/stream agent) or 'history' (fetch checkpoint state) */
+  langGraphAction?: "invoke" | "history";
+  /** History response format: clean chat messages array or raw state snapshot */
+  langGraphHistoryFormat?: "chat_messages" | "full_state";
+  /** Whether to exclude internal tool execution messages from the chat messages array */
+  langGraphHistoryExcludeToolMessages?: boolean;
+  /** Whether to enable cursor/limit pagination for history */
+  langGraphHistoryPaginationEnabled?: boolean;
+  /** Source expression for limit (e.g. 'query.limit') */
+  langGraphHistoryLimitSource?: string;
+  /** Default limit count (default: 10) */
+  langGraphHistoryLimitDefault?: number;
+  /** Source expression for cursor / before checkpoint_id (e.g. 'query.before') */
+  langGraphHistoryBeforeSource?: string;
+  /** Specific state channels to select (e.g. ['values.messages']) */
+  langGraphHistorySelect?: string[];
 }
 
 export interface LangGraphMessagesConfig {
@@ -627,6 +643,14 @@ export const pipelineStepSchema: z.ZodType<PipelineStep> = z.lazy(() =>
     langGraphOutputFields: z.array(z.string()).optional(),
     langGraphTrackTokenUsage: z.boolean().optional(),
     langGraphMessagesConfig: langGraphMessagesConfigSchema.optional(),
+    langGraphAction: z.enum(["invoke", "history"]).optional(),
+    langGraphHistoryFormat: z.enum(["chat_messages", "full_state"]).optional(),
+    langGraphHistoryExcludeToolMessages: z.boolean().optional(),
+    langGraphHistoryPaginationEnabled: z.boolean().optional(),
+    langGraphHistoryLimitSource: z.string().optional(),
+    langGraphHistoryLimitDefault: z.number().optional(),
+    langGraphHistoryBeforeSource: z.string().optional(),
+    langGraphHistorySelect: z.array(z.string()).optional(),
   })
 );
 

@@ -2,7 +2,7 @@
 
 import React from "react";
 import { useParams } from "next/navigation";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Zap, History } from "lucide-react";
 import { BackendNode, BackendEdge, Endpoint } from "@workspace/canvas/types";
 import { PipelineStepDraft, AvailableSource } from "./types";
 import {
@@ -14,6 +14,7 @@ import {
   ConversationMessagesSection,
   StateChannelPayloadSection,
   StreamingAndOutputSection,
+  HistoryConfigSection,
   useAgentTargeting,
   useSessionThreadId,
   useConversationMessages,
@@ -174,6 +175,53 @@ export const LangGraphInvokeStepSection: React.FC<
         onOpenStudio={handleOpenStudio}
       />
 
+      {/* Execution Action Switcher: Invoke vs Fetch History */}
+      <div className="flex items-center justify-between p-1 bg-secondary/50 rounded-xl border border-border/50">
+        <button
+          type="button"
+          className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all ${
+            step.langGraphAction !== "history"
+              ? "bg-primary text-primary-foreground shadow-xs"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+          onClick={() => onChange({ ...step, langGraphAction: "invoke" })}
+        >
+          <Zap size={13} />
+          Run / Stream Agent
+        </button>
+        <button
+          type="button"
+          className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all ${
+            step.langGraphAction === "history"
+              ? "bg-indigo-600 text-white shadow-xs"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+          onClick={() =>
+            onChange({
+              ...step,
+              langGraphAction: "history",
+              outputVariable: step.outputVariable || "chatHistory",
+              langGraphThreadIdSource: step.langGraphThreadIdSource || "params.threadId",
+            })
+          }
+        >
+          <History size={13} />
+          Fetch Chat History
+        </button>
+      </div>
+
+      {step.langGraphAction === "history" ? (
+        <HistoryConfigSection
+          step={step}
+          selectedAgentNode={selectedAgentNode}
+          availableSources={availableSources}
+          serviceNodeId={serviceNodeId}
+          endpoint={endpoint}
+          onChange={onChange}
+        />
+      ) : (
+        <>
+
       {/* Memory Checkpointer Thread ID Section */}
       <SessionThreadIdSection
         hasMemory={hasMemory}
@@ -293,6 +341,8 @@ export const LangGraphInvokeStepSection: React.FC<
         trackTokenUsage={realtimeStreaming.trackTokenUsage}
         onToggleTrackTokenUsage={realtimeStreaming.handleToggleTrackTokenUsage}
       />
+        </>
+      )}
 
       {children}
     </div>

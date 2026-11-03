@@ -130,6 +130,29 @@ describe("Convex canvasValidators exact schema", () => {
     expect(parsed.success).toBe(true);
   });
 
+  it("successfully parses langgraph_invoke steps with langGraphAction: 'history' and langGraphHistoryFormat", () => {
+    const lgHistoryStep = {
+      id: "hist-step-1",
+      name: "chatHistory",
+      type: "langgraph_invoke",
+      langGraphAction: "history" as const,
+      langGraphHistoryFormat: "chat_messages" as const,
+      langGraphHistoryExcludeToolMessages: true,
+      langGraphTargetNodeId: "agent-node-1",
+      langGraphThreadIdSource: "params.threadId",
+      outputVariable: "chatHistory",
+    };
+
+    const parsedHistory = safePipelineStepSchema.safeParse(lgHistoryStep);
+    expect(parsedHistory.success).toBe(true);
+    if (parsedHistory.success) {
+      expect((parsedHistory.data as any).langGraphAction).toBe("history");
+      expect((parsedHistory.data as any).langGraphHistoryFormat).toBe("chat_messages");
+    }
+    const parsed = parsedHistory;
+    expect(parsed.success).toBe(true);
+  });
+
   it("backendEndpointDataValidator, backendEventDataValidator, backendNodeDataValidator are valid Convex validators", () => {
     expect(backendEndpointDataValidator).toBeDefined();
     expect(backendEventDataValidator).toBeDefined();

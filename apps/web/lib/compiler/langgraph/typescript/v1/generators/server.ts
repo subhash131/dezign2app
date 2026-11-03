@@ -351,16 +351,36 @@ ${hasMemory ? `
 app.get("/api/threads/:threadId/history", async (req: Request, res: Response) => {
   try {
     const { threadId } = req.params;
-    const snapshot = await ${graphVarName}.getState({ configurable: { thread_id: threadId } });
-    const messages = (snapshot.values && typeof snapshot.values === "object")
+    const limit = Math.max(1, Number(req.query.limit) || 10);
+    const before = typeof req.query.before === "string" && req.query.before.trim()
+      ? { configurable: { checkpoint_id: req.query.before.trim() } }
+      : undefined;
+
+    const historySnapshots: any[] = [];
+    for await (const snap of ${graphVarName}.getStateHistory(
+      { configurable: { thread_id: threadId } },
+      { limit, before }
+    )) {
+      historySnapshots.push(snap);
+    }
+
+    const snapshot = historySnapshots[0] || (await ${graphVarName}.getState({ configurable: { thread_id: threadId } }));
+    const nextCursor = historySnapshots[historySnapshots.length - 1]?.config?.configurable?.checkpoint_id ?? null;
+
+    const messages = (snapshot?.values && typeof snapshot.values === "object")
       ? Reflect.get(snapshot.values, "messages") ?? []
       : [];
     res.json({
       ok: true,
       thread_id: threadId,
-      state: snapshot.values || {},
+      state: snapshot?.values || {},
       messages: messages || [],
-      next: snapshot.next || [],
+      next: snapshot?.next || [],
+      pagination: {
+        limit,
+        before: req.query.before ?? null,
+        next_cursor: nextCursor,
+      },
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

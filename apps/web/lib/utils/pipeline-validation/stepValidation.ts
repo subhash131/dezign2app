@@ -574,6 +574,11 @@ function isLangGraphStepUnconfigured(
   );
   if (!targetNode) return true;
 
+  // History mode only requires target LangGraph node and a threadId source
+  if (step.langGraphAction === "history") {
+    return !step.langGraphThreadIdSource?.trim();
+  }
+
   const inputBindings = step.inputBindings || [];
   const stateMapping = step.langGraphStateMapping || {};
 

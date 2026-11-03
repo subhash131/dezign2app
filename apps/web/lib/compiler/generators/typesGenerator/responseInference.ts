@@ -234,6 +234,15 @@ export function inferBindingType(
         return "Record<string, string | number | boolean | null>";
       }
       if (step.type === "langgraph_invoke") {
+        if (step.langGraphAction === "history") {
+          if (source.field === "values") return "Record<string, unknown>";
+          if (source.field === "next") return "string[]";
+          if (source.field === "messages") return "Array<{ id: string; role: string; content: string }>";
+          if (step.langGraphHistoryFormat === "full_state") {
+            return "{ threadId: string; values: Record<string, unknown>; next: string[] }";
+          }
+          return "Array<{ id: string; role: string; content: string }>";
+        }
         if (source.field) {
           if (
             source.field === "response" ||
@@ -731,7 +740,13 @@ export interface ${interfaceName}StreamChunk {
         lastDataType = `{\n${props.join("\n")}\n}`;
       }
     } else if (lastStep?.type === "langgraph_invoke") {
-      if (lastStep.langGraphOutputMode === "last_message") {
+      if (lastStep.langGraphAction === "history") {
+        if (lastStep.langGraphHistoryFormat === "full_state") {
+          lastDataType = "{\n  threadId: string;\n  values: Record<string, unknown>;\n  next: string[];\n}";
+        } else {
+          lastDataType = "Array<{\n  id: string;\n  role: string;\n  content: string;\n}>";
+        }
+      } else if (lastStep.langGraphOutputMode === "last_message") {
         lastDataType = "string";
       } else if (
         lastStep.langGraphOutputMode === "specific_fields" &&
