@@ -902,7 +902,7 @@ describe("LangGraph Invoke Pipeline Step Compiler", () => {
 
       expect(code).toContain("const chatHistorySnapshot = await supportAgentGraph.getState({");
       expect(code).toContain("configurable: { thread_id: req.params.threadId }");
-      expect(code).toContain("const chatHistoryRawMessages = (chatHistorySnapshot?.values as any)?.messages ?? [];");
+      expect(code).toContain("const chatHistoryRawMessages = chatHistorySnapshot?.values?.messages ?? [];");
       expect(code).toContain('const role = (t === "human" || t === "user") ? "user" : (t === "ai" || t === "assistant") ? "assistant" : String(t || "assistant");');
       expect(code).toContain("return { id: m.id ||");
     });

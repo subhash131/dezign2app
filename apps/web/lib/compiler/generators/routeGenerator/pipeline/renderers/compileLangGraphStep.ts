@@ -128,7 +128,8 @@ export function renderLangGraphInvokeStep(
   } = step;
 
   const rawLines: string[] = [];
-  const rawLabel = step.name || "agent";
+  // Strip the " History" suffix so history steps resolve to the same graph variable as the regular invoke step.
+  const rawLabel = (step.name || "agent").replace(/\s+history$/i, "").trim() || "agent";
   const graphVar =
     functionRef?.name ||
     (langGraphTargetNodeId &&
@@ -164,7 +165,7 @@ export function renderLangGraphInvokeStep(
       rawLines.push("const " + outputVariable + "Limit = Math.max(1, Number(" + limitAccessor + ") || " + defaultLimit + ");");
       rawLines.push("const " + outputVariable + "BeforeRaw = " + beforeAccessor + ";");
       rawLines.push("const " + outputVariable + "Before = (" + outputVariable + "BeforeRaw && " + outputVariable + "BeforeRaw !== \"0\" && " + outputVariable + "BeforeRaw !== \"null\" && " + outputVariable + "BeforeRaw !== \"undefined\") ? { configurable: { checkpoint_id: String(" + outputVariable + "BeforeRaw).trim() } } : undefined;");
-      rawLines.push("const " + outputVariable + "Snapshots: any[] = [];");
+      rawLines.push("const " + outputVariable + "Snapshots = [];");
       rawLines.push("for await (const snap of " + graphVar + ".getStateHistory(");
       rawLines.push("  { configurable: { thread_id: " + threadAccessor + " } },");
       rawLines.push("  { limit: " + outputVariable + "Limit, before: " + outputVariable + "Before }");
@@ -194,22 +195,33 @@ export function renderLangGraphInvokeStep(
       rawLines.push("};");
     } else {
       const excludeTools = step.langGraphHistoryExcludeToolMessages !== false;
-      rawLines.push("const " + outputVariable + "RawMessages = (" + snapVar + "?.values as any)?.messages ?? [];");
+      rawLines.push("const " + outputVariable + "RawMessages = " + snapVar + "?.values?.messages ?? [];");
       rawLines.push("const " + outputVariable + "Messages = (Array.isArray(" + outputVariable + "RawMessages) ? " + outputVariable + "RawMessages : [])");
       if (excludeTools) {
-        rawLines.push("  .filter((m: any) => {");
+        rawLines.push("  .filter((m) => {");
         rawLines.push("    const t = typeof m.getType === \"function\" ? m.getType() : m.role;");
         rawLines.push("    return t === \"human\" || t === \"user\" || t === \"ai\" || t === \"assistant\";");
         rawLines.push("  })");
       }
-      rawLines.push("  .map((m: any) => {");
+      rawLines.push("  .map((m) => {");
       rawLines.push("    const t = typeof m.getType === \"function\" ? m.getType() : m.role;");
       rawLines.push("    const role = (t === \"human\" || t === \"user\") ? \"user\" : (t === \"ai\" || t === \"assistant\") ? \"assistant\" : String(t || \"assistant\");");
-      rawLines.push("    const content = typeof m.content === \"string\"");
-      rawLines.push("      ? m.content");
-      rawLines.push("      : Array.isArray(m.content)");
-      rawLines.push("        ? m.content.map((b: any) => b.text || \"\").join(\"\")");
-      rawLines.push("        : String(m.content ?? \"\");");
+            rawLines.push("    let content = \"\";");
+      rawLines.push("    if (typeof m.content === \"string\") {");
+      rawLines.push("      content = m.content;");
+      rawLines.push("    } else if (Array.isArray(m.content)) {");
+      rawLines.push("      for (const item of m.content) {");
+      rawLines.push("        if (typeof item === \"string\") {");
+      rawLines.push("          content += item;");
+      rawLines.push("        } else if (item && typeof item === \"object\" && \"text\" in item && typeof item.text === \"string\") {");
+      rawLines.push("          content += item.text;");
+      rawLines.push("        } else {");
+      rawLines.push("          content += JSON.stringify(item);");
+      rawLines.push("        }");
+      rawLines.push("      }");
+      rawLines.push("    } else {");
+      rawLines.push("      content = String(m.content ?? \"\");");
+      rawLines.push("    }");
       rawLines.push("    return { id: m.id || (typeof crypto !== \"undefined\" && typeof crypto.randomUUID === \"function\" ? crypto.randomUUID() : String(Date.now())), role, content };");
       rawLines.push("  });");
 
