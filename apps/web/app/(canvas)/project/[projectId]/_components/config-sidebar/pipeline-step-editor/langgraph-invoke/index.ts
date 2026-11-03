@@ -5,6 +5,7 @@ export * from "./SessionThreadIdSection";
 export * from "./ConversationMessagesSection";
 export * from "./StateChannelPayloadSection";
 export * from "./StreamingAndOutputSection";
+export * from "./HistoryConfigSection";
 export * from "./hooks/useAgentTargeting";
 export * from "./hooks/useSessionThreadId";
 export * from "./hooks/useConversationMessages";

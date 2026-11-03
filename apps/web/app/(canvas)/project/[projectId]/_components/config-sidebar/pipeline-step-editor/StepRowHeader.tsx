@@ -138,6 +138,27 @@ export const StepRowHeader = ({
               </>
             )
           ) : step.type === "langgraph_invoke" ? (
+            step.langGraphAction === "history" ? (
+              <>
+                <span className="text-[9.5px] font-sans font-semibold px-1.5 py-0.2 rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 shrink-0">
+                  History
+                </span>
+                <span className="font-normal select-none text-muted-foreground/45">const</span>
+                <span className="text-primary/95 font-semibold">{displayVarName}</span>
+                <span className="text-muted-foreground/35 font-normal select-none">=</span>
+                <span className="text-[11px] text-indigo-400 font-mono font-medium truncate max-w-[180px]">
+                  await {step.name || "Agent"}.getState(...)
+                </span>
+                {step.langGraphThreadIdSource && (
+                  <span
+                    className="text-[9px] font-mono px-1 py-0.2 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 truncate max-w-[130px]"
+                    title={`Thread ID: ${step.langGraphThreadIdSource}`}
+                  >
+                    thread: {step.langGraphThreadIdSource.replace(/^body\./, "").replace(/^req\.headers\[['"]/, "").replace(/['"]\]$/, "").replace(/^params\./, "").replace(/^query\./, "")}
+                  </span>
+                )}
+              </>
+            ) : (
             <>
               {step.langGraphStreamingEnabled ? (
                 <span className="text-[9.5px] font-sans font-semibold px-1.5 py-0.2 rounded bg-purple-500/15 text-purple-300 border border-purple-500/30 shrink-0">
@@ -170,6 +191,7 @@ export const StepRowHeader = ({
                 </span>
               )}
             </>
+            )
           ) : (
             <>
               {step.declarationKind === "reassign" ? null : (

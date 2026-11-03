@@ -594,6 +594,33 @@ describe("pipeline-validation: isStepInputUnconfigured for langgraph_invoke", ()
     };
     expect(isStepInputUnconfigured(step, [agentNodeWithMessagesInput])).toBe(false);
   });
+
+  it("returns true (unconfigured) in history mode when threadId source is missing", () => {
+    const step: PipelineStepDraft = {
+      id: "step-lg-history-1",
+      name: "getHistory",
+      type: "langgraph_invoke",
+      langGraphAction: "history",
+      enabled: true,
+      langGraphTargetNodeId: "agent-1",
+      langGraphThreadIdSource: "",
+    };
+    expect(isStepInputUnconfigured(step, [mockAgentNode])).toBe(true);
+  });
+
+  it("returns false (configured) in history mode when target node and threadId source are configured", () => {
+    const step: PipelineStepDraft = {
+      id: "step-lg-history-2",
+      name: "getHistory",
+      type: "langgraph_invoke",
+      langGraphAction: "history",
+      enabled: true,
+      langGraphTargetNodeId: "agent-1",
+      langGraphThreadIdSource: "params.threadId",
+    };
+    // Note: mockAgentNode has required inputChannel "query", but in history mode it should NOT be required!
+    expect(isStepInputUnconfigured(step, [mockAgentNode])).toBe(false);
+  });
 });
 
 

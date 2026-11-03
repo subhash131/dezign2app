@@ -464,6 +464,28 @@ export function createDefaultStepDraft({
       defaultStateMapping["messages"] = isConsumer ? "event.message" : "body.message";
     }
 
+    const isGetOrHistory =
+      !isConsumer &&
+      Boolean(
+        endpoint &&
+          (endpoint.type === "GET" ||
+            (endpoint.name &&
+              (endpoint.name.toLowerCase().includes("history") ||
+                endpoint.name.toLowerCase().includes("messages")))),
+      );
+
+    let defaultThreadSource = isConsumer ? "event.thread_id" : "body.thread_id";
+    if (isGetOrHistory) {
+      const epPath = endpoint?.name || "";
+      if (epPath.includes(":threadId")) {
+        defaultThreadSource = "params.threadId";
+      } else if (epPath.includes(":id")) {
+        defaultThreadSource = "params.id";
+      } else {
+        defaultThreadSource = "query.thread_id";
+      }
+    }
+
     const memoryConfig = effectiveLgNode?.data?.memoryConfig;
     const hasMemory = Boolean(
       memoryConfig &&
@@ -472,8 +494,11 @@ export function createDefaultStepDraft({
     );
 
     initialFields = {
-      name: agentLabel,
-      outputVariable: varName,
+      name: isGetOrHistory ? `${agentLabel} History` : agentLabel,
+      outputVariable: isGetOrHistory ? "chatHistory" : varName,
+      langGraphAction: isGetOrHistory ? "history" : "invoke",
+      langGraphHistoryFormat: "chat_messages",
+      langGraphHistoryExcludeToolMessages: true,
       langGraphTargetNodeId: effectiveLgId,
       langGraphStreamingEnabled: false,
       langGraphStreamingProtocol: "sse",
@@ -481,12 +506,10 @@ export function createDefaultStepDraft({
       langGraphStreamIncludeReasoning: true,
       langGraphStreamSubgraphs: false,
       langGraphOutputMode: "full_state",
-      langGraphStateMapping: defaultStateMapping,
-      ...(hasMemory
+      langGraphStateMapping: isGetOrHistory ? {} : defaultStateMapping,
+      ...(hasMemory || isGetOrHistory
         ? {
-            langGraphThreadIdSource: isConsumer
-              ? "event.thread_id"
-              : "body.thread_id",
+            langGraphThreadIdSource: defaultThreadSource,
           }
         : {}),
       inputBindings: [],

@@ -881,4 +881,129 @@ describe("LangGraph Invoke Pipeline Step Compiler", () => {
       expect(code).toContain('data: [DONE]\\n\\n');
     });
   });
+
+  describe("History Mode (getState)", () => {
+    it("renders await graph.getState() in history mode with chat_messages formatting by default", () => {
+      const step: PipelineStep = {
+        id: "step-history-1",
+        name: "SupportAgent",
+        type: "langgraph_invoke",
+        langGraphAction: "history",
+        outputVariable: "chatHistory",
+        langGraphTargetNodeId: "supportAgent",
+        langGraphThreadIdSource: "params.threadId",
+      };
+
+      const lines = renderPipelineStep(step, {
+        priorOutputs: new Map(),
+        bodyVar: "body",
+      });
+      const code = lines.join("\n");
+
+      expect(code).toContain("const chatHistorySnapshot = await supportAgentGraph.getState({");
+      expect(code).toContain("configurable: { thread_id: req.params.threadId }");
+      expect(code).toContain("const chatHistoryRawMessages = chatHistorySnapshot?.values?.messages ?? [];");
+      expect(code).toContain('const role = (t === "human" || t === "user") ? "user" : (t === "ai" || t === "assistant") ? "assistant" : String(t || "assistant");');
+      expect(code).toContain("return { id: m.id ||");
+    });
+
+    it("renders full_state format when langGraphHistoryFormat is full_state", () => {
+      const step: PipelineStep = {
+        id: "step-history-2",
+        name: "SupportAgent",
+        type: "langgraph_invoke",
+        langGraphAction: "history",
+        langGraphHistoryFormat: "full_state",
+        outputVariable: "fullStateOutput",
+        langGraphTargetNodeId: "supportAgent",
+        langGraphThreadIdSource: "query.thread_id",
+      };
+
+      const lines = renderPipelineStep(step, {
+        priorOutputs: new Map(),
+        bodyVar: "body",
+      });
+      const code = lines.join("\n");
+
+      expect(code).toContain("const fullStateOutputSnapshot = await supportAgentGraph.getState({");
+      expect(code).toContain("configurable: { thread_id: req.query.thread_id }");
+      expect(code).toContain("const fullStateOutput = {");
+      expect(code).toContain("values: fullStateOutputSnapshot?.values ?? {}");
+      expect(code).toContain("next: fullStateOutputSnapshot?.next ?? []");
+    });
+
+    it("retains tool messages when langGraphHistoryExcludeToolMessages is explicitly false", () => {
+      const step: PipelineStep = {
+        id: "step-history-3",
+        name: "SupportAgent",
+        type: "langgraph_invoke",
+        langGraphAction: "history",
+        langGraphHistoryExcludeToolMessages: false,
+        outputVariable: "allTurns",
+        langGraphTargetNodeId: "supportAgent",
+        langGraphThreadIdSource: "headers.x-thread-id",
+      };
+
+      const lines = renderPipelineStep(step, {
+        priorOutputs: new Map(),
+        bodyVar: "body",
+      });
+      const code = lines.join("\n");
+
+      expect(code).toContain("req.headers[\"x-thread-id\"]");
+      expect(code).not.toContain(".filter((m: any) =>");
+    });
+
+    it("falls back to default thread accessor if langGraphThreadIdSource is not set", () => {
+      const step: PipelineStep = {
+        id: "step-history-4",
+        name: "SupportAgent",
+        type: "langgraph_invoke",
+        langGraphAction: "history",
+        outputVariable: "fallbackHistory",
+        langGraphTargetNodeId: "supportAgent",
+      };
+
+      const lines = renderPipelineStep(step, {
+        priorOutputs: new Map(),
+        bodyVar: "body",
+      });
+      const code = lines.join("\n");
+
+      expect(code).toContain("req.params.threadId ?? req.query.thread_id ?? req.headers[\"x-thread-id\"]");
+    });
+
+    it("renders getStateHistory with limit and before cursor when langGraphHistoryPaginationEnabled is true", () => {
+      const step: PipelineStep = {
+        id: "step-history-paginated",
+        name: "SupportAgent",
+        type: "langgraph_invoke",
+        langGraphAction: "history",
+        langGraphHistoryPaginationEnabled: true,
+        langGraphHistoryLimitSource: "query.limit",
+        langGraphHistoryLimitDefault: 10,
+        langGraphHistoryBeforeSource: "query.before",
+        outputVariable: "paginatedHistory",
+        langGraphTargetNodeId: "supportAgent",
+        langGraphThreadIdSource: "params.threadId",
+      };
+
+      const lines = renderPipelineStep(step, {
+        priorOutputs: new Map(),
+        bodyVar: "body",
+      });
+      const code = lines.join("\n");
+
+      expect(code).toContain("const paginatedHistoryLimit = Math.max(1, Number(req.query.limit) || 10);");
+      expect(code).toContain("const paginatedHistoryBeforeRaw = req.query.before;");
+      expect(code).toContain("const paginatedHistoryBefore = (paginatedHistoryBeforeRaw && paginatedHistoryBeforeRaw !== \"0\" && paginatedHistoryBeforeRaw !== \"null\" && paginatedHistoryBeforeRaw !== \"undefined\") ? { configurable: { checkpoint_id: String(paginatedHistoryBeforeRaw).trim() } } : undefined;");
+      expect(code).toContain("for await (const snap of supportAgentGraph.getStateHistory(");
+      expect(code).toContain("{ limit: paginatedHistoryLimit, before: paginatedHistoryBefore }");
+      expect(code).toContain("next_cursor: paginatedHistoryNextCursor");
+      expect(code).toContain("messages: paginatedHistoryMessages");
+      expect(code).toContain("const paginatedHistoryStartIndex = Math.max(0, paginatedHistoryEndIndex - paginatedHistoryLimit);");
+      expect(code).toContain("const paginatedHistoryMessages = paginatedHistoryAllMessages.slice(paginatedHistoryStartIndex, paginatedHistoryEndIndex);");
+      expect(code).toContain("const paginatedHistoryNextCursor = paginatedHistoryStartIndex > 0 ? (paginatedHistoryMessages[0]?.id ?? null) : null;");
+    });
+  });
 });

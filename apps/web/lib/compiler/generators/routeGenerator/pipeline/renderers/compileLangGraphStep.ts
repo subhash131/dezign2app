@@ -128,7 +128,8 @@ export function renderLangGraphInvokeStep(
   } = step;
 
   const rawLines: string[] = [];
-  const rawLabel = step.name || "agent";
+  // Strip the " History" suffix so history steps resolve to the same graph variable as the regular invoke step.
+  const rawLabel = (step.name || "agent").replace(/\s+history$/i, "").trim() || "agent";
   const graphVar =
     functionRef?.name ||
     (langGraphTargetNodeId &&
@@ -142,6 +143,114 @@ export function renderLangGraphInvokeStep(
   let threadIdExpr: string | undefined = langGraphThreadIdSource
     ? resolvePathAccessor(langGraphThreadIdSource, ctx)
     : undefined;
+
+  // ─── LangGraph Action: History (getState / getStateHistory) ───
+  if (step.langGraphAction === "history") {
+    const threadAccessor = threadIdExpr || "req.params.threadId ?? req.query.thread_id ?? req.headers[\"x-thread-id\"]";
+    const format = step.langGraphHistoryFormat || "chat_messages";
+    const snapVar = outputVariable + "Snapshot";
+    const isPaginated = Boolean(step.langGraphHistoryPaginationEnabled);
+
+    let limitAccessor = "req.query.limit";
+    let beforeAccessor = "req.query.before";
+
+    if (isPaginated) {
+      const limitSource = step.langGraphHistoryLimitSource || "query.limit";
+      limitAccessor = resolvePathAccessor(limitSource, ctx);
+      const defaultLimit = step.langGraphHistoryLimitDefault || 20;
+
+      const beforeSource = step.langGraphHistoryBeforeSource || "query.before";
+      beforeAccessor = resolvePathAccessor(beforeSource, ctx);
+
+      rawLines.push("const " + outputVariable + "Limit = Math.max(1, Number(" + limitAccessor + ") || " + defaultLimit + ");");
+      rawLines.push("const " + outputVariable + "BeforeRaw = " + beforeAccessor + ";");
+      rawLines.push("const " + outputVariable + "Before = (" + outputVariable + "BeforeRaw && " + outputVariable + "BeforeRaw !== \"0\" && " + outputVariable + "BeforeRaw !== \"null\" && " + outputVariable + "BeforeRaw !== \"undefined\") ? { configurable: { checkpoint_id: String(" + outputVariable + "BeforeRaw).trim() } } : undefined;");
+      rawLines.push("const " + outputVariable + "Snapshots = [];");
+      rawLines.push("for await (const snap of " + graphVar + ".getStateHistory(");
+      rawLines.push("  { configurable: { thread_id: " + threadAccessor + " } },");
+      rawLines.push("  { limit: " + outputVariable + "Limit, before: " + outputVariable + "Before }");
+      rawLines.push(")) {");
+      rawLines.push("  " + outputVariable + "Snapshots.push(snap);");
+      rawLines.push("}");
+      rawLines.push("const " + snapVar + " = " + outputVariable + "Snapshots[0] || (await " + graphVar + ".getState({ configurable: { thread_id: " + threadAccessor + " } }));");
+      rawLines.push("let " + outputVariable + "NextCursor = " + outputVariable + "Snapshots[" + outputVariable + "Snapshots.length - 1]?.config?.configurable?.checkpoint_id ?? null;");
+    } else {
+      rawLines.push("const " + snapVar + " = await " + graphVar + ".getState({");
+      rawLines.push("  configurable: { thread_id: " + threadAccessor + " },");
+      rawLines.push("});");
+    }
+
+    if (format === "full_state") {
+      rawLines.push("const " + outputVariable + " = {");
+      rawLines.push("  threadId: " + threadAccessor + ",");
+      rawLines.push("  values: " + snapVar + "?.values ?? {},");
+      rawLines.push("  next: " + snapVar + "?.next ?? [],");
+      if (isPaginated) {
+        rawLines.push("  pagination: {");
+        rawLines.push("    limit: " + outputVariable + "Limit,");
+        rawLines.push("    before: " + beforeAccessor + " ?? null,");
+        rawLines.push("    next_cursor: " + outputVariable + "NextCursor,");
+        rawLines.push("  },");
+      }
+      rawLines.push("};");
+    } else {
+      const excludeTools = step.langGraphHistoryExcludeToolMessages !== false;
+      rawLines.push("const " + outputVariable + "RawMessages = " + snapVar + "?.values?.messages ?? [];");
+      rawLines.push("const " + outputVariable + "AllMessages = (Array.isArray(" + outputVariable + "RawMessages) ? " + outputVariable + "RawMessages : [])");
+      if (excludeTools) {
+        rawLines.push("  .filter((m) => {");
+        rawLines.push("    const t = typeof m.getType === \"function\" ? m.getType() : m.role;");
+        rawLines.push("    return t === \"human\" || t === \"user\" || t === \"ai\" || t === \"assistant\";");
+        rawLines.push("  })");
+      }
+      rawLines.push("  .map((m) => {");
+      rawLines.push("    const t = typeof m.getType === \"function\" ? m.getType() : m.role;");
+      rawLines.push("    const role = (t === \"human\" || t === \"user\") ? \"user\" : (t === \"ai\" || t === \"assistant\") ? \"assistant\" : String(t || \"assistant\");");
+            rawLines.push("    let content = \"\";");
+      rawLines.push("    if (typeof m.content === \"string\") {");
+      rawLines.push("      content = m.content;");
+      rawLines.push("    } else if (Array.isArray(m.content)) {");
+      rawLines.push("      for (const item of m.content) {");
+      rawLines.push("        if (typeof item === \"string\") {");
+      rawLines.push("          content += item;");
+      rawLines.push("        } else if (item && typeof item === \"object\" && \"text\" in item && typeof item.text === \"string\") {");
+      rawLines.push("          content += item.text;");
+      rawLines.push("        } else {");
+      rawLines.push("          content += JSON.stringify(item);");
+      rawLines.push("        }");
+      rawLines.push("      }");
+      rawLines.push("    } else {");
+      rawLines.push("      content = String(m.content ?? \"\");");
+      rawLines.push("    }");
+      rawLines.push("    return { id: m.id || (typeof crypto !== \"undefined\" && typeof crypto.randomUUID === \"function\" ? crypto.randomUUID() : String(Date.now())), role, content };");
+      rawLines.push("  });");
+
+      if (isPaginated) {
+        rawLines.push("let " + outputVariable + "EndIndex = " + outputVariable + "AllMessages.length;");
+        rawLines.push("if (" + outputVariable + "BeforeRaw && " + outputVariable + "BeforeRaw !== \"0\" && " + outputVariable + "BeforeRaw !== \"null\" && " + outputVariable + "BeforeRaw !== \"undefined\") {");
+        rawLines.push("  const beforeIdx = " + outputVariable + "AllMessages.findIndex((m) => m.id === String(" + outputVariable + "BeforeRaw).trim());");
+        rawLines.push("  if (beforeIdx !== -1) {");
+        rawLines.push("    " + outputVariable + "EndIndex = beforeIdx;");
+        rawLines.push("  }");
+        rawLines.push("}");
+        rawLines.push("const " + outputVariable + "StartIndex = Math.max(0, " + outputVariable + "EndIndex - " + outputVariable + "Limit);");
+        rawLines.push("const " + outputVariable + "Messages = " + outputVariable + "AllMessages.slice(" + outputVariable + "StartIndex, " + outputVariable + "EndIndex);");
+        rawLines.push(outputVariable + "NextCursor = " + outputVariable + "StartIndex > 0 ? (" + outputVariable + "Messages[0]?.id ?? null) : null;");
+        rawLines.push("const " + outputVariable + " = {");
+        rawLines.push("  messages: " + outputVariable + "Messages,");
+        rawLines.push("  pagination: {");
+        rawLines.push("    limit: " + outputVariable + "Limit,");
+        rawLines.push("    before: " + beforeAccessor + " ?? null,");
+        rawLines.push("    next_cursor: " + outputVariable + "NextCursor,");
+        rawLines.push("  },");
+        rawLines.push("};");
+      } else {
+        rawLines.push("const " + outputVariable + " = " + outputVariable + "AllMessages;");
+      }
+    }
+
+    return rawLines;
+  }
 
   // Build dedicated messages initialization if langGraphMessagesConfig is defined
   const stepPrefix = toVarName(step.name || step.id || "agent");
