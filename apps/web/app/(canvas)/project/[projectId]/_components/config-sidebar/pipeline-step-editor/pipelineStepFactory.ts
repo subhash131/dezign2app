@@ -506,7 +506,7 @@ export function createDefaultStepDraft({
       langGraphStreamIncludeReasoning: true,
       langGraphStreamSubgraphs: false,
       langGraphOutputMode: "full_state",
-      langGraphStateMapping: defaultStateMapping,
+      langGraphStateMapping: isGetOrHistory ? {} : defaultStateMapping,
       ...(hasMemory || isGetOrHistory
         ? {
             langGraphThreadIdSource: defaultThreadSource,
