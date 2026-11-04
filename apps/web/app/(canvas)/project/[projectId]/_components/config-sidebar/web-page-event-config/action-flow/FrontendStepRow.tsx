@@ -3,6 +3,7 @@ import { Draggable } from "@hello-pangea/dnd";
 import type { BackendNode, Endpoint, UIEventItem } from "@workspace/canvas";
 import type { ActionStepItem } from "../TargetEndpointSection";
 import type { FrontendActionStepDraft, AvailablePath } from "./types";
+import type { ComboboxOption } from "./ActionFlowCombobox";
 import { FrontendStepRowHeader } from "./FrontendStepRowHeader";
 import { ApiCallStep } from "./ApiCallStep";
 import { StoragePutStep } from "./StoragePutStep";
@@ -30,6 +31,10 @@ export interface FrontendStepRowProps {
   actionItem?: UIEventItem;
   isProtected?: boolean;
   incomingPaths?: AvailablePath[];
+  isItemScoped?: boolean;
+  itemKeyField?: string;
+  itemSourceStateName?: string;
+  itemPropSuggestions?: ComboboxOption[];
   onChange: (updated: FrontendActionStepDraft) => void;
   onDelete: () => void;
 }
@@ -48,6 +53,10 @@ export const FrontendStepRow: React.FC<FrontendStepRowProps> = ({
   actionItem,
   isProtected,
   incomingPaths,
+  isItemScoped,
+  itemKeyField,
+  itemSourceStateName,
+  itemPropSuggestions,
   onChange,
   onDelete,
 }) => {
@@ -96,6 +105,10 @@ export const FrontendStepRow: React.FC<FrontendStepRowProps> = ({
 
                   isProtected={isProtected}
                   incomingPaths={incomingPaths}
+                  isItemScoped={isItemScoped}
+                  itemKeyField={itemKeyField}
+                  itemSourceStateName={itemSourceStateName}
+                  itemPropSuggestions={itemPropSuggestions}
                   onChange={onChange}
                 />
               )}
@@ -126,8 +139,10 @@ export const FrontendStepRow: React.FC<FrontendStepRowProps> = ({
                   webPageNodeId={webPageNodeId}
                   actionId={actionId}
                   actionItem={actionItem}
-
                   incomingPaths={incomingPaths}
+                  isItemScoped={isItemScoped}
+                  itemKeyField={itemKeyField}
+                  itemPropSuggestions={itemPropSuggestions}
                   onChange={onChange}
                 />
               )}

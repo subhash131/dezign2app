@@ -28,6 +28,29 @@ interface MockAccordionProps {
   children?: React.ReactNode;
 }
 
+vi.mock("../web-page-event-config/action-flow", async (importOriginal) => {
+  const actual = await importOriginal<any>();
+  return {
+    ...actual,
+    ActionFlowCombobox: ({
+      value,
+      onChange,
+      placeholder,
+    }: {
+      value?: string;
+      onChange: (val: string) => void;
+      placeholder?: string;
+    }) => (
+      <input
+        data-testid="mock-action-flow-combobox"
+        value={value || ""}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+      />
+    ),
+  };
+});
+
 vi.mock("@workspace/ui/components/accordion", () => ({
   Accordion: ({ children }: MockAccordionProps) => <div>{children}</div>,
   AccordionItem: ({ children }: MockAccordionProps) => <div>{children}</div>,

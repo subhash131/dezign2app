@@ -594,3 +594,10 @@ export function getActionFlowRuntime(
 
   return lines.join("\n");
 }
+
+
+export {
+  extractBaseTypeName,
+  resolveItemPropsFromType,
+  resolveItemPropsFromState,
+} from "./itemPropUtils";

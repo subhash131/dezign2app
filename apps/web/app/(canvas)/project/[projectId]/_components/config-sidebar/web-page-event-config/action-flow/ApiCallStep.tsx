@@ -1,4 +1,5 @@
 import React from "react";
+import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import {
   Plus,
   Trash2,
@@ -39,7 +40,7 @@ import type { PageSection } from "@/types/canvas";
 import { ResponseFieldPicker } from "./ResponseFieldPicker";
 import { ActionFlowCombobox, ComboboxOption } from "./ActionFlowCombobox";
 import { ensureActionServiceConnection, cleanupActionStepEdge } from "./actionStepCanvasSync";
-import { isAuthHeaderName, buildInitialBindingsFromEndpoint } from "./utils";
+import { isAuthHeaderName, buildInitialBindingsFromEndpoint, resolveItemPropsFromState } from "./utils";
 
 type SourceKindOption =
   | "auth_token"
@@ -177,7 +178,7 @@ const BindingSlotRow: React.FC<BindingSlotRowProps> = ({
               <SelectItem value="item_prop">
                 <span className="flex items-center gap-1.5 text-violet-400 font-medium">
                   <Box size={11} />
-                  Current Element Prop {isItemScoped ? `(item.${itemKeyField || "id"})` : "(Array Item)"}
+                  Current item {!isItemScoped && "(Array Item)"}
                 </span>
               </SelectItem>
               <SelectItem value="auth_token">
@@ -221,7 +222,7 @@ const BindingSlotRow: React.FC<BindingSlotRowProps> = ({
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-medium text-violet-400 flex items-center gap-1.5">
                 <Box size={12} />
-                Current Element Property (Array Item)
+                Current item Property (Array Item)
               </span>
               <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 font-mono text-violet-400 border-violet-500/30 bg-violet-500/10">
                 {itemSourceStateName ? `${itemSourceStateName}[]` : "item context"}
@@ -800,41 +801,78 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
   const effectiveItemKeyField = itemKeyField || currentAction?.itemContextFields?.[0] || "id";
 
   const targetArrayState = React.useMemo(() => {
-    if (!currentAction?.itemSourceStateId) return undefined;
-    const sections: PageSection[] = currentPageNode?.data?.sections || [];
-    return sections
+    const targetStateId = currentAction?.itemSourceStateId;
+    const storeNodes =
+      typeof useBackendCanvasStore?.getState === "function"
+        ? useBackendCanvasStore.getState().nodes || []
+        : [];
+    const pool = allNodes && allNodes.length > 0 ? allNodes : storeNodes;
+    if (targetStateId) {
+      for (const n of pool) {
+        const sections: PageSection[] = n.data?.sections || [];
+        for (const s of sections) {
+          const found = (s.stateObjects || []).find(
+            (st) => st.id === targetStateId || st.name === targetStateId,
+          );
+          if (found) return found;
+        }
+      }
+    }
+    const pageSections: PageSection[] = currentPageNode?.data?.sections || [];
+    return pageSections
       .flatMap((s) => s.stateObjects || [])
       .find(
         (st) =>
-          st.id === currentAction.itemSourceStateId ||
-          st.name === currentAction.itemSourceStateId,
+          st.type === "array" ||
+          st.type?.endsWith("[]") ||
+          st.type?.includes("[]"),
       );
-  }, [currentPageNode, currentAction?.itemSourceStateId]);
+  }, [allNodes, currentPageNode, currentAction?.itemSourceStateId]);
 
   const effectiveItemSourceStateName = itemSourceStateName || targetArrayState?.name;
 
   const effectiveItemPropSuggestions: ComboboxOption[] = React.useMemo(() => {
-    if (itemPropSuggestions && itemPropSuggestions.length > 0) return itemPropSuggestions;
     const list: ComboboxOption[] = [];
-    if (effectiveItemKeyField) {
-      list.push({
+    const seen = new Set<string>();
+
+    const addOption = (opt: ComboboxOption) => {
+      if (opt.value && !seen.has(opt.value)) {
+        seen.add(opt.value);
+        list.push(opt);
+      }
+    };
+
+    // 1. Suggestions from props if passed
+    (itemPropSuggestions || []).forEach(addOption);
+
+    // 2. Dynamically resolved properties from targetArrayState and canvas defined types
+    const fromState = resolveItemPropsFromState(targetArrayState, allNodes, effectiveItemKeyField, currentAction?.itemSourceStateId || effectiveItemSourceStateName);
+    fromState.forEach(addOption);
+
+    // 3. Current action context fields or identifier key
+    if (effectiveItemKeyField && !seen.has(effectiveItemKeyField)) {
+      list.unshift({
         value: effectiveItemKeyField,
         label: `${effectiveItemKeyField} (Key)`,
         type: "identifier",
       });
+      seen.add(effectiveItemKeyField);
     }
     (currentAction?.itemContextFields || []).forEach((f: string) => {
-      if (!list.some((s) => s.value === f)) {
-        list.push({ value: f, label: f, type: "field" });
+      if (f && !seen.has(f)) {
+        addOption({ value: f, label: f, type: "field" });
       }
     });
-    ["id", "_id", "uuid", "name", "title", "slug", "key"].forEach((c) => {
-      if (!list.some((s) => s.value === c)) {
-        list.push({ value: c, label: c, type: "string" });
-      }
-    });
+
+    // 4. Common identifier fallbacks if list is still empty
+    if (list.length === 0) {
+      ["id", "_id", "uuid", "name", "title", "slug", "key"].forEach((c) => {
+        addOption({ value: c, label: c, type: "string" });
+      });
+    }
+
     return list;
-  }, [effectiveItemKeyField, currentAction?.itemContextFields, itemPropSuggestions]);
+  }, [effectiveItemKeyField, currentAction?.itemContextFields, itemPropSuggestions, targetArrayState, allNodes]);
 
   // Slot-specific field suggestions
   const headerSuggestions: ComboboxOption[] = React.useMemo(() => {
