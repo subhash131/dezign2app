@@ -99,7 +99,7 @@ function getRawGraphNodeData(
         { id: "in_name", name: "name", type: "string", required: true },
       ],
       logicMode: "code",
-      code: "return {\n  slug: input.name.toLowerCase().replace(/\\s+/g, '-'),\n};",
+      code: "return {\n  slug: name.toLowerCase().replace(/\\s+/g, '-'),\n};",
       returnSchema: [
         { id: "out_slug", name: "slug", type: "string", required: true },
       ],
