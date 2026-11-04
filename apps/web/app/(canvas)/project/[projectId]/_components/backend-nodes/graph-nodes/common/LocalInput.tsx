@@ -16,7 +16,7 @@ export const LocalInput = React.forwardRef<HTMLInputElement, LocalInputProps>(
       onKeyDown,
       onFocus,
       onBlur,
-      debounceMs = 150,
+      debounceMs = 300,
       spellCheck,
       ...props
     },
