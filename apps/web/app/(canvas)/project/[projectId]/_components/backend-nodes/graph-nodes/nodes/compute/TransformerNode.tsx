@@ -18,6 +18,7 @@ import {
 } from "../../common";
 import { useNodePipelineError } from "@/lib/utils/pipelineValidation";
 import { toVarName } from "@/lib/compiler/utils";
+import { toast } from "sonner";
 
 export const TransformerNode = ({
   id,
@@ -25,6 +26,7 @@ export const TransformerNode = ({
   selected,
 }: NodeProps<BackendNode>) => {
   const hasPipelineError = useNodePipelineError(id);
+  const nodes = useBackendCanvasStore((s) => s.nodes);
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const deleteNode = useBackendCanvasStore((s) => s.deleteNode);
   const requestDeleteNode = useBackendCanvasStore((s) => s.requestDeleteNode);
@@ -94,6 +96,27 @@ export const TransformerNode = ({
       return;
     }
     const formatted = toVarName(trimmed);
+    const isDuplicate = nodes.some(
+      (n) =>
+        n.id !== id &&
+        n.type === "transformer" &&
+        toVarName(n.data?.functionName || n.data?.label || "").toLowerCase() ===
+          formatted.toLowerCase(),
+    );
+
+    if (isDuplicate) {
+      toast.error(
+        `A transformer named "${formatted}" already exists. Transformer names must be unique.`,
+      );
+      if (!data.label && !data.functionName) {
+        setIsEditing(true);
+      } else {
+        setName(toVarName(data.label || data.functionName || ""));
+        setIsEditing(false);
+      }
+      return;
+    }
+
     updateNode(id, {
       data: {
         ...data,
@@ -119,6 +142,18 @@ export const TransformerNode = ({
     requestDeleteNode(id);
   };
 
+  const isDuplicateName = React.useMemo(() => {
+    const currentName = toVarName(data.label || data.functionName || "");
+    if (!currentName) return false;
+    return nodes.some(
+      (n) =>
+        n.id !== id &&
+        n.type === "transformer" &&
+        toVarName(n.data?.functionName || n.data?.label || "").toLowerCase() ===
+          currentName.toLowerCase(),
+    );
+  }, [nodes, id, data.label, data.functionName]);
+
   const scope = data.scope || "global";
 
   return (
@@ -128,7 +163,7 @@ export const TransformerNode = ({
         selected
           ? "border-purple-500 shadow-purple-500/15 ring-1 ring-purple-500/20"
           : "border-border/80 hover:border-purple-500/50 hover:shadow-lg",
-        hasPipelineError &&
+        (hasPipelineError || isDuplicateName) &&
           "border-destructive/80 ring-1 ring-destructive/30 shadow-destructive/5",
         borderClass,
       )}
@@ -190,6 +225,15 @@ export const TransformerNode = ({
                 >
                   <Package size={7} />
                   {data.packageImports.length}
+                </span>
+              )}
+              {isDuplicateName && (
+                <span
+                  className="text-[7px] font-medium px-1 py-0.2 rounded bg-destructive/15 text-destructive border border-destructive/30 flex items-center gap-0.5 shrink-0 animate-pulse"
+                  title="Transformer names must be unique"
+                >
+                  <AlertTriangle size={8} />
+                  Duplicate
                 </span>
               )}
               {hasPipelineError && (
@@ -265,6 +309,13 @@ export const TransformerNode = ({
           </button>
         </div>
       </div>
+
+      {isDuplicateName && (
+        <div className="flex items-center gap-1 px-1.5 py-1 rounded bg-destructive/10 border border-destructive/20 text-[10px] text-destructive leading-tight">
+          <AlertTriangle size={11} className="shrink-0" />
+          <span className="font-medium">Transformer name &quot;{toVarName(data.label || data.functionName || "")}&quot; is already in use</span>
+        </div>
+      )}
 
       {hasPipelineError && (
         <div className="flex items-center gap-1 px-1.5 py-1 rounded bg-destructive/10 border border-destructive/20 text-[10px] text-destructive leading-tight">

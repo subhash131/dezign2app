@@ -140,6 +140,17 @@ const TransformerConfigContent: React.FC<
   const scope = data.scope || "local";
   const functionName = data.functionName || data.label || "transformData";
   const Pascal = toPascalCase(toVarName(functionName));
+
+  const isDuplicateFunctionName = React.useMemo(() => {
+    if (!functionName) return false;
+    return allNodes.some(
+      (n) =>
+        n.id !== node.id &&
+        n.type === "transformer" &&
+        toVarName(n.data?.functionName || n.data?.label || "").toLowerCase() ===
+          toVarName(functionName).toLowerCase(),
+    );
+  }, [allNodes, node.id, functionName]);
   const inputTypeName = `${Pascal}Input`;
   const outputTypeName = `${Pascal}Output`;
 
@@ -942,11 +953,14 @@ const TransformerConfigContent: React.FC<
           <div className="grid grid-cols-2 gap-4">
         {/* Function name */}
         <div className="flex flex-col gap-1.5 min-w-0">
-          <Label className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
-            Function Name
+          <Label className="text-xs text-muted-foreground font-semibold uppercase tracking-wider flex items-center justify-between">
+            <span>Function Name</span>
+            {isDuplicateFunctionName && (
+              <span className="text-[10px] text-destructive lowercase font-normal">name in use</span>
+            )}
           </Label>
           <LocalInput
-            className="h-8 text-xs font-mono bg-background/60 border-border/60"
+            className={`h-8 text-xs font-mono bg-background/60 border-border/60 ${isDuplicateFunctionName ? "border-destructive focus-visible:ring-destructive" : ""}`}
             value={functionName}
             debounceMs={200}
             spellCheck={false}
@@ -955,6 +969,19 @@ const TransformerConfigContent: React.FC<
             autoCorrect="off"
             onChange={(e) => {
               const val = toVarName(e.target.value);
+              if (val) {
+                const isDuplicate = allNodes.some(
+                  (n) =>
+                    n.id !== node.id &&
+                    n.type === "transformer" &&
+                    toVarName(n.data?.functionName || n.data?.label || "").toLowerCase() ===
+                      val.toLowerCase(),
+                );
+                if (isDuplicate) {
+                  toast.error(`A transformer named "${val}" already exists. Transformer names must be unique.`);
+                  return;
+                }
+              }
               updateData({
                 label: val,
                 functionName: val,

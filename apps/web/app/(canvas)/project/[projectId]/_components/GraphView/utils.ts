@@ -92,7 +92,20 @@ function getRawGraphNodeData(
   }
 
   if (type === "transformer") {
-    const fnName = label ? toVarName(label) : "";
+    const existingTransformers = existingNodes.filter((n) => n.type === "transformer");
+    const existingNames = new Set(
+      existingTransformers
+        .map((n) => toVarName(n.data?.functionName || n.data?.label || "").toLowerCase())
+        .filter(Boolean),
+    );
+    let fnName = label ? toVarName(label) : "";
+    if (fnName && existingNames.has(fnName.toLowerCase())) {
+      let counter = 2;
+      while (existingNames.has(`${fnName.toLowerCase()}${counter}`)) {
+        counter++;
+      }
+      fnName = `${fnName}${counter}`;
+    }
     return {
       ...baseData,
       label: fnName,

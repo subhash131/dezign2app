@@ -16,13 +16,14 @@ import {
 } from "../constants";
 import { LocalInput } from "../../../common";
 import { toVarName } from "@/lib/compiler/utils";
+import { toast } from "sonner";
 
 export const LangGraphCanvasTransformerNode = ({
   id,
   data,
   selected,
 }: NodeProps<TransformerCanvasNode>) => {
-  const { setNodes, setEdges } = useReactFlow<LangGraphCanvasNode>();
+  const { setNodes, setEdges, getNodes } = useReactFlow<LangGraphCanvasNode>();
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameValue, setNameValue] = useState(
     data.label || data.functionName || "Transformer",
@@ -50,6 +51,18 @@ export const LangGraphCanvasTransformerNode = ({
       return;
     }
     const formatted = toVarName(trimmed);
+    const isDuplicate = getNodes().some(
+      (n) =>
+        n.id !== id &&
+        n.type === LANGGRAPH_CANVAS_NODE_TRANSFORMER &&
+        toVarName((n.data as any)?.functionName || (n.data as any)?.label || "").toLowerCase() ===
+          formatted.toLowerCase(),
+    );
+    if (isDuplicate) {
+      toast.error(`A transformer named "${formatted}" already exists. Transformer names must be unique.`);
+      setNameValue(toVarName(data.label || data.functionName || "") || "transformer");
+      return;
+    }
     setNameValue(formatted);
     if (formatted !== data.label || formatted !== data.functionName) {
       updateTransformerData({

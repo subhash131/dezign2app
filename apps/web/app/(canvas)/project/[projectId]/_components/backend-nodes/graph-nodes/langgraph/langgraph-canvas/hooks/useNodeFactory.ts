@@ -56,6 +56,7 @@ import {
   STEP_TYPE_ROUTER,
 } from "../constants";
 import { generateDefaultTransformerCode } from "@/lib/utils/transformerCodeGenerator";
+import { toVarName } from "@/lib/compiler/utils";
 
 interface UseNodeFactoryProps {
   setNodes: React.Dispatch<React.SetStateAction<LangGraphCanvasNode[]>>;
@@ -660,16 +661,29 @@ export function useNodeFactory({
         const transformerId = `transformer_${Date.now().toString(36).slice(-4)}`;
         setNodes((nds) => {
           const position = getCenterPosition(type, nds);
+          const existingNames = new Set(
+            nds
+              .filter((n) => n.type === LANGGRAPH_CANVAS_NODE_TRANSFORMER)
+              .map((n) => ((n.data as any)?.functionName || (n.data as any)?.label || "").toLowerCase()),
+          );
+          let fnName = label ? toVarName(label) : "transformData";
+          if (existingNames.has(fnName.toLowerCase())) {
+            let counter = 2;
+            while (existingNames.has(`${fnName.toLowerCase()}${counter}`)) {
+              counter++;
+            }
+            fnName = `${fnName}${counter}`;
+          }
           const newTransformerNode: TransformerCanvasNode = {
             id: transformerId,
             type: LANGGRAPH_CANVAS_NODE_TRANSFORMER,
             position,
             data: {
-              label: label || "Transformer",
-              functionName: "transformData",
+              label: fnName,
+              functionName: fnName,
               scope: "global",
               isGlobal: true,
-              code: generateDefaultTransformerCode({ functionName: "transformData" }),
+              code: generateDefaultTransformerCode({ functionName: fnName }),
               inputSchema: [],
               returnSchema: [],
               onDeleteTransformer: () => {
