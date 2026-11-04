@@ -86,6 +86,7 @@ export const DatabaseConnectionCheckCard: React.FC<DatabaseConnectionCheckCardPr
   const handleCheckConnection = async () => {
     setChecking(true);
     try {
+      console.log("[DatabaseConnectionCheckCard] Testing live connection...", { engine, currentHost, currentPort, provider });
       const data = await checkDatabaseConnection({
         engine,
         connection: {

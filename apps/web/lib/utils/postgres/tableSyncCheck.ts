@@ -64,6 +64,10 @@ export async function checkPostgresTableSync(
     };
   }
 
+  const maskedUri = connectionString.replace(/:([^:@]+)@/, ":••••@");
+  console.log(`[checkPostgresTableSync] Validating table "${safeTable}" on schema "${targetSchema}" against: ${maskedUri}`, {
+    sslRequired: isSslRequiredForConfig(connection, connectionString),
+  });
   const pool = new Pool({
     connectionString,
     max: 1,
@@ -430,6 +434,13 @@ export async function checkPostgresTableSync(
       missingPrerequisiteTables,
     };
   } catch (error) {
+    console.error(`[checkPostgresTableSync] ❌ Database error checking table "${safeTable}":`, {
+      message: error instanceof Error ? error.message : String(error),
+      code: (error as any)?.code,
+      detail: (error as any)?.detail,
+      hint: (error as any)?.hint,
+      stack: (error as any)?.stack,
+    });
     return {
       success: false,
       serverReachable: false,

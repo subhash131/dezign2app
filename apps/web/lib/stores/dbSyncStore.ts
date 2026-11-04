@@ -169,6 +169,18 @@ export const useDbSyncStore = create<DbSyncStore>((set, get) => ({
       },
     }));
 
+    console.log(`[dbSyncStore:validateEntity] Validating table "${tableName}" (${entityId})`, {
+      engine: dbInfo.engine,
+      dbLabel: dbInfo.dbLabel,
+      schema: dbInfo.schema,
+      connection: {
+        ...dbInfo.connection,
+        password: dbInfo.connection.password ? "••••" : undefined,
+        connectionString: dbInfo.connection.connectionString
+          ? dbInfo.connection.connectionString.replace(/:([^:@]+)@/, ":••••@")
+          : undefined,
+      },
+    });
     try {
       const foreignKeys = deriveEntityForeignKeys(entityNode);
       const result = await checkDbTableSync({
@@ -192,6 +204,22 @@ export const useDbSyncStore = create<DbSyncStore>((set, get) => ({
         },
       }));
 
+      if (!result.success || !result.serverReachable || result.error) {
+        console.error(
+          `[dbSyncStore:validateEntity] ❌ Table validation failed for "${tableName}":`,
+          result.error || "Server unreachable",
+          result,
+        );
+      } else {
+        console.log(
+          `[dbSyncStore:validateEntity] ✅ Table "${tableName}" validated successfully:`,
+          {
+            tableExists: result.tableExists,
+            inSync: result.inSync,
+            missingColumns: result.missingColumns?.length || 0,
+          },
+        );
+      }
       return result;
     } catch (err) {
       const errorResult: CheckDbTableSyncResult = {
@@ -255,11 +283,13 @@ export const useDbSyncStore = create<DbSyncStore>((set, get) => ({
     let inSync = 0;
     let outOfSync = 0;
     let errors = 0;
+    let firstError = "";
 
     for (const table of attachedTables) {
       const res = await get().validateEntity(table.id);
       if (!res || !res.success || !res.serverReachable) {
         errors++;
+        if (!firstError && res?.error) firstError = res.error;
       } else if (res.inSync) {
         inSync++;
       } else {
@@ -275,7 +305,7 @@ export const useDbSyncStore = create<DbSyncStore>((set, get) => ({
 
     if (errors > 0 && inSync === 0 && outOfSync === 0) {
       toast.error(
-        `Failed to reach database for ${dbLabel}. Check connection settings.`,
+        firstError ? `Failed to reach database for ${dbLabel}: ${firstError}` : `Failed to reach database for ${dbLabel}. Check connection settings.`,
       );
     } else if (outOfSync === 0 && errors === 0) {
       toast.success(`All ${inSync} tables in ${dbLabel} are in sync!`);
