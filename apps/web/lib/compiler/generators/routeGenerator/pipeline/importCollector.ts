@@ -1,5 +1,6 @@
 import { PipelineStep } from "@workspace/canvas/types";
 import { toVarName } from "../../../utils";
+import { toCamelCase } from "../../../langgraph/typescript/v1/utils";
 
 /**
  * Builds an import map from pipeline steps (including recursive nested branches).
@@ -65,8 +66,8 @@ export function collectPipelineImports(
         !/^[0-9]/.test(s.langGraphTargetNodeId) &&
         !s.langGraphTargetNodeId.includes("-") &&
         s.langGraphTargetNodeId.length < 20
-          ? `${toVarName(s.langGraphTargetNodeId)}Graph`
-          : `${toVarName(rawLabel)}Graph`);
+          ? `${toCamelCase(s.langGraphTargetNodeId)}Graph`
+          : `${toCamelCase(rawLabel)}Graph`);
       const existing = imports.get(importPath);
       if (existing) {
         existing.add(graphName);

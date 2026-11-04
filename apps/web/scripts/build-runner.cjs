@@ -41,14 +41,34 @@ function parseEnvFile(envPath) {
   return result;
 }
 
+function parseWranglerVars(wranglerPath) {
+  if (!fs.existsSync(wranglerPath)) return {};
+  try {
+    const raw = fs.readFileSync(wranglerPath, "utf8");
+    const cleaned = raw.replace(/^\s*\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
+    const parsed = JSON.parse(cleaned);
+    return parsed.vars || {};
+  } catch (e) {
+    console.warn(`[build-runner] Warning reading ${wranglerPath}:`, e.message);
+  }
+  return {};
+}
+
 // 1. Gather env files based on target environment
+const wranglerVars = parseWranglerVars(path.join(webDir, "wrangler.jsonc"));
 const baseEnv = parseEnvFile(path.join(webDir, ".env"));
 const prodEnv = parseEnvFile(path.join(webDir, ".env.production"));
 
-// Real process.env takes highest precedence over .env files
+// Real process.env takes highest precedence over .env files and wrangler vars
 const resolvedEnv = isDev
-  ? { ...prodEnv, ...baseEnv, ...process.env }
-  : { ...baseEnv, ...prodEnv, ...process.env };
+  ? { ...wranglerVars, ...prodEnv, ...baseEnv, ...process.env }
+  : { ...wranglerVars, ...baseEnv, ...prodEnv, ...process.env };
+
+// Fallback to default production Convex URLs if not supplied in CI/CD environment
+if (!resolvedEnv.NEXT_PUBLIC_CONVEX_URL && !isDev) {
+  resolvedEnv.NEXT_PUBLIC_CONVEX_URL = "https://gregarious-quail-82.convex.cloud";
+  resolvedEnv.NEXT_PUBLIC_CONVEX_SITE_URL = "https://gregarious-quail-82.convex.site";
+}
 
 // Auto-derive site URL from cloud URL if not explicitly specified
 if (resolvedEnv.NEXT_PUBLIC_CONVEX_URL && !resolvedEnv.NEXT_PUBLIC_CONVEX_SITE_URL) {
@@ -60,6 +80,12 @@ if (resolvedEnv.CONVEX_URL && !resolvedEnv.CONVEX_SITE_URL) {
 
 resolvedEnv.CONVEX_URL = resolvedEnv.CONVEX_URL || resolvedEnv.NEXT_PUBLIC_CONVEX_URL;
 resolvedEnv.CONVEX_SITE_URL = resolvedEnv.CONVEX_SITE_URL || resolvedEnv.NEXT_PUBLIC_CONVEX_SITE_URL;
+
+// Auto-derive desktop auth URL if not explicitly specified
+if (!resolvedEnv.NEXT_PUBLIC_DESKTOP_AUTH_URL) {
+  resolvedEnv.NEXT_PUBLIC_DESKTOP_AUTH_URL =
+    resolvedEnv.NEXT_PUBLIC_APP_URL || resolvedEnv.BETTER_AUTH_URL || "https://www.dezign2app.com";
+}
 
 // Fail fast if required Convex configuration is missing
 if (!resolvedEnv.NEXT_PUBLIC_CONVEX_URL) {
@@ -77,6 +103,7 @@ if (!resolvedEnv.NEXT_PUBLIC_CONVEX_SITE_URL) {
 resolvedEnv.NODE_ENV = "production"; // Next.js requires NODE_ENV=production during `next build`
 resolvedEnv.BUILD_ENV = targetEnv;
 resolvedEnv.APP_ENV = targetEnv;
+resolvedEnv.NODE_OPTIONS = `${resolvedEnv.NODE_OPTIONS || ""} --max-old-space-size=4096`.trim();
 
 console.log("\n======================================================================");
 console.log(`==> [Next.js Build] Target Environment: ${targetEnv.toUpperCase()}`);

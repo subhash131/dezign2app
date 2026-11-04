@@ -15,6 +15,85 @@ export function resolveLangGraphStepPaths(
     step.type === "langgraph_invoke" || Boolean(step.langGraphTargetNodeId);
   if (!isLangGraphStep) return;
 
+  if (step.langGraphAction === "history") {
+    if (step.langGraphHistoryFormat === "full_state") {
+      if (!stepPaths.some((p) => p.path === "values")) {
+        stepPaths.push({
+          path: "values",
+          type: "object",
+          description: "Latest state channel snapshot values",
+        });
+      }
+      if (!stepPaths.some((p) => p.path === "next")) {
+        stepPaths.push({
+          path: "next",
+          type: "string[]",
+          description: "Next nodes to execute in graph",
+        });
+      }
+      if (!stepPaths.some((p) => p.path === "threadId")) {
+        stepPaths.push({
+          path: "threadId",
+          type: "string",
+          description: "Target session thread ID",
+        });
+      }
+      if (!stepPaths.some((p) => p.path === "messages")) {
+        stepPaths.push({
+          path: "messages",
+          type: "BaseMessage[]",
+          description: "State messages array",
+        });
+      }
+    } else {
+      if (!stepPaths.some((p) => p.path === "")) {
+        stepPaths.push({
+          path: "",
+          type: "BaseMessage[]",
+          description: "Formatted chat messages array",
+        });
+      }
+      if (!stepPaths.some((p) => p.path === "messages")) {
+        stepPaths.push({
+          path: "messages",
+          type: "BaseMessage[]",
+          description: "Formatted chat messages array",
+        });
+      }
+    }
+    if (step.langGraphHistoryPaginationEnabled) {
+      if (!stepPaths.some((p) => p.path === "pagination")) {
+        stepPaths.push({
+          path: "pagination",
+          type: "object",
+          description: "Cursor pagination metadata",
+        });
+      }
+      if (!stepPaths.some((p) => p.path === "pagination.limit")) {
+        stepPaths.push({
+          path: "pagination.limit",
+          type: "number",
+          description: "Page size limit",
+        });
+      }
+      if (!stepPaths.some((p) => p.path === "pagination.before")) {
+        stepPaths.push({
+          path: "pagination.before",
+          type: "string | null",
+          description: "Starting checkpoint cursor",
+        });
+      }
+      if (!stepPaths.some((p) => p.path === "pagination.next_cursor")) {
+        stepPaths.push({
+          path: "pagination.next_cursor",
+          type: "string | null",
+          description: "Next page cursor checkpoint ID",
+        });
+      }
+    }
+    return;
+  }
+
   const lgNode =
     allNodes.find((n) => n.id === step.langGraphTargetNodeId && n.type === "langgraph") ||
     allNodes.find((n) => n.type === "langgraph");

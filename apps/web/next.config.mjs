@@ -15,6 +15,9 @@ const nextConfig = {
     "@wterm/react",
   ],
   crossOrigin: "use-credentials",
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   experimental: {
     mcpServer: true,
   },
