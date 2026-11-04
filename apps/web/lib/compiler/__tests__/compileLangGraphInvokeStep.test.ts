@@ -1007,5 +1007,95 @@ describe("LangGraph Invoke Pipeline Step Compiler", () => {
       expect(code).toContain("const paginatedHistoryMessages = paginatedHistoryAllMessages.slice(paginatedHistoryStartIndex, paginatedHistoryEndIndex);");
       expect(code).toContain("const paginatedHistoryNextCursor = paginatedHistoryStartIndex > 0 ? (paginatedHistoryMessages[0]?.id ?? null) : null;");
     });
+
+    it("resolves graphVar to aiAgentGraph for 'AI Agent' and exposes .messages on outputVariable in chat_messages mode", () => {
+      const step: PipelineStep = {
+        id: "step-history-ai-agent",
+        name: "AI Agent History",
+        type: "langgraph_invoke",
+        langGraphAction: "history",
+        outputVariable: "chatHistory",
+        langGraphTargetNodeId: "ai-agent-node",
+        langGraphThreadIdSource: "params.id",
+      };
+
+      const lines = renderPipelineStep(step, {
+        priorOutputs: new Map(),
+        bodyVar: "body",
+      });
+      const code = lines.join("\n");
+
+      // Verify aiAgentGraph is used (NOT aIAgentGraph)
+      expect(code).toContain("const chatHistorySnapshot = await aiAgentGraph.getState({");
+      expect(code).toContain("configurable: { thread_id: req.params.id }");
+      expect(code).not.toContain("aIAgentGraph");
+
+      // Verify chatHistory is an array that also has .messages attached
+      expect(code).toContain("const chatHistory = Object.assign(chatHistoryAllMessages, {");
+      expect(code).toContain("messages: chatHistoryAllMessages");
+    });
+
+    it("generates full route handler with correct aiAgentGraph import and chatHistory.messages compatibility", () => {
+      const endpoint: Endpoint & { nodeId: string } = {
+        id: "ep-history-1",
+        nodeId: "service-1",
+        name: "GET /chat/history/:id",
+        type: "GET",
+        pipelineSteps: [
+          {
+            id: "step-lg-history",
+            name: "AI Agent History",
+            type: "langgraph_invoke",
+            langGraphAction: "history",
+            outputVariable: "chatHistory",
+            langGraphTargetNodeId: "ai-agent-node",
+            langGraphThreadIdSource: "params.id",
+          },
+          {
+            id: "step-return",
+            name: "Return Response",
+            type: "return_response",
+            inputBindings: [
+              {
+                argName: "data",
+                source: {
+                  kind: "step_output",
+                  stepId: "step-lg-history",
+                  field: "messages",
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = generateEndpointRouteHandler({
+        ep: endpoint,
+        index: 0,
+        serviceName: "ChatService",
+        pascalServiceName: "ChatService",
+        serviceFolderName: "chatservice",
+        allNodes: [],
+        allEdges: [],
+        allEndpoints: [endpoint],
+        dbFunctions: [],
+        kafkaFunctions: [],
+        redisFunctions: [],
+        nodePublishedEvents: [],
+        usedFileNames: new Set(),
+      });
+      const code = result.file.content;
+
+      // Correct import matching @workspace/langgraph-ai-agent exported graph
+      expect(code).toContain('import { aiAgentGraph } from "@workspace/langgraph-ai-agent"');
+      expect(code).not.toContain("aIAgentGraph");
+
+      // Graph getState call
+      expect(code).toContain("await aiAgentGraph.getState({");
+
+      // Object.assign provides both array and .messages
+      expect(code).toContain("const chatHistory = Object.assign(chatHistoryAllMessages, {");
+      expect(code).toContain("data: chatHistory.messages");
+    });
   });
 });
