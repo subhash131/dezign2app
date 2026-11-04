@@ -5,6 +5,7 @@ import type {
   PageSection,
 } from "@workspace/canvas/types";
 import { parsePageRoute, DEFAULT_ZONES, getDefaultNodeEnvVars } from "@workspace/canvas";
+import { toVarName } from "@/lib/compiler/utils";
 
 export function createGraphNodeData(
   type: BackendNodeType,
@@ -91,15 +92,30 @@ function getRawGraphNodeData(
   }
 
   if (type === "transformer") {
+    const existingTransformers = existingNodes.filter((n) => n.type === "transformer");
+    const existingNames = new Set(
+      existingTransformers
+        .map((n) => toVarName(n.data?.functionName || n.data?.label || "").toLowerCase())
+        .filter(Boolean),
+    );
+    let fnName = label ? toVarName(label) : "";
+    if (fnName && existingNames.has(fnName.toLowerCase())) {
+      let counter = 2;
+      while (existingNames.has(`${fnName.toLowerCase()}${counter}`)) {
+        counter++;
+      }
+      fnName = `${fnName}${counter}`;
+    }
     return {
       ...baseData,
-      functionName: label || "",
+      label: fnName,
+      functionName: fnName,
       scope: "global",
       inputSchema: [
         { id: "in_name", name: "name", type: "string", required: true },
       ],
       logicMode: "code",
-      code: "return {\n  slug: input.name.toLowerCase().replace(/\\s+/g, '-'),\n};",
+      code: "return {\n  slug: name.toLowerCase().replace(/\\s+/g, '-'),\n};",
       returnSchema: [
         { id: "out_slug", name: "slug", type: "string", required: true },
       ],

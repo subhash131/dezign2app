@@ -150,8 +150,16 @@ export const TransformerStepSection = ({
       : { x: 250, y: 250 };
 
     const id = generateId();
-    const existingTransformersCount = store.nodes.filter((n) => n.type === "transformer").length;
-    const fnName = `transformData${existingTransformersCount + 1}`;
+    const existingNames = new Set(
+      store.nodes
+        .filter((n) => n.type === "transformer")
+        .map((n) => (n.data?.functionName || n.data?.label || "").toLowerCase()),
+    );
+    let counter = store.nodes.filter((n) => n.type === "transformer").length + 1;
+    while (existingNames.has(`transformdata${counter}`)) {
+      counter++;
+    }
+    const fnName = `transformData${counter}`;
 
     // 1. Add transformer node to canvas
     store.addNode({

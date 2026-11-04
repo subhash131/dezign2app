@@ -1,4 +1,5 @@
 import { BackendNode } from "@/types/canvas";
+import { toVarName } from "../../../compiler/utils";
 import { applyNodeChanges, NodeChange } from "@xyflow/react";
 import { pageRouteToUrl, pageRouteToFolderPath, arePageRoutesEqual } from "@workspace/canvas";
 import { BackendCanvasState, SyncServiceTypesSummary } from "../types";
@@ -179,6 +180,34 @@ export const createNodeSlice = (
     get().pushHistorySnapshot(isSchema ? "schema" : "graph");
 
     let effectiveChanges = changes;
+
+    // When updating a transformer node, ensure label and functionName are formatted as camelCase and unique
+    if (updatedNode.type === "transformer" && changes.data) {
+      const rawName = changes.data.functionName ?? changes.data.label;
+      if (rawName && typeof rawName === "string") {
+        const formatted = toVarName(rawName);
+        const isDuplicate = get().nodes.some(
+          (n) =>
+            n.id !== id &&
+            n.type === "transformer" &&
+            toVarName(n.data?.functionName || n.data?.label || "").toLowerCase() ===
+              formatted.toLowerCase(),
+        );
+        if (isDuplicate) {
+          // Reject update if name collides with an existing transformer
+          return;
+        }
+        effectiveChanges = {
+          ...changes,
+          data: {
+            ...updatedNode.data,
+            ...changes.data,
+            label: formatted,
+            functionName: formatted,
+          },
+        };
+      }
+    }
 
     // When renaming a WebPage node, keep data.path, data.pageSlug, and data.route in sync
     const isWebPageRename =

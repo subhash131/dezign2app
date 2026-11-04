@@ -464,6 +464,7 @@ export type FrontendFieldSource =
   | { kind: "route_param"; paramName: string }
   | { kind: "query_param"; paramName: string }
   | { kind: "session_storage"; key: string }
+  | { kind: "item_prop"; propPath?: string; fieldPath?: string }
   | { kind: "local_storage"; key: string }
   | { kind: "cookie"; cookieName: string }
   | {

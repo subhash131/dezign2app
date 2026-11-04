@@ -1,8 +1,9 @@
 import React, { useState } from "react";
 import { Draggable } from "@hello-pangea/dnd";
-import type { BackendNode, Endpoint } from "@workspace/canvas";
+import type { BackendNode, Endpoint, UIEventItem } from "@workspace/canvas";
 import type { ActionStepItem } from "../TargetEndpointSection";
 import type { FrontendActionStepDraft, AvailablePath } from "./types";
+import type { ComboboxOption } from "./ActionFlowCombobox";
 import { FrontendStepRowHeader } from "./FrontendStepRowHeader";
 import { ApiCallStep } from "./ApiCallStep";
 import { StoragePutStep } from "./StoragePutStep";
@@ -27,8 +28,13 @@ export interface FrontendStepRowProps {
   endpoints: (Endpoint & { nodeId: string })[];
   webPageNodeId?: string;
   actionId?: string;
+  actionItem?: UIEventItem;
   isProtected?: boolean;
   incomingPaths?: AvailablePath[];
+  isItemScoped?: boolean;
+  itemKeyField?: string;
+  itemSourceStateName?: string;
+  itemPropSuggestions?: ComboboxOption[];
   onChange: (updated: FrontendActionStepDraft) => void;
   onDelete: () => void;
 }
@@ -44,8 +50,13 @@ export const FrontendStepRow: React.FC<FrontendStepRowProps> = ({
   endpoints,
   webPageNodeId,
   actionId,
+  actionItem,
   isProtected,
   incomingPaths,
+  isItemScoped,
+  itemKeyField,
+  itemSourceStateName,
+  itemPropSuggestions,
   onChange,
   onDelete,
 }) => {
@@ -90,8 +101,14 @@ export const FrontendStepRow: React.FC<FrontendStepRowProps> = ({
                   endpoints={endpoints}
                   webPageNodeId={webPageNodeId}
                   actionId={actionId}
+                  actionItem={actionItem}
+
                   isProtected={isProtected}
                   incomingPaths={incomingPaths}
+                  isItemScoped={isItemScoped}
+                  itemKeyField={itemKeyField}
+                  itemSourceStateName={itemSourceStateName}
+                  itemPropSuggestions={itemPropSuggestions}
                   onChange={onChange}
                 />
               )}
@@ -107,6 +124,8 @@ export const FrontendStepRow: React.FC<FrontendStepRowProps> = ({
                   endpoints={endpoints}
                   webPageNodeId={webPageNodeId}
                   actionId={actionId}
+                  actionItem={actionItem}
+
                   onChange={onChange}
                 />
               )}
@@ -119,7 +138,11 @@ export const FrontendStepRow: React.FC<FrontendStepRowProps> = ({
                   allNodes={allNodes}
                   webPageNodeId={webPageNodeId}
                   actionId={actionId}
+                  actionItem={actionItem}
                   incomingPaths={incomingPaths}
+                  isItemScoped={isItemScoped}
+                  itemKeyField={itemKeyField}
+                  itemPropSuggestions={itemPropSuggestions}
                   onChange={onChange}
                 />
               )}
@@ -133,6 +156,8 @@ export const FrontendStepRow: React.FC<FrontendStepRowProps> = ({
                   endpoints={endpoints}
                   webPageNodeId={webPageNodeId}
                   actionId={actionId}
+                  actionItem={actionItem}
+
                   onChange={onChange}
                 />
               )}
@@ -164,6 +189,8 @@ export const FrontendStepRow: React.FC<FrontendStepRowProps> = ({
                   allNodes={allNodes}
                   webPageNodeId={webPageNodeId}
                   actionId={actionId}
+                  actionItem={actionItem}
+
                   incomingPaths={incomingPaths}
                   onChange={onChange}
                 />

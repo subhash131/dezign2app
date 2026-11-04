@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
+import { useParams } from "next/navigation";
 import { NodeProps, Handle, Position, useUpdateNodeInternals } from "@xyflow/react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
@@ -19,6 +20,8 @@ import {
   createExtendedTypeNode,
   refreshPackageTypesFromNodeModules,
 } from "@/lib/stores/backendCanvas/packageTypesSync";
+import { getProjectWorkspaceDir } from "../../../../terminal/hooks/projectWorkspaceUtils";
+import { getActiveProjectOutputDir } from "@/lib/utils/localEnvSync";
 import {
   TypesNodeHeader,
   TypesNodeInstallBanner,
@@ -77,13 +80,19 @@ export const TypesNode = ({
 
   const shouldCollapse = restTypes.length > COLLAPSED_THRESHOLD;
 
+  const routeParams = useParams();
+  const routeProjectId = (routeParams?.projectId as string) || "";
+
   const handleRefresh = async (e: React.MouseEvent) => {
     e.stopPropagation();
     const pkg = data.packageName || data.label;
     if (!pkg) return;
     setIsRefreshing(true);
     try {
-      await refreshPackageTypesFromNodeModules(id, pkg);
+      const outputDir =
+        (routeProjectId ? getProjectWorkspaceDir(routeProjectId) : "") ||
+        getActiveProjectOutputDir(routeProjectId);
+      await refreshPackageTypesFromNodeModules(id, pkg, outputDir, routeProjectId);
     } finally {
       setIsRefreshing(false);
     }

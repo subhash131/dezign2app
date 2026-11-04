@@ -8,6 +8,7 @@ import { PipelineStep } from "@workspace/canvas/types";
 import { PipelineRenderContext } from "../types";
 import { resolveBinding } from "../sourceResolver";
 import { toVarName } from "../../../../utils";
+import { toCamelCase } from "../../../../langgraph/typescript/v1/utils";
 
 function isBlankOrQuotes(val: string | number | boolean | object | null | undefined): boolean {
   if (val === undefined || val === null) return true;
@@ -136,8 +137,8 @@ export function renderLangGraphInvokeStep(
     !/^[0-9]/.test(langGraphTargetNodeId) &&
     !langGraphTargetNodeId.includes("-") &&
     langGraphTargetNodeId.length < 20
-      ? `${toVarName(langGraphTargetNodeId)}Graph`
-      : `${toVarName(rawLabel)}Graph`);
+      ? `${toCamelCase(langGraphTargetNodeId)}Graph`
+      : `${toCamelCase(rawLabel)}Graph`);
 
   // Extract thread_id if configured or mapped
   let threadIdExpr: string | undefined = langGraphThreadIdSource
@@ -187,6 +188,7 @@ export function renderLangGraphInvokeStep(
       rawLines.push("  threadId: " + threadAccessor + ",");
       rawLines.push("  values: " + snapVar + "?.values ?? {},");
       rawLines.push("  next: " + snapVar + "?.next ?? [],");
+      rawLines.push("  messages: " + snapVar + "?.values?.messages ?? [],");
       if (isPaginated) {
         rawLines.push("  pagination: {");
         rawLines.push("    limit: " + outputVariable + "Limit,");
@@ -255,7 +257,9 @@ export function renderLangGraphInvokeStep(
         rawLines.push("  },");
         rawLines.push("};");
       } else {
-        rawLines.push("const " + outputVariable + " = " + outputVariable + "AllMessages;");
+        rawLines.push("const " + outputVariable + " = Object.assign(" + outputVariable + "AllMessages, {");
+        rawLines.push("  messages: " + outputVariable + "AllMessages,");
+        rawLines.push("});");
       }
     }
 
