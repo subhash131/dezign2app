@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { useParams } from "next/navigation";
 import { Button } from "@workspace/ui/components/button";
 import { Package, AlertTriangle, RefreshCw, Check, Copy, Lock, ArrowUpRight } from "lucide-react";
 import { cn } from "@workspace/ui/lib/utils";
@@ -8,6 +9,8 @@ import {
   createExtendedTypeNode,
   refreshPackageTypesFromNodeModules,
 } from "@/lib/stores/backendCanvas/packageTypesSync";
+import { getProjectWorkspaceDir } from "../../terminal/hooks/projectWorkspaceUtils";
+import { getActiveProjectOutputDir } from "@/lib/utils/localEnvSync";
 import type { PackageTypesBannerProps } from "./types";
 import type { CustomTypeItem } from "@workspace/canvas/types";
 
@@ -21,6 +24,8 @@ export const PackageNodeTopBanner: React.FC<PackageTypesBannerProps> = ({
   const [copiedInstall, setCopiedInstall] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const installCmd = "pnpm i";
+  const routeParams = useParams();
+  const routeProjectId = (routeParams?.projectId as string) || "";
 
   const handleCopyInstall = () => {
     navigator.clipboard.writeText("pnpm i");
@@ -32,7 +37,10 @@ export const PackageNodeTopBanner: React.FC<PackageTypesBannerProps> = ({
     if (!packageName) return;
     setIsRefreshing(true);
     try {
-      await refreshPackageTypesFromNodeModules(nodeId, packageName);
+      const outputDir =
+        (routeProjectId ? getProjectWorkspaceDir(routeProjectId) : "") ||
+        getActiveProjectOutputDir(routeProjectId);
+      await refreshPackageTypesFromNodeModules(nodeId, packageName, outputDir, routeProjectId);
     } finally {
       setIsRefreshing(false);
     }

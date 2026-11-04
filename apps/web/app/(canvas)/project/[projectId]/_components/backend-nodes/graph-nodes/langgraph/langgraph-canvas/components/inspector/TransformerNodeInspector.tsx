@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Label } from "@workspace/ui/components/label";
+import { toast } from "sonner";
 import {
   Select,
   SelectContent,
@@ -416,6 +417,19 @@ export function TransformerNodeInspector({
                 autoCorrect="off"
                 onChange={(e) => {
                   const val = toVarName(e.target.value);
+                  if (val && nodes) {
+                    const isDuplicate = nodes.some(
+                      (n) =>
+                        n.id !== (selectedTransformerData as any)?.id &&
+                        n.type === "transformer" &&
+                        toVarName((n.data as any)?.functionName || (n.data as any)?.label || "").toLowerCase() ===
+                          val.toLowerCase(),
+                    );
+                    if (isDuplicate) {
+                      toast.error(`A transformer named "${val}" already exists. Transformer names must be unique.`);
+                      return;
+                    }
+                  }
                   onUpdateTransformer({
                     label: val,
                     functionName: val,

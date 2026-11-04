@@ -80,6 +80,16 @@ describe("packageTypesSync - Dynamic Inference from node_modules", () => {
     15000,
   );
 
+  it("infers types successfully for uuid package", async () => {
+    const result = await fetchPackageTypesFromNodeModules("uuid");
+    expect(result.installed).toBe(true);
+    expect(result.types.length).toBeGreaterThanOrEqual(10);
+    const typeNames = result.types.map((t) => t.name);
+    expect(typeNames).toContain("v4");
+    expect(typeNames).toContain("v1");
+    expect(typeNames).toContain("validate");
+  });
+
   it("flags uninstalled package with isInstalled: false, 0 types, and install error", async () => {
     const store = useBackendCanvasStore.getState();
 

@@ -523,7 +523,6 @@ export const WebAppConfig = ({
           <NodePackageManager
             nodeId={nodeId}
             nodeType="webApp"
-            projectId={id}
             customDependencies={customDependencies}
             onUpdateDependencies={(deps) => updateData({ customDependencies: deps })}
             inferredDependencies={inferredWebDeps}

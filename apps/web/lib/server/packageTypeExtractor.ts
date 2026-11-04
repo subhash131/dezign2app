@@ -37,6 +37,122 @@ interface PackageJsonStructure {
 // In-memory cache keyed by "packageName@version"
 const extractionCache = new Map<string, PackageTypeExtractionResult>();
 
+export const UUID_BUILTIN_TYPES: CustomTypeItem[] = [
+  {
+    id: "type-uuid-v4",
+    name: "v4",
+    kind: "function",
+    description: "Generate RFC4122 version 4 (random) UUID",
+    returnType: "string",
+    packageSource: "uuid",
+    isReadOnly: true,
+    isExtendable: true,
+  },
+  {
+    id: "type-uuid-v1",
+    name: "v1",
+    kind: "function",
+    description: "Generate RFC4122 version 1 (timestamp) UUID",
+    returnType: "string",
+    packageSource: "uuid",
+    isReadOnly: true,
+    isExtendable: true,
+  },
+  {
+    id: "type-uuid-v5",
+    name: "v5",
+    kind: "function",
+    description: "Generate RFC4122 version 5 (namespace with SHA-1) UUID",
+    returnType: "string",
+    packageSource: "uuid",
+    isReadOnly: true,
+    isExtendable: true,
+  },
+  {
+    id: "type-uuid-v3",
+    name: "v3",
+    kind: "function",
+    description: "Generate RFC4122 version 3 (namespace with MD5) UUID",
+    returnType: "string",
+    packageSource: "uuid",
+    isReadOnly: true,
+    isExtendable: true,
+  },
+  {
+    id: "type-uuid-validate",
+    name: "validate",
+    kind: "function",
+    description: "Validate if a string is a valid UUID",
+    returnType: "boolean",
+    packageSource: "uuid",
+    isReadOnly: true,
+    isExtendable: true,
+  },
+  {
+    id: "type-uuid-version",
+    name: "version",
+    kind: "function",
+    description: "Detect the RFC4122 version of a UUID",
+    returnType: "number",
+    packageSource: "uuid",
+    isReadOnly: true,
+    isExtendable: true,
+  },
+  {
+    id: "type-uuid-parse",
+    name: "parse",
+    kind: "function",
+    description: "Parse a UUID string into an array of bytes",
+    returnType: "Uint8Array",
+    packageSource: "uuid",
+    isReadOnly: true,
+    isExtendable: true,
+  },
+  {
+    id: "type-uuid-stringify",
+    name: "stringify",
+    kind: "function",
+    description: "Convert an array of bytes into a UUID string",
+    returnType: "string",
+    packageSource: "uuid",
+    isReadOnly: true,
+    isExtendable: true,
+  },
+  {
+    id: "type-uuid-NIL",
+    name: "NIL",
+    kind: "type",
+    typeAliasValue: '"00000000-0000-0000-0000-000000000000"',
+    description: "The nil UUID string '00000000-0000-0000-0000-000000000000'",
+    packageSource: "uuid",
+    isReadOnly: true,
+    isExtendable: true,
+  },
+  {
+    id: "type-uuid-UUID",
+    name: "UUID",
+    kind: "type",
+    typeAliasValue: "string",
+    description: "RFC4122 UUID string format",
+    packageSource: "uuid",
+    isReadOnly: true,
+    isExtendable: true,
+  },
+];
+
+export const UUID_BUILTIN_EXPORTS: PackageExportSymbol[] = [
+  { name: "v4", kind: "function", description: "Generate RFC4122 version 4 (random) UUID" },
+  { name: "v1", kind: "function", description: "Generate RFC4122 version 1 (timestamp) UUID" },
+  { name: "v5", kind: "function", description: "Generate RFC4122 version 5 (namespace with SHA-1) UUID" },
+  { name: "v3", kind: "function", description: "Generate RFC4122 version 3 (namespace with MD5) UUID" },
+  { name: "validate", kind: "function", description: "Validate if a string is a valid UUID" },
+  { name: "version", kind: "function", description: "Detect the RFC4122 version of a UUID" },
+  { name: "parse", kind: "function", description: "Parse a UUID string into an array of bytes" },
+  { name: "stringify", kind: "function", description: "Convert an array of bytes into a UUID string" },
+  { name: "NIL", kind: "type", description: "The nil UUID string '00000000-0000-0000-0000-000000000000'" },
+  { name: "UUID", kind: "type", description: "RFC4122 UUID string format" },
+];
+
 function findInPnpmStore(pnpmStoreDir: string, pkg: string): string | null {
   if (!fs.existsSync(pnpmStoreDir)) return null;
   const pkgParts = pkg.split("/");
@@ -62,7 +178,13 @@ export function resolvePackageDirectory(pkg: string, projectDir?: string): strin
   const searchStarts: string[] = [];
   if (projectDir) {
     const clean = path.resolve(projectDir);
-    if (fs.existsSync(clean)) searchStarts.push(clean);
+    if (fs.existsSync(clean)) {
+      searchStarts.push(clean);
+      const subTransformers = path.join(clean, "packages", "transformers");
+      if (fs.existsSync(subTransformers)) searchStarts.push(subTransformers);
+      const subBackend = path.join(clean, "packages", "backend");
+      if (fs.existsSync(subBackend)) searchStarts.push(subBackend);
+    }
   }
   searchStarts.push(cwd);
 
@@ -488,6 +610,17 @@ export function extractPackageTypesFromNodeModules(
 
   const pkgDir = resolvePackageDirectory(trimmedPkg, projectDir);
   if (!pkgDir) {
+    if (trimmedPkg === "uuid") {
+      const fallbackResult: PackageTypeExtractionResult = {
+        installed: true,
+        pkg: trimmedPkg,
+        version: "native",
+        types: [...UUID_BUILTIN_TYPES],
+        exports: [...UUID_BUILTIN_EXPORTS],
+      };
+      return fallbackResult;
+    }
+
     return {
       installed: false,
       pkg: trimmedPkg,
@@ -654,110 +787,7 @@ export function extractPackageTypesFromNodeModules(
 
   // 3. Fallback: For packages with exports but no extracted types (or uuid), ensure types are populated
   if (trimmedPkg === "uuid") {
-    const uuidBuiltins: CustomTypeItem[] = [
-      {
-        id: `type-uuid-v4`,
-        name: "v4",
-        kind: "function",
-        description: "Generate RFC4122 version 4 (random) UUID",
-        returnType: "string",
-        packageSource: "uuid",
-        isReadOnly: true,
-        isExtendable: true,
-      },
-      {
-        id: `type-uuid-v1`,
-        name: "v1",
-        kind: "function",
-        description: "Generate RFC4122 version 1 (timestamp) UUID",
-        returnType: "string",
-        packageSource: "uuid",
-        isReadOnly: true,
-        isExtendable: true,
-      },
-      {
-        id: `type-uuid-v5`,
-        name: "v5",
-        kind: "function",
-        description: "Generate RFC4122 version 5 (namespace with SHA-1) UUID",
-        returnType: "string",
-        packageSource: "uuid",
-        isReadOnly: true,
-        isExtendable: true,
-      },
-      {
-        id: `type-uuid-v3`,
-        name: "v3",
-        kind: "function",
-        description: "Generate RFC4122 version 3 (namespace with MD5) UUID",
-        returnType: "string",
-        packageSource: "uuid",
-        isReadOnly: true,
-        isExtendable: true,
-      },
-      {
-        id: `type-uuid-validate`,
-        name: "validate",
-        kind: "function",
-        description: "Validate if a string is a valid UUID",
-        returnType: "boolean",
-        packageSource: "uuid",
-        isReadOnly: true,
-        isExtendable: true,
-      },
-      {
-        id: `type-uuid-version`,
-        name: "version",
-        kind: "function",
-        description: "Detect the RFC4122 version of a UUID",
-        returnType: "number",
-        packageSource: "uuid",
-        isReadOnly: true,
-        isExtendable: true,
-      },
-      {
-        id: `type-uuid-parse`,
-        name: "parse",
-        kind: "function",
-        description: "Parse a UUID string into an array of bytes",
-        returnType: "Uint8Array",
-        packageSource: "uuid",
-        isReadOnly: true,
-        isExtendable: true,
-      },
-      {
-        id: `type-uuid-stringify`,
-        name: "stringify",
-        kind: "function",
-        description: "Convert an array of bytes into a UUID string",
-        returnType: "string",
-        packageSource: "uuid",
-        isReadOnly: true,
-        isExtendable: true,
-      },
-      {
-        id: `type-uuid-NIL`,
-        name: "NIL",
-        kind: "type",
-        typeAliasValue: '"00000000-0000-0000-0000-000000000000"',
-        description: "The nil UUID string '00000000-0000-0000-0000-000000000000'",
-        packageSource: "uuid",
-        isReadOnly: true,
-        isExtendable: true,
-      },
-      {
-        id: `type-uuid-UUID`,
-        name: "UUID",
-        kind: "type",
-        typeAliasValue: "string",
-        description: "RFC4122 UUID string format",
-        packageSource: "uuid",
-        isReadOnly: true,
-        isExtendable: true,
-      },
-    ];
-
-    for (const b of uuidBuiltins) {
+    for (const b of UUID_BUILTIN_TYPES) {
       if (!extractedTypes.some((t) => t.name === b.name)) {
         extractedTypes.push(b);
       }
