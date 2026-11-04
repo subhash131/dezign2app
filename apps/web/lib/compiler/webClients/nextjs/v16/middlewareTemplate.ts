@@ -1,5 +1,5 @@
 import { PageInfo } from "./types";
-import { BackendNodeData } from "@workspace/canvas";
+import { BackendNodeData, arePageRoutesEqual } from "@workspace/canvas";
 
 /**
  * Generates Next.js 16 proxy.ts for route protection (replaces deprecated middleware.ts)
@@ -12,12 +12,23 @@ export function generateProxy(pagesInfo: PageInfo[], authNodeData?: BackendNodeD
 
   const redirects = authNodeData?.redirects || {};
   const resolveRedirect = (nodeId?: string, fallbackUrl?: string, defaultFallback: string = "/") => {
+    if (fallbackUrl) {
+      const cleanFallback = fallbackUrl.startsWith("/") ? fallbackUrl : `/${fallbackUrl}`;
+      if (nodeId) {
+        const matched = pagesInfo.find((p) => p.nodeId === nodeId);
+        if (
+          matched &&
+          (arePageRoutesEqual(matched.routePath, cleanFallback) ||
+            arePageRoutesEqual(matched.label, cleanFallback))
+        ) {
+          return matched.routePath;
+        }
+      }
+      return cleanFallback;
+    }
     if (nodeId) {
       const matched = pagesInfo.find((p) => p.nodeId === nodeId);
       if (matched) return matched.routePath;
-    }
-    if (fallbackUrl) {
-      return fallbackUrl.startsWith("/") ? fallbackUrl : `/${fallbackUrl}`;
     }
     return defaultFallback;
   };

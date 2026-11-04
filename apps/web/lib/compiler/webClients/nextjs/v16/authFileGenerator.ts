@@ -1,5 +1,5 @@
 import { BackendNode, BackendEdge, SimulationTestCase } from "@/types/canvas";
-import { DEFAULT_BETTER_AUTH_VERSION } from "@workspace/canvas";
+import { DEFAULT_BETTER_AUTH_VERSION, arePageRoutesEqual } from "@workspace/canvas";
 import { Endpoint, AnyMessagingResource, CompiledFile } from "@workspace/canvas/types";
 import { PageInfo } from "./types";
 import { compileAuth } from "../../../compileAuth";
@@ -78,8 +78,8 @@ export function resolveConnectedAuthNode(
 
   // 3. Fallback only if there are NO explicit WebApp nodes on the canvas
   // and there is a single auth node on the canvas
-  const hasExplicitWebAppNodes = allNodes.some((n) => n.type === "webApp");
-  if (!hasExplicitWebAppNodes && webAppNode === undefined && authNodes.length === 1) {
+  // Fallback: If only 1 auth node exists on the canvas, use it for the web app
+  if (authNodes.length === 1) {
     return authNodes[0];
   }
 
@@ -214,12 +214,23 @@ export const { POST, GET } = toNextJsHandler(auth);
 
     const redirects = authNode.data?.redirects || {};
     const resolveRedirect = (nodeId?: string, fallbackUrl?: string, defaultFallback: string = "/") => {
+      if (fallbackUrl) {
+        const cleanFallback = fallbackUrl.startsWith("/") ? fallbackUrl : `/${fallbackUrl}`;
+        if (nodeId && pagesInfo) {
+          const matched = pagesInfo.find((p) => p.nodeId === nodeId);
+          if (
+            matched &&
+            (arePageRoutesEqual(matched.routePath, cleanFallback) ||
+              arePageRoutesEqual(matched.label, cleanFallback))
+          ) {
+            return matched.routePath;
+          }
+        }
+        return cleanFallback;
+      }
       if (nodeId && pagesInfo) {
         const matched = pagesInfo.find((p) => p.nodeId === nodeId);
         if (matched) return matched.routePath;
-      }
-      if (fallbackUrl) {
-        return fallbackUrl.startsWith("/") ? fallbackUrl : `/${fallbackUrl}`;
       }
       return defaultFallback;
     };

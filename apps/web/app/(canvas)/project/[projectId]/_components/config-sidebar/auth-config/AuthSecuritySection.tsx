@@ -5,7 +5,7 @@ import {
   AccordionTrigger,
 } from "@workspace/ui/components/accordion";
 import { ShieldCheck } from "lucide-react";
-import { RedirectsConfig } from "@workspace/canvas";
+import { RedirectsConfig, arePageRoutesEqual } from "@workspace/canvas";
 import { AuthConfigSectionProps } from "./types";
 import {
   getConfiguredPages,
@@ -52,11 +52,14 @@ export const AuthSecuritySection: React.FC<AuthConfigSectionProps> = ({
   });
 
   const handleUpdateRedirects = (changes: Partial<RedirectsConfig>) => {
+    const nextRedirects = { ...redirects, ...changes };
+    for (const key of Object.keys(changes) as (keyof RedirectsConfig)[]) {
+      if (changes[key] === undefined) {
+        delete nextRedirects[key];
+      }
+    }
     updateData({
-      redirects: {
-        ...redirects,
-        ...changes,
-      },
+      redirects: nextRedirects,
     });
   };
 
@@ -65,55 +68,38 @@ export const AuthSecuritySection: React.FC<AuthConfigSectionProps> = ({
     let needsUpdate = false;
     const updatedRedirects = { ...redirects };
 
-    if (redirects.signInPageNodeId) {
-      const page = configuredPages.find((p) => p.id === redirects.signInPageNodeId);
-      if (page && page.path !== redirects.signInPageUrl) {
-        updatedRedirects.signInPageUrl = page.path;
-        needsUpdate = true;
+    const checkField = (
+      nodeIdKey: keyof RedirectsConfig,
+      urlKey: keyof RedirectsConfig,
+    ) => {
+      const nid = redirects[nodeIdKey];
+      if (nid) {
+        const page = configuredPages.find((p) => p.id === nid);
+        if (!page) {
+          delete updatedRedirects[nodeIdKey];
+          needsUpdate = true;
+        } else if (
+          redirects[urlKey] &&
+          !arePageRoutesEqual(page.path, redirects[urlKey] as string) &&
+          !arePageRoutesEqual(page.label, redirects[urlKey] as string)
+        ) {
+          // Stale node reference: custom URL was selected
+          delete updatedRedirects[nodeIdKey];
+          needsUpdate = true;
+        } else if (page.path !== redirects[urlKey]) {
+          updatedRedirects[urlKey] = page.path;
+          needsUpdate = true;
+        }
       }
-    }
-    if (redirects.signUpPageNodeId) {
-      const page = configuredPages.find((p) => p.id === redirects.signUpPageNodeId);
-      if (page && page.path !== redirects.signUpPageUrl) {
-        updatedRedirects.signUpPageUrl = page.path;
-        needsUpdate = true;
-      }
-    }
-    if (redirects.signInRedirectNodeId) {
-      const page = configuredPages.find((p) => p.id === redirects.signInRedirectNodeId);
-      if (page && page.path !== redirects.signInRedirectUrl) {
-        updatedRedirects.signInRedirectUrl = page.path;
-        needsUpdate = true;
-      }
-    }
-    if (redirects.signUpRedirectNodeId) {
-      const page = configuredPages.find((p) => p.id === redirects.signUpRedirectNodeId);
-      if (page && page.path !== redirects.signUpRedirectUrl) {
-        updatedRedirects.signUpRedirectUrl = page.path;
-        needsUpdate = true;
-      }
-    }
-    if (redirects.signOutRedirectNodeId) {
-      const page = configuredPages.find((p) => p.id === redirects.signOutRedirectNodeId);
-      if (page && page.path !== redirects.signOutRedirectUrl) {
-        updatedRedirects.signOutRedirectUrl = page.path;
-        needsUpdate = true;
-      }
-    }
-    if (redirects.unauthorizedNodeId) {
-      const page = configuredPages.find((p) => p.id === redirects.unauthorizedNodeId);
-      if (page && page.path !== redirects.unauthorizedUrl) {
-        updatedRedirects.unauthorizedUrl = page.path;
-        needsUpdate = true;
-      }
-    }
-    if (redirects.pricingNodeId) {
-      const page = configuredPages.find((p) => p.id === redirects.pricingNodeId);
-      if (page && page.path !== redirects.pricingUrl) {
-        updatedRedirects.pricingUrl = page.path;
-        needsUpdate = true;
-      }
-    }
+    };
+
+    checkField("signInPageNodeId", "signInPageUrl");
+    checkField("signUpPageNodeId", "signUpPageUrl");
+    checkField("signInRedirectNodeId", "signInRedirectUrl");
+    checkField("signUpRedirectNodeId", "signUpRedirectUrl");
+    checkField("signOutRedirectNodeId", "signOutRedirectUrl");
+    checkField("unauthorizedNodeId", "unauthorizedUrl");
+    checkField("pricingNodeId", "pricingUrl");
 
     if (needsUpdate) {
       updateData({ redirects: updatedRedirects });

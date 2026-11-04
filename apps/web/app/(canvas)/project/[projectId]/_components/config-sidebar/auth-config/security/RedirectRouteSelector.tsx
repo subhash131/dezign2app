@@ -30,16 +30,6 @@ export const RedirectRouteSelector: React.FC<RedirectRouteSelectorProps> = ({
   const router = useRouter();
   const [isCustomInput, setIsCustomInput] = useState(false);
 
-  // Find page by nodeId first, then fall back to path matching
-  const matchingByNodeId = nodeIdValue
-    ? configuredPages.find((p) => p.id === nodeIdValue)
-    : undefined;
-  const matchingByPath = configuredPages.find((p) => p.path === value);
-  const matchedPage = matchingByNodeId || matchingByPath;
-
-  const effectivePath = matchedPage ? matchedPage.path : value;
-  const currentSelectValue = matchedPage ? matchedPage.id : value ? `__value__${value}` : "";
-
   // Presets based on zone
   const standardPresets =
     targetZoneType === "protected"
@@ -58,10 +48,33 @@ export const RedirectRouteSelector: React.FC<RedirectRouteSelectorProps> = ({
         ];
 
   const missingPresets = standardPresets.filter(
-    (preset) => !configuredPages.some((p) => p.path === preset.path),
+    (preset) => !configuredPages.some((p) => arePageRoutesEqual(p.path, preset.path)),
   );
 
-  return (
+  // Find page by nodeId first if it matches current value, otherwise fall back to path matching
+  const matchingByNodeId = nodeIdValue
+    ? configuredPages.find((p) => p.id === nodeIdValue)
+    : undefined;
+  const matchingByPath = configuredPages.find((p) => arePageRoutesEqual(p.path, value || ""));
+  const matchedPage =
+    matchingByNodeId &&
+    (!value ||
+      arePageRoutesEqual(matchingByNodeId.path, value) ||
+      arePageRoutesEqual(matchingByNodeId.label, value))
+      ? matchingByNodeId
+      : matchingByPath;
+
+  const effectivePath = matchedPage ? matchedPage.path : value;
+  const matchedPreset = standardPresets.find((p) => arePageRoutesEqual(p.path, value || ""));
+  const currentSelectValue = matchedPage
+    ? matchedPage.id
+    : matchedPreset
+    ? `__preset__${matchedPreset.path}`
+    : value
+    ? `__value__${value}`
+    : "";
+
+return (
     <div className="flex flex-col gap-1.5 p-2 rounded-lg bg-background/60 border border-border/40">
       <div className="flex items-center justify-between">
         <Label className="text-[11px] text-muted-foreground font-medium">{label}</Label>
