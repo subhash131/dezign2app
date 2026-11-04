@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "dezign2app-web",
+  "name": "dezign2app",
   "main": ".open-next/worker.js",
   "compatibility_date": "2025-04-01",
   "compatibility_flags": [
@@ -12,5 +12,13 @@
   },
   "observability": {
     "enabled": true
+  },
+  "vars": {
+    "BETTER_AUTH_TRUSTED_ORIGINS": "https://dezign2app.com,https://www.dezign2app.com,dezign2app://",
+    "BETTER_AUTH_URL": "https://www.dezign2app.com",
+    "NEXT_PUBLIC_APP_URL": "https://www.dezign2app.com",
+    "NEXT_PUBLIC_CONVEX_SITE_URL": "https://gregarious-quail-82.convex.site",
+    "NEXT_PUBLIC_CONVEX_URL": "https://gregarious-quail-82.convex.cloud",
+    "NODE_VERSION": "22"
   }
 }
