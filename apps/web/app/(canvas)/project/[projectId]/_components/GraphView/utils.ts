@@ -5,6 +5,7 @@ import type {
   PageSection,
 } from "@workspace/canvas/types";
 import { parsePageRoute, DEFAULT_ZONES, getDefaultNodeEnvVars } from "@workspace/canvas";
+import { toVarName } from "@/lib/compiler/utils";
 
 export function createGraphNodeData(
   type: BackendNodeType,
@@ -91,9 +92,11 @@ function getRawGraphNodeData(
   }
 
   if (type === "transformer") {
+    const fnName = label ? toVarName(label) : "";
     return {
       ...baseData,
-      functionName: label || "",
+      label: fnName,
+      functionName: fnName,
       scope: "global",
       inputSchema: [
         { id: "in_name", name: "name", type: "string", required: true },

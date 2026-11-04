@@ -15,6 +15,7 @@ import {
   HANDLE_TRANSFORMER_OUT,
 } from "../constants";
 import { LocalInput } from "../../../common";
+import { toVarName } from "@/lib/compiler/utils";
 
 export const LangGraphCanvasTransformerNode = ({
   id,
@@ -43,12 +44,17 @@ export const LangGraphCanvasTransformerNode = ({
 
   const handleNameSave = () => {
     setIsEditingName(false);
-    const trimmed = nameValue.trim() || "Transformer";
-    setNameValue(trimmed);
-    if (trimmed !== data.label) {
+    const trimmed = nameValue.trim();
+    if (!trimmed) {
+      setNameValue(toVarName(data.label || data.functionName || "") || "transformer");
+      return;
+    }
+    const formatted = toVarName(trimmed);
+    setNameValue(formatted);
+    if (formatted !== data.label || formatted !== data.functionName) {
       updateTransformerData({
-        label: trimmed,
-        functionName: trimmed.replace(/[^a-zA-Z0-9_$]/g, "_"),
+        label: formatted,
+        functionName: formatted,
       });
     }
   };

@@ -17,6 +17,7 @@ import {
   getSimulationNodeBorderClass,
 } from "../../common";
 import { useNodePipelineError } from "@/lib/utils/pipelineValidation";
+import { toVarName } from "@/lib/compiler/utils";
 
 export const TransformerNode = ({
   id,
@@ -42,11 +43,26 @@ export const TransformerNode = ({
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setName(data.label || data.functionName || "");
-    if (!data.label && !data.functionName) {
-      setIsEditing(true);
+    const raw = data.label || data.functionName || "";
+    if (raw) {
+      const formatted = toVarName(raw);
+      setName(formatted);
+      if (formatted !== data.label || formatted !== data.functionName) {
+        updateNode(id, {
+          data: {
+            ...data,
+            label: formatted,
+            functionName: formatted,
+          },
+        });
+      }
+    } else {
+      setName("");
+      if (!data.label && !data.functionName) {
+        setIsEditing(true);
+      }
     }
-  }, [data.label, data.functionName]);
+  }, [data.label, data.functionName, id, updateNode]);
 
   useEffect(() => {
     if (isEditing) {
@@ -72,18 +88,20 @@ export const TransformerNode = ({
         deleteNode(id);
         return;
       }
-      setName(data.label || data.functionName || "");
+      const fallback = toVarName(data.label || data.functionName || "") || "transformer";
+      setName(fallback);
       setIsEditing(false);
       return;
     }
+    const formatted = toVarName(trimmed);
     updateNode(id, {
       data: {
         ...data,
-        label: trimmed,
-        functionName: trimmed,
+        label: formatted,
+        functionName: formatted,
       },
     });
-    setName(trimmed);
+    setName(formatted);
     setIsEditing(false);
   };
 
@@ -221,9 +239,9 @@ export const TransformerNode = ({
                   e.stopPropagation();
                   setIsEditing(true);
                 }}
-                title={data.label || data.functionName || "Transformer"}
+                title={toVarName(data.label || data.functionName || "") || "transformer"}
               >
-                {data.label || data.functionName || "Transformer"}
+                {toVarName(data.label || data.functionName || "") || "transformer"}
               </span>
             )}
           </div>

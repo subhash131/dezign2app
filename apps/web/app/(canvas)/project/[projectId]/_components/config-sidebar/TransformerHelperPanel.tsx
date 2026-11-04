@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select";
 import { TypeCombobox } from "./TypeCombobox";
+import { toVarName } from "@/lib/compiler/utils";
 import {
   ChevronDown,
   ChevronRight,
@@ -197,7 +198,7 @@ const HelperCard = ({ helper, onChange, onDelete }: HelperCardProps) => {
               <Input
                 className="h-7 text-xs font-mono bg-background/60 border-border/60"
                 value={helper.name}
-                onChange={(e) => update({ name: e.target.value })}
+                onChange={(e) => update({ name: toVarName(e.target.value) })}
                 placeholder="slugifyProductInput"
               />
             </div>
