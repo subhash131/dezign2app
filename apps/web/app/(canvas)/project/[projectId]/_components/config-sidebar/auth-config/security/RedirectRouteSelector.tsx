@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Input } from "@workspace/ui/components/input";
+import { LocalInput } from "../LocalInput";
 import { Label } from "@workspace/ui/components/label";
 import { Button } from "@workspace/ui/components/button";
 import {
@@ -91,7 +91,7 @@ export const RedirectRouteSelector: React.FC<RedirectRouteSelectorProps> = ({
       <div className="flex items-center gap-1.5">
         {isCustomInput ? (
           <div className="flex items-center gap-1 flex-1">
-            <Input
+            <LocalInput
               className="h-7 text-xs font-mono bg-background flex-1"
               placeholder={placeholder}
               value={effectivePath}

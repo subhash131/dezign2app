@@ -1,7 +1,7 @@
 import React from "react";
 import { Label } from "@workspace/ui/components/label";
 import { Button } from "@workspace/ui/components/button";
-import { Input } from "@workspace/ui/components/input";
+import { LocalInput } from "../LocalInput";
 import {
   Select,
   SelectContent,
@@ -72,7 +72,7 @@ export const AssociatedDbFunctionsSection: React.FC<
                     <Label className="text-[10px] font-medium text-muted-foreground flex items-center gap-1">
                       Variable
                     </Label>
-                    <Input
+                    <LocalInput
                       placeholder="e.g. user, subscription"
                       value={af.variableName || ""}
                       onChange={(e) =>

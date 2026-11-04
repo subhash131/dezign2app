@@ -1,6 +1,6 @@
 import React from "react";
 import { Label } from "@workspace/ui/components/label";
-import { Input } from "@workspace/ui/components/input";
+import { LocalInput } from "../LocalInput";
 import { ArrowRightLeft } from "lucide-react";
 import { RedirectRouteSelector } from "./RedirectRouteSelector";
 import { RedirectRoutingCardProps } from "./types";
@@ -126,7 +126,7 @@ export const RedirectRoutingCard: React.FC<RedirectRoutingCardProps> = ({
           <Label className="text-[11px] text-muted-foreground font-medium">
             OAuth Callback Base Route
           </Label>
-          <Input
+          <LocalInput
             className="h-7 text-xs font-mono bg-background"
             placeholder="/api/auth/callback"
             value={redirects.callbackUrl || "/api/auth/callback"}

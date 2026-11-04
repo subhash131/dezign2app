@@ -1,6 +1,6 @@
 import React from "react";
-import { Textarea } from "@workspace/ui/components/textarea";
-import { Input } from "@workspace/ui/components/input";
+import { LocalInput, LocalTextarea } from "./LocalInput";
+
 import { Button } from "@workspace/ui/components/button";
 import { Label } from "@workspace/ui/components/label";
 import {
@@ -340,7 +340,7 @@ export const AuthHooksSection: React.FC<AuthConfigSectionProps> = ({
 
                         {!isPreset && (
                           <div className="min-w-[140px] flex-1">
-                            <Input
+                            <LocalInput
                               className="h-7 text-xs font-mono bg-background"
                               placeholder="e.g. /custom-route"
                               value={hook.event}
@@ -432,7 +432,7 @@ export const AuthHooksSection: React.FC<AuthConfigSectionProps> = ({
                     {/* Row 3: Content Input Area */}
                     <div>
                       {mode === "naturalLanguage" ? (
-                        <Textarea
+                        <LocalTextarea
                           className="min-h-[70px] text-xs font-mono bg-background/80 leading-relaxed"
                           placeholder="Describe logic (e.g. After sign up, create default workspace and send welcome email)"
                           value={hook.prompt || ""}
@@ -441,7 +441,7 @@ export const AuthHooksSection: React.FC<AuthConfigSectionProps> = ({
                           }
                         />
                       ) : (
-                        <Textarea
+                        <LocalTextarea
                           className="min-h-[90px] text-xs font-mono bg-muted/90 text-foreground leading-relaxed"
                           placeholder={`if (ctx.path === "${hook.event}") {\n  // custom code\n}`}
                           value={hook.code || ""}
@@ -567,7 +567,7 @@ export const AuthHooksSection: React.FC<AuthConfigSectionProps> = ({
 
                         {!isModelPreset && (
                           <div className="min-w-[120px] flex-1">
-                            <Input
+                            <LocalInput
                               className="h-7 text-xs font-mono bg-background"
                               placeholder="Custom model/table..."
                               value={hook.model}
@@ -682,7 +682,7 @@ export const AuthHooksSection: React.FC<AuthConfigSectionProps> = ({
                     {/* Row 3: Content Input Area */}
                     <div>
                       {mode === "naturalLanguage" ? (
-                        <Textarea
+                        <LocalTextarea
                           className="min-h-[70px] text-xs font-mono bg-background/80 leading-relaxed"
                           placeholder="Describe DB side-effect or data mutation..."
                           value={hook.prompt || ""}
@@ -691,7 +691,7 @@ export const AuthHooksSection: React.FC<AuthConfigSectionProps> = ({
                           }
                         />
                       ) : (
-                        <Textarea
+                        <LocalTextarea
                           className="min-h-[90px] text-xs font-mono bg-muted/90 text-foreground leading-relaxed"
                           placeholder={`async (${hook.model}, ctx) => {\n  // logic\n}`}
                           value={hook.code || ""}

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Input } from "@workspace/ui/components/input";
+import { LocalInput } from "../LocalInput";
 import { Label } from "@workspace/ui/components/label";
 import { Checkbox } from "@workspace/ui/components/checkbox";
 import { Button } from "@workspace/ui/components/button";
@@ -148,7 +148,7 @@ export const SocialProvidersConfigCard: React.FC<SocialProvidersConfigCardProps>
                       </Select>
                     </div>
                     <div className="col-span-4 relative flex items-center">
-                      <Input
+                      <LocalInput
                         className="h-7 text-xs font-mono bg-background pr-6"
                         value={oa.clientIdEnv}
                         placeholder="CLIENT_ID_ENV"
@@ -162,7 +162,7 @@ export const SocialProvidersConfigCard: React.FC<SocialProvidersConfigCardProps>
                       <Lock className="w-3 h-3 text-muted-foreground absolute right-2 pointer-events-none" />
                     </div>
                     <div className="col-span-4 relative flex items-center">
-                      <Input
+                      <LocalInput
                         className="h-7 text-xs font-mono bg-background pr-6"
                         value={oa.clientSecretEnv}
                         placeholder="CLIENT_SECRET_ENV"

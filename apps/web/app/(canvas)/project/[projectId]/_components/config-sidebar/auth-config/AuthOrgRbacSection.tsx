@@ -1,6 +1,6 @@
 import React from "react";
 import { Label } from "@workspace/ui/components/label";
-import { Input } from "@workspace/ui/components/input";
+import { LocalInput } from "./LocalInput";
 import { Checkbox } from "@workspace/ui/components/checkbox";
 import { Switch } from "@workspace/ui/components/switch";
 import {
@@ -170,7 +170,7 @@ export const AuthOrgRbacSection: React.FC<AuthConfigSectionProps> = ({
                     <div className="flex flex-col gap-1">
                       <span className="text-[10px] text-muted-foreground font-medium">Invite Expiry</span>
                       <div className="flex items-center gap-1">
-                        <Input
+                        <LocalInput
                           className="h-7 text-xs font-mono bg-background"
                           type="number"
                           value={invitationsConfig.inviteExpiresInDays ?? 7}
