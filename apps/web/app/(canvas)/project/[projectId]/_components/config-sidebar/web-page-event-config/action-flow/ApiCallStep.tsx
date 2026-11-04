@@ -1,4 +1,5 @@
 import React from "react";
+import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import {
   Plus,
   Trash2,
@@ -13,6 +14,7 @@ import {
   ChevronRight,
   RefreshCw,
   Key,
+  Box,
 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
@@ -38,10 +40,11 @@ import type { PageSection } from "@/types/canvas";
 import { ResponseFieldPicker } from "./ResponseFieldPicker";
 import { ActionFlowCombobox, ComboboxOption } from "./ActionFlowCombobox";
 import { ensureActionServiceConnection, cleanupActionStepEdge } from "./actionStepCanvasSync";
-import { isAuthHeaderName, buildInitialBindingsFromEndpoint } from "./utils";
+import { isAuthHeaderName, buildInitialBindingsFromEndpoint, resolveItemPropsFromState } from "./utils";
 
 type SourceKindOption =
   | "auth_token"
+  | "item_prop"
   | "user_input"
   | "route_param"
   | "query_param"
@@ -66,6 +69,10 @@ interface BindingSlotRowProps {
   stateStores: BackendNode[];
   sectionStateVars: Array<{ name: string; type?: string; storeName?: string; storeId?: string }>;
   incomingPaths?: AvailablePath[];
+  isItemScoped?: boolean;
+  itemKeyField?: string;
+  itemSourceStateName?: string;
+  itemPropSuggestions?: ComboboxOption[];
 }
 
 const BindingSlotRow: React.FC<BindingSlotRowProps> = ({
@@ -81,6 +88,10 @@ const BindingSlotRow: React.FC<BindingSlotRowProps> = ({
   stateStores,
   sectionStateVars,
   incomingPaths,
+  isItemScoped,
+  itemKeyField,
+  itemSourceStateName,
+  itemPropSuggestions,
 }) => {
   const isAuth = binding.slot === "header" && isAuthHeaderName(binding.targetField);
 
@@ -164,6 +175,12 @@ const BindingSlotRow: React.FC<BindingSlotRowProps> = ({
                   </span>
                 </SelectItem>
               )}
+              <SelectItem value="item_prop">
+                <span className="flex items-center gap-1.5 text-violet-400 font-medium">
+                  <Box size={11} />
+                  Current item {!isItemScoped && "(Array Item)"}
+                </span>
+              </SelectItem>
               <SelectItem value="auth_token">
                 <span className="flex items-center gap-1.5 text-amber-500 font-medium">
                   <Key size={11} />
@@ -200,6 +217,45 @@ const BindingSlotRow: React.FC<BindingSlotRowProps> = ({
 
       {/* Source Details Editor */}
       <div className="pt-0.5">
+        {binding.source.kind === "item_prop" && (
+          <div className="p-2.5 rounded border border-violet-500/25 bg-violet-500/5 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-medium text-violet-400 flex items-center gap-1.5">
+                <Box size={12} />
+                Current item Property (Array Item)
+              </span>
+              <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 font-mono text-violet-400 border-violet-500/30 bg-violet-500/10">
+                {itemSourceStateName ? `${itemSourceStateName}[]` : "item context"}
+              </Badge>
+            </div>
+            <div className="grid grid-cols-2 gap-2 pt-0.5">
+              <div className="space-y-1">
+                <Label className="text-[10px] text-muted-foreground">Item Property Key</Label>
+                <ActionFlowCombobox
+                  value={binding.source.propPath || binding.source.fieldPath || ""}
+                  onChange={(val) =>
+                    onUpdate((prev) => ({
+                      ...prev,
+                      source: { kind: "item_prop", propPath: val, fieldPath: val },
+                    }))
+                  }
+                  placeholder={itemKeyField || binding.targetField || "id"}
+                  headerLabel="Suggested Item Properties"
+                  options={itemPropSuggestions || []}
+                />
+              </div>
+              <div className="flex flex-col justify-end text-[10px] text-muted-foreground leading-tight pb-0.5">
+                <span>
+                  Runtime value: <code className="text-violet-300 font-mono">item.{binding.source.propPath || binding.source.fieldPath || itemKeyField || binding.targetField || "id"}</code>
+                </span>
+                <span className="text-[9px] text-muted-foreground/80 mt-0.5">
+                  Passed into request when array item is clicked.
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {binding.source.kind === "auth_token" && (
           <div className="p-2.5 rounded border border-amber-500/25 bg-amber-500/5 space-y-2">
             <div className="flex items-center justify-between">
@@ -405,6 +461,28 @@ const BindingSlotRow: React.FC<BindingSlotRowProps> = ({
               !source.storeName &&
               sectionStateVars.some((v) => v.name === source.stateKey));
 
+          // Determine the type of the currently selected field
+          const selectedFieldType: string = (() => {
+            const key = source.stateKey;
+            if (!key) return "";
+            if (selectedStore) {
+              return (selectedStore.data?.fields || []).find((f: any) => f.name === key)?.type || "";
+            }
+            if (isLocal) {
+              return sectionStateVars.find((v) => v.name === key)?.type || "";
+            }
+            for (const s of stateStores) {
+              const f = (s.data?.fields || []).find((f: any) => f.name === key);
+              if (f) return f.type || "";
+            }
+            return "";
+          })();
+
+          const isArrayField =
+            selectedFieldType.includes("[]") ||
+            selectedFieldType.startsWith("Array<") ||
+            selectedFieldType.startsWith("List<");
+
           const storeFieldOptions: ComboboxOption[] = selectedStore
             ? (selectedStore.data?.fields || []).map((f) => ({
                 value: f.name,
@@ -432,102 +510,195 @@ const BindingSlotRow: React.FC<BindingSlotRowProps> = ({
                 })),
               ];
 
+          // Quick-access expression presets for arrays
+          const arrayExprPresets = source.stateKey
+            ? [
+                { label: "Last item", expr: `${source.stateKey}[${source.stateKey}.length - 1]` },
+                { label: "First item", expr: `${source.stateKey}[0]` },
+                { label: "Count / length", expr: `${source.stateKey}.length` },
+                { label: "Last item ID", expr: `${source.stateKey}[${source.stateKey}.length - 1]?.id` },
+                { label: "Last item createdAt", expr: `${source.stateKey}[${source.stateKey}.length - 1]?.createdAt` },
+              ]
+            : [];
+
           return (
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <Label className="text-[10px] text-muted-foreground">
-                  Source Store
-                </Label>
-                <Select
-                  value={
-                    isLocal
-                      ? "__local__"
-                      : selectedStore?.id || (stateStores[0]?.id ?? "__local__")
-                  }
-                  onValueChange={(val) => {
-                    if (val === "__local__") {
-                      const firstLocal = sectionStateVars[0]?.name || "";
-                      onUpdate((prev) => ({
-                        ...prev,
-                        source: {
-                          kind: "state_var",
-                          sourceType: "local",
-                          storeNodeId: undefined,
-                          storeName: undefined,
-                          stateKey:
-                            firstLocal ||
-                            (prev.source.kind === "state_var"
-                              ? prev.source.stateKey
-                              : ""),
-                        },
-                      }));
-                    } else {
-                      const targetStore = stateStores.find((s) => s.id === val);
-                      const storeName =
-                        targetStore?.data?.label ||
-                        targetStore?.data?.storeName ||
-                        "Store";
-                      const firstField = targetStore?.data?.fields?.[0]?.name || "";
-                      onUpdate((prev) => ({
-                        ...prev,
-                        source: {
-                          kind: "state_var",
-                          sourceType: "store",
-                          storeNodeId: targetStore?.id,
-                          storeName,
-                          stateKey:
-                            firstField ||
-                            (prev.source.kind === "state_var"
-                              ? prev.source.stateKey
-                              : ""),
-                        },
-                      }));
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-[10px] text-muted-foreground">
+                    Source Store
+                  </Label>
+                  <Select
+                    value={
+                      isLocal
+                        ? "__local__"
+                        : selectedStore?.id || (stateStores[0]?.id ?? "__local__")
                     }
-                  }}
-                >
-                  <SelectTrigger className="h-7 text-xs bg-background">
-                    <SelectValue placeholder="Choose store..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {stateStores.map((st) => (
-                      <SelectItem key={st.id} value={st.id}>
-                        ⚡ {st.data?.label || st.data?.storeName || "Store"} (Zustand)
+                    onValueChange={(val) => {
+                      if (val === "__local__") {
+                        const firstLocal = sectionStateVars[0]?.name || "";
+                        onUpdate((prev) => ({
+                          ...prev,
+                          source: {
+                            kind: "state_var",
+                            sourceType: "local",
+                            storeNodeId: undefined,
+                            storeName: undefined,
+                            stateKey:
+                              firstLocal ||
+                              (prev.source.kind === "state_var"
+                                ? prev.source.stateKey
+                                : ""),
+                            fieldPath: undefined,
+                          },
+                        }));
+                      } else {
+                        const targetStore = stateStores.find((s) => s.id === val);
+                        const storeName =
+                          targetStore?.data?.label ||
+                          targetStore?.data?.storeName ||
+                          "Store";
+                        const firstField = targetStore?.data?.fields?.[0]?.name || "";
+                        onUpdate((prev) => ({
+                          ...prev,
+                          source: {
+                            kind: "state_var",
+                            sourceType: "store",
+                            storeNodeId: targetStore?.id,
+                            storeName,
+                            stateKey:
+                              firstField ||
+                              (prev.source.kind === "state_var"
+                                ? prev.source.stateKey
+                                : ""),
+                            fieldPath: undefined,
+                          },
+                        }));
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="h-7 text-xs bg-background">
+                      <SelectValue placeholder="Choose store..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {stateStores.map((st) => (
+                        <SelectItem key={st.id} value={st.id}>
+                          ⚡ {st.data?.label || st.data?.storeName || "Store"} (Zustand)
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="__local__">
+                        📄 Page / Section State
                       </SelectItem>
-                    ))}
-                    <SelectItem value="__local__">
-                      📄 Page / Section State
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-[10px] text-muted-foreground">
+                    Store Field / Property
+                  </Label>
+                  <ActionFlowCombobox
+                    value={source.stateKey}
+                    onChange={(key) => {
+                      onUpdate((prev) => {
+                        const prevSrc =
+                          prev.source.kind === "state_var"
+                            ? prev.source
+                            : { kind: "state_var", stateKey: key };
+                        return {
+                          ...prev,
+                          source: {
+                            ...prevSrc,
+                            kind: "state_var",
+                            stateKey: key,
+                            fieldPath: undefined, // reset accessor when field changes
+                          },
+                        };
+                      });
+                    }}
+                    placeholder="e.g. keyword, userId"
+                    headerLabel="Available Store Fields"
+                    options={storeFieldOptions}
+                  />
+                </div>
               </div>
 
-              <div className="space-y-1">
-                <Label className="text-[10px] text-muted-foreground">
-                  Store Field / Property
-                </Label>
-                <ActionFlowCombobox
-                  value={source.stateKey}
-                  onChange={(key) => {
-                    onUpdate((prev) => {
-                      const prevSrc =
-                        prev.source.kind === "state_var"
-                          ? prev.source
-                          : { kind: "state_var", stateKey: key };
-                      return {
-                        ...prev,
-                        source: {
-                          ...prevSrc,
-                          kind: "state_var",
-                          stateKey: key,
-                        },
-                      };
-                    });
-                  }}
-                  placeholder="e.g. keyword, userId"
-                  headerLabel="Available Store Fields"
-                  options={storeFieldOptions}
-                />
-              </div>
+              {/* Array accessor expression — shown when selected field is an array type */}
+              {isArrayField && (
+                <div className="p-2.5 rounded border border-blue-500/25 bg-blue-500/5 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-medium text-blue-400 flex items-center gap-1.5">
+                      <Box size={12} />
+                      Array Accessor Expression
+                    </span>
+                    <Badge
+                      variant="outline"
+                      className="text-[9px] px-1.5 py-0 h-4 font-mono text-blue-400 border-blue-500/30 bg-blue-500/10"
+                    >
+                      {selectedFieldType}
+                    </Badge>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] text-muted-foreground">
+                      JS expression to extract a scalar value from the array
+                    </Label>
+                    <Input
+                      value={source.fieldPath ?? ""}
+                      onChange={(e) =>
+                        onUpdate((prev) => ({
+                          ...prev,
+                          source: {
+                            ...(prev.source as Extract<typeof prev.source, { kind: "state_var" }>),
+                            kind: "state_var",
+                            fieldPath: e.target.value,
+                          },
+                        }))
+                      }
+                      placeholder={`e.g. ${source.stateKey}[${source.stateKey}.length - 1]?.id`}
+                      className="h-7 text-xs bg-background font-mono"
+                      spellCheck={false}
+                    />
+
+                    {/* Quick preset chips */}
+                    {arrayExprPresets.length > 0 && (
+                      <div className="flex flex-wrap gap-1 pt-0.5">
+                        {arrayExprPresets.map((p) => (
+                          <button
+                            key={p.expr}
+                            type="button"
+                            onClick={() =>
+                              onUpdate((prev) => ({
+                                ...prev,
+                                source: {
+                                  ...(prev.source as Extract<typeof prev.source, { kind: "state_var" }>),
+                                  kind: "state_var",
+                                  fieldPath: p.expr,
+                                },
+                              }))
+                            }
+                            className={`text-[9px] px-1.5 py-0.5 rounded font-mono border transition-colors cursor-pointer ${
+                              source.fieldPath === p.expr
+                                ? "bg-blue-500/20 border-blue-500/50 text-blue-300"
+                                : "bg-muted/40 border-border/50 text-muted-foreground hover:border-blue-500/40 hover:text-blue-400"
+                            }`}
+                          >
+                            {p.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    <p className="text-[9px] text-muted-foreground/70 leading-tight">
+                      Runtime:{" "}
+                      <code className="text-blue-300 font-mono">
+                        {source.fieldPath || source.stateKey}
+                      </code>
+                      {" "}— any valid JS expression evaluated at runtime.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           );
         })()}
@@ -638,8 +809,13 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
   endpoints = [],
   webPageNodeId,
   actionId,
+  actionItem,
   isProtected = false,
   incomingPaths,
+  isItemScoped,
+  itemKeyField,
+  itemSourceStateName,
+  itemPropSuggestions,
   onChange,
 }) => {
   const bindings = draft.requestBindings || [];
@@ -725,6 +901,93 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
     });
     return list;
   }, [allNodes, webPageNodeId]);
+
+  const currentAction = React.useMemo(() => {
+    if (actionItem) return actionItem;
+    const sections: PageSection[] = currentPageNode?.data?.sections || [];
+    return sections
+      .flatMap((s) => s.actions || [])
+      .find((a) => a.id === actionId);
+  }, [actionItem, currentPageNode, actionId]);
+
+  const effectiveIsItemScoped = isItemScoped ?? Boolean(
+    currentAction?.scope === "item" || currentAction?.itemSourceStateId,
+  );
+  const effectiveItemKeyField = itemKeyField || currentAction?.itemContextFields?.[0] || "id";
+
+  const targetArrayState = React.useMemo(() => {
+    const targetStateId = currentAction?.itemSourceStateId;
+    const storeNodes =
+      typeof useBackendCanvasStore?.getState === "function"
+        ? useBackendCanvasStore.getState().nodes || []
+        : [];
+    const pool = allNodes && allNodes.length > 0 ? allNodes : storeNodes;
+    if (targetStateId) {
+      for (const n of pool) {
+        const sections: PageSection[] = n.data?.sections || [];
+        for (const s of sections) {
+          const found = (s.stateObjects || []).find(
+            (st) => st.id === targetStateId || st.name === targetStateId,
+          );
+          if (found) return found;
+        }
+      }
+    }
+    const pageSections: PageSection[] = currentPageNode?.data?.sections || [];
+    return pageSections
+      .flatMap((s) => s.stateObjects || [])
+      .find(
+        (st) =>
+          st.type === "array" ||
+          st.type?.endsWith("[]") ||
+          st.type?.includes("[]"),
+      );
+  }, [allNodes, currentPageNode, currentAction?.itemSourceStateId]);
+
+  const effectiveItemSourceStateName = itemSourceStateName || targetArrayState?.name;
+
+  const effectiveItemPropSuggestions: ComboboxOption[] = React.useMemo(() => {
+    const list: ComboboxOption[] = [];
+    const seen = new Set<string>();
+
+    const addOption = (opt: ComboboxOption) => {
+      if (opt.value && !seen.has(opt.value)) {
+        seen.add(opt.value);
+        list.push(opt);
+      }
+    };
+
+    // 1. Suggestions from props if passed
+    (itemPropSuggestions || []).forEach(addOption);
+
+    // 2. Dynamically resolved properties from targetArrayState and canvas defined types
+    const fromState = resolveItemPropsFromState(targetArrayState, allNodes, effectiveItemKeyField, currentAction?.itemSourceStateId || effectiveItemSourceStateName);
+    fromState.forEach(addOption);
+
+    // 3. Current action context fields or identifier key
+    if (effectiveItemKeyField && !seen.has(effectiveItemKeyField)) {
+      list.unshift({
+        value: effectiveItemKeyField,
+        label: `${effectiveItemKeyField} (Key)`,
+        type: "identifier",
+      });
+      seen.add(effectiveItemKeyField);
+    }
+    (currentAction?.itemContextFields || []).forEach((f: string) => {
+      if (f && !seen.has(f)) {
+        addOption({ value: f, label: f, type: "field" });
+      }
+    });
+
+    // 4. Common identifier fallbacks if list is still empty
+    if (list.length === 0) {
+      ["id", "_id", "uuid", "name", "title", "slug", "key"].forEach((c) => {
+        addOption({ value: c, label: c, type: "string" });
+      });
+    }
+
+    return list;
+  }, [effectiveItemKeyField, currentAction?.itemContextFields, itemPropSuggestions, targetArrayState, allNodes]);
 
   // Slot-specific field suggestions
   const headerSuggestions: ComboboxOption[] = React.useMemo(() => {
@@ -857,7 +1120,7 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
     }
 
     const updatedBindings = defaultEp
-      ? buildInitialBindingsFromEndpoint(defaultEp, isProtected)
+      ? buildInitialBindingsFromEndpoint(defaultEp, isProtected, effectiveIsItemScoped, effectiveItemKeyField)
       : [];
 
     onChange({
@@ -902,7 +1165,7 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
 
     const newEndpoint = serviceEndpoints.find((ep) => ep.id === newEndpointId);
     const updatedBindings = newEndpoint
-      ? buildInitialBindingsFromEndpoint(newEndpoint, isProtected)
+      ? buildInitialBindingsFromEndpoint(newEndpoint, isProtected, effectiveIsItemScoped, effectiveItemKeyField)
       : [];
 
     onChange({
@@ -915,7 +1178,7 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
 
   const handleResetToEndpointDefaults = () => {
     if (!selectedEndpoint) return;
-    const freshBindings = buildInitialBindingsFromEndpoint(selectedEndpoint, isProtected);
+    const freshBindings = buildInitialBindingsFromEndpoint(selectedEndpoint, isProtected, effectiveIsItemScoped, effectiveItemKeyField);
     onChange({
       ...draft,
       requestBindings: freshBindings,
@@ -929,10 +1192,16 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
         ? { kind: "auth_token", tokenType: "session" }
         : { kind: "literal", value: "" };
     } else if (slot === "path_param") {
-      defaultSource = {
-        kind: "route_param",
-        paramName: defaultTargetField || routeParamSuggestions[0]?.value || "",
-      };
+      defaultSource = effectiveIsItemScoped
+        ? {
+            kind: "item_prop",
+            propPath: defaultTargetField || effectiveItemKeyField || "id",
+            fieldPath: defaultTargetField || effectiveItemKeyField || "id",
+          }
+        : {
+            kind: "route_param",
+            paramName: defaultTargetField || routeParamSuggestions[0]?.value || "",
+          };
     } else if (slot === "query_param") {
       defaultSource = {
         kind: "query_param",
@@ -982,6 +1251,9 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
       const isAuth = isAuthHeaderName(b.targetField);
       if (newKind === "auth_token") {
         nextSource = { kind: "auth_token", tokenType: "session" };
+      } else if (newKind === "item_prop") {
+        const prop = effectiveItemKeyField || b.targetField || "id";
+        nextSource = { kind: "item_prop", propPath: prop, fieldPath: prop };
       } else if (newKind === "literal") {
         nextSource = { kind: "literal", value: "" };
       } else if (newKind === "state_var") {
@@ -1208,6 +1480,10 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
                       stateStores={stateStores}
                       sectionStateVars={sectionStateVars}
                       incomingPaths={incomingPaths}
+                      isItemScoped={effectiveIsItemScoped}
+                      itemKeyField={effectiveItemKeyField}
+                      itemSourceStateName={effectiveItemSourceStateName}
+                      itemPropSuggestions={effectiveItemPropSuggestions}
                     />
                   ))
                 )}
@@ -1265,6 +1541,10 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
                       stateStores={stateStores}
                       sectionStateVars={sectionStateVars}
                       incomingPaths={incomingPaths}
+                      isItemScoped={effectiveIsItemScoped}
+                      itemKeyField={effectiveItemKeyField}
+                      itemSourceStateName={effectiveItemSourceStateName}
+                      itemPropSuggestions={effectiveItemPropSuggestions}
                     />
                   ))
                 )}
@@ -1321,6 +1601,10 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
                       stateStores={stateStores}
                       sectionStateVars={sectionStateVars}
                       incomingPaths={incomingPaths}
+                      isItemScoped={effectiveIsItemScoped}
+                      itemKeyField={effectiveItemKeyField}
+                      itemSourceStateName={effectiveItemSourceStateName}
+                      itemPropSuggestions={effectiveItemPropSuggestions}
                     />
                   ))
                 )}
@@ -1379,6 +1663,10 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
                       stateStores={stateStores}
                       sectionStateVars={sectionStateVars}
                       incomingPaths={incomingPaths}
+                      isItemScoped={effectiveIsItemScoped}
+                      itemKeyField={effectiveItemKeyField}
+                      itemSourceStateName={effectiveItemSourceStateName}
+                      itemPropSuggestions={effectiveItemPropSuggestions}
                     />
                   ))
                 )}

@@ -111,6 +111,16 @@ export async function executeApiAction<TData = unknown, TBody = unknown>(
     }`}
 
     let targetUrl = url;
+    if (targetUrl && targetUrl !== "#" && typeof requestBody === "object" && requestBody !== null) {
+      Object.entries(requestBody as Record<string, unknown>).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && (typeof v === "string" || typeof v === "number" || typeof v === "boolean")) {
+          const encoded = encodeURIComponent(String(v));
+          targetUrl = targetUrl
+            .replace(new RegExp(":" + k + "\\\\b", "g"), encoded)
+            .replace(new RegExp("\\\\{" + k + "\\\\}", "g"), encoded);
+        }
+      });
+    }
     if (queryParams && Object.keys(queryParams).length > 0 && targetUrl && targetUrl !== "#") {
       try {
         const urlObj = new URL(

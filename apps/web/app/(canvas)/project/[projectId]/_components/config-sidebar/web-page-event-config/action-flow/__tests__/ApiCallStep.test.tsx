@@ -6,12 +6,14 @@ import { ApiCallStep } from "../ApiCallStep";
 import { buildInitialBindingsFromEndpoint } from "../utils";
 import type { FrontendActionStepDraft } from "../types";
 
+
 // Mock @workspace/ui components
 vi.mock("@workspace/ui/components/popover", () => ({
   Popover: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
   PopoverTrigger: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
   PopoverContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 }));
+
 
 vi.mock("../ActionFlowCombobox", () => ({
   ActionFlowCombobox: ({
@@ -32,6 +34,10 @@ vi.mock("../ActionFlowCombobox", () => ({
   ),
 }));
 
+
+const MockSelectContext = React.createContext<{ onValueChange?: (val: string) => void }>({});
+
+
 vi.mock("@workspace/ui/components/select", () => ({
   Select: ({
     children,
@@ -42,34 +48,36 @@ vi.mock("@workspace/ui/components/select", () => ({
     value?: string;
     onValueChange?: (val: string) => void;
   }) => (
-    <div data-testid="mock-select" data-value={value}>
-      <button
-        type="button"
-        data-testid="mock-select-change-session"
-        onClick={() => onValueChange?.("session_storage")}
-      />
-      <button
-        type="button"
-        data-testid="mock-select-change-local"
-        onClick={() => onValueChange?.("local_storage")}
-      />
-      <button
-        type="button"
-        data-testid="mock-select-change-cookie"
-        onClick={() => onValueChange?.("cookie")}
-      />
-      {children}
-    </div>
+    <MockSelectContext.Provider value={{ onValueChange }}>
+      <div data-testid="mock-select" data-value={value}>
+        {children}
+      </div>
+    </MockSelectContext.Provider>
   ),
   SelectTrigger: ({ children }: { children?: React.ReactNode }) => (
     <button type="button">{children}</button>
   ),
   SelectValue: ({ placeholder }: { placeholder?: string }) => <span>{placeholder}</span>,
   SelectContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-  SelectItem: ({ children, value }: { children?: React.ReactNode; value?: string }) => (
-    <div data-value={value}>{children}</div>
-  ),
+  SelectItem: ({ children, value }: { children?: React.ReactNode; value?: string }) => {
+    const ctx = React.useContext(MockSelectContext);
+    return (
+      <button
+        type="button"
+        data-testid={`mock-select-item-${value}`}
+        data-value={value}
+        onClick={() => {
+          if (value !== undefined) {
+            ctx.onValueChange?.(value);
+          }
+        }}
+      >
+        {children}
+      </button>
+    );
+  },
 }));
+
 
 describe("buildInitialBindingsFromEndpoint", () => {
   const sampleEndpoint: Endpoint = {
@@ -94,8 +102,10 @@ describe("buildInitialBindingsFromEndpoint", () => {
     },
   };
 
+
   it("should generate slot-aware bindings for headers, pathParams, queryParams, and body fields", () => {
     const bindings = buildInitialBindingsFromEndpoint(sampleEndpoint, true);
+
 
     // 1. Headers: should include Authorization (since protected) and X-Custom-Client
     const headerBindings = bindings.filter((b) => b.slot === "header");
@@ -103,11 +113,13 @@ describe("buildInitialBindingsFromEndpoint", () => {
     expect(headerBindings.some((b) => b.targetField === "Authorization" && b.source.kind === "auth_token")).toBe(true);
     expect(headerBindings.some((b) => b.targetField === "X-Custom-Client")).toBe(true);
 
+
     // 2. Path Params: should include userId mapped to route_param
     const pathBindings = bindings.filter((b) => b.slot === "path_param");
     expect(pathBindings.length).toBe(1);
     expect(pathBindings[0]?.targetField).toBe("userId");
     expect(pathBindings[0]?.source).toEqual({ kind: "route_param", paramName: "userId" });
+
 
     // 3. Query Params: should include includeDetails mapped to query_param
     const queryBindings = bindings.filter((b) => b.slot === "query_param");
@@ -115,12 +127,14 @@ describe("buildInitialBindingsFromEndpoint", () => {
     expect(queryBindings[0]?.targetField).toBe("includeDetails");
     expect(queryBindings[0]?.source).toEqual({ kind: "query_param", paramName: "includeDetails" });
 
+
     // 4. Body Fields: should include email and fullName mapped to user_input
     const bodyBindings = bindings.filter((b) => b.slot === "body");
     expect(bodyBindings.length).toBe(2);
     expect(bodyBindings.some((b) => b.targetField === "email" && b.source.kind === "user_input")).toBe(true);
     expect(bodyBindings.some((b) => b.targetField === "fullName" && b.source.kind === "user_input")).toBe(true);
   });
+
 
   it("should not inject auth headers when endpoint explicitly sets requireAuth to false", () => {
     const unauthEndpoint: Endpoint = {
@@ -131,7 +145,20 @@ describe("buildInitialBindingsFromEndpoint", () => {
     const auth = bindings.find((b) => b.targetField.toLowerCase() === "authorization");
     expect(auth).toBeUndefined();
   });
+
+
+  it("should map path parameters to item_prop when isItemScoped is true", () => {
+    const bindings = buildInitialBindingsFromEndpoint(sampleEndpoint, true, true, "userId");
+    const pathBinding = bindings.find((b) => b.slot === "path_param");
+    expect(pathBinding).toBeDefined();
+    expect(pathBinding?.source).toEqual({
+      kind: "item_prop",
+      propPath: "userId",
+      fieldPath: "userId",
+    });
+  });
 });
+
 
 describe("ApiCallStep UI component", () => {
   const serviceNode: BackendNode = {
@@ -141,6 +168,7 @@ describe("ApiCallStep UI component", () => {
     fractionalIndex: "a0",
     data: { label: "User Service" },
   };
+
 
   const endpoint: Endpoint & { nodeId: string } = {
     id: "ep-1",
@@ -155,6 +183,7 @@ describe("ApiCallStep UI component", () => {
       fields: [{ id: "f1", name: "username", type: "string", required: true }],
     },
   };
+
 
   const draft: FrontendActionStepDraft = {
     id: "step-1",
@@ -190,6 +219,7 @@ describe("ApiCallStep UI component", () => {
     ],
   };
 
+
   it("should render all four slot sections: HTTP Headers, Path Parameters, Query Parameters, and Request Body", () => {
     render(
       <ApiCallStep
@@ -205,14 +235,16 @@ describe("ApiCallStep UI component", () => {
       />,
     );
 
+
     expect(screen.getByText("HTTP Headers")).toBeDefined();
     expect(screen.getByText("Path Parameters")).toBeDefined();
     expect(screen.getByText("Query Parameters")).toBeDefined();
     expect(screen.getByText("Request Body")).toBeDefined();
   });
 
+
   it("should allow adding a new binding to a specific slot with correct slot tag", () => {
-    const handleChange = vi.fn();
+    const handleChange = vi.fn<(step: FrontendActionStepDraft) => void>();
     render(
       <ApiCallStep
         draft={draft}
@@ -227,15 +259,121 @@ describe("ApiCallStep UI component", () => {
       />,
     );
 
+
     const addHeaderBtn = screen.getByText("Add Header");
     fireEvent.click(addHeaderBtn);
+
 
     expect(handleChange).toHaveBeenCalled();
     const firstCall = handleChange.mock.calls[0];
     expect(firstCall).toBeDefined();
-    const updatedDraft = firstCall?.[0] as FrontendActionStepDraft;
+    const updatedDraft = firstCall?.[0];
     const bindings = updatedDraft?.requestBindings || [];
     const newBinding = bindings[bindings.length - 1];
     expect(newBinding?.slot).toBe("header");
+  });
+
+
+  it("should allow changing source kind to item_prop for array element mapping", () => {
+    const handleChange = vi.fn<(step: FrontendActionStepDraft) => void>();
+    render(
+      <ApiCallStep
+        draft={draft}
+        stepIndex={0}
+        allSteps={[draft]}
+        allCanvasSteps={[]}
+        serviceNodes={[serviceNode]}
+        allNodes={[serviceNode]}
+        endpoints={[endpoint]}
+        isProtected={true}
+        isItemScoped={true}
+        itemKeyField="id"
+        onChange={handleChange}
+      />,
+    );
+
+
+    const itemPropOptions = screen.getAllByTestId("mock-select-item-item_prop");
+    expect(itemPropOptions.length).toBeGreaterThan(0);
+    fireEvent.click(itemPropOptions[0]!);
+
+
+    expect(handleChange).toHaveBeenCalled();
+    const firstCall = handleChange.mock.calls[0];
+    expect(firstCall).toBeDefined();
+    const updatedDraft = firstCall?.[0];
+    const itemPropBinding = updatedDraft?.requestBindings?.find((b) => b.source.kind === "item_prop");
+    expect(itemPropBinding).toBeDefined();
+  });
+
+
+  it("should render Array Accessor Expression and presets when state_var source is an array field", () => {
+    const stateStoreNode: BackendNode = {
+      id: "store-app",
+      type: "state_store",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a2",
+      data: {
+        label: "AppStore",
+        fields: [
+          { id: "f1", name: "messages", type: "ChatMessage[]" },
+          { id: "f2", name: "status", type: "string" },
+        ],
+      },
+    };
+
+
+    const arrayBindingDraft: FrontendActionStepDraft = {
+      ...draft,
+      requestBindings: [
+        {
+          id: "b-arr",
+          slot: "query_param",
+          targetField: "before",
+          source: {
+            kind: "state_var",
+            sourceType: "store",
+            storeNodeId: "store-app",
+            storeName: "AppStore",
+            stateKey: "messages",
+          },
+        },
+      ],
+    };
+
+
+    const handleChange = vi.fn<(step: FrontendActionStepDraft) => void>();
+    render(
+      <ApiCallStep
+        draft={arrayBindingDraft}
+        stepIndex={0}
+        allSteps={[arrayBindingDraft]}
+        allCanvasSteps={[]}
+        serviceNodes={[serviceNode]}
+        allNodes={[serviceNode, stateStoreNode]}
+        endpoints={[endpoint]}
+        onChange={handleChange}
+      />,
+    );
+
+
+    expect(screen.getByText("Array Accessor Expression")).toBeDefined();
+    expect(screen.getByText("ChatMessage[]")).toBeDefined();
+    expect(screen.getByText("Last item ID")).toBeDefined();
+    expect(screen.getByText("Count / length")).toBeDefined();
+
+
+    // Click a preset chip
+    const lastItemIdBtn = screen.getByText("Last item ID");
+    fireEvent.click(lastItemIdBtn);
+
+
+    expect(handleChange).toHaveBeenCalled();
+    const updated = handleChange.mock.calls[0]?.[0];
+    const binding = updated?.requestBindings?.[0];
+    expect(binding?.source.kind).toBe("state_var");
+    if (binding?.source.kind === "state_var") {
+      expect(binding.source.fieldPath).toBe("messages[messages.length - 1]?.id");
+    }
   });
 });

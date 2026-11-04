@@ -13,6 +13,11 @@ import {
   ActionFlowEditor,
   ActionSimulator,
 } from "./web-page-event-config";
+import {
+  ActionFlowCombobox,
+  resolveItemPropsFromState,
+  extractBaseTypeName,
+} from "./web-page-event-config/action-flow";
 import { useWebPageConnectedContext } from "./web-page-config/hooks/useWebPageConnectedContext";
 import { ActionStepItem } from "./web-page-event-config/TargetEndpointSection";
 import { isStorageRefNode } from "@/lib/stores/backendCanvas/edge/utils";
@@ -345,15 +350,41 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
   );
   const eligibleStates = arrayStateObjects.length > 0 ? arrayStateObjects : sectionStateObjects;
 
+  const activeTargetState = React.useMemo(() => {
+    const targetId = selectedStateId || item?.itemSourceStateId;
+    if (!targetId) return eligibleStates[0] || undefined;
+    return (
+      eligibleStates.find((st) => st.id === targetId || st.name === targetId) ||
+      sectionStateObjects.find((st) => st.id === targetId || st.name === targetId) ||
+      eligibleStates[0]
+    );
+  }, [selectedStateId, item?.itemSourceStateId, eligibleStates, sectionStateObjects]);
+
+  const itemPropSuggestions = React.useMemo(() => {
+    return resolveItemPropsFromState(activeTargetState, nodes, itemKeyField);
+  }, [activeTargetState, nodes, itemKeyField]);
+
+  const targetStateTypeName = activeTargetState?.type
+    ? extractBaseTypeName(activeTargetState.type)
+    : "";
+
   const handleToggleItemScoped = (checked: boolean) => {
     if (checked) {
       const defaultState = eligibleStates.find((st) => st.id === selectedStateId) || eligibleStates[0];
       const defaultStateId = defaultState?.id || selectedStateId || "";
       setSelectedStateId(defaultStateId);
+      const props = resolveItemPropsFromState(defaultState, nodes);
+      let nextKey = itemKeyField || "id";
+      if (props.length > 0 && (!itemKeyField || !props.some((p) => p.value === itemKeyField))) {
+        const idField = props.find((p) => p.value === "id" || p.value === "_id");
+        const firstProp = props[0];
+        nextKey = idField ? idField.value : firstProp ? firstProp.value : "id";
+        setItemKeyField(nextKey);
+      }
       updateActionInParent({
         scope: "item",
         itemSourceStateId: defaultStateId,
-        itemContextFields: [itemKeyField || "id"],
+        itemContextFields: [nextKey],
       });
     } else {
       updateActionInParent({
@@ -365,8 +396,18 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
 
   const handleSelectTargetState = (stateId: string) => {
     setSelectedStateId(stateId);
+    const newTarget = eligibleStates.find((st) => st.id === stateId || st.name === stateId);
+    const newProps = resolveItemPropsFromState(newTarget, nodes);
+    let nextKey = itemKeyField;
+    if (newProps.length > 0 && !newProps.some((p) => p.value === itemKeyField)) {
+      const idMatch = newProps.find((p) => p.value === "id" || p.value === "_id");
+      const firstNewProp = newProps[0];
+      nextKey = idMatch ? idMatch.value : firstNewProp ? firstNewProp.value : itemKeyField || "id";
+      setItemKeyField(nextKey);
+    }
     updateActionInParent({
       itemSourceStateId: stateId,
+      itemContextFields: [nextKey || "id"],
     });
   };
 
@@ -505,22 +546,34 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <Label className="text-[10px] font-medium text-muted-foreground">
-                    Item Context Identifier Key
-                  </Label>
+                  <div className="flex items-center justify-between">
+                    <Label className="text-[10px] font-medium text-muted-foreground">
+                      Item Context Identifier Key
+                    </Label>
+                    {targetStateTypeName && (
+                      <span className="text-[9px] font-mono text-violet-400 font-normal">
+                        Type: {targetStateTypeName}
+                      </span>
+                    )}
+                  </div>
                   <div className="flex items-center gap-1.5">
-                    <Input
-                      className="h-7 text-xs font-mono bg-background"
-                      placeholder="e.g. id, uuid, slug"
+                    <ActionFlowCombobox
                       value={itemKeyField}
-                      onChange={(e) => setItemKeyField(e.target.value)}
-                      onBlur={() => {
-                        const cleaned = itemKeyField.trim() || "id";
+                      onChange={(val) => {
+                        const cleaned = val.trim() || "id";
                         setItemKeyField(cleaned);
                         updateActionInParent({ itemContextFields: [cleaned] });
                       }}
+                      placeholder="e.g. id, uuid, slug"
+                      headerLabel={
+                        targetStateTypeName
+                          ? `Props of ${targetStateTypeName}`
+                          : "Item Properties"
+                      }
+                      options={itemPropSuggestions}
+                      className="h-7 text-xs font-mono bg-background"
                     />
-                    <span className="text-[10px] text-muted-foreground whitespace-nowrap font-mono">
+                    <span className="text-[10px] text-muted-foreground whitespace-nowrap font-mono shrink-0">
                       item.{itemKeyField || "id"}
                     </span>
                   </div>
@@ -530,7 +583,7 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
               <div className="text-[10px] text-muted-foreground leading-relaxed">
                 Clicking an item in{" "}
                 <span className="font-semibold text-foreground font-mono">
-                  {sourceState?.name || "the array"}
+                  {activeTargetState?.name || sourceState?.name || "the array"}
                 </span>{" "}
                 triggers this action and passes{" "}
                 <code className="text-violet-400 font-mono">&#123; {itemKeyField || "id"}: item.{itemKeyField || "id"} &#125;</code> into the request.
@@ -579,6 +632,10 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
                   webPageNodeId={nodeId}
                   actionId={id}
                   isProtected={isProtected}
+                  isItemScoped={isItemScoped}
+                  itemKeyField={itemKeyField}
+                  itemSourceStateName={activeTargetState?.name || sourceState?.name}
+                  itemPropSuggestions={itemPropSuggestions}
                   onSave={(drafts) =>
                     updateActionInParent({ actionSteps: drafts })
                   }

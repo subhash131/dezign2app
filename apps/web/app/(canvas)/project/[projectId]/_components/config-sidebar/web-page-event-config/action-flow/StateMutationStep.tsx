@@ -10,14 +10,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
-import type { BackendNode } from "@workspace/canvas";
+import type { BackendNode, UIEventItem } from "@workspace/canvas";
 import type {
   FrontendActionStepDraft,
   FrontendFieldSource,
   AvailablePath,
 } from "./types";
 import { ResponseFieldPicker } from "./ResponseFieldPicker";
-import { ActionFlowCombobox } from "./ActionFlowCombobox";
+import { ActionFlowCombobox, type ComboboxOption } from "./ActionFlowCombobox";
 import {
   getActionsForReducer,
   isValuelessAction,
@@ -37,7 +37,11 @@ export interface StateMutationStepProps {
   allNodes: BackendNode[];
   webPageNodeId?: string;
   actionId?: string;
+  actionItem?: UIEventItem;
   incomingPaths?: AvailablePath[];
+  isItemScoped?: boolean;
+  itemKeyField?: string;
+  itemPropSuggestions?: ComboboxOption[];
   onChange: (updated: FrontendActionStepDraft) => void;
 }
 
@@ -48,7 +52,11 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
   allNodes,
   webPageNodeId,
   actionId,
+  actionItem,
   incomingPaths,
+  isItemScoped,
+  itemKeyField,
+  itemPropSuggestions,
   onChange,
 }) => {
   const stateStores = allNodes.filter((n) => n.type === "state_store");
@@ -432,6 +440,7 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
                   | "session_storage"
                   | "local_storage"
                   | "cookie"
+                  | "item_prop"
                   | "realtime_payload",
               ) => {
                 let nextSource: FrontendFieldSource;
@@ -464,6 +473,8 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
                   nextSource = { kind: "session_storage", key: "" };
                 } else if (val === "local_storage") {
                   nextSource = { kind: "local_storage", key: "" };
+                } else if (val === "item_prop") {
+                  nextSource = { kind: "item_prop", propPath: "id", fieldPath: "id" };
                 } else if (val === "cookie") {
                   nextSource = { kind: "cookie", cookieName: "" };
                 } else {
@@ -481,6 +492,9 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
                     ⚡ Incoming Stream Data
                   </SelectItem>
                 )}
+                <SelectItem value="item_prop" className="text-violet-400 font-medium">
+                  Current Element Prop (Array Item)
+                </SelectItem>
                 <SelectItem value="literal">Static Literal</SelectItem>
                 <SelectItem value="user_input">User Form Input</SelectItem>
                 <SelectItem value="route_param">Page Route Param</SelectItem>
@@ -505,6 +519,40 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
         </div>
       ) : (
         <div className="pt-1">
+          {valueSource.kind === "item_prop" && (
+            <div className="space-y-1">
+              <Label className="text-[10px] text-muted-foreground">
+                Item Property Key (item.*)
+              </Label>
+              {itemPropSuggestions && itemPropSuggestions.length > 0 ? (
+                <ActionFlowCombobox
+                  value={valueSource.propPath || valueSource.fieldPath || ""}
+                  onChange={(val) =>
+                    onChange({
+                      ...draft,
+                      stateValueSource: { kind: "item_prop", propPath: val, fieldPath: val },
+                    })
+                  }
+                  placeholder={itemKeyField || "id"}
+                  headerLabel="Suggested Item Properties"
+                  options={itemPropSuggestions}
+                />
+              ) : (
+                <Input
+                  value={valueSource.propPath || valueSource.fieldPath || ""}
+                  onChange={(e) =>
+                    onChange({
+                      ...draft,
+                      stateValueSource: { kind: "item_prop", propPath: e.target.value, fieldPath: e.target.value },
+                    })
+                  }
+                  placeholder={itemKeyField || "id"}
+                  className="h-7 text-xs bg-background font-mono"
+                />
+              )}
+            </div>
+          )}
+
           {valueSource.kind === "literal" && (
             <div className="space-y-1">
               <Label className="text-[10px] text-muted-foreground">

@@ -43,11 +43,17 @@ export const ActionFlowEditor: React.FC<ActionFlowEditorProps> = ({
   realtimeSourceLabel,
   realtimeSourceItemName,
   incomingPaths,
+  isItemScoped,
+  itemKeyField,
+  itemSourceStateName,
+  itemPropSuggestions,
   isLangGraph,
   langGraphStreamModes,
   onSave,
   onDeleteStep,
 }) => {
+    const effectiveIsItemScoped = isItemScoped ?? Boolean(item?.scope === "item" || item?.itemSourceStateId);
+  const effectiveItemKey = itemKeyField || item?.itemContextFields?.[0] || "id";
   const [drafts, setDrafts] = useState<FrontendActionStepDraft[]>(() => {
     if (item?.actionSteps && item.actionSteps.length > 0) {
       const hasUnmergedCanvasStep = canvasSteps.some(
@@ -61,7 +67,7 @@ export const ActionFlowEditor: React.FC<ActionFlowEditorProps> = ({
           const ep = endpoints.find((e) => e.id === s.endpointId);
           const bindings = s.requestBindings && s.requestBindings.length > 0
             ? autoMapAuthBindings(s.requestBindings, ep, isProtected)
-            : buildInitialBindingsFromEndpoint(ep, isProtected);
+            : buildInitialBindingsFromEndpoint(ep, isProtected, effectiveIsItemScoped, effectiveItemKey);
           return {
             ...s,
             requestBindings: bindings,
@@ -90,7 +96,7 @@ export const ActionFlowEditor: React.FC<ActionFlowEditorProps> = ({
             const ep = endpoints.find((e) => e.id === s.endpointId);
             const bindings = s.requestBindings && s.requestBindings.length > 0
               ? autoMapAuthBindings(s.requestBindings, ep, isProtected)
-              : buildInitialBindingsFromEndpoint(ep, isProtected);
+              : buildInitialBindingsFromEndpoint(ep, isProtected, effectiveIsItemScoped, effectiveItemKey);
             return {
               ...s,
               requestBindings: bindings,
@@ -130,7 +136,7 @@ export const ActionFlowEditor: React.FC<ActionFlowEditorProps> = ({
           serviceNodeId: firstService.id,
           endpointId: firstEndpoint.id,
           edgeId,
-          requestBindings: buildInitialBindingsFromEndpoint(firstEndpoint, isProtected),
+          requestBindings: buildInitialBindingsFromEndpoint(firstEndpoint, isProtected, effectiveIsItemScoped, effectiveItemKey),
         };
       }
     }
@@ -376,8 +382,13 @@ export const ActionFlowEditor: React.FC<ActionFlowEditorProps> = ({
                       endpoints={endpoints}
                       webPageNodeId={webPageNodeId}
                       actionId={actionId}
+                      actionItem={item}
                       isProtected={isProtected}
                       incomingPaths={incomingPaths}
+                      isItemScoped={effectiveIsItemScoped}
+                      itemKeyField={effectiveItemKey}
+                      itemSourceStateName={itemSourceStateName}
+                      itemPropSuggestions={itemPropSuggestions}
                       onChange={handleStepChange}
                       onDelete={() => handleDeleteStep(step.id)}
                     />
