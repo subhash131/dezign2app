@@ -143,6 +143,12 @@ export async function checkPostgresConnection(
   } catch (error) {
     const latencyMs = Math.round(performance.now() - start);
     const errMsg = error instanceof Error ? error.message : String(error);
+    console.error(`[checkPostgresConnection] ❌ Connection failed:`, {
+      message: errMsg,
+      code: (error as any)?.code,
+      routine: (error as any)?.routine,
+      stack: (error as any)?.stack,
+    });
     return {
       success: false,
       engine: "postgres",

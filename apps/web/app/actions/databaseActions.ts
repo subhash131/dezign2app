@@ -354,6 +354,13 @@ export async function checkDbConnectionAction(
   payload: CheckDbConnectionPayload,
 ): Promise<CheckDbConnectionResult> {
   try {
+    console.log(`[checkDbConnectionAction] Check request received`, {
+      engine: payload.engine,
+      host: payload.connection?.host,
+      port: payload.connection?.port,
+      hasConnStr: Boolean(payload.connection?.connectionString || payload.connection?.connectionStringPooled),
+      connStrEnv: payload.connection?.connectionStringEnv,
+    });
     const { engine = "redis", connection = {} } = payload;
 
     let host = connection.host || "127.0.0.1";
@@ -483,6 +490,10 @@ export async function checkDbTableSyncAction(
   const isSqlite = engine === "sqlite";
 
   try {
+    console.log(`[checkDbTableSyncAction] Checking table "${tableName}" (schema: "${schema || 'public'}", engine: "${engine}")`, {
+      hasConnStr: Boolean(connection.connectionString || connection.connectionStringPooled),
+      connStrEnv: connection.connectionStringEnv,
+    });
     if (isPostgres) {
       return await checkPostgresTableSync(connection, tableName, columns, schema, indexes, foreignKeys);
     }
@@ -514,6 +525,7 @@ export async function checkDbTableSyncAction(
       missingPrerequisiteTables: [],
     };
   } catch (err) {
+    console.error(`[checkDbTableSyncAction] ❌ Error checking table "${tableName}":`, err);
     return {
       success: false,
       serverReachable: false,
