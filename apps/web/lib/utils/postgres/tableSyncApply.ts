@@ -7,7 +7,7 @@ import { AlteredColumnDefinition, CanvasForeignKey, PostgresApplySyncResult, Pos
  * Helper to synchronize foreign key constraints on a table in PostgreSQL.
  */
 export async function applyForeignKeysToTable(
-  client: import("pg").PoolClient,
+  client: import("pg").Client | import("pg").PoolClient,
   safeTable: string,
   targetSchema: string,
   validCanvasFks: CanvasForeignKey[],
@@ -255,7 +255,7 @@ export async function applyPostgresTableSync(
   foreignKeys?: Array<CanvasForeignKey>,
   prerequisiteTables?: Array<PrerequisiteTableDefinition>,
 ): Promise<PostgresApplySyncResult> {
-  const { Pool } = await import("pg");
+  const { Client } = await import("pg");
   const connectionString = resolveConnectionString(connection);
   const { safeTable, targetSchema } = resolveTableAndSchema(tableName, schema);
 
@@ -293,18 +293,15 @@ export async function applyPostgresTableSync(
     };
   }
 
-  const pool = new Pool({
+  const client = new Client({
     connectionString,
-    max: 1,
-    connectionTimeoutMillis: 6000,
     ssl: isSslRequiredForConfig(connection, connectionString)
       ? { rejectUnauthorized: false }
       : undefined,
   });
 
-  let client: import("pg").PoolClient | undefined;
   try {
-    client = await pool.connect();
+    await client.connect();
 
     // 1. Create any missing prerequisite tables first
     const appliedPrerequisiteTables: string[] = [];
@@ -765,7 +762,8 @@ export async function applyPostgresTableSync(
       error: error instanceof Error ? error.message : String(error),
     };
   } finally {
-    if (client) client.release();
-    await pool.end().catch(() => {});
+    if (client) {
+      await client.end().catch(() => {});
+    }
   }
 }

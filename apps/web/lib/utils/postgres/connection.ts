@@ -99,21 +99,21 @@ export function resolveTableAndSchema(
 export async function checkPostgresConnection(
   connection: PostgresConnectionConfig,
 ): Promise<CheckDbConnectionResult> {
-  const { Pool } = await import("pg");
+  const { Client } = await import("pg");
   const connectionString = resolveConnectionString(connection);
+  const maskedUri = connectionString.replace(/:([^:@]+)@/, ':***@');
   const start = performance.now();
 
-  const pool = new Pool({
+  const client = new Client({
     connectionString,
-    max: 1,
     ssl: isSslRequiredForConfig(connection, connectionString)
       ? { rejectUnauthorized: false }
       : undefined,
   });
 
-  let client: import("pg").PoolClient | undefined;
   try {
-    client = await pool.connect();
+    await client.connect();
+    console.log(`[checkPostgresConnection] 🔌 Connected to Postgres successfully (${maskedUri})`);
     const res = await client.query<{
       version: string;
       current_database: string;
@@ -121,6 +121,11 @@ export async function checkPostgresConnection(
     }>(
       `SELECT version(), current_database(), pg_database_size(current_database())`,
     );
+    console.log(`[checkPostgresConnection] ✅ Query executed successfully: SELECT version(), current_database()`, {
+      version: res.rows[0]?.version,
+      database: res.rows[0]?.current_database,
+      size: res.rows[0]?.pg_database_size,
+    });
     const row = res.rows[0];
     const latencyMs = Math.round(performance.now() - start);
 
@@ -161,7 +166,9 @@ export async function checkPostgresConnection(
       },
     };
   } finally {
-    if (client) client.release();
-    await pool.end().catch(() => {});
+    if (client) {
+      await client.end().catch(() => {});
+      console.log(`[checkPostgresConnection] 🔒 Client closed gracefully`);
+    }
   }
 }

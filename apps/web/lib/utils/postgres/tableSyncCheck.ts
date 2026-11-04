@@ -14,7 +14,7 @@ export async function checkPostgresTableSync(
   indexes?: Array<{ name: string; columns: string; isUnique?: boolean }>,
   foreignKeys?: Array<CanvasForeignKey>,
 ): Promise<PostgresTableSyncResult> {
-  const { Pool } = await import("pg");
+  const { Client } = await import("pg");
   const connectionString = resolveConnectionString(connection);
   const { safeTable, targetSchema } = resolveTableAndSchema(tableName, schema);
 
@@ -68,18 +68,16 @@ export async function checkPostgresTableSync(
   console.log(`[checkPostgresTableSync] Validating table "${safeTable}" on schema "${targetSchema}" against: ${maskedUri}`, {
     sslRequired: isSslRequiredForConfig(connection, connectionString),
   });
-  const pool = new Pool({
+  const client = new Client({
     connectionString,
-    max: 1,
-    connectionTimeoutMillis: 5000,
     ssl: isSslRequiredForConfig(connection, connectionString)
       ? { rejectUnauthorized: false }
       : undefined,
   });
 
-  let client: import("pg").PoolClient | undefined;
   try {
-    client = await pool.connect();
+    await client.connect();
+    console.log(`[checkPostgresTableSync] 🔌 Connected to Postgres successfully for table "${safeTable}"`);
 
     // Check if table exists in the configured schema
     const checkRes = await client.query<{ exists: boolean }>(
@@ -91,6 +89,7 @@ export async function checkPostgresTableSync(
       [safeTable, targetSchema],
     );
     const tableExists = Boolean(checkRes.rows[0]?.exists);
+    console.log(`[checkPostgresTableSync] 🔎 Table "${safeTable}" in schema "${targetSchema}": exists = ${tableExists}`);
 
     const canvasCols = (columns || []).map((c) => ({
       name: c.name || "col",
@@ -106,6 +105,7 @@ export async function checkPostgresTableSync(
       [targetSchema],
     );
     const existingTableNames = new Set(allTablesRes.rows.map((r) => r.table_name.toLowerCase()));
+    console.log(`[checkPostgresTableSync] 📋 Schema "${targetSchema}" contains ${existingTableNames.size} total tables`);
 
     const missingPrerequisiteTables = Array.from(
       new Set(
@@ -415,6 +415,15 @@ export async function checkPostgresTableSync(
       extraIndexes.length === 0 &&
       missingForeignKeys.length === 0 &&
       extraForeignKeys.length === 0;
+    console.log(`[checkPostgresTableSync] 🏁 Table "${safeTable}" sync check completed:`, {
+      tableExists,
+      inSync,
+      missingCols: missingColumns.length,
+      alteredCols: alteredColumns.length,
+      extraCols: extraColumns.length,
+      missingIdx: missingIndexes.length,
+      missingFks: missingForeignKeys.length,
+    });
 
     return {
       success: true,
@@ -460,7 +469,9 @@ export async function checkPostgresTableSync(
       error: error instanceof Error ? error.message : String(error),
     };
   } finally {
-    if (client) client.release();
-    await pool.end().catch(() => {});
+    if (client) {
+      await client.end().catch(() => {});
+      console.log(`[checkPostgresTableSync] 🔒 Client closed gracefully for table "${safeTable}"`);
+    }
   }
 }

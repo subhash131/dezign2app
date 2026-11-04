@@ -9,7 +9,7 @@ import { ExecutePostgresOptions, PostgresOperationResult, SqlParamValue, SqlRowR
  * Execute a formatted SQL string using pg client.
  */
 export async function executeRawSql(
-  client: import("pg").PoolClient,
+  client: import("pg").Client | import("pg").PoolClient,
   sql: string,
   params: SqlParamValue[],
 ): Promise<{ rows: JsonObject[]; rowCount: number }> {
@@ -26,24 +26,22 @@ export async function executeRawSql(
 export async function executePostgresLiveOperation(
   opts: ExecutePostgresOptions,
 ): Promise<PostgresOperationResult> {
-  const { Pool } = await import("pg");
+  const { Client } = await import("pg");
   const connectionString = resolveConnectionString(opts.connection);
   const rawTableName = opts.entity?.name || extractTableName(opts.operation);
   const { safeTable, targetSchema: hintedSchema } = resolveTableAndSchema(rawTableName, opts.entity?.schema);
   const tableName = safeTable || "record";
   const start = performance.now();
 
-  const pool = new Pool({
+  const client = new Client({
     connectionString,
-    max: 3,
     ssl: isSslRequiredForConfig(opts.connection, connectionString)
       ? { rejectUnauthorized: false }
       : undefined,
   });
 
-  let client: import("pg").PoolClient | undefined;
   try {
-    client = await pool.connect();
+    await client.connect();
 
     // 1. Discover the real schema and exact table name casing.
     let resolvedSchema = hintedSchema;
@@ -289,7 +287,8 @@ export async function executePostgresLiveOperation(
       durationMs: Math.max(0.5, durationMs),
     };
   } finally {
-    if (client) client.release();
-    await pool.end().catch(() => {});
+    if (client) {
+      await client.end().catch(() => {});
+    }
   }
 }
