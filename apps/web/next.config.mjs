@@ -15,6 +15,13 @@ const nextConfig = {
     "@wterm/react",
   ],
   crossOrigin: "use-credentials",
+  typescript: {
+    // TypeScript is validated in CI / local check; skip redundant in-process check to avoid OOM in build containers
+    ignoreBuildErrors: true,
+  },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   experimental: {
     mcpServer: true,
   },

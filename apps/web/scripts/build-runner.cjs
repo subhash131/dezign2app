@@ -45,7 +45,7 @@ function parseWranglerVars(wranglerPath) {
   if (!fs.existsSync(wranglerPath)) return {};
   try {
     const raw = fs.readFileSync(wranglerPath, "utf8");
-    const cleaned = raw.replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
+    const cleaned = raw.replace(/^\s*\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
     const parsed = JSON.parse(cleaned);
     return parsed.vars || {};
   } catch (e) {
@@ -103,6 +103,7 @@ if (!resolvedEnv.NEXT_PUBLIC_CONVEX_SITE_URL) {
 resolvedEnv.NODE_ENV = "production"; // Next.js requires NODE_ENV=production during `next build`
 resolvedEnv.BUILD_ENV = targetEnv;
 resolvedEnv.APP_ENV = targetEnv;
+resolvedEnv.NODE_OPTIONS = `${resolvedEnv.NODE_OPTIONS || ""} --max-old-space-size=4096`.trim();
 
 console.log("\n======================================================================");
 console.log(`==> [Next.js Build] Target Environment: ${targetEnv.toUpperCase()}`);
