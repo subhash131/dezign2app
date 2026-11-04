@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Draggable } from "@hello-pangea/dnd";
-import type { BackendNode, Endpoint } from "@workspace/canvas";
+import type { BackendNode, Endpoint, UIEventItem } from "@workspace/canvas";
 import type { ActionStepItem } from "../TargetEndpointSection";
 import type { FrontendActionStepDraft, AvailablePath } from "./types";
 import { FrontendStepRowHeader } from "./FrontendStepRowHeader";
@@ -27,6 +27,7 @@ export interface FrontendStepRowProps {
   endpoints: (Endpoint & { nodeId: string })[];
   webPageNodeId?: string;
   actionId?: string;
+  actionItem?: UIEventItem;
   isProtected?: boolean;
   incomingPaths?: AvailablePath[];
   onChange: (updated: FrontendActionStepDraft) => void;
@@ -44,6 +45,7 @@ export const FrontendStepRow: React.FC<FrontendStepRowProps> = ({
   endpoints,
   webPageNodeId,
   actionId,
+  actionItem,
   isProtected,
   incomingPaths,
   onChange,
@@ -90,6 +92,8 @@ export const FrontendStepRow: React.FC<FrontendStepRowProps> = ({
                   endpoints={endpoints}
                   webPageNodeId={webPageNodeId}
                   actionId={actionId}
+                  actionItem={actionItem}
+
                   isProtected={isProtected}
                   incomingPaths={incomingPaths}
                   onChange={onChange}
@@ -107,6 +111,8 @@ export const FrontendStepRow: React.FC<FrontendStepRowProps> = ({
                   endpoints={endpoints}
                   webPageNodeId={webPageNodeId}
                   actionId={actionId}
+                  actionItem={actionItem}
+
                   onChange={onChange}
                 />
               )}
@@ -119,6 +125,8 @@ export const FrontendStepRow: React.FC<FrontendStepRowProps> = ({
                   allNodes={allNodes}
                   webPageNodeId={webPageNodeId}
                   actionId={actionId}
+                  actionItem={actionItem}
+
                   incomingPaths={incomingPaths}
                   onChange={onChange}
                 />
@@ -133,6 +141,8 @@ export const FrontendStepRow: React.FC<FrontendStepRowProps> = ({
                   endpoints={endpoints}
                   webPageNodeId={webPageNodeId}
                   actionId={actionId}
+                  actionItem={actionItem}
+
                   onChange={onChange}
                 />
               )}
@@ -164,6 +174,8 @@ export const FrontendStepRow: React.FC<FrontendStepRowProps> = ({
                   allNodes={allNodes}
                   webPageNodeId={webPageNodeId}
                   actionId={actionId}
+                  actionItem={actionItem}
+
                   incomingPaths={incomingPaths}
                   onChange={onChange}
                 />

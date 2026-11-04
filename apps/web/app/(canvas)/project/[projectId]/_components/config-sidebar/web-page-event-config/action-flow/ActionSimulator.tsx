@@ -18,6 +18,7 @@ import {
   Sparkles,
   HardDrive,
   Radio,
+  Box,
 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
@@ -129,6 +130,7 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
       localStorage: Record<string, string>;
       cookies: Record<string, string>;
       incomingPayload: Record<string, JSONValue>;
+      itemContext: Record<string, JSONValue>;
     } = {
       stores: {},
       localState: {},
@@ -139,6 +141,7 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
       localStorage: {},
       cookies: {},
       incomingPayload: {},
+      itemContext: {},
     };
 
     // Initialize stores with their actual node field default values
@@ -219,6 +222,11 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
         if (!ctx.localStorage["auth_token"]) {
           ctx.localStorage["auth_token"] = "Bearer simulated-session-token";
         }
+      } else if (src.kind === "item_prop") {
+        const prop = src.propPath || src.fieldPath || item?.itemContextFields?.[0] || "id";
+        if (!(prop in ctx.itemContext)) {
+          ctx.itemContext[prop] = prop === "id" ? "item_101" : `sample_${prop}`;
+        }
       } else if (src.kind === "realtime_payload") {
         if (!ctx.incomingPayload || Object.keys(ctx.incomingPayload).length === 0) {
           ctx.incomingPayload = { message: "Sample live payload", id: "evt_101" };
@@ -270,6 +278,7 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
       localStorage: Record<string, string>;
       cookies: Record<string, string>;
       incomingPayload: Record<string, JSONValue>;
+      itemContext: Record<string, JSONValue>;
     } = JSON.parse(JSON.stringify(testContext));
     const stepResponses: Record<string, JSONValue> = {};
 
@@ -283,6 +292,10 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
           return storeObj[source.stateKey];
         }
         return runtimeState.localState[source.stateKey];
+      }
+      if (source.kind === "item_prop") {
+        const prop = source.propPath || source.fieldPath || item?.itemContextFields?.[0] || "id";
+        return runtimeState.itemContext?.[prop] ?? runtimeState.itemContext?.["id"] ?? `sim_${prop}`;
       }
       if (source.kind === "user_input") {
         return runtimeState.inputs[source.fieldName];
@@ -764,7 +777,8 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
         Object.keys(testContext.inputs).length === 0 &&
         Object.keys(testContext.sessionStorage || {}).length === 0 &&
         Object.keys(testContext.localStorage || {}).length === 0 &&
-        Object.keys(testContext.cookies || {}).length === 0 ? (
+        Object.keys(testContext.cookies || {}).length === 0 &&
+        Object.keys(testContext.itemContext || {}).length === 0 ? (
           <div className="text-[11px] text-muted-foreground/80 py-1 italic">
             No dynamic store bindings or inputs detected. Configure an API request with store variables or browser storage to test bindings.
           </div>
@@ -803,6 +817,41 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
                   className="w-full p-1.5 text-[11px] font-mono rounded bg-background border border-border/50 text-foreground resize-y focus:outline-none focus:ring-1 focus:ring-purple-400"
                   placeholder='{"message": "hello", "id": "123"}'
                 />
+              </div>
+            )}
+
+            {/* Item Context (Current Element Properties) */}
+            {Object.keys(testContext.itemContext || {}).length > 0 && (
+              <div className="p-2 rounded bg-violet-950/20 border border-violet-500/30 space-y-1.5 font-mono text-[11px]">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-violet-400 font-semibold">
+                    <Box size={12} className="text-violet-400" />
+                    <span>item.* (Simulated Element Context)</span>
+                  </div>
+                  <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5 text-violet-400 border-violet-400/30 bg-violet-400/10 font-mono">
+                    Item Scoped
+                  </Badge>
+                </div>
+                {Object.entries(testContext.itemContext).map(([propKey, propVal]) => (
+                  <div key={propKey} className="grid grid-cols-2 items-center gap-2">
+                    <span className="text-muted-foreground truncate">item.{propKey}</span>
+                    <Input
+                      value={String(propVal ?? "")}
+                      onChange={(e) => {
+                        const nextVal = e.target.value;
+                        setTestContext((prev) => ({
+                          ...prev,
+                          itemContext: {
+                            ...prev.itemContext,
+                            [propKey]: nextVal,
+                          },
+                        }));
+                      }}
+                      className="h-6 text-[11px] font-mono bg-background"
+                      placeholder={`Value for ${propKey}`}
+                    />
+                  </div>
+                ))}
               </div>
             )}
 

@@ -76,6 +76,8 @@ export function isAuthHeaderName(name?: string): boolean {
 export function getEndpointAuthHeaders(
   endpoint?: Endpoint | null,
   isProtected?: boolean,
+  isItemScoped?: boolean,
+  itemKeyField?: string,
 ): Array<{ name: string; value: string }> {
   if (endpoint?.requireAuth === false) {
     return [];
@@ -116,6 +118,8 @@ export function autoMapAuthBindings(
   bindings: FrontendRequestFieldBinding[] = [],
   endpoint?: Endpoint | null,
   isProtected?: boolean,
+  isItemScoped?: boolean,
+  itemKeyField?: string,
 ): FrontendRequestFieldBinding[] {
   const authHeaders = getEndpointAuthHeaders(endpoint, isProtected);
 
@@ -169,6 +173,8 @@ export function autoMapAuthBindings(
 export function buildInitialBindingsFromEndpoint(
   endpoint?: Endpoint | null,
   isProtected?: boolean,
+  isItemScoped?: boolean,
+  itemKeyField?: string,
 ): FrontendRequestFieldBinding[] {
   if (!endpoint) return [];
 
@@ -214,7 +220,9 @@ export function buildInitialBindingsFromEndpoint(
       id: `bind-p-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       slot: "path_param",
       targetField: p.name,
-      source: { kind: "route_param", paramName: p.name },
+      source: isItemScoped
+        ? { kind: "item_prop", propPath: itemKeyField || p.name, fieldPath: itemKeyField || p.name }
+        : { kind: "route_param", paramName: p.name },
     });
   }
 
@@ -252,6 +260,8 @@ export function deriveStepsFromEdges(
   canvasSteps: ActionStepItem[],
   existing?: FrontendActionStepDraft[],
   isProtected?: boolean,
+  isItemScoped?: boolean,
+  itemKeyField?: string,
 ): FrontendActionStepDraft[] {
   const existingByEdgeId = new Map<string, FrontendActionStepDraft>();
   const existingByEndpoint = new Map<string, FrontendActionStepDraft>();
@@ -386,6 +396,7 @@ function formatDraftStep(
         if (src.kind === "session_storage") return `sessionStorage.${src.key}`;
         if (src.kind === "local_storage") return `localStorage.${src.key}`;
         if (src.kind === "cookie") return `cookie.${src.cookieName}`;
+        if (src.kind === "item_prop") return `item.${src.propPath || src.fieldPath || "id"}`;
         if (src.kind === "realtime_payload") return `stream.${src.fieldPath || "payload"}`;
         if (src.kind === "auth_token") {
           return src.tokenType === "cookie"
@@ -546,7 +557,9 @@ export function getActionFlowRuntime(
                                   ? `localStorage.${b.source.key}`
                                   : b.source.kind === "cookie"
                                     ? `cookie.${b.source.cookieName}`
-                                    : b.source.kind === "realtime_payload"
+                                    : b.source.kind === "item_prop"
+                                      ? `item.${b.source.propPath || b.source.fieldPath || "id"}`
+                                      : b.source.kind === "realtime_payload"
                                         ? `stream.${b.source.fieldPath || "data"}`
                                         : b.source.kind === "auth_token"
                                       ? "auth.sessionToken"

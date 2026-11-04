@@ -32,6 +32,8 @@ vi.mock("../ActionFlowCombobox", () => ({
   ),
 }));
 
+const MockSelectContext = React.createContext<{ onValueChange?: (val: string) => void }>({});
+
 vi.mock("@workspace/ui/components/select", () => ({
   Select: ({
     children,
@@ -42,33 +44,34 @@ vi.mock("@workspace/ui/components/select", () => ({
     value?: string;
     onValueChange?: (val: string) => void;
   }) => (
-    <div data-testid="mock-select" data-value={value}>
-      <button
-        type="button"
-        data-testid="mock-select-change-session"
-        onClick={() => onValueChange?.("session_storage")}
-      />
-      <button
-        type="button"
-        data-testid="mock-select-change-local"
-        onClick={() => onValueChange?.("local_storage")}
-      />
-      <button
-        type="button"
-        data-testid="mock-select-change-cookie"
-        onClick={() => onValueChange?.("cookie")}
-      />
-      {children}
-    </div>
+    <MockSelectContext.Provider value={{ onValueChange }}>
+      <div data-testid="mock-select" data-value={value}>
+        {children}
+      </div>
+    </MockSelectContext.Provider>
   ),
   SelectTrigger: ({ children }: { children?: React.ReactNode }) => (
     <button type="button">{children}</button>
   ),
   SelectValue: ({ placeholder }: { placeholder?: string }) => <span>{placeholder}</span>,
   SelectContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-  SelectItem: ({ children, value }: { children?: React.ReactNode; value?: string }) => (
-    <div data-value={value}>{children}</div>
-  ),
+  SelectItem: ({ children, value }: { children?: React.ReactNode; value?: string }) => {
+    const ctx = React.useContext(MockSelectContext);
+    return (
+      <button
+        type="button"
+        data-testid={`mock-select-item-${value}`}
+        data-value={value}
+        onClick={() => {
+          if (value !== undefined) {
+            ctx.onValueChange?.(value);
+          }
+        }}
+      >
+        {children}
+      </button>
+    );
+  },
 }));
 
 describe("buildInitialBindingsFromEndpoint", () => {
@@ -130,6 +133,17 @@ describe("buildInitialBindingsFromEndpoint", () => {
     const bindings = buildInitialBindingsFromEndpoint(unauthEndpoint, true);
     const auth = bindings.find((b) => b.targetField.toLowerCase() === "authorization");
     expect(auth).toBeUndefined();
+  });
+
+  it("should map path parameters to item_prop when isItemScoped is true", () => {
+    const bindings = buildInitialBindingsFromEndpoint(sampleEndpoint, true, true, "userId");
+    const pathBinding = bindings.find((b) => b.slot === "path_param");
+    expect(pathBinding).toBeDefined();
+    expect(pathBinding?.source).toEqual({
+      kind: "item_prop",
+      propPath: "userId",
+      fieldPath: "userId",
+    });
   });
 });
 
@@ -212,7 +226,7 @@ describe("ApiCallStep UI component", () => {
   });
 
   it("should allow adding a new binding to a specific slot with correct slot tag", () => {
-    const handleChange = vi.fn();
+    const handleChange = vi.fn<(step: FrontendActionStepDraft) => void>();
     render(
       <ApiCallStep
         draft={draft}
@@ -233,9 +247,39 @@ describe("ApiCallStep UI component", () => {
     expect(handleChange).toHaveBeenCalled();
     const firstCall = handleChange.mock.calls[0];
     expect(firstCall).toBeDefined();
-    const updatedDraft = firstCall?.[0] as FrontendActionStepDraft;
+    const updatedDraft = firstCall?.[0];
     const bindings = updatedDraft?.requestBindings || [];
     const newBinding = bindings[bindings.length - 1];
     expect(newBinding?.slot).toBe("header");
+  });
+
+  it("should allow changing source kind to item_prop for array element mapping", () => {
+    const handleChange = vi.fn<(step: FrontendActionStepDraft) => void>();
+    render(
+      <ApiCallStep
+        draft={draft}
+        stepIndex={0}
+        allSteps={[draft]}
+        allCanvasSteps={[]}
+        serviceNodes={[serviceNode]}
+        allNodes={[serviceNode]}
+        endpoints={[endpoint]}
+        isProtected={true}
+        isItemScoped={true}
+        itemKeyField="id"
+        onChange={handleChange}
+      />,
+    );
+
+    const itemPropOptions = screen.getAllByTestId("mock-select-item-item_prop");
+    expect(itemPropOptions.length).toBeGreaterThan(0);
+    fireEvent.click(itemPropOptions[0]!);
+
+    expect(handleChange).toHaveBeenCalled();
+    const firstCall = handleChange.mock.calls[0];
+    expect(firstCall).toBeDefined();
+    const updatedDraft = firstCall?.[0];
+    const itemPropBinding = updatedDraft?.requestBindings?.find((b) => b.source.kind === "item_prop");
+    expect(itemPropBinding).toBeDefined();
   });
 });

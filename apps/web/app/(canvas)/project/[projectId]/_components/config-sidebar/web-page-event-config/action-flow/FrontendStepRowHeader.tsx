@@ -116,6 +116,7 @@ export function formatStepCodePreview(
         if (src.kind === "session_storage") return `sessionStorage.${src.key}`;
         if (src.kind === "local_storage") return `localStorage.${src.key}`;
         if (src.kind === "cookie") return `cookie.${src.cookieName}`;
+        if (src.kind === "item_prop") return `item.${src.propPath || src.fieldPath || "id"}`;
         if (src.kind === "realtime_payload") return `stream.${src.fieldPath || "payload"}`;
         if (src.kind === "auth_token") {
           return src.tokenType === "cookie"

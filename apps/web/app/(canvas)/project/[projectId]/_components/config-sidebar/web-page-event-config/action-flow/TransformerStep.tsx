@@ -20,7 +20,7 @@ import {
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { toVarName } from "@/lib/compiler/utils";
 import { toast } from "sonner";
-import type { BackendNode } from "@workspace/canvas";
+import type { BackendNode, UIEventItem } from "@workspace/canvas";
 import type {
   FrontendActionStepDraft,
   FrontendFieldSource,
@@ -49,6 +49,7 @@ export interface TransformerStepProps {
   allNodes: BackendNode[];
   webPageNodeId?: string;
   actionId?: string;
+  actionItem?: UIEventItem;
   incomingPaths?: AvailablePath[];
   onChange: (updated: FrontendActionStepDraft) => void;
 }

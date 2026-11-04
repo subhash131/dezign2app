@@ -376,6 +376,7 @@ export const ActionFlowEditor: React.FC<ActionFlowEditorProps> = ({
                       endpoints={endpoints}
                       webPageNodeId={webPageNodeId}
                       actionId={actionId}
+                      actionItem={item}
                       isProtected={isProtected}
                       incomingPaths={incomingPaths}
                       onChange={handleStepChange}

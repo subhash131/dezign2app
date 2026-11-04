@@ -13,6 +13,7 @@ import {
   ChevronRight,
   RefreshCw,
   Key,
+  Box,
 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
@@ -42,6 +43,7 @@ import { isAuthHeaderName, buildInitialBindingsFromEndpoint } from "./utils";
 
 type SourceKindOption =
   | "auth_token"
+  | "item_prop"
   | "user_input"
   | "route_param"
   | "query_param"
@@ -66,6 +68,10 @@ interface BindingSlotRowProps {
   stateStores: BackendNode[];
   sectionStateVars: Array<{ name: string; type?: string; storeName?: string; storeId?: string }>;
   incomingPaths?: AvailablePath[];
+  isItemScoped?: boolean;
+  itemKeyField?: string;
+  itemSourceStateName?: string;
+  itemPropSuggestions?: ComboboxOption[];
 }
 
 const BindingSlotRow: React.FC<BindingSlotRowProps> = ({
@@ -81,6 +87,10 @@ const BindingSlotRow: React.FC<BindingSlotRowProps> = ({
   stateStores,
   sectionStateVars,
   incomingPaths,
+  isItemScoped,
+  itemKeyField,
+  itemSourceStateName,
+  itemPropSuggestions,
 }) => {
   const isAuth = binding.slot === "header" && isAuthHeaderName(binding.targetField);
 
@@ -164,6 +174,12 @@ const BindingSlotRow: React.FC<BindingSlotRowProps> = ({
                   </span>
                 </SelectItem>
               )}
+              <SelectItem value="item_prop">
+                <span className="flex items-center gap-1.5 text-violet-400 font-medium">
+                  <Box size={11} />
+                  Current Element Prop {isItemScoped ? `(item.${itemKeyField || "id"})` : "(Array Item)"}
+                </span>
+              </SelectItem>
               <SelectItem value="auth_token">
                 <span className="flex items-center gap-1.5 text-amber-500 font-medium">
                   <Key size={11} />
@@ -200,6 +216,45 @@ const BindingSlotRow: React.FC<BindingSlotRowProps> = ({
 
       {/* Source Details Editor */}
       <div className="pt-0.5">
+        {binding.source.kind === "item_prop" && (
+          <div className="p-2.5 rounded border border-violet-500/25 bg-violet-500/5 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-medium text-violet-400 flex items-center gap-1.5">
+                <Box size={12} />
+                Current Element Property (Array Item)
+              </span>
+              <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 font-mono text-violet-400 border-violet-500/30 bg-violet-500/10">
+                {itemSourceStateName ? `${itemSourceStateName}[]` : "item context"}
+              </Badge>
+            </div>
+            <div className="grid grid-cols-2 gap-2 pt-0.5">
+              <div className="space-y-1">
+                <Label className="text-[10px] text-muted-foreground">Item Property Key</Label>
+                <ActionFlowCombobox
+                  value={binding.source.propPath || binding.source.fieldPath || ""}
+                  onChange={(val) =>
+                    onUpdate((prev) => ({
+                      ...prev,
+                      source: { kind: "item_prop", propPath: val, fieldPath: val },
+                    }))
+                  }
+                  placeholder={itemKeyField || binding.targetField || "id"}
+                  headerLabel="Suggested Item Properties"
+                  options={itemPropSuggestions || []}
+                />
+              </div>
+              <div className="flex flex-col justify-end text-[10px] text-muted-foreground leading-tight pb-0.5">
+                <span>
+                  Runtime value: <code className="text-violet-300 font-mono">item.{binding.source.propPath || binding.source.fieldPath || itemKeyField || binding.targetField || "id"}</code>
+                </span>
+                <span className="text-[9px] text-muted-foreground/80 mt-0.5">
+                  Passed into request when array item is clicked.
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {binding.source.kind === "auth_token" && (
           <div className="p-2.5 rounded border border-amber-500/25 bg-amber-500/5 space-y-2">
             <div className="flex items-center justify-between">
@@ -638,8 +693,13 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
   endpoints = [],
   webPageNodeId,
   actionId,
+  actionItem,
   isProtected = false,
   incomingPaths,
+  isItemScoped,
+  itemKeyField,
+  itemSourceStateName,
+  itemPropSuggestions,
   onChange,
 }) => {
   const bindings = draft.requestBindings || [];
@@ -725,6 +785,56 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
     });
     return list;
   }, [allNodes, webPageNodeId]);
+
+  const currentAction = React.useMemo(() => {
+    if (actionItem) return actionItem;
+    const sections: PageSection[] = currentPageNode?.data?.sections || [];
+    return sections
+      .flatMap((s) => s.actions || [])
+      .find((a) => a.id === actionId);
+  }, [actionItem, currentPageNode, actionId]);
+
+  const effectiveIsItemScoped = isItemScoped ?? Boolean(
+    currentAction?.scope === "item" || currentAction?.itemSourceStateId,
+  );
+  const effectiveItemKeyField = itemKeyField || currentAction?.itemContextFields?.[0] || "id";
+
+  const targetArrayState = React.useMemo(() => {
+    if (!currentAction?.itemSourceStateId) return undefined;
+    const sections: PageSection[] = currentPageNode?.data?.sections || [];
+    return sections
+      .flatMap((s) => s.stateObjects || [])
+      .find(
+        (st) =>
+          st.id === currentAction.itemSourceStateId ||
+          st.name === currentAction.itemSourceStateId,
+      );
+  }, [currentPageNode, currentAction?.itemSourceStateId]);
+
+  const effectiveItemSourceStateName = itemSourceStateName || targetArrayState?.name;
+
+  const effectiveItemPropSuggestions: ComboboxOption[] = React.useMemo(() => {
+    if (itemPropSuggestions && itemPropSuggestions.length > 0) return itemPropSuggestions;
+    const list: ComboboxOption[] = [];
+    if (effectiveItemKeyField) {
+      list.push({
+        value: effectiveItemKeyField,
+        label: `${effectiveItemKeyField} (Key)`,
+        type: "identifier",
+      });
+    }
+    (currentAction?.itemContextFields || []).forEach((f: string) => {
+      if (!list.some((s) => s.value === f)) {
+        list.push({ value: f, label: f, type: "field" });
+      }
+    });
+    ["id", "_id", "uuid", "name", "title", "slug", "key"].forEach((c) => {
+      if (!list.some((s) => s.value === c)) {
+        list.push({ value: c, label: c, type: "string" });
+      }
+    });
+    return list;
+  }, [effectiveItemKeyField, currentAction?.itemContextFields, itemPropSuggestions]);
 
   // Slot-specific field suggestions
   const headerSuggestions: ComboboxOption[] = React.useMemo(() => {
@@ -857,7 +967,7 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
     }
 
     const updatedBindings = defaultEp
-      ? buildInitialBindingsFromEndpoint(defaultEp, isProtected)
+      ? buildInitialBindingsFromEndpoint(defaultEp, isProtected, effectiveIsItemScoped, effectiveItemKeyField)
       : [];
 
     onChange({
@@ -902,7 +1012,7 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
 
     const newEndpoint = serviceEndpoints.find((ep) => ep.id === newEndpointId);
     const updatedBindings = newEndpoint
-      ? buildInitialBindingsFromEndpoint(newEndpoint, isProtected)
+      ? buildInitialBindingsFromEndpoint(newEndpoint, isProtected, effectiveIsItemScoped, effectiveItemKeyField)
       : [];
 
     onChange({
@@ -915,7 +1025,7 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
 
   const handleResetToEndpointDefaults = () => {
     if (!selectedEndpoint) return;
-    const freshBindings = buildInitialBindingsFromEndpoint(selectedEndpoint, isProtected);
+    const freshBindings = buildInitialBindingsFromEndpoint(selectedEndpoint, isProtected, effectiveIsItemScoped, effectiveItemKeyField);
     onChange({
       ...draft,
       requestBindings: freshBindings,
@@ -929,10 +1039,16 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
         ? { kind: "auth_token", tokenType: "session" }
         : { kind: "literal", value: "" };
     } else if (slot === "path_param") {
-      defaultSource = {
-        kind: "route_param",
-        paramName: defaultTargetField || routeParamSuggestions[0]?.value || "",
-      };
+      defaultSource = effectiveIsItemScoped
+        ? {
+            kind: "item_prop",
+            propPath: defaultTargetField || effectiveItemKeyField || "id",
+            fieldPath: defaultTargetField || effectiveItemKeyField || "id",
+          }
+        : {
+            kind: "route_param",
+            paramName: defaultTargetField || routeParamSuggestions[0]?.value || "",
+          };
     } else if (slot === "query_param") {
       defaultSource = {
         kind: "query_param",
@@ -982,6 +1098,9 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
       const isAuth = isAuthHeaderName(b.targetField);
       if (newKind === "auth_token") {
         nextSource = { kind: "auth_token", tokenType: "session" };
+      } else if (newKind === "item_prop") {
+        const prop = effectiveItemKeyField || b.targetField || "id";
+        nextSource = { kind: "item_prop", propPath: prop, fieldPath: prop };
       } else if (newKind === "literal") {
         nextSource = { kind: "literal", value: "" };
       } else if (newKind === "state_var") {
@@ -1208,6 +1327,10 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
                       stateStores={stateStores}
                       sectionStateVars={sectionStateVars}
                       incomingPaths={incomingPaths}
+                      isItemScoped={effectiveIsItemScoped}
+                      itemKeyField={effectiveItemKeyField}
+                      itemSourceStateName={effectiveItemSourceStateName}
+                      itemPropSuggestions={effectiveItemPropSuggestions}
                     />
                   ))
                 )}
@@ -1265,6 +1388,10 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
                       stateStores={stateStores}
                       sectionStateVars={sectionStateVars}
                       incomingPaths={incomingPaths}
+                      isItemScoped={effectiveIsItemScoped}
+                      itemKeyField={effectiveItemKeyField}
+                      itemSourceStateName={effectiveItemSourceStateName}
+                      itemPropSuggestions={effectiveItemPropSuggestions}
                     />
                   ))
                 )}
@@ -1321,6 +1448,10 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
                       stateStores={stateStores}
                       sectionStateVars={sectionStateVars}
                       incomingPaths={incomingPaths}
+                      isItemScoped={effectiveIsItemScoped}
+                      itemKeyField={effectiveItemKeyField}
+                      itemSourceStateName={effectiveItemSourceStateName}
+                      itemPropSuggestions={effectiveItemPropSuggestions}
                     />
                   ))
                 )}
@@ -1379,6 +1510,10 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
                       stateStores={stateStores}
                       sectionStateVars={sectionStateVars}
                       incomingPaths={incomingPaths}
+                      isItemScoped={effectiveIsItemScoped}
+                      itemKeyField={effectiveItemKeyField}
+                      itemSourceStateName={effectiveItemSourceStateName}
+                      itemPropSuggestions={effectiveItemPropSuggestions}
                     />
                   ))
                 )}

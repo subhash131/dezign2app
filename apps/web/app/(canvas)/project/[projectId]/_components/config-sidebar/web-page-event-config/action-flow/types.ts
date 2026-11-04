@@ -12,6 +12,7 @@ import type {
 } from "@workspace/canvas";
 import type { ActionStepItem } from "../TargetEndpointSection";
 import type { AvailablePath } from "../../pipeline-step-editor/types";
+import type { ComboboxOption } from "./ActionFlowCombobox";
 
 export type {
   BindingSlot,
@@ -35,6 +36,7 @@ export interface ActionFlowEditorProps {
   endpoints: (Endpoint & { nodeId: string })[];
   webPageNodeId?: string;
   actionId?: string;
+  actionItem?: UIEventItem;
   isProtected?: boolean;
   isRealtime?: boolean;
   realtimeEventName?: string;
@@ -42,6 +44,10 @@ export interface ActionFlowEditorProps {
   realtimeSourceLabel?: string;
   realtimeSourceItemName?: string;
   incomingPaths?: AvailablePath[];
+  isItemScoped?: boolean;
+  itemKeyField?: string;
+  itemSourceStateName?: string;
+  itemPropSuggestions?: ComboboxOption[];
   isLangGraph?: boolean;
   langGraphStreamModes?: string[];
   onSave: (drafts: FrontendActionStepDraft[]) => void;
@@ -59,9 +65,14 @@ export interface ActionFlowStepProps {
   endpoints: (Endpoint & { nodeId: string })[];
   webPageNodeId?: string;
   actionId?: string;
+  actionItem?: UIEventItem;
   isProtected?: boolean;
   isRealtime?: boolean;
   incomingPaths?: AvailablePath[];
+  isItemScoped?: boolean;
+  itemKeyField?: string;
+  itemSourceStateName?: string;
+  itemPropSuggestions?: ComboboxOption[];
   onChange: (updated: FrontendActionStepDraft) => void;
   onDelete: () => void;
 }
@@ -77,8 +88,13 @@ export interface ApiCallStepProps {
   endpoints?: (Endpoint & { nodeId: string })[];
   webPageNodeId?: string;
   actionId?: string;
+  actionItem?: UIEventItem;
   isProtected?: boolean;
   incomingPaths?: AvailablePath[];
+  isItemScoped?: boolean;
+  itemKeyField?: string;
+  itemSourceStateName?: string;
+  itemPropSuggestions?: ComboboxOption[];
   onChange: (updated: FrontendActionStepDraft) => void;
 }
 
@@ -92,6 +108,7 @@ export interface StoragePutStepProps {
   endpoints?: (Endpoint & { nodeId: string })[];
   webPageNodeId?: string;
   actionId?: string;
+  actionItem?: UIEventItem;
   onChange: (updated: FrontendActionStepDraft) => void;
 }
 
@@ -120,6 +137,7 @@ export interface BrowserStorageStepProps {
   endpoints?: (Endpoint & { nodeId: string })[];
   webPageNodeId?: string;
   actionId?: string;
+  actionItem?: UIEventItem;
   onChange: (updated: FrontendActionStepDraft) => void;
 }
 
