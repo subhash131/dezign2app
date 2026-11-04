@@ -238,16 +238,35 @@ export const NodePackageManager: React.FC<NodePackageManagerProps> = ({
 }) => {
   const routeParams = useParams();
   const routeProjectId = (routeParams?.projectId as string) || "";
-  const effectiveProjectId = projectId || routeProjectId;
+  const isInvalidProjectId =
+    !projectId ||
+    projectId === nodeId ||
+    projectId === "langgraph_tr" ||
+    projectId.startsWith("node-") ||
+    projectId.startsWith("transformer-") ||
+    projectId.startsWith("service-") ||
+    projectId.startsWith("webApp-");
+  const effectiveProjectId = !isInvalidProjectId ? projectId : routeProjectId;
 
   const getResolvedOutputDir = (): string => {
     if (outputDir && outputDir.trim()) return outputDir.trim();
+
     if (effectiveProjectId) {
       const fromWorkspace = getProjectWorkspaceDir(effectiveProjectId);
       if (fromWorkspace && fromWorkspace.trim()) return fromWorkspace.trim();
     }
-    const fromActive = getActiveProjectOutputDir(effectiveProjectId);
+
+    if (routeProjectId && routeProjectId !== effectiveProjectId) {
+      const fromRoute = getProjectWorkspaceDir(routeProjectId);
+      if (fromRoute && fromRoute.trim()) return fromRoute.trim();
+    }
+
+    const fromActive =
+      getActiveProjectOutputDir(effectiveProjectId) ||
+      getActiveProjectOutputDir(routeProjectId) ||
+      getActiveProjectOutputDir();
     if (fromActive && fromActive.trim()) return fromActive.trim();
+
     return "";
   };
 

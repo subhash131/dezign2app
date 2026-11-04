@@ -24,6 +24,7 @@ export interface FetchPackageTypesResponse {
 export async function fetchPackageTypesFromNodeModules(
   pkg: string,
   outputDir?: string,
+  projectId?: string,
 ): Promise<FetchPackageTypesResponse> {
   const trimmedPkg = pkg.trim();
   if (!trimmedPkg) {
@@ -35,7 +36,10 @@ export async function fetchPackageTypesFromNodeModules(
     };
   }
 
-  const resolvedOutputDir = outputDir || getActiveProjectOutputDir();
+  const resolvedOutputDir =
+    outputDir ||
+    (projectId ? getActiveProjectOutputDir(projectId) : "") ||
+    getActiveProjectOutputDir();
 
   try {
     const params = new URLSearchParams({ pkg: trimmedPkg });
@@ -84,13 +88,17 @@ export async function refreshPackageTypesFromNodeModules(
   typesNodeId: string,
   pkg: string,
   outputDir?: string,
+  projectId?: string,
 ): Promise<boolean> {
   const store = useBackendCanvasStore.getState();
   const node = store.nodes.find((n) => n.id === typesNodeId);
   if (!node) return false;
 
-  const resolvedOutputDir = outputDir || getActiveProjectOutputDir();
-  const result = await fetchPackageTypesFromNodeModules(pkg, resolvedOutputDir);
+  const resolvedOutputDir =
+    outputDir ||
+    (projectId ? getActiveProjectOutputDir(projectId) : "") ||
+    getActiveProjectOutputDir();
+  const result = await fetchPackageTypesFromNodeModules(pkg, resolvedOutputDir, projectId);
   const currentNode = useBackendCanvasStore.getState().nodes.find((n) => n.id === typesNodeId);
   if (!currentNode) return false;
 
@@ -389,7 +397,7 @@ export function syncPackageTypesToCanvas(
     });
 
     // Asynchronously infer types directly from node_modules
-    fetchPackageTypesFromNodeModules(trimmedPkg, resolvedOutputDir).then((result) => {
+    fetchPackageTypesFromNodeModules(trimmedPkg, resolvedOutputDir, projectId).then((result) => {
       const storeState = useBackendCanvasStore.getState();
       const currentNode = storeState.nodes.find((n) => n.id === typesNodeId);
       if (!currentNode) return;
