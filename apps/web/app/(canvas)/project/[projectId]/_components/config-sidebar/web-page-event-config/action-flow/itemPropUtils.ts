@@ -235,16 +235,18 @@ export function resolveItemPropsFromType(
         (node.data?.tableName && node.data.tableName.toLowerCase() === baseTypeName.toLowerCase());
 
       if (isMatch) {
-        const columns = node.data?.columns || node.data?.fields || [];
+        const columns = node.data?.columns;
         if (Array.isArray(columns)) {
-          columns.forEach((col: any) => {
-            const colName = col.name || col.columnName;
+          columns.forEach((col) => {
+            const colName = col.name;
             if (colName) {
               addOption({
                 value: colName,
                 label: colName,
-                type: col.type || col.columnType || "column",
-                description: col.description || (col.isPrimary ? "Primary Key" : undefined),
+                type: col.type || "column",
+                description:
+                  col.description ||
+                  (col.isPrimaryKey || col.isPrimary || col.primaryKey ? "Primary Key" : undefined),
               });
             }
           });
@@ -261,7 +263,7 @@ export function resolveItemPropsFromType(
         node.data?.label === baseTypeName ||
         node.data?.storeName === baseTypeName;
       if (isStoreMatch && Array.isArray(node.data?.fields)) {
-        node.data.fields.forEach((sf: any) => {
+        node.data.fields.forEach((sf) => {
           if (sf.name) {
             addOption({
               value: sf.name,
@@ -334,29 +336,23 @@ export function resolveItemPropsFromState(
     }
   }
 
+  // Determine type string to resolve
+  let typeToResolve = state?.type;
+
   // Check if targetState has linked store
-  let extraStoreFields: ComboboxOption[] = [];
   if (state?.storeNodeId || state?.storeId) {
     const storeNode = nodes.find(
       (n) => n.id === state?.storeNodeId || n.id === state?.storeId,
     );
     if (storeNode && Array.isArray(storeNode.data?.fields)) {
       const match = storeNode.data.fields.find(
-        (f: any) => f.id === state?.fieldId || f.name === state?.name,
+        (f) => f.id === state?.fieldId || f.name === state?.name,
       );
-      if (match && Array.isArray(match.nestedFields)) {
-        extraStoreFields = match.nestedFields.map((nf: any) => ({
-          value: nf.name,
-          label: nf.name,
-          type: nf.type || "field",
-          description: nf.description,
-        }));
+      if (match?.type && !typeToResolve) {
+        typeToResolve = match.type;
       }
     }
   }
-
-  // Determine type string to resolve
-  let typeToResolve = state?.type;
   if (!typeToResolve || typeToResolve === "array" || typeToResolve === "object") {
     // If state type is missing or generic array, try state name or fallback identifier
     const candidateName = state?.name || fallbackStateNameOrId;
@@ -374,14 +370,7 @@ export function resolveItemPropsFromState(
     itemKeyField: preferredKeyField || state?.itemKeyField,
   });
 
-  if (extraStoreFields.length > 0) {
-    const seen = new Set(resolved.map((r) => r.value));
-    extraStoreFields.forEach((f) => {
-      if (!seen.has(f.value)) {
-        resolved.push(f);
-      }
-    });
-  }
+
 
   // If still empty (e.g. primitive array 'string[]' or generic array), provide common identifier fields
   if (resolved.length === 0) {

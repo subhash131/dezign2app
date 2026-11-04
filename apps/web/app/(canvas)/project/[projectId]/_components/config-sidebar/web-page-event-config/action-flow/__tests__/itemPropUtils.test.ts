@@ -43,6 +43,7 @@ describe("itemPropUtils", () => {
         id: "node-types-1",
         type: "types",
         position: { x: 0, y: 0 },
+        fractionalIndex: "a0",
         data: {
           label: "App Types",
           types: [
@@ -56,7 +57,7 @@ describe("itemPropUtils", () => {
                 { id: "f3", name: "content", type: "string" },
                 { id: "f4", name: "createdAt", type: "string" },
               ],
-            } as CustomTypeItem,
+            },
           ],
         },
       };
@@ -71,13 +72,14 @@ describe("itemPropUtils", () => {
         id: "entity-users",
         type: "entity",
         position: { x: 0, y: 0 },
+        fractionalIndex: "a1",
         data: {
           label: "users",
           tableName: "users",
           columns: [
-            { id: "c1", name: "id", type: "uuid", isPrimary: true },
-            { id: "c2", name: "email", type: "varchar" },
-            { id: "c3", name: "avatarUrl", type: "text" },
+            { name: "id", type: "uuid", isPrimary: true },
+            { name: "email", type: "varchar" },
+            { name: "avatarUrl", type: "text" },
           ],
         },
       };

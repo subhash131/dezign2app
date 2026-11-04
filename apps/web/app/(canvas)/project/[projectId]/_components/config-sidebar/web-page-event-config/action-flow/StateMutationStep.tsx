@@ -17,7 +17,7 @@ import type {
   AvailablePath,
 } from "./types";
 import { ResponseFieldPicker } from "./ResponseFieldPicker";
-import { ActionFlowCombobox } from "./ActionFlowCombobox";
+import { ActionFlowCombobox, type ComboboxOption } from "./ActionFlowCombobox";
 import {
   getActionsForReducer,
   isValuelessAction,
@@ -39,6 +39,9 @@ export interface StateMutationStepProps {
   actionId?: string;
   actionItem?: UIEventItem;
   incomingPaths?: AvailablePath[];
+  isItemScoped?: boolean;
+  itemKeyField?: string;
+  itemPropSuggestions?: ComboboxOption[];
   onChange: (updated: FrontendActionStepDraft) => void;
 }
 
@@ -49,7 +52,11 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
   allNodes,
   webPageNodeId,
   actionId,
+  actionItem,
   incomingPaths,
+  isItemScoped,
+  itemKeyField,
+  itemPropSuggestions,
   onChange,
 }) => {
   const stateStores = allNodes.filter((n) => n.type === "state_store");
@@ -517,17 +524,32 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
               <Label className="text-[10px] text-muted-foreground">
                 Item Property Key (item.*)
               </Label>
-              <Input
-                value={valueSource.propPath || valueSource.fieldPath || ""}
-                onChange={(e) =>
-                  onChange({
-                    ...draft,
-                    stateValueSource: { kind: "item_prop", propPath: e.target.value, fieldPath: e.target.value },
-                  })
-                }
-                placeholder="id"
-                className="h-7 text-xs bg-background font-mono"
-              />
+              {itemPropSuggestions && itemPropSuggestions.length > 0 ? (
+                <ActionFlowCombobox
+                  value={valueSource.propPath || valueSource.fieldPath || ""}
+                  onChange={(val) =>
+                    onChange({
+                      ...draft,
+                      stateValueSource: { kind: "item_prop", propPath: val, fieldPath: val },
+                    })
+                  }
+                  placeholder={itemKeyField || "id"}
+                  headerLabel="Suggested Item Properties"
+                  options={itemPropSuggestions}
+                />
+              ) : (
+                <Input
+                  value={valueSource.propPath || valueSource.fieldPath || ""}
+                  onChange={(e) =>
+                    onChange({
+                      ...draft,
+                      stateValueSource: { kind: "item_prop", propPath: e.target.value, fieldPath: e.target.value },
+                    })
+                  }
+                  placeholder={itemKeyField || "id"}
+                  className="h-7 text-xs bg-background font-mono"
+                />
+              )}
             </div>
           )}
 

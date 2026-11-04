@@ -461,6 +461,28 @@ const BindingSlotRow: React.FC<BindingSlotRowProps> = ({
               !source.storeName &&
               sectionStateVars.some((v) => v.name === source.stateKey));
 
+          // Determine the type of the currently selected field
+          const selectedFieldType: string = (() => {
+            const key = source.stateKey;
+            if (!key) return "";
+            if (selectedStore) {
+              return (selectedStore.data?.fields || []).find((f: any) => f.name === key)?.type || "";
+            }
+            if (isLocal) {
+              return sectionStateVars.find((v) => v.name === key)?.type || "";
+            }
+            for (const s of stateStores) {
+              const f = (s.data?.fields || []).find((f: any) => f.name === key);
+              if (f) return f.type || "";
+            }
+            return "";
+          })();
+
+          const isArrayField =
+            selectedFieldType.includes("[]") ||
+            selectedFieldType.startsWith("Array<") ||
+            selectedFieldType.startsWith("List<");
+
           const storeFieldOptions: ComboboxOption[] = selectedStore
             ? (selectedStore.data?.fields || []).map((f) => ({
                 value: f.name,
@@ -488,102 +510,195 @@ const BindingSlotRow: React.FC<BindingSlotRowProps> = ({
                 })),
               ];
 
+          // Quick-access expression presets for arrays
+          const arrayExprPresets = source.stateKey
+            ? [
+                { label: "Last item", expr: `${source.stateKey}[${source.stateKey}.length - 1]` },
+                { label: "First item", expr: `${source.stateKey}[0]` },
+                { label: "Count / length", expr: `${source.stateKey}.length` },
+                { label: "Last item ID", expr: `${source.stateKey}[${source.stateKey}.length - 1]?.id` },
+                { label: "Last item createdAt", expr: `${source.stateKey}[${source.stateKey}.length - 1]?.createdAt` },
+              ]
+            : [];
+
           return (
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <Label className="text-[10px] text-muted-foreground">
-                  Source Store
-                </Label>
-                <Select
-                  value={
-                    isLocal
-                      ? "__local__"
-                      : selectedStore?.id || (stateStores[0]?.id ?? "__local__")
-                  }
-                  onValueChange={(val) => {
-                    if (val === "__local__") {
-                      const firstLocal = sectionStateVars[0]?.name || "";
-                      onUpdate((prev) => ({
-                        ...prev,
-                        source: {
-                          kind: "state_var",
-                          sourceType: "local",
-                          storeNodeId: undefined,
-                          storeName: undefined,
-                          stateKey:
-                            firstLocal ||
-                            (prev.source.kind === "state_var"
-                              ? prev.source.stateKey
-                              : ""),
-                        },
-                      }));
-                    } else {
-                      const targetStore = stateStores.find((s) => s.id === val);
-                      const storeName =
-                        targetStore?.data?.label ||
-                        targetStore?.data?.storeName ||
-                        "Store";
-                      const firstField = targetStore?.data?.fields?.[0]?.name || "";
-                      onUpdate((prev) => ({
-                        ...prev,
-                        source: {
-                          kind: "state_var",
-                          sourceType: "store",
-                          storeNodeId: targetStore?.id,
-                          storeName,
-                          stateKey:
-                            firstField ||
-                            (prev.source.kind === "state_var"
-                              ? prev.source.stateKey
-                              : ""),
-                        },
-                      }));
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-[10px] text-muted-foreground">
+                    Source Store
+                  </Label>
+                  <Select
+                    value={
+                      isLocal
+                        ? "__local__"
+                        : selectedStore?.id || (stateStores[0]?.id ?? "__local__")
                     }
-                  }}
-                >
-                  <SelectTrigger className="h-7 text-xs bg-background">
-                    <SelectValue placeholder="Choose store..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {stateStores.map((st) => (
-                      <SelectItem key={st.id} value={st.id}>
-                        ⚡ {st.data?.label || st.data?.storeName || "Store"} (Zustand)
+                    onValueChange={(val) => {
+                      if (val === "__local__") {
+                        const firstLocal = sectionStateVars[0]?.name || "";
+                        onUpdate((prev) => ({
+                          ...prev,
+                          source: {
+                            kind: "state_var",
+                            sourceType: "local",
+                            storeNodeId: undefined,
+                            storeName: undefined,
+                            stateKey:
+                              firstLocal ||
+                              (prev.source.kind === "state_var"
+                                ? prev.source.stateKey
+                                : ""),
+                            fieldPath: undefined,
+                          },
+                        }));
+                      } else {
+                        const targetStore = stateStores.find((s) => s.id === val);
+                        const storeName =
+                          targetStore?.data?.label ||
+                          targetStore?.data?.storeName ||
+                          "Store";
+                        const firstField = targetStore?.data?.fields?.[0]?.name || "";
+                        onUpdate((prev) => ({
+                          ...prev,
+                          source: {
+                            kind: "state_var",
+                            sourceType: "store",
+                            storeNodeId: targetStore?.id,
+                            storeName,
+                            stateKey:
+                              firstField ||
+                              (prev.source.kind === "state_var"
+                                ? prev.source.stateKey
+                                : ""),
+                            fieldPath: undefined,
+                          },
+                        }));
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="h-7 text-xs bg-background">
+                      <SelectValue placeholder="Choose store..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {stateStores.map((st) => (
+                        <SelectItem key={st.id} value={st.id}>
+                          ⚡ {st.data?.label || st.data?.storeName || "Store"} (Zustand)
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="__local__">
+                        📄 Page / Section State
                       </SelectItem>
-                    ))}
-                    <SelectItem value="__local__">
-                      📄 Page / Section State
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-[10px] text-muted-foreground">
+                    Store Field / Property
+                  </Label>
+                  <ActionFlowCombobox
+                    value={source.stateKey}
+                    onChange={(key) => {
+                      onUpdate((prev) => {
+                        const prevSrc =
+                          prev.source.kind === "state_var"
+                            ? prev.source
+                            : { kind: "state_var", stateKey: key };
+                        return {
+                          ...prev,
+                          source: {
+                            ...prevSrc,
+                            kind: "state_var",
+                            stateKey: key,
+                            fieldPath: undefined, // reset accessor when field changes
+                          },
+                        };
+                      });
+                    }}
+                    placeholder="e.g. keyword, userId"
+                    headerLabel="Available Store Fields"
+                    options={storeFieldOptions}
+                  />
+                </div>
               </div>
 
-              <div className="space-y-1">
-                <Label className="text-[10px] text-muted-foreground">
-                  Store Field / Property
-                </Label>
-                <ActionFlowCombobox
-                  value={source.stateKey}
-                  onChange={(key) => {
-                    onUpdate((prev) => {
-                      const prevSrc =
-                        prev.source.kind === "state_var"
-                          ? prev.source
-                          : { kind: "state_var", stateKey: key };
-                      return {
-                        ...prev,
-                        source: {
-                          ...prevSrc,
-                          kind: "state_var",
-                          stateKey: key,
-                        },
-                      };
-                    });
-                  }}
-                  placeholder="e.g. keyword, userId"
-                  headerLabel="Available Store Fields"
-                  options={storeFieldOptions}
-                />
-              </div>
+              {/* Array accessor expression — shown when selected field is an array type */}
+              {isArrayField && (
+                <div className="p-2.5 rounded border border-blue-500/25 bg-blue-500/5 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-medium text-blue-400 flex items-center gap-1.5">
+                      <Box size={12} />
+                      Array Accessor Expression
+                    </span>
+                    <Badge
+                      variant="outline"
+                      className="text-[9px] px-1.5 py-0 h-4 font-mono text-blue-400 border-blue-500/30 bg-blue-500/10"
+                    >
+                      {selectedFieldType}
+                    </Badge>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] text-muted-foreground">
+                      JS expression to extract a scalar value from the array
+                    </Label>
+                    <Input
+                      value={source.fieldPath ?? ""}
+                      onChange={(e) =>
+                        onUpdate((prev) => ({
+                          ...prev,
+                          source: {
+                            ...(prev.source as Extract<typeof prev.source, { kind: "state_var" }>),
+                            kind: "state_var",
+                            fieldPath: e.target.value,
+                          },
+                        }))
+                      }
+                      placeholder={`e.g. ${source.stateKey}[${source.stateKey}.length - 1]?.id`}
+                      className="h-7 text-xs bg-background font-mono"
+                      spellCheck={false}
+                    />
+
+                    {/* Quick preset chips */}
+                    {arrayExprPresets.length > 0 && (
+                      <div className="flex flex-wrap gap-1 pt-0.5">
+                        {arrayExprPresets.map((p) => (
+                          <button
+                            key={p.expr}
+                            type="button"
+                            onClick={() =>
+                              onUpdate((prev) => ({
+                                ...prev,
+                                source: {
+                                  ...(prev.source as Extract<typeof prev.source, { kind: "state_var" }>),
+                                  kind: "state_var",
+                                  fieldPath: p.expr,
+                                },
+                              }))
+                            }
+                            className={`text-[9px] px-1.5 py-0.5 rounded font-mono border transition-colors cursor-pointer ${
+                              source.fieldPath === p.expr
+                                ? "bg-blue-500/20 border-blue-500/50 text-blue-300"
+                                : "bg-muted/40 border-border/50 text-muted-foreground hover:border-blue-500/40 hover:text-blue-400"
+                            }`}
+                          >
+                            {p.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    <p className="text-[9px] text-muted-foreground/70 leading-tight">
+                      Runtime:{" "}
+                      <code className="text-blue-300 font-mono">
+                        {source.fieldPath || source.stateKey}
+                      </code>
+                      {" "}— any valid JS expression evaluated at runtime.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           );
         })()}

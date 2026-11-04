@@ -377,7 +377,8 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
       let nextKey = itemKeyField || "id";
       if (props.length > 0 && (!itemKeyField || !props.some((p) => p.value === itemKeyField))) {
         const idField = props.find((p) => p.value === "id" || p.value === "_id");
-        nextKey = idField ? idField.value : props[0].value;
+        const firstProp = props[0];
+        nextKey = idField ? idField.value : firstProp ? firstProp.value : "id";
         setItemKeyField(nextKey);
       }
       updateActionInParent({
@@ -400,7 +401,8 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
     let nextKey = itemKeyField;
     if (newProps.length > 0 && !newProps.some((p) => p.value === itemKeyField)) {
       const idMatch = newProps.find((p) => p.value === "id" || p.value === "_id");
-      nextKey = idMatch ? idMatch.value : newProps[0].value;
+      const firstNewProp = newProps[0];
+      nextKey = idMatch ? idMatch.value : firstNewProp ? firstNewProp.value : itemKeyField || "id";
       setItemKeyField(nextKey);
     }
     updateActionInParent({

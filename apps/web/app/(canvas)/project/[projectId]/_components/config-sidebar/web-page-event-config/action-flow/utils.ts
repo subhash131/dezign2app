@@ -269,14 +269,19 @@ export function deriveStepsFromEdges(
 
   if (existing) {
     for (const draft of existing) {
-      if (draft.edgeId) {
-        existingByEdgeId.set(draft.edgeId, draft);
+      const edgeId =
+        draft.edgeId ||
+        (canvasSteps.some((c) => c.edgeId === draft.id) ? draft.id : undefined);
+      if (edgeId) {
+        existingByEdgeId.set(edgeId, draft);
         if (draft.serviceNodeId && draft.endpointId) {
           existingByEndpoint.set(`${draft.serviceNodeId}:${draft.endpointId}`, draft);
         }
       } else {
         // Retain steps without a canvas edge (e.g. state_mutation, update_query_params, navigate)
-        nonEdgeSteps.push(draft);
+        if (draft.type !== "api_call" && draft.type !== "storage_put") {
+          nonEdgeSteps.push(draft);
+        }
       }
     }
   }
@@ -388,7 +393,7 @@ function formatDraftStep(
         if (!src) return "value";
         if (src.kind === "literal") return `"${src.value || ""}"`;
         if (src.kind === "state_var")
-          return src.storeName ? `${src.storeName}.${src.stateKey}` : `state.${src.stateKey}`;
+          return src.fieldPath || (src.storeName ? `${src.storeName}.${src.stateKey}` : `state.${src.stateKey}`);
         if (src.kind === "user_input") return `input.${src.fieldName}`;
         if (src.kind === "prev_response") return `step.${src.fieldPath}`;
         if (src.kind === "route_param") return `params.${src.paramName}`;
@@ -544,7 +549,7 @@ export function getActionFlowRuntime(
                     b.source.kind === "literal"
                       ? `"${b.source.value}"`
                       : b.source.kind === "state_var"
-                        ? (b.source.storeName ? `${b.source.storeName}.${b.source.stateKey}` : `state.${b.source.stateKey}`)
+                        ? (b.source.fieldPath || (b.source.storeName ? `${b.source.storeName}.${b.source.stateKey}` : `state.${b.source.stateKey}`))
                         : b.source.kind === "user_input"
                           ? `input.${b.source.fieldName}`
                           : b.source.kind === "route_param"
