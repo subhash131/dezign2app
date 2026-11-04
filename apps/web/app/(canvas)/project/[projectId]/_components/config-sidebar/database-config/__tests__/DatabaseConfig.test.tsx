@@ -111,9 +111,9 @@ describe("DatabaseConfig — Debounced Inputs", () => {
     // But canvas store update is debounced
     expect(updateNodeSpy).not.toHaveBeenCalled();
 
-    // Advance timers past default debounce delay (150ms)
+    // Advance timers past debounce delay (300ms)
     act(() => {
-      vi.advanceTimersByTime(200);
+      vi.advanceTimersByTime(350);
     });
 
     expect(updateNodeSpy).toHaveBeenCalledWith("node-db-1", {
@@ -141,8 +141,9 @@ describe("DatabaseConfig — Debounced Inputs", () => {
     expect(hostInput.value).toBe("db.staging.internal");
     expect(updateNodeSpy).not.toHaveBeenCalled();
 
+    // Advance timers past debounce delay (300ms)
     act(() => {
-      vi.advanceTimersByTime(200);
+      vi.advanceTimersByTime(350);
     });
 
     expect(updateNodeSpy).toHaveBeenCalledWith("node-db-1", {
@@ -248,8 +249,9 @@ describe("DatabaseConfig — Debounced Inputs", () => {
     );
     expect(updateNodeSpy).not.toHaveBeenCalled();
 
+    // Advance timers past debounce delay (300ms)
     act(() => {
-      vi.advanceTimersByTime(200);
+      vi.advanceTimersByTime(350);
     });
 
     expect(updateNodeSpy).toHaveBeenCalledWith("node-db-1", {

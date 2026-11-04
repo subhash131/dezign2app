@@ -321,6 +321,7 @@ export function DatabaseProviderSection({
                     handleParseAndApply(val);
                   }
                 }}
+                debounceMs={300}
                 placeholder="postgresql://user:password@ep-sample.region.neon.tech/neondb?sslmode=require"
                 className="h-8 text-xs font-mono pr-8"
               />
@@ -371,6 +372,7 @@ export function DatabaseProviderSection({
               type={showPassword ? "text" : "password"}
               value={data.connectionStringPooled || ""}
               onChange={(e) => onUpdateField("connectionStringPooled", e.target.value)}
+              debounceMs={300}
               placeholder="postgresql://user:password@ep-sample-pooler.region.neon.tech/neondb?sslmode=require"
               className="h-8 text-xs font-mono"
             />
