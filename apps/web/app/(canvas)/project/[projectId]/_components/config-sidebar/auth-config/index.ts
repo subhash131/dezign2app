@@ -8,3 +8,4 @@ export * from "./AuthOrgRbacSection";
 export * from "./AuthHooksSection";
 export * from "./AuthPluginsSection";
 export * from "./AuthCodePreviewSection";
+export * from "./LocalInput";

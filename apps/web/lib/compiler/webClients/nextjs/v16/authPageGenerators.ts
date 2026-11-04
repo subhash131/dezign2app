@@ -1,5 +1,5 @@
 import { PageInfo } from "./types";
-import { BackendNodeData, OAuthProviderConfig } from "@workspace/canvas";
+import { BackendNodeData, OAuthProviderConfig, arePageRoutesEqual } from "@workspace/canvas";
 import {
   isAuthRegisterPage,
   shouldGenerateSocialProviders,
@@ -29,12 +29,23 @@ export function generateAuthFormComponent(
   const redirects = authNodeData?.redirects || {};
 
   const resolveRedirect = (nodeId?: string, fallbackUrl?: string, defaultFallback: string = "/") => {
+    if (fallbackUrl) {
+      const cleanFallback = fallbackUrl.startsWith("/") ? fallbackUrl : `/${fallbackUrl}`;
+      if (nodeId && allPages) {
+        const matched = allPages.find((p) => p.nodeId === nodeId);
+        if (
+          matched &&
+          (arePageRoutesEqual(matched.routePath, cleanFallback) ||
+            arePageRoutesEqual(matched.label, cleanFallback))
+        ) {
+          return matched.routePath;
+        }
+      }
+      return cleanFallback;
+    }
     if (nodeId && allPages) {
       const matched = allPages.find((p) => p.nodeId === nodeId);
       if (matched) return matched.routePath;
-    }
-    if (fallbackUrl) {
-      return fallbackUrl.startsWith("/") ? fallbackUrl : `/${fallbackUrl}`;
     }
     return defaultFallback;
   };

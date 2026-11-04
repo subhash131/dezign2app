@@ -1,6 +1,6 @@
 import React from "react";
 import { Label } from "@workspace/ui/components/label";
-import { Input } from "@workspace/ui/components/input";
+import { LocalInput } from "../LocalInput";
 import { Button } from "@workspace/ui/components/button";
 import { Globe, Plus, Trash } from "lucide-react";
 import { TrustedOriginsCardProps } from "./types";
@@ -42,7 +42,7 @@ export const TrustedOriginsCard: React.FC<TrustedOriginsCardProps> = ({
             key={idx}
             className="flex items-center gap-2 p-2 rounded bg-background border border-border/50 text-xs"
           >
-            <Input
+            <LocalInput
               className="h-7 text-xs font-mono bg-background flex-1"
               placeholder="https://yourdomain.com"
               value={origin}

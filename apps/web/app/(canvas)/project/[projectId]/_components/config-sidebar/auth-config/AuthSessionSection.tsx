@@ -1,5 +1,5 @@
 import React from "react";
-import { Input } from "@workspace/ui/components/input";
+import { LocalInput } from "./LocalInput";
 import { Label } from "@workspace/ui/components/label";
 import { Button } from "@workspace/ui/components/button";
 import { Checkbox } from "@workspace/ui/components/checkbox";
@@ -166,7 +166,7 @@ export const AuthSessionSection: React.FC<AuthConfigSectionProps> = ({
               <div className="flex flex-col gap-1">
                 <Label className="text-[11px] text-muted-foreground font-medium">Remember Me</Label>
                 <div className="flex items-center gap-1">
-                  <Input
+                  <LocalInput
                     className="h-7 text-xs font-mono bg-background"
                     type="number"
                     value={sessionConfig.rememberMeDurationDays ?? 30}
@@ -207,7 +207,7 @@ export const AuthSessionSection: React.FC<AuthConfigSectionProps> = ({
               {cookieCache.enabled !== false && (
                 <div className="flex items-center gap-1.5">
                   <span className="text-[10px] text-muted-foreground font-mono">Max Age:</span>
-                  <Input
+                  <LocalInput
                     className="h-6 w-16 text-[11px] font-mono bg-background text-right"
                     type="number"
                     value={cookieCache.maxAgeSeconds ?? 300}
@@ -353,7 +353,7 @@ export const AuthSessionSection: React.FC<AuthConfigSectionProps> = ({
 
                     {/* Row 2: Claim key + Source/Table selector */}
                     <div className="grid grid-cols-2 gap-2 items-center">
-                      <Input
+                      <LocalInput
                         className="h-7 text-xs font-mono bg-background"
                         value={claim.key}
                         placeholder="claim_name"
@@ -426,7 +426,7 @@ export const AuthSessionSection: React.FC<AuthConfigSectionProps> = ({
                               </SelectContent>
                             </Select>
                           ) : (
-                            <Input
+                            <LocalInput
                               className="h-6 text-[11px] font-mono bg-background/80"
                               placeholder={`e.g. role, status, plan_id`}
                               value={claim.targetValue || ""}
@@ -465,7 +465,7 @@ export const AuthSessionSection: React.FC<AuthConfigSectionProps> = ({
                             </SelectContent>
                           </Select>
                         ) : (
-                          <Input
+                          <LocalInput
                             className="h-6 text-[11px] font-mono bg-background/80"
                             placeholder="e.g. getUserPermissions, findSubscription"
                             value={claim.targetValue || ""}
@@ -501,7 +501,7 @@ export const AuthSessionSection: React.FC<AuthConfigSectionProps> = ({
                             </SelectContent>
                           </Select>
                         ) : (
-                          <Input
+                          <LocalInput
                             className="h-6 text-[11px] font-mono bg-background/80"
                             placeholder="e.g. GET /api/v1/user/claims"
                             value={claim.targetValue || ""}
@@ -517,7 +517,7 @@ export const AuthSessionSection: React.FC<AuthConfigSectionProps> = ({
                     {claim.source === "customFunction" && (
                       <div className="flex items-center gap-2 pl-1">
                         <span className="text-[11px] text-muted-foreground shrink-0 font-medium">Function:</span>
-                        <Input
+                        <LocalInput
                           className="h-6 text-[11px] font-mono bg-background/80"
                           placeholder="e.g. resolveUserClaims(ctx)"
                           value={claim.targetValue || ""}

@@ -1,5 +1,5 @@
 import React from "react";
-import { Input } from "@workspace/ui/components/input";
+import { LocalInput } from "../LocalInput";
 import { Label } from "@workspace/ui/components/label";
 import { Checkbox } from "@workspace/ui/components/checkbox";
 import {
@@ -144,7 +144,7 @@ export const EmailPasswordConfigCard: React.FC<EmailPasswordConfigCardProps> = (
             <div className="grid grid-cols-3 gap-2">
               <div className="flex flex-col gap-1">
                 <span className="text-[10px] text-muted-foreground font-medium">Max Attempts</span>
-                <Input
+                <LocalInput
                   className="h-7 text-xs font-mono bg-background"
                   type="number"
                   value={emailPassword.rateLimit?.maxAttempts ?? 5}
@@ -167,7 +167,7 @@ export const EmailPasswordConfigCard: React.FC<EmailPasswordConfigCardProps> = (
               </div>
               <div className="flex flex-col gap-1">
                 <span className="text-[10px] text-muted-foreground font-medium">Window (Sec)</span>
-                <Input
+                <LocalInput
                   className="h-7 text-xs font-mono bg-background"
                   type="number"
                   value={emailPassword.rateLimit?.windowSeconds ?? 60}
@@ -190,7 +190,7 @@ export const EmailPasswordConfigCard: React.FC<EmailPasswordConfigCardProps> = (
               </div>
               <div className="flex flex-col gap-1">
                 <span className="text-[10px] text-muted-foreground font-medium">Lockout (Sec)</span>
-                <Input
+                <LocalInput
                   className="h-7 text-xs font-mono bg-background"
                   type="number"
                   value={emailPassword.rateLimit?.lockoutDurationSeconds ?? 900}
