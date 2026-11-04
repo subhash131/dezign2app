@@ -285,7 +285,7 @@ const HelperCard = ({ helper, onChange, onDelete }: HelperCardProps) => {
                     className="text-xs font-mono bg-background/60 border-border/60 min-h-[100px] resize-y"
                     value={helper.code ?? ""}
                     onChange={(e) => update({ code: e.target.value })}
-                    placeholder={`return {\n  slug: input.name.toLowerCase().replace(/\\s+/g, '-'),\n};`}
+                    placeholder={`return {\n  slug: name.toLowerCase().replace(/\\s+/g, '-'),\n};`}
                   />
                 </div>
               ) : (
