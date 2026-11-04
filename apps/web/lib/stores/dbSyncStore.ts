@@ -285,8 +285,19 @@ export const useDbSyncStore = create<DbSyncStore>((set, get) => ({
     let errors = 0;
     let firstError = "";
 
-    for (const table of attachedTables) {
+    console.log(`[dbSyncStore:validateDatabase] 🚀 Starting validation for "${dbLabel}" (${attachedTables.length} tables total)`);
+    for (let i = 0; i < attachedTables.length; i++) {
+      const table = attachedTables[i];
+      if (!table) continue;
+      const tableName = table.data?.tableName || table.data?.label || table.id;
       const res = await get().validateEntity(table.id);
+      console.log(`[dbSyncStore:validateDatabase] 📊 [${i + 1}/${attachedTables.length}] "${tableName}":`, {
+        success: res?.success,
+        serverReachable: res?.serverReachable,
+        tableExists: res?.tableExists,
+        inSync: res?.inSync,
+        error: res?.error,
+      });
       if (!res || !res.success || !res.serverReachable) {
         errors++;
         if (!firstError && res?.error) firstError = res.error;
@@ -296,6 +307,13 @@ export const useDbSyncStore = create<DbSyncStore>((set, get) => ({
         outOfSync++;
       }
     }
+    console.log(`[dbSyncStore:validateDatabase] 🏁 Validation finished for "${dbLabel}":`, {
+      total: attachedTables.length,
+      inSync,
+      outOfSync,
+      errors,
+      firstError,
+    });
 
     set((state) => {
       const next = { ...state.validatingDatabases };

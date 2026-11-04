@@ -27,7 +27,7 @@ export interface PostgresRenameColumnResult {
  * Ensures table exists in PostgreSQL database, creating it with defaults and adding any missing columns.
  */
 export async function ensurePostgresTable(
-  client: import("pg").PoolClient,
+  client: import("pg").Client | import("pg").PoolClient,
   tableName: string,
   columns?: Array<{ name?: string; type?: string; isPrimaryKey?: boolean; isPrimary?: boolean; primaryKey?: boolean }>,
   schema?: string,
@@ -129,7 +129,7 @@ export async function dropPostgresTable(
   tableName: string,
   schema?: string,
 ): Promise<PostgresDropTableResult> {
-  const { Pool } = await import("pg");
+  const { Client } = await import("pg");
   const connectionString = resolveConnectionString(connection);
   const { safeTable, targetSchema } = resolveTableAndSchema(tableName, schema);
 
@@ -141,18 +141,15 @@ export async function dropPostgresTable(
     };
   }
 
-  const pool = new Pool({
+  const client = new Client({
     connectionString,
-    max: 1,
-    connectionTimeoutMillis: 6000,
     ssl: isSslRequiredForConfig(connection, connectionString)
       ? { rejectUnauthorized: false }
       : undefined,
   });
 
-  let client: import("pg").PoolClient | undefined;
   try {
-    client = await pool.connect();
+    await client.connect();
     await client.query(`DROP TABLE IF EXISTS "${targetSchema}"."${safeTable}" CASCADE`);
     return {
       success: true,
@@ -165,8 +162,9 @@ export async function dropPostgresTable(
       error: error instanceof Error ? error.message : String(error),
     };
   } finally {
-    if (client) client.release();
-    await pool.end().catch(() => {});
+    if (client) {
+      await client.end().catch(() => {});
+    }
   }
 }
 
@@ -179,7 +177,7 @@ export async function renamePostgresTable(
   newTableName: string,
   schema?: string,
 ): Promise<PostgresRenameTableResult> {
-  const { Pool } = await import("pg");
+  const { Client } = await import("pg");
   const connectionString = resolveConnectionString(connection);
   const { safeTable: safeOld, targetSchema } = resolveTableAndSchema(oldTableName, schema);
   const { safeTable: safeNew } = resolveTableAndSchema(newTableName, targetSchema);
@@ -193,18 +191,15 @@ export async function renamePostgresTable(
     };
   }
 
-  const pool = new Pool({
+  const client = new Client({
     connectionString,
-    max: 1,
-    connectionTimeoutMillis: 6000,
     ssl: isSslRequiredForConfig(connection, connectionString)
       ? { rejectUnauthorized: false }
       : undefined,
   });
 
-  let client: import("pg").PoolClient | undefined;
   try {
-    client = await pool.connect();
+    await client.connect();
     await client.query(`ALTER TABLE "${targetSchema}"."${safeOld}" RENAME TO "${safeNew}"`);
     return {
       success: true,
@@ -219,8 +214,9 @@ export async function renamePostgresTable(
       error: error instanceof Error ? error.message : String(error),
     };
   } finally {
-    if (client) client.release();
-    await pool.end().catch(() => {});
+    if (client) {
+      await client.end().catch(() => {});
+    }
   }
 }
 
@@ -234,7 +230,7 @@ export async function renamePostgresColumn(
   newColumnName: string,
   schema?: string,
 ): Promise<PostgresRenameColumnResult> {
-  const { Pool } = await import("pg");
+  const { Client } = await import("pg");
   const connectionString = resolveConnectionString(connection);
   const { safeTable, targetSchema } = resolveTableAndSchema(tableName, schema);
   const safeOldCol = oldColumnName.replace(/[^a-zA-Z0-9_]/g, "");
@@ -250,18 +246,15 @@ export async function renamePostgresColumn(
     };
   }
 
-  const pool = new Pool({
+  const client = new Client({
     connectionString,
-    max: 1,
-    connectionTimeoutMillis: 6000,
     ssl: isSslRequiredForConfig(connection, connectionString)
       ? { rejectUnauthorized: false }
       : undefined,
   });
 
-  let client: import("pg").PoolClient | undefined;
   try {
-    client = await pool.connect();
+    await client.connect();
     await client.query(
       `ALTER TABLE "${targetSchema}"."${safeTable}" RENAME COLUMN "${safeOldCol}" TO "${safeNewCol}"`,
     );
@@ -280,7 +273,8 @@ export async function renamePostgresColumn(
       error: error instanceof Error ? error.message : String(error),
     };
   } finally {
-    if (client) client.release();
-    await pool.end().catch(() => {});
+    if (client) {
+      await client.end().catch(() => {});
+    }
   }
 }

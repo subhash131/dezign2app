@@ -416,7 +416,7 @@ export async function checkDbConnectionAction(
     // 3. POSTGRES ENGINE — full credential check
     const normalizedEngineCheck = (engine || "").trim().toLowerCase();
     if (normalizedEngineCheck === "postgres" || normalizedEngineCheck === "postgresql" || normalizedEngineCheck === "pg" || normalizedEngineCheck === "cockroachdb") {
-      return await checkPostgresConnection({
+      const res = await checkPostgresConnection({
         host,
         port,
         connectionString,
@@ -429,6 +429,13 @@ export async function checkDbConnectionAction(
         user: connection.user || connection.username,
         password: connection.password,
       });
+      console.log(`[checkDbConnectionAction] ✅ Postgres connection check response:`, {
+        success: res.success,
+        latencyMs: res.latencyMs,
+        version: res.info?.version,
+        error: res.error,
+      });
+      return res;
     }
 
     // 4. RELATIONAL / TCP ENGINES (mysql, etc.)
@@ -495,7 +502,15 @@ export async function checkDbTableSyncAction(
       connStrEnv: connection.connectionStringEnv,
     });
     if (isPostgres) {
-      return await checkPostgresTableSync(connection, tableName, columns, schema, indexes, foreignKeys);
+      const res = await checkPostgresTableSync(connection, tableName, columns, schema, indexes, foreignKeys);
+      console.log(`[checkDbTableSyncAction] ✅ Postgres table sync check response for "${tableName}":`, {
+        success: res.success,
+        serverReachable: res.serverReachable,
+        tableExists: res.tableExists,
+        inSync: res.inSync,
+        error: res.error,
+      });
+      return res;
     }
 
     if (isSqlite) {
