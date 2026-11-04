@@ -23,6 +23,7 @@
     "NEXT_PUBLIC_CONVEX_SITE_URL": "https://gregarious-quail-82.convex.site",
     "NEXT_PUBLIC_CONVEX_URL": "https://gregarious-quail-82.convex.cloud",
     "NEXT_PUBLIC_DESKTOP_AUTH_URL": "https://www.dezign2app.com",
+    "NODE_OPTIONS": "--max-old-space-size=4096",
     "NODE_VERSION": "22",
     "TEST_MODE": "false"
   }
