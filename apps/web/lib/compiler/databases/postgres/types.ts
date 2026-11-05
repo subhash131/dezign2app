@@ -8,6 +8,10 @@ export interface PgColumnMeta {
   isUnique?: boolean;
   isForeignKey?: boolean;
   isNotNull?: boolean;
+  references?: {
+    table: string;
+    column: string;
+  };
 }
 
 import type { PersonaSeed } from "../../types/testPersona";

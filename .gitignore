@@ -28,6 +28,10 @@ e2e_results.json
 # Vercel
 .vercel
 
+# Cloudflare Wrangler & OpenNext
+.wrangler/
+.open-next/
+
 # Build Outputs
 .next/
 out/
@@ -40,8 +44,6 @@ dist
 dist-electron/
 apps/desktop/release/
 apps/desktop/dist-electron/
-
-
 
 # Debug
 npm-debug.log*
@@ -60,5 +62,8 @@ agent-checkpoints.json
 *.db-shm
 *.sqlite
 *.sqlite3
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
 
-.pnpm-store
+.pnpm-store

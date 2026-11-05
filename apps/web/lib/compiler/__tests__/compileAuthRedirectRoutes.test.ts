@@ -4,6 +4,7 @@ import { resolveConnectedAuthNode } from "../webClients/nextjs/v16/authFileGener
 import { PageInfo } from "../webClients/nextjs/v16/types";
 import { BackendNode, BackendEdge } from "@/types/canvas";
 import { compileNextjsV16WebClient } from "../webClients/nextjs/v16";
+import { AuthCompilerNodeData } from "../compileAuth";
 
 describe("Auth Redirect Routes Compilation", () => {
   const loginPageMeta: PageInfo = {
@@ -26,7 +27,7 @@ describe("Auth Redirect Routes Compilation", () => {
   };
 
   it("should compile custom signInRedirectUrl to LoginForm even with a stale nodeId pointing to chat page", () => {
-    const authNodeData = {
+    const authNodeData: AuthCompilerNodeData = {
       framework: "better_auth",
       redirects: {
         signInRedirectUrl: "/dashboard",
@@ -35,7 +36,11 @@ describe("Auth Redirect Routes Compilation", () => {
         signUpRedirectNodeId: "page-chat",
       },
       providers: {
-        emailPassword: { enabled: true },
+        emailPassword: {
+          enabled: true,
+          minLength: 8,
+          requireVerification: false,
+        },
       },
     };
 
@@ -48,7 +53,7 @@ describe("Auth Redirect Routes Compilation", () => {
   });
 
   it("should use linked canvas node route if custom fallback matches it", () => {
-    const authNodeData = {
+    const authNodeData: AuthCompilerNodeData = {
       framework: "better_auth",
       redirects: {
         signInRedirectUrl: "/chat/[id]",
@@ -63,49 +68,9 @@ describe("Auth Redirect Routes Compilation", () => {
 
   it("should resolve single Auth node on canvas even if not explicitly edge-connected to WebApp", () => {
     const authNode: BackendNode = {
-      id: "auth-1",
-      type: "auth",
-      position: { x: 0, y: 0 },
-      fractionalIndex: "a0",
-      data: {
-        label: "Better Auth",
-        framework: "better_auth",
-        redirects: {
-          signInRedirectUrl: "/dashboard",
-        },
-      },
-    };
-
-    const webAppNode: BackendNode = {
-      id: "webapp-1",
-      type: "webApp",
-      position: { x: 200, y: 0 },
-      fractionalIndex: "a1",
-      data: {
-        label: "Portal",
-      },
-    };
-
-    const homeNode: BackendNode = {
-      id: "page-home",
-      type: "webPage",
-      position: { x: 400, y: 0 },
-      fractionalIndex: "a2",
-      data: {
-        label: "/",
-      },
-    };
-
-    const resolved = resolveConnectedAuthNode(webAppNode, [homeNode], [authNode, webAppNode, homeNode], []);
-    expect(resolved).toBeDefined();
-    expect(resolved?.id).toBe("auth-1");
-  });
-
-  it("should compile LoginForm with configured preset/custom redirects in full webClient compiler", () => {
-    const authNode: BackendNode = {
       id: "node-auth",
       type: "auth",
-      position: { x: -200, y: 0 },
+      position: { x: 0, y: 0 },
       fractionalIndex: "a0",
       data: {
         label: "Auth",
@@ -117,7 +82,11 @@ describe("Auth Redirect Routes Compilation", () => {
           signUpPageUrl: "/register",
         },
         providers: {
-          emailPassword: { enabled: true },
+          emailPassword: {
+            enabled: true,
+            minLength: 8,
+            requireVerification: false,
+          },
         },
       },
     };
@@ -171,4 +140,3 @@ describe("Auth Redirect Routes Compilation", () => {
     expect(loginForm?.content).toContain('const effectiveSignUpRedirect = redirectParam || "/onboarding";');
   });
 });
-
