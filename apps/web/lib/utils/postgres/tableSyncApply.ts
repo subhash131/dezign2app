@@ -1,5 +1,5 @@
 import { normalizeToPostgresType, normalizePostgresDbType, arePostgresTypesEquivalent } from "@/lib/schema/columnTypes";
-import { resolveConnectionString, isSslRequiredForConfig, resolveTableAndSchema } from "./connection";
+import { resolveConnectionString, isSslRequiredForConfig, resolveTableAndSchema, createPostgresClient, enhancePostgresError } from "./connection";
 import { ensurePostgresTable } from "./tableSchema";
 import { AlteredColumnDefinition, CanvasForeignKey, PostgresApplySyncResult, PostgresConnectionConfig, PrerequisiteTableDefinition } from "./types";
 
@@ -255,8 +255,6 @@ export async function applyPostgresTableSync(
   foreignKeys?: Array<CanvasForeignKey>,
   prerequisiteTables?: Array<PrerequisiteTableDefinition>,
 ): Promise<PostgresApplySyncResult> {
-  const { Client } = await import("pg");
-  const connectionString = resolveConnectionString(connection);
   const { safeTable, targetSchema } = resolveTableAndSchema(tableName, schema);
 
   const validCanvasIndexes = (indexes || [])
@@ -293,12 +291,7 @@ export async function applyPostgresTableSync(
     };
   }
 
-  const client = new Client({
-    connectionString,
-    ssl: isSslRequiredForConfig(connection, connectionString)
-      ? { rejectUnauthorized: false }
-      : undefined,
-  });
+  const { client, connectionString, isHyperdrive } = await createPostgresClient(connection);
 
   try {
     await client.connect();
@@ -759,7 +752,7 @@ export async function applyPostgresTableSync(
       success: false,
       createdTable: false,
       appliedColumns: [],
-      error: error instanceof Error ? error.message : String(error),
+      error: enhancePostgresError(error, connectionString),
     };
   } finally {
     if (client) {

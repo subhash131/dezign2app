@@ -1,7 +1,7 @@
 import { sanitizeForConvex } from "@/lib/utils/convexSanitizer";
 import { planSqlCommand, extractTableName } from "@/lib/database-runner";
 import { JsonObject, JsonValue } from "@workspace/canvas";
-import { resolveConnectionString, isSslRequiredForConfig, resolveTableAndSchema } from "./connection";
+import { resolveConnectionString, isSslRequiredForConfig, resolveTableAndSchema, createPostgresClient, enhancePostgresError } from "./connection";
 import { ensurePostgresTable } from "./tableSchema";
 import { ExecutePostgresOptions, PostgresOperationResult, SqlParamValue, SqlRowRecord } from "./types";
 
@@ -26,19 +26,12 @@ export async function executeRawSql(
 export async function executePostgresLiveOperation(
   opts: ExecutePostgresOptions,
 ): Promise<PostgresOperationResult> {
-  const { Client } = await import("pg");
-  const connectionString = resolveConnectionString(opts.connection);
   const rawTableName = opts.entity?.name || extractTableName(opts.operation);
   const { safeTable, targetSchema: hintedSchema } = resolveTableAndSchema(rawTableName, opts.entity?.schema);
   const tableName = safeTable || "record";
   const start = performance.now();
 
-  const client = new Client({
-    connectionString,
-    ssl: isSslRequiredForConfig(opts.connection, connectionString)
-      ? { rejectUnauthorized: false }
-      : undefined,
-  });
+  const { client, connectionString, isHyperdrive } = await createPostgresClient(opts.connection);
 
   try {
     await client.connect();
@@ -283,7 +276,7 @@ export async function executePostgresLiveOperation(
     return {
       success: false,
       serverActive: !isConnectionError,
-      error: errMsg,
+      error: enhancePostgresError(error, connectionString),
       durationMs: Math.max(0.5, durationMs),
     };
   } finally {
