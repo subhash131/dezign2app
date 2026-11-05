@@ -129,8 +129,7 @@ export async function dropPostgresTable(
   tableName: string,
   schema?: string,
 ): Promise<PostgresDropTableResult> {
-  const { Client } = await import("pg");
-  const connectionString = resolveConnectionString(connection);
+  const { client, connectionString } = await createPostgresClient(connection);
   const { safeTable, targetSchema } = resolveTableAndSchema(tableName, schema);
 
   if (!safeTable) {
@@ -141,12 +140,6 @@ export async function dropPostgresTable(
     };
   }
 
-  const client = new Client({
-    connectionString,
-    ssl: isSslRequiredForConfig(connection, connectionString)
-      ? { rejectUnauthorized: false }
-      : undefined,
-  });
 
   try {
     await client.connect();
@@ -159,7 +152,7 @@ export async function dropPostgresTable(
     return {
       success: false,
       droppedTable: safeTable,
-      error: error instanceof Error ? error.message : String(error),
+      error: enhancePostgresError(error, connectionString),
     };
   } finally {
     if (client) {
@@ -177,8 +170,7 @@ export async function renamePostgresTable(
   newTableName: string,
   schema?: string,
 ): Promise<PostgresRenameTableResult> {
-  const { Client } = await import("pg");
-  const connectionString = resolveConnectionString(connection);
+  const { client, connectionString } = await createPostgresClient(connection);
   const { safeTable: safeOld, targetSchema } = resolveTableAndSchema(oldTableName, schema);
   const { safeTable: safeNew } = resolveTableAndSchema(newTableName, targetSchema);
 
@@ -191,12 +183,6 @@ export async function renamePostgresTable(
     };
   }
 
-  const client = new Client({
-    connectionString,
-    ssl: isSslRequiredForConfig(connection, connectionString)
-      ? { rejectUnauthorized: false }
-      : undefined,
-  });
 
   try {
     await client.connect();
@@ -230,8 +216,7 @@ export async function renamePostgresColumn(
   newColumnName: string,
   schema?: string,
 ): Promise<PostgresRenameColumnResult> {
-  const { Client } = await import("pg");
-  const connectionString = resolveConnectionString(connection);
+  const { client, connectionString } = await createPostgresClient(connection);
   const { safeTable, targetSchema } = resolveTableAndSchema(tableName, schema);
   const safeOldCol = oldColumnName.replace(/[^a-zA-Z0-9_]/g, "");
   const safeNewCol = newColumnName.replace(/[^a-zA-Z0-9_]/g, "");
@@ -246,12 +231,6 @@ export async function renamePostgresColumn(
     };
   }
 
-  const client = new Client({
-    connectionString,
-    ssl: isSslRequiredForConfig(connection, connectionString)
-      ? { rejectUnauthorized: false }
-      : undefined,
-  });
 
   try {
     await client.connect();

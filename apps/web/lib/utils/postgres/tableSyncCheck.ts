@@ -1,5 +1,5 @@
 import { normalizePostgresDbType, arePostgresTypesEquivalent, normalizeToPostgresType } from "@/lib/schema/columnTypes";
-import { resolveConnectionString, resolveTableAndSchema, isSslRequiredForConfig } from "./connection";
+import { resolveConnectionString, resolveTableAndSchema, isSslRequiredForConfig, createPostgresClient, enhancePostgresError } from "./connection";
 import { AlteredColumnDefinition, CanvasForeignKey, PostgresConnectionConfig, PostgresTableSyncResult } from "./types";
 
 /**
@@ -14,8 +14,6 @@ export async function checkPostgresTableSync(
   indexes?: Array<{ name: string; columns: string; isUnique?: boolean }>,
   foreignKeys?: Array<CanvasForeignKey>,
 ): Promise<PostgresTableSyncResult> {
-  const { Client } = await import("pg");
-  const connectionString = resolveConnectionString(connection);
   const { safeTable, targetSchema } = resolveTableAndSchema(tableName, schema);
 
   const validCanvasIndexes = (indexes || [])
@@ -64,15 +62,11 @@ export async function checkPostgresTableSync(
     };
   }
 
+  const { client, connectionString, isHyperdrive } = await createPostgresClient(connection);
   const maskedUri = connectionString.replace(/:([^:@]+)@/, ":••••@");
   console.log(`[checkPostgresTableSync] Validating table "${safeTable}" on schema "${targetSchema}" against: ${maskedUri}`, {
-    sslRequired: isSslRequiredForConfig(connection, connectionString),
-  });
-  const client = new Client({
-    connectionString,
-    ssl: isSslRequiredForConfig(connection, connectionString)
-      ? { rejectUnauthorized: false }
-      : undefined,
+    isHyperdrive,
+    sslRequired: isHyperdrive ? false : isSslRequiredForConfig(connection, connectionString),
   });
 
   try {
@@ -466,7 +460,7 @@ export async function checkPostgresTableSync(
       extraForeignKeys: [],
       existingForeignKeys: [],
       missingPrerequisiteTables: [],
-      error: error instanceof Error ? error.message : String(error),
+      error: enhancePostgresError(error, connectionString),
     };
   } finally {
     if (client) {

@@ -62,6 +62,7 @@ export function isSslRequiredForConfig(config: PostgresConnectionConfig, connStr
     connStr.includes("sslmode=require") ||
     connStr.includes("neon.tech") ||
     connStr.includes("supabase.co") ||
+    connStr.includes("pooler.supabase.com") ||
     process.env.NODE_ENV === "production"
   );
 }
@@ -71,6 +72,60 @@ export function isSslRequiredForConfig(config: PostgresConnectionConfig, connStr
  * If tableName includes a dot (e.g. "billing.users"), schema and table are parsed from it.
  * If schema isn't configured, defaults to "public" for backward compatibility.
  */
+/**
+ * Resolves Cloudflare Hyperdrive connection string if running in Cloudflare Workers and binding is present.
+ */
+export async function getHyperdriveUrl(): Promise<string | undefined> {
+  try {
+    const { getCloudflareContext } = await import("@opennextjs/cloudflare");
+    const ctx = getCloudflareContext();
+    return (ctx?.env as any)?.HYPERDRIVE?.connectionString;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Creates a configured PostgreSQL Client instance, honoring Cloudflare Hyperdrive bindings when available.
+ */
+export async function createPostgresClient(
+  connection: PostgresConnectionConfig,
+  customConnectionString?: string,
+): Promise<{ client: import("pg").Client; connectionString: string; isHyperdrive: boolean }> {
+  const { Client } = await import("pg");
+  const hyperdriveUrl = await getHyperdriveUrl();
+  const connectionString = hyperdriveUrl || customConnectionString || resolveConnectionString(connection);
+  const isHyperdrive = Boolean(hyperdriveUrl);
+
+  const client = new Client({
+    connectionString,
+    ssl: isHyperdrive
+      ? undefined
+      : isSslRequiredForConfig(connection, connectionString)
+        ? { rejectUnauthorized: false }
+        : undefined,
+  });
+
+  return { client, connectionString, isHyperdrive };
+}
+
+/**
+ * Translates opaque errors (like Cloudflare TLS rejection of Supabase private CA) into actionable explanations.
+ */
+export function enhancePostgresError(error: unknown, connectionString: string): string {
+  const errMsg = error instanceof Error ? error.message : String(error);
+  if (
+    errMsg.includes("Connection terminated unexpectedly") &&
+    (connectionString.includes("supabase.co") || connectionString.includes("pooler.supabase.com"))
+  ) {
+    return (
+      "Connection terminated unexpectedly. Supabase poolers use a private TLS certificate that Cloudflare Workers rejects during TLS handshake. " +
+      "To connect from Cloudflare Workers, bind a Cloudflare Hyperdrive config or use a provider with public CA (e.g. Neon)."
+    );
+  }
+  return errMsg;
+}
+
 export function resolveTableAndSchema(
   rawTableName: string,
   explicitSchema?: string,
@@ -99,17 +154,9 @@ export function resolveTableAndSchema(
 export async function checkPostgresConnection(
   connection: PostgresConnectionConfig,
 ): Promise<CheckDbConnectionResult> {
-  const { Client } = await import("pg");
-  const connectionString = resolveConnectionString(connection);
-  const maskedUri = connectionString.replace(/:([^:@]+)@/, ':***@');
   const start = performance.now();
-
-  const client = new Client({
-    connectionString,
-    ssl: isSslRequiredForConfig(connection, connectionString)
-      ? { rejectUnauthorized: false }
-      : undefined,
-  });
+  const { client, connectionString, isHyperdrive } = await createPostgresClient(connection);
+  const maskedUri = connectionString.replace(/:([^:@]+)@/, ':***@');
 
   try {
     await client.connect();
@@ -147,7 +194,8 @@ export async function checkPostgresConnection(
     };
   } catch (error) {
     const latencyMs = Math.round(performance.now() - start);
-    const errMsg = error instanceof Error ? error.message : String(error);
+    const rawErrMsg = error instanceof Error ? error.message : String(error);
+    const errMsg = enhancePostgresError(error, connectionString);
     console.error(`[checkPostgresConnection] ❌ Connection failed:`, {
       message: errMsg,
       code: (error as any)?.code,
