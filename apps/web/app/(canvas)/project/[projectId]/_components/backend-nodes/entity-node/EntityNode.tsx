@@ -200,25 +200,6 @@ export const EntityNode = React.memo(({ id, data, selected }: NodeProps<BackendN
     );
   }, [allNodes, id, edges]);
 
-  // Auto-validate schema against connected live database on debounced entity changes
-  React.useEffect(() => {
-    if (!hasLiveConnection || isVector || data.readOnly) return;
-    const timer = setTimeout(() => {
-      validateEntity(id);
-    }, 700);
-    return () => clearTimeout(timer);
-  }, [
-    id,
-    hasLiveConnection,
-    isVector,
-    data.readOnly,
-    data.columns,
-    data.indexes,
-    data.tableName,
-    data.label,
-    data.databaseId,
-    validateEntity,
-  ]);
 
   const currentNode = React.useMemo(() => {
     return (

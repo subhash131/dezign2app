@@ -11,7 +11,7 @@
   "main": "dist-electron/main.js",
   "scripts": {
     "generate-icons": "node scripts/generate-icons.js",
-    "dev": "tsc -p tsconfig.electron.json && electron .",
+    "dev": "tsc -p tsconfig.electron.json && node scripts/dev.js",
     "build:electron": "node scripts/build.js --prod",
     "build:electron:prod": "node scripts/build.js --prod",
     "build:electron:prod:win": "node scripts/build.js --prod --win",
