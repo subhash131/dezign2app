@@ -48,9 +48,9 @@ export * from "./templates";
  * - schema.sql: Complete DDL with user tables, BetterAuth, Payments, and test seeds
  * - connection.ts: Connection pool (pg), parameterized query, withTransaction, health check, auto-migrations
  * - sync.ts: Programmatic local validation & migration functions matching dbSyncStore (validateTable, validateDatabase, applyTableSync, syncAll)
- * - .helper-scripts/validate.ts: Local CLI runner (pnpm db:validate / pnpm db:check)
- * - .helper-scripts/sync.ts: Local migration script to run directly on the developer's machine (pnpm db:push / pnpm db:sync)
- * - .helper-scripts/server.ts: Local zero-dependency HTTP bridge daemon on port 9000 (pnpm db:serve / pnpm db:bridge)
+ * - scripts/validate.ts: Local CLI runner (pnpm db:validate / pnpm db:check)
+ * - scripts/sync.ts: Local migration script to run directly on the developer's machine (pnpm db:push / pnpm db:sync)
+ * - scripts/server.ts: Local zero-dependency HTTP bridge daemon on port 46555 (pnpm db:serve / pnpm db:bridge)
  * - helpers/{entity}.ts: Typed async CRUD helpers with $1, $2 parameterized queries and RETURNING *
  * - helpers/index.ts: Re-exports all table helpers and types
  * - index.ts: Root package entry point
@@ -264,23 +264,23 @@ export function compilePostgresDatabase(
     content: generateLocalSyncFile(packageName, connEnvKey, tableDefinitionsJson),
   });
 
-  // ── 6. .helper-scripts/validate.ts (CLI validation runner: pnpm db:validate) ──
+  // ── 6. scripts/validate.ts (CLI validation runner: pnpm db:validate) ──────
   files.push({
-    filename: ".helper-scripts/validate.ts",
+    filename: "scripts/validate.ts",
     language: "typescript",
     content: generateValidateScript(packageName),
   });
 
-  // ── 7. .helper-scripts/sync.ts (CLI migration runner: pnpm db:push) ───────────
+  // ── 7. scripts/sync.ts (CLI migration runner: pnpm db:push) ───────────────
   files.push({
-    filename: ".helper-scripts/sync.ts",
+    filename: "scripts/sync.ts",
     language: "typescript",
     content: generateSyncScript(packageName, connEnvKey),
   });
 
-  // ── 8. .helper-scripts/server.ts (Local bridge daemon on port 9000: pnpm db:serve)
+  // ── 8. scripts/server.ts (Local bridge daemon on port 46555: pnpm db:serve)
   files.push({
-    filename: ".helper-scripts/server.ts",
+    filename: "scripts/server.ts",
     language: "typescript",
     content: generateBridgeServerScript(packageName),
   });

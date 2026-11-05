@@ -32,9 +32,9 @@ describe("compilePostgresDatabase", () => {
     expect(filenames).toContain("connection.ts");
     expect(filenames).toContain("schema.sql");
     expect(filenames).toContain("sync.ts");
-    expect(filenames).toContain(".helper-scripts/validate.ts");
-    expect(filenames).toContain(".helper-scripts/sync.ts");
-    expect(filenames).toContain(".helper-scripts/server.ts");
+    expect(filenames).toContain("scripts/validate.ts");
+    expect(filenames).toContain("scripts/sync.ts");
+    expect(filenames).toContain("scripts/server.ts");
     expect(filenames).toContain("helpers/order.ts");
     expect(filenames).toContain("helpers/index.ts");
     expect(filenames).toContain("index.ts");
@@ -225,19 +225,19 @@ describe("compilePostgresDatabase", () => {
     expect(syncCode).not.toMatch(/\bany\b/);
     expect(syncCode).not.toMatch(/\bunknown\b/);
 
-    const validateScript = result.files.find((f) => f.filename === ".helper-scripts/validate.ts");
+    const validateScript = result.files.find((f) => f.filename === "scripts/validate.ts");
     expect(validateScript).toBeDefined();
     expect(validateScript!.content).not.toMatch(/\bas\s+[A-Za-z0-9_]/);
     expect(validateScript!.content).not.toMatch(/\bany\b/);
     expect(validateScript!.content).not.toMatch(/\bunknown\b/);
 
-    const syncScript = result.files.find((f) => f.filename === ".helper-scripts/sync.ts");
+    const syncScript = result.files.find((f) => f.filename === "scripts/sync.ts");
     expect(syncScript).toBeDefined();
     expect(syncScript!.content).not.toMatch(/\bas\s+[A-Za-z0-9_]/);
     expect(syncScript!.content).not.toMatch(/\bany\b/);
     expect(syncScript!.content).not.toMatch(/\bunknown\b/);
 
-    const serverScript = result.files.find((f) => f.filename === ".helper-scripts/server.ts");
+    const serverScript = result.files.find((f) => f.filename === "scripts/server.ts");
     expect(serverScript).toBeDefined();
     const serverLines = serverScript!.content
       .split("\n")

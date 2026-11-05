@@ -127,20 +127,6 @@ export interface ElectronAPI {
     renameColumn?(payload: ElectronRenameDbColumnPayload): Promise<ElectronRenameDbColumnResult>;
   };
 
-  script?: {
-    runFile(
-      filePath: string,
-      args?: string[],
-      cwd?: string,
-    ): Promise<{
-      success: boolean;
-      output?: string;
-      error?: string;
-      exitCode?: number | null;
-      durationMs: number;
-    }>;
-  };
-
   workspace?: {
     setPath?(path: string): void;
     getPath?(): Promise<string | null>;
