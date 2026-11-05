@@ -182,21 +182,11 @@ export async function checkDatabaseConnection(
     return localResult;
   }
 
-  const cloudResult = await checkDbConnectionAction(payload);
-  if (
-    !cloudResult.success &&
-    cloudResult.error &&
-    (cloudResult.error.includes("Cloudflare Workers") ||
-      cloudResult.error.includes("Supabase poolers") ||
-      cloudResult.error.includes("ECONNREFUSED"))
-  ) {
-    return {
-      ...cloudResult,
-      error:
-        "Local DB sync server is not running on port 9000. Please run 'pnpm dev' (or 'pnpm db:dev') in your terminal to start the sync server.",
-    };
-  }
-  return cloudResult;
+  return {
+    success: false,
+    engine: payload.engine || "postgres",
+    error: "Local DB sync server is not running on port 9000. Please run 'pnpm db:server' in your terminal to start the sync server.",
+  };
 }
 
 /**
@@ -240,21 +230,23 @@ export async function checkDbTableSync(
     return localResult;
   }
 
-  const cloudResult = await checkDbTableSyncAction(payload);
-  if (
-    !cloudResult.success &&
-    cloudResult.error &&
-    (cloudResult.error.includes("Cloudflare Workers") ||
-      cloudResult.error.includes("Supabase poolers") ||
-      cloudResult.error.includes("ECONNREFUSED"))
-  ) {
-    return {
-      ...cloudResult,
-      error:
-        "Local DB sync server is not running on port 9000. Please run 'pnpm dev' (or 'pnpm db:dev') in your terminal to start the sync server, then click Validate DB again.",
-    };
-  }
-  return cloudResult;
+  return {
+    success: false,
+    serverReachable: false,
+    tableExists: false,
+    inSync: false,
+    missingColumns: [],
+    extraColumns: [],
+    existingColumns: [],
+    missingIndexes: [],
+    extraIndexes: [],
+    existingIndexes: [],
+    missingForeignKeys: [],
+    extraForeignKeys: [],
+    existingForeignKeys: [],
+    missingPrerequisiteTables: [],
+    error: "Local DB sync server is not running on port 9000. Please run 'pnpm db:server' in your terminal, then click Validate DB again.",
+  };
 }
 
 /**
@@ -292,21 +284,14 @@ export async function applyDbTableSync(
     return localResult;
   }
 
-  const cloudResult = await applyDbTableSyncAction(payload);
-  if (
-    !cloudResult.success &&
-    cloudResult.error &&
-    (cloudResult.error.includes("Cloudflare Workers") ||
-      cloudResult.error.includes("Supabase poolers") ||
-      cloudResult.error.includes("ECONNREFUSED"))
-  ) {
-    return {
-      ...cloudResult,
-      error:
-        "Local DB sync server is not running on port 9000. Please run 'pnpm dev' (or 'pnpm db:dev') in your terminal to start the sync server, then click Sync again.",
-    };
-  }
-  return cloudResult;
+  return {
+    success: false,
+    createdTable: false,
+    appliedColumns: [],
+    appliedIndexes: [],
+    appliedForeignKeys: [],
+    error: "Local DB sync server is not running on port 9000. Please run 'pnpm db:server' in your terminal, then click Sync again.",
+  };
 }
 
 /**
