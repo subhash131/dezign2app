@@ -3,18 +3,18 @@ import { compilePostgresDatabase } from "../databases/postgres";
 import type { BackendNode } from "@/types/canvas";
 import type { CanvasEntityColumn } from "@workspace/canvas/types";
 
-type ColumnInput = { name: string; type: string; [key: string]: unknown };
+
 
 const makeEntityNode = (
   id: string,
   label: string,
-  columns: ColumnInput[],
+  columns: CanvasEntityColumn[],
 ): BackendNode => ({
   id,
   type: "entity",
   position: { x: 0, y: 0 },
   fractionalIndex: "a0",
-  data: { label, columns: columns as unknown as CanvasEntityColumn[] },
+  data: { label, columns },
 });
 
 describe("compilePostgresDatabase", () => {
@@ -125,6 +125,11 @@ describe("compilePostgresDatabase", () => {
     expect(code).toContain("export async function withTransaction");
     expect(code).toContain("export async function checkPostgresHealth");
     expect(code).toContain("export const db = pool;");
+    expect(code).not.toContain("as any");
+    expect(code).not.toContain("as unknown");
+    expect(code).not.toMatch(/\bany\b/);
+    expect(code).not.toMatch(/\bunknown\b/);
+    expect(code).not.toMatch(/\bas\s+[A-Za-z0-9_]+\b/);
     expect(code).toContain("ADD COLUMN IF NOT EXISTS");
   });
 
@@ -249,9 +254,15 @@ describe("compilePostgresDatabase", () => {
     const conn = result.files.find((f) => f.filename === "connection.ts");
     expect(conn).toBeDefined();
     const code = conn!.content;
-    expect(code).toContain("export interface PreparedStatement");
+    expect(code).toContain("export interface PreparedStatement<T extends QueryResultRow = Record<string, SqlParam>>");
     expect(code).toContain('declare module "pg"');
-    expect(code).toContain(".prepare = function prepare");
+    expect(code).toContain("prepare<T extends QueryResultRow = Record<string, SqlParam>>(sql: string): PreparedStatement<T>;");
+    expect(code).toContain(".prepare = function prepare<T extends QueryResultRow = Record<string, SqlParam>>(sql: string): PreparedStatement<T>");
     expect(code).toContain("export const db = pool;");
+    expect(code).not.toContain("as any");
+    expect(code).not.toContain("as unknown");
+    expect(code).not.toMatch(/\bany\b/);
+    expect(code).not.toMatch(/\bunknown\b/);
+    expect(code).not.toMatch(/\bas\s+[A-Za-z0-9_]+\b/);
   });
 });
