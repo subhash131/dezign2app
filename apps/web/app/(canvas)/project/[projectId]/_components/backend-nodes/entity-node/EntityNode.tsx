@@ -68,7 +68,7 @@ export const EntityNode = React.memo(({ id, data, selected }: NodeProps<BackendN
         data: {
           ...data,
           columns: [
-            { name: "id", type: "TEXT", isPrimaryKey: true },
+            { name: "id", type: "UUID", isPrimaryKey: true },
             { name: "created_at", type: "TIMESTAMPTZ" },
             { name: "updated_at", type: "TIMESTAMPTZ" },
           ],
@@ -82,18 +82,43 @@ export const EntityNode = React.memo(({ id, data, selected }: NodeProps<BackendN
       data.columns[0]?.name?.toLowerCase() === "id"
     ) {
       hasInitializedColumnsRef.current = true;
+      const firstCol = data.columns[0];
+      const idType = (!firstCol.type || firstCol.type === "TEXT") ? "UUID" : firstCol.type;
       updateNode(id, {
         data: {
           ...data,
           columns: [
-            ...data.columns,
+            { ...firstCol, type: idType, isPrimaryKey: true },
             { name: "created_at", type: "TIMESTAMPTZ" },
             { name: "updated_at", type: "TIMESTAMPTZ" },
           ],
         },
       });
+      return;
     }
-  }, [id, isVector, data.dbType, data.readOnly, data.columns, updateNode]);
+
+    if (
+      !data.tableName &&
+      !data.label &&
+      data.columns.length === 3 &&
+      data.columns[0]?.name === "id" &&
+      data.columns[0]?.type === "TEXT" &&
+      data.columns[1]?.name === "created_at" &&
+      data.columns[2]?.name === "updated_at"
+    ) {
+      hasInitializedColumnsRef.current = true;
+      updateNode(id, {
+        data: {
+          ...data,
+          columns: [
+            { ...data.columns[0], type: "UUID" },
+            data.columns[1],
+            data.columns[2],
+          ],
+        },
+      });
+    }
+  }, [id, isVector, data.dbType, data.readOnly, data.columns, data.label, data.tableName, updateNode]);
 
   const [renameDialogOpen, setRenameDialogOpen] = React.useState(false);
   const [showSyncBanner, setShowSyncBanner] = React.useState(false);

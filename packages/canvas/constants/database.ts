@@ -105,7 +105,7 @@ export function sqlColumnToTsType(type?: string): "number" | "boolean" | "string
 }
 
 export const DEFAULT_ENTITY_COLUMNS = [
-  { name: "id", type: DB_COLUMN_TYPES.TEXT, isPrimaryKey: true },
+  { name: "id", type: DB_COLUMN_TYPES.UUID, isPrimaryKey: true },
   { name: "created_at", type: DB_COLUMN_TYPES.TIMESTAMPTZ },
   { name: "updated_at", type: DB_COLUMN_TYPES.TIMESTAMPTZ },
 ] as const;

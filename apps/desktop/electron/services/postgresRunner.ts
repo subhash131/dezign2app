@@ -362,12 +362,14 @@ export async function ensurePostgresTable(
         else if (t === "boolean" || t === "bool") pgType = "BOOLEAN";
         else if (t === "timestamp" || t === "datetime") pgType = "TIMESTAMPTZ";
         else if (t === "json" || t === "object" || t === "jsonb") pgType = "JSONB";
+        else if (t === "uuid") pgType = "UUID";
 
-        colDefs.push(isPk ? `"${colName}" ${pgType} PRIMARY KEY` : `"${colName}" ${pgType}`);
+        const defaultClause = isPk && pgType === "UUID" ? " DEFAULT gen_random_uuid()" : "";
+        colDefs.push(isPk ? `"${colName}" ${pgType}${defaultClause} PRIMARY KEY` : `"${colName}" ${pgType}`);
       }
     }
     if (!colDefs.some((d) => d.includes("PRIMARY KEY"))) {
-      colDefs.unshift(`"id" TEXT PRIMARY KEY`);
+      colDefs.unshift(`"id" UUID DEFAULT gen_random_uuid() PRIMARY KEY`);
     }
     if (!colDefs.some((d) => d.startsWith('"created_at"'))) {
       colDefs.push(`"created_at" TIMESTAMPTZ DEFAULT NOW()`);
@@ -392,6 +394,7 @@ export async function ensurePostgresTable(
       else if (t === "boolean" || t === "bool") pgType = "BOOLEAN";
       else if (t === "timestamp" || t === "datetime") pgType = "TIMESTAMPTZ";
       else if (t === "json" || t === "object" || t === "jsonb") pgType = "JSONB";
+      else if (t === "uuid") pgType = "UUID";
       try {
         await client.query(
           `ALTER TABLE "${safeTable}" ADD COLUMN IF NOT EXISTS "${colName}" ${pgType}`,
@@ -963,7 +966,11 @@ export async function applyPostgresTableSync(
         const pgType = mapToPgType(c.type, isPk && explicitPks.length <= 1);
         let def = `"${c.name}" ${pgType}`;
         if (isPk && explicitPks.length <= 1) {
-          def += " PRIMARY KEY";
+          if (pgType === "UUID") {
+            def += " DEFAULT gen_random_uuid() PRIMARY KEY";
+          } else {
+            def += " PRIMARY KEY";
+          }
         } else if (c.isNotNull || isPk) {
           def += " NOT NULL";
         }
@@ -972,7 +979,7 @@ export async function applyPostgresTableSync(
       }
 
       if (pkNames.length === 0) {
-        colDefs.unshift('"id" TEXT PRIMARY KEY');
+        colDefs.unshift('"id" UUID DEFAULT gen_random_uuid() PRIMARY KEY');
       } else if (pkNames.length > 1) {
         colDefs.push(`PRIMARY KEY (${pkNames.map((n) => `"${n}"`).join(", ")})`);
       }
