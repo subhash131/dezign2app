@@ -19,8 +19,18 @@ import { isPortOpen, killProcessOnPort } from "../services/network";
 import {
   executeDbOperation,
   checkDbConnection,
+  checkDbTableSync,
+  applyDbTableSync,
+  dropDbTable,
+  renameDbTable,
+  renameDbColumn,
   TestDbOperationPayload,
   CheckDbConnectionPayload,
+  CheckDbTableSyncPayload,
+  ApplyDbTableSyncPayload,
+  DropDbTablePayload,
+  RenameDbTablePayload,
+  RenameDbColumnPayload,
 } from "../services/dbRunner";
 import {
   checkForUpdatesManual,
@@ -192,6 +202,26 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle("db:check-connection", async (_event, payload: CheckDbConnectionPayload) => {
     return checkDbConnection(payload);
+  });
+
+  ipcMain.handle("db:check-table-sync", async (_event, payload: CheckDbTableSyncPayload) => {
+    return checkDbTableSync(payload);
+  });
+
+  ipcMain.handle("db:apply-table-sync", async (_event, payload: ApplyDbTableSyncPayload) => {
+    return applyDbTableSync(payload);
+  });
+
+  ipcMain.handle("db:drop-table", async (_event, payload: DropDbTablePayload) => {
+    return dropDbTable(payload);
+  });
+
+  ipcMain.handle("db:rename-table", async (_event, payload: RenameDbTablePayload) => {
+    return renameDbTable(payload);
+  });
+
+  ipcMain.handle("db:rename-column", async (_event, payload: RenameDbColumnPayload) => {
+    return renameDbColumn(payload);
   });
 
   // ── App / Platform Info ────────────────────
