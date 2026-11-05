@@ -284,7 +284,9 @@ export async function testDbOperationAction(
           rawCommand: pgResult.rawSql || operation.query || `${operation.name}(${Object.keys(args).join(", ")})`,
           durationMs: pgResult.durationMs || 0,
           mode: "live",
-          tip: `Ensure your local PostgreSQL server is running on port ${port}, or switch to 'Simulation Sandbox' mode.`,
+          tip: pgResult.error && pgResult.error.includes("Hyperdrive")
+            ? "Supabase poolers require Cloudflare Hyperdrive or a public-CA provider (e.g. Neon) when deployed to Cloudflare Workers."
+            : `Ensure your local PostgreSQL server is running on port ${port}, or switch to 'Simulation Sandbox' mode.`,
         };
       }
 

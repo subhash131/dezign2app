@@ -645,7 +645,7 @@ export async function applyPostgresTableSync(
         }
         // If column should be nullable but is currently NOT NULL in PostgreSQL, drop NOT NULL constraint
         const existing = existingColMap.get(colName.toLowerCase());
-        const shouldBeNotNull = Boolean(isPk || (col as any).isNotNull);
+        const shouldBeNotNull = Boolean(isPk || col.isNotNull);
         if (!shouldBeNotNull && existing?.isNullable === "NO" && !isPk) {
           try {
             await client.query(
@@ -752,11 +752,9 @@ export async function applyPostgresTableSync(
       success: false,
       createdTable: false,
       appliedColumns: [],
-      error: enhancePostgresError(error, connectionString),
+      error: enhancePostgresError(error instanceof Error ? error : new Error(String(error)), connectionString, isHyperdrive),
     };
   } finally {
-    if (client) {
-      await client.end().catch(() => {});
-    }
+    await client.end().catch(() => {});
   }
 }

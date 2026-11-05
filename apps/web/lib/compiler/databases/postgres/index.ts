@@ -19,6 +19,7 @@ import {
 import { generatePostgresTableHelpers } from "./helpers";
 import {
   generateConnectionFile,
+  generateSyncScript,
   generatePackageJson,
   generateTsConfig,
   generateIndexBarrel,
@@ -43,10 +44,11 @@ export * from "./templates";
  * Generated artifacts:
  * - schema.sql: Complete DDL with user tables, BetterAuth, Payments, and test seeds
  * - connection.ts: Connection pool (pg), parameterized query, withTransaction, health check, auto-migrations
+ * - scripts/sync.ts: Local migration script to run directly on the developer's machine (pnpm db:push)
  * - helpers/{entity}.ts: Typed async CRUD helpers with $1, $2 parameterized queries and RETURNING *
  * - helpers/index.ts: Re-exports all table helpers and types
  * - index.ts: Root package entry point
- * - package.json: Pre-configured with pg and @workspace/logger
+ * - package.json: Pre-configured with pg, tsx, and @workspace/logger
  * - tsconfig.json: Pre-configured TypeScript configuration
  */
 export function compilePostgresDatabase(
@@ -160,7 +162,14 @@ export function compilePostgresDatabase(
     ),
   });
 
-  // ── 5. Per-table helpers ───────────────────────────────────────────────────
+  // ── 5. scripts/sync.ts (Local execution migration runner) ─────────────────
+  files.push({
+    filename: "scripts/sync.ts",
+    language: "typescript",
+    content: generateSyncScript(packageName, connEnvKey),
+  });
+
+  // ── 6. Per-table helpers ───────────────────────────────────────────────────
   tables.forEach((tableNode) => {
     const rawName = tableNode.data?.label || tableNode.data?.tableRef || "table";
     const tableName = toTableName(rawName);
@@ -214,35 +223,35 @@ export function compilePostgresDatabase(
   // ── tests/connection.test.ts ──────────────────────────────────────────────
   files.push(generateDatabaseConnectionTest("postgres", packageName));
 
-  // ── 6. helpers/index.ts ───────────────────────────────────────────────────
+  // ── 7. helpers/index.ts ───────────────────────────────────────────────────
   files.push({
     filename: "helpers/index.ts",
     language: "typescript",
     content: generateHelpersBarrel(helperBarrel),
   });
 
-  // ── 7. connection.ts ──────────────────────────────────────────────────────
+  // ── 8. connection.ts ──────────────────────────────────────────────────────
   files.push({
     filename: "connection.ts",
     language: "typescript",
     content: generateConnectionFile(packageName, connEnvKey, tableSchemas),
   });
 
-  // ── 8. index.ts ───────────────────────────────────────────────────────────
+  // ── 9. index.ts ───────────────────────────────────────────────────────────
   files.push({
     filename: "index.ts",
     language: "typescript",
     content: generateIndexBarrel(packageName),
   });
 
-  // ── 9. package.json ───────────────────────────────────────────────────────
+  // ── 10. package.json ──────────────────────────────────────────────────────
   files.push({
     filename: "package.json",
     language: "json",
     content: generatePackageJson(packageName),
   });
 
-  // ── 10. tsconfig.json ─────────────────────────────────────────────────────
+  // ── 11. tsconfig.json ─────────────────────────────────────────────────────
   files.push({
     filename: "tsconfig.json",
     language: "json",

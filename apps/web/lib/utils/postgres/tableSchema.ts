@@ -1,3 +1,4 @@
+import type { Client, PoolClient } from "pg";
 import { normalizeToPostgresType } from "@/lib/schema/columnTypes";
 import { resolveTableAndSchema, enhancePostgresError, createPostgresClient } from "./connection";
 import { PostgresConnectionConfig } from "./types";
@@ -27,9 +28,16 @@ export interface PostgresRenameColumnResult {
  * Ensures table exists in PostgreSQL database, creating it with defaults and adding any missing columns.
  */
 export async function ensurePostgresTable(
-  client: import("pg").Client | import("pg").PoolClient,
+  client: Client | PoolClient,
   tableName: string,
-  columns?: Array<{ name?: string; type?: string; isPrimaryKey?: boolean; isPrimary?: boolean; primaryKey?: boolean }>,
+  columns?: Array<{
+    name?: string;
+    type?: string;
+    isPrimaryKey?: boolean;
+    isPrimary?: boolean;
+    primaryKey?: boolean;
+    isNotNull?: boolean;
+  }>,
   schema?: string,
 ): Promise<void> {
   const { safeTable, targetSchema } = resolveTableAndSchema(tableName, schema);
@@ -66,7 +74,7 @@ export async function ensurePostgresTable(
         const isSinglePk = explicitPkCols.length <= 1 && isPk;
         const pgType = normalizeToPostgresType(col.type, isSinglePk);
         const defaultClause = isPk && pgType === "UUID" ? " DEFAULT gen_random_uuid()" : "";
-        const notNullClause = isPk || (col as any).isNotNull ? " NOT NULL" : "";
+        const notNullClause = isPk || col.isNotNull ? " NOT NULL" : "";
 
         if (isPk && explicitPkCols.length <= 1) {
           colDefs.push(`"${colName}" ${pgType}${defaultClause} PRIMARY KEY`);
@@ -129,7 +137,7 @@ export async function dropPostgresTable(
   tableName: string,
   schema?: string,
 ): Promise<PostgresDropTableResult> {
-  const { client, connectionString } = await createPostgresClient(connection);
+  const { client, connectionString, isHyperdrive } = await createPostgresClient(connection);
   const { safeTable, targetSchema } = resolveTableAndSchema(tableName, schema);
 
   if (!safeTable) {
@@ -140,7 +148,6 @@ export async function dropPostgresTable(
     };
   }
 
-
   try {
     await client.connect();
     await client.query(`DROP TABLE IF EXISTS "${targetSchema}"."${safeTable}" CASCADE`);
@@ -149,15 +156,14 @@ export async function dropPostgresTable(
       droppedTable: safeTable,
     };
   } catch (error) {
+    const errorInstance = error instanceof Error ? error : new Error(String(error));
     return {
       success: false,
       droppedTable: safeTable,
-      error: enhancePostgresError(error, connectionString),
+      error: enhancePostgresError(errorInstance, connectionString, isHyperdrive),
     };
   } finally {
-    if (client) {
-      await client.end().catch(() => {});
-    }
+    await client.end().catch(() => {});
   }
 }
 
@@ -170,7 +176,7 @@ export async function renamePostgresTable(
   newTableName: string,
   schema?: string,
 ): Promise<PostgresRenameTableResult> {
-  const { client, connectionString } = await createPostgresClient(connection);
+  const { client, connectionString, isHyperdrive } = await createPostgresClient(connection);
   const { safeTable: safeOld, targetSchema } = resolveTableAndSchema(oldTableName, schema);
   const { safeTable: safeNew } = resolveTableAndSchema(newTableName, targetSchema);
 
@@ -183,7 +189,6 @@ export async function renamePostgresTable(
     };
   }
 
-
   try {
     await client.connect();
     await client.query(`ALTER TABLE "${targetSchema}"."${safeOld}" RENAME TO "${safeNew}"`);
@@ -193,16 +198,15 @@ export async function renamePostgresTable(
       newTableName: safeNew,
     };
   } catch (error) {
+    const errorInstance = error instanceof Error ? error : new Error(String(error));
     return {
       success: false,
       oldTableName: safeOld,
       newTableName: safeNew,
-      error: error instanceof Error ? error.message : String(error),
+      error: enhancePostgresError(errorInstance, connectionString, isHyperdrive),
     };
   } finally {
-    if (client) {
-      await client.end().catch(() => {});
-    }
+    await client.end().catch(() => {});
   }
 }
 
@@ -216,7 +220,7 @@ export async function renamePostgresColumn(
   newColumnName: string,
   schema?: string,
 ): Promise<PostgresRenameColumnResult> {
-  const { client, connectionString } = await createPostgresClient(connection);
+  const { client, connectionString, isHyperdrive } = await createPostgresClient(connection);
   const { safeTable, targetSchema } = resolveTableAndSchema(tableName, schema);
   const safeOldCol = oldColumnName.replace(/[^a-zA-Z0-9_]/g, "");
   const safeNewCol = newColumnName.replace(/[^a-zA-Z0-9_]/g, "");
@@ -231,7 +235,6 @@ export async function renamePostgresColumn(
     };
   }
 
-
   try {
     await client.connect();
     await client.query(
@@ -244,16 +247,15 @@ export async function renamePostgresColumn(
       newColumnName: safeNewCol,
     };
   } catch (error) {
+    const errorInstance = error instanceof Error ? error : new Error(String(error));
     return {
       success: false,
       tableName: safeTable,
       oldColumnName: safeOldCol,
       newColumnName: safeNewCol,
-      error: error instanceof Error ? error.message : String(error),
+      error: enhancePostgresError(errorInstance, connectionString, isHyperdrive),
     };
   } finally {
-    if (client) {
-      await client.end().catch(() => {});
-    }
+    await client.end().catch(() => {});
   }
 }
