@@ -915,14 +915,14 @@ export function generateSyncScript(packageName: string, connEnvKey: string): str
 }
 
 /**
- * Generates the scripts/server.ts file for starting a local HTTP bridge daemon on port 46555.
+ * Generates the scripts/server.ts file for starting a local HTTP bridge daemon on port 9000.
  */
 export function generateBridgeServerScript(packageName: string): string {
   return [
     "/**",
     ` * ${packageName}/scripts/server.ts — Local Database Bridge Daemon`,
     " *",
-    " * Lightweight zero-dependency HTTP bridge listening on http://127.0.0.1:46555.",
+    " * Lightweight zero-dependency HTTP bridge listening on http://127.0.0.1:9000.",
     " * Allows the web canvas to execute live validation and migrations directly on this machine.",
     " * Run via 'pnpm db:serve' or 'pnpm db:bridge'.",
     " */",
@@ -938,7 +938,7 @@ export function generateBridgeServerScript(packageName: string): string {
     "  TableDefinition,",
     '} from "../sync";',
     "",
-    "const PORT = 46555;",
+    "const PORT = 9000;",
     "",
     "function sendJson(res: http.ServerResponse, statusCode: number, data: object): void {",
     "  const payload = JSON.stringify(data);",
@@ -1073,6 +1073,8 @@ export function generatePackageJson(packageName: string): string {
         "./helpers/*": "./helpers/*.ts",
       },
       scripts: {
+        dev: "tsx scripts/server.ts",
+        start: "tsx scripts/server.ts",
         build: "tsc",
         "check-types": "tsc --noEmit",
         test: "vitest run",

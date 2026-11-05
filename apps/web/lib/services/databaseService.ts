@@ -52,7 +52,7 @@ export type {
   JsonArray,
 };
 
-const LOCAL_BRIDGE_URL = "http://127.0.0.1:46555";
+const LOCAL_BRIDGE_URL = "http://127.0.0.1:9000";
 
 function isCheckDbConnectionResult(val: object): val is CheckDbConnectionResult {
   return "success" in val && "engine" in val;
@@ -120,7 +120,7 @@ async function postToLocalBridge<TPayload, TResult extends object>(
  *
  * Automatically routes:
  * 1. In Electron desktop app -> Native IPC pipe (`window.electronAPI.db.executeOperation`)
- * 2. In Browser with local bridge -> Local machine runner (`http://127.0.0.1:46555/api/execute-operation`)
+ * 2. In Browser with local bridge -> Local machine runner (`http://127.0.0.1:9000/api/execute-operation`)
  * 3. In Browser cloud mode -> Next.js Server Action (`testDbOperationAction`)
  */
 export async function testDatabaseOperation(
@@ -155,7 +155,7 @@ export async function testDatabaseOperation(
  *
  * Automatically routes:
  * 1. In Electron desktop app -> Native IPC pipe (`window.electronAPI.db.checkConnection`)
- * 2. In Browser with local bridge -> Local machine runner (`http://127.0.0.1:46555/api/check-connection`)
+ * 2. In Browser with local bridge -> Local machine runner (`http://127.0.0.1:9000/api/check-connection`)
  * 3. In Browser cloud mode -> Next.js Server Action (`checkDbConnectionAction`)
  */
 export async function checkDatabaseConnection(
@@ -182,7 +182,21 @@ export async function checkDatabaseConnection(
     return localResult;
   }
 
-  return checkDbConnectionAction(payload);
+  const cloudResult = await checkDbConnectionAction(payload);
+  if (
+    !cloudResult.success &&
+    cloudResult.error &&
+    (cloudResult.error.includes("Cloudflare Workers") ||
+      cloudResult.error.includes("Supabase poolers") ||
+      cloudResult.error.includes("ECONNREFUSED"))
+  ) {
+    return {
+      ...cloudResult,
+      error:
+        "Local DB sync server is not running on port 9000. Please run 'pnpm dev' (or 'pnpm db:dev') in your terminal to start the sync server.",
+    };
+  }
+  return cloudResult;
 }
 
 /**
@@ -190,7 +204,7 @@ export async function checkDatabaseConnection(
  *
  * Automatically routes:
  * 1. In Electron desktop app -> Native IPC pipe (`window.electronAPI.db.checkTableSync`)
- * 2. In Browser with local bridge -> Local machine runner (`http://127.0.0.1:46555/api/check-table-sync`)
+ * 2. In Browser with local bridge -> Local machine runner (`http://127.0.0.1:9000/api/check-table-sync`)
  * 3. In Browser cloud mode -> Next.js Server Action (`checkDbTableSyncAction`)
  */
 export async function checkDbTableSync(
@@ -226,7 +240,21 @@ export async function checkDbTableSync(
     return localResult;
   }
 
-  return checkDbTableSyncAction(payload);
+  const cloudResult = await checkDbTableSyncAction(payload);
+  if (
+    !cloudResult.success &&
+    cloudResult.error &&
+    (cloudResult.error.includes("Cloudflare Workers") ||
+      cloudResult.error.includes("Supabase poolers") ||
+      cloudResult.error.includes("ECONNREFUSED"))
+  ) {
+    return {
+      ...cloudResult,
+      error:
+        "Local DB sync server is not running on port 9000. Please run 'pnpm dev' (or 'pnpm db:dev') in your terminal to start the sync server, then click Validate DB again.",
+    };
+  }
+  return cloudResult;
 }
 
 /**
@@ -234,7 +262,7 @@ export async function checkDbTableSync(
  *
  * Automatically routes:
  * 1. In Electron desktop app -> Native IPC pipe (`window.electronAPI.db.applyTableSync`)
- * 2. In Browser with local bridge -> Local machine runner (`http://127.0.0.1:46555/api/apply-table-sync`)
+ * 2. In Browser with local bridge -> Local machine runner (`http://127.0.0.1:9000/api/apply-table-sync`)
  * 3. In Browser cloud mode -> Next.js Server Action (`applyDbTableSyncAction`)
  */
 export async function applyDbTableSync(
@@ -264,7 +292,21 @@ export async function applyDbTableSync(
     return localResult;
   }
 
-  return applyDbTableSyncAction(payload);
+  const cloudResult = await applyDbTableSyncAction(payload);
+  if (
+    !cloudResult.success &&
+    cloudResult.error &&
+    (cloudResult.error.includes("Cloudflare Workers") ||
+      cloudResult.error.includes("Supabase poolers") ||
+      cloudResult.error.includes("ECONNREFUSED"))
+  ) {
+    return {
+      ...cloudResult,
+      error:
+        "Local DB sync server is not running on port 9000. Please run 'pnpm dev' (or 'pnpm db:dev') in your terminal to start the sync server, then click Sync again.",
+    };
+  }
+  return cloudResult;
 }
 
 /**
