@@ -9,13 +9,11 @@ import {
   Clock,
   AlertCircle,
   Database,
-  Terminal,
 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
 import { cn } from "@workspace/ui/lib/utils";
 import { checkDatabaseConnection } from "@/lib/services/databaseService";
-import { DatabaseMigrationModal } from "./DatabaseMigrationModal";
 
 interface ConnectionStatusData {
   connected: boolean;
@@ -66,7 +64,6 @@ export const DatabaseConnectionCheckCard: React.FC<DatabaseConnectionCheckCardPr
 }) => {
   const [checking, setChecking] = useState(false);
   const [localStatus, setLocalStatus] = useState<ConnectionStatusData | undefined>(lastStatus);
-  const [showMigrationModal, setShowMigrationModal] = useState(false);
 
   const isRedis = engine === "redis";
   const isSqlite = engine === "sqlite";
@@ -236,36 +233,18 @@ export const DatabaseConnectionCheckCard: React.FC<DatabaseConnectionCheckCardPr
         </div>
       )}
 
-      {/* Disconnection Warning & Actionable Guidance */}
+      {/* Disconnection Warning & Guidance */}
       {isFailed && (
         <div className="p-2.5 rounded-lg bg-destructive/10 border border-destructive/20 text-xs text-destructive space-y-2">
           <div className="flex items-start gap-1.5">
             <AlertCircle size={13} className="shrink-0 mt-0.5" />
             <div className="flex flex-col gap-0.5 leading-relaxed">
               <span className="font-semibold text-[11px]">
-                {isSqlite ? "Cannot access database file" : "Cannot reach database directly from cloud"}
+                {isSqlite ? "Cannot access database file" : "Cannot reach database"}
               </span>
               <span className="text-[10px] opacity-90 leading-normal">{status?.error}</span>
             </div>
           </div>
-
-          {isPostgres && (
-            <div className="pt-2 border-t border-destructive/20 flex items-center justify-between gap-2">
-              <span className="text-[10px] text-muted-foreground leading-tight">
-                Bypass cloud TLS limits by running migration on your machine:
-              </span>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => setShowMigrationModal(true)}
-                className="h-6 text-[10px] px-2.5 gap-1 shrink-0 bg-background text-foreground hover:bg-secondary font-medium"
-              >
-                <Terminal size={11} className="text-emerald-500" />
-                Local Sync & SQL
-              </Button>
-            </div>
-          )}
 
           {isRedis && (
             <div className="pt-1 border-t border-destructive/20 text-[10px] text-muted-foreground font-mono">
@@ -280,27 +259,13 @@ export const DatabaseConnectionCheckCard: React.FC<DatabaseConnectionCheckCardPr
         </div>
       )}
 
-      {/* Action Footer: Check Button, Local Sync Shortcut, & Timestamp */}
+      {/* Action Footer: Status Timestamp & Check Button */}
       <div className="flex items-center justify-between pt-1 gap-2">
         <span className="text-[10px] text-muted-foreground truncate">
           {status?.checkedAt ? `Verified at ${status.checkedAt}` : "Ping server to verify status"}
         </span>
 
         <div className="flex items-center gap-1.5 shrink-0">
-          {isPostgres && (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => setShowMigrationModal(true)}
-              className="h-7 text-xs gap-1 font-medium border-border/60 hover:bg-secondary text-foreground"
-              title="View compiled SQL and local terminal command (pnpm db:push)"
-            >
-              <Terminal size={11} className="text-emerald-500" />
-              Local Sync & SQL
-            </Button>
-          )}
-
           <Button
             size="sm"
             variant={isConnected ? "outline" : "default"}
@@ -316,17 +281,6 @@ export const DatabaseConnectionCheckCard: React.FC<DatabaseConnectionCheckCardPr
           </Button>
         </div>
       </div>
-
-      {/* Local Migration Modal */}
-      {isPostgres && (
-        <DatabaseMigrationModal
-          isOpen={showMigrationModal}
-          onClose={() => setShowMigrationModal(false)}
-          dbLabel={database || "Primary PostgreSQL DB"}
-          engine={engine}
-          provider={provider}
-        />
-      )}
     </div>
   );
 };

@@ -86,13 +86,14 @@ async function postToLocalBridge<TPayload, TResult extends object>(
   endpoint: string,
   payload: TPayload,
   isResultValid: (val: object) => val is TResult,
+  timeoutMs = 20000,
 ): Promise<TResult | null> {
   if (typeof window === "undefined") {
     return null;
   }
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 1500);
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     const response = await fetch(`${LOCAL_BRIDGE_URL}${endpoint}`, {
       method: "POST",
       headers: {
@@ -103,6 +104,12 @@ async function postToLocalBridge<TPayload, TResult extends object>(
     });
     clearTimeout(timeoutId);
     if (!response.ok) {
+      try {
+        const errJson = await response.json();
+        if (typeof errJson === "object" && errJson !== null && isResultValid(errJson)) {
+          return errJson;
+        }
+      } catch {}
       return null;
     }
     const data = await response.json();
@@ -110,7 +117,8 @@ async function postToLocalBridge<TPayload, TResult extends object>(
       return data;
     }
     return null;
-  } catch {
+  } catch (err) {
+    console.warn(`[LocalBridge ${endpoint}] Request failed or timed out:`, err);
     return null;
   }
 }
@@ -182,11 +190,15 @@ export async function checkDatabaseConnection(
     return localResult;
   }
 
-  return {
-    success: false,
-    engine: payload.engine || "postgres",
-    error: "Local DB sync server is not running on port 9000. Please run 'pnpm db:server' in your terminal to start the sync server.",
-  };
+  try {
+    return await checkDbConnectionAction(payload);
+  } catch {
+    return {
+      success: false,
+      engine: payload.engine || "postgres",
+      error: "Local DB sync server is not running on port 9000. Please run 'pnpm db:server' in your terminal to start the sync server.",
+    };
+  }
 }
 
 /**
@@ -216,6 +228,10 @@ export async function checkDbTableSync(
         missingIndexes: [],
         extraIndexes: [],
         existingIndexes: [],
+        missingForeignKeys: [],
+        extraForeignKeys: [],
+        existingForeignKeys: [],
+        missingPrerequisiteTables: [],
         error: `Desktop IPC error: ${err instanceof Error ? err.message : String(err)}`,
       };
     }
@@ -230,23 +246,27 @@ export async function checkDbTableSync(
     return localResult;
   }
 
-  return {
-    success: false,
-    serverReachable: false,
-    tableExists: false,
-    inSync: false,
-    missingColumns: [],
-    extraColumns: [],
-    existingColumns: [],
-    missingIndexes: [],
-    extraIndexes: [],
-    existingIndexes: [],
-    missingForeignKeys: [],
-    extraForeignKeys: [],
-    existingForeignKeys: [],
-    missingPrerequisiteTables: [],
-    error: "Local DB sync server is not running on port 9000. Please run 'pnpm db:server' in your terminal, then click Validate DB again.",
-  };
+  try {
+    return await checkDbTableSyncAction(payload);
+  } catch {
+    return {
+      success: false,
+      serverReachable: false,
+      tableExists: false,
+      inSync: false,
+      missingColumns: [],
+      extraColumns: [],
+      existingColumns: [],
+      missingIndexes: [],
+      extraIndexes: [],
+      existingIndexes: [],
+      missingForeignKeys: [],
+      extraForeignKeys: [],
+      existingForeignKeys: [],
+      missingPrerequisiteTables: [],
+      error: "Local DB sync server is not running on port 9000. Please run 'pnpm db:server' in your terminal, then click Validate DB again.",
+    };
+  }
 }
 
 /**
@@ -270,6 +290,7 @@ export async function applyDbTableSync(
         createdTable: false,
         appliedColumns: [],
         appliedIndexes: [],
+        appliedForeignKeys: [],
         error: `Desktop IPC error: ${err instanceof Error ? err.message : String(err)}`,
       };
     }
@@ -284,14 +305,18 @@ export async function applyDbTableSync(
     return localResult;
   }
 
-  return {
-    success: false,
-    createdTable: false,
-    appliedColumns: [],
-    appliedIndexes: [],
-    appliedForeignKeys: [],
-    error: "Local DB sync server is not running on port 9000. Please run 'pnpm db:server' in your terminal, then click Sync again.",
-  };
+  try {
+    return await applyDbTableSyncAction(payload);
+  } catch {
+    return {
+      success: false,
+      createdTable: false,
+      appliedColumns: [],
+      appliedIndexes: [],
+      appliedForeignKeys: [],
+      error: "Local DB sync server is not running on port 9000. Please run 'pnpm db:server' in your terminal, then click Sync again.",
+    };
+  }
 }
 
 /**
