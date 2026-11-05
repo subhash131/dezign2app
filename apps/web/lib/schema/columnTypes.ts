@@ -124,7 +124,7 @@ export function normalizePostgresDbType(dataType?: string, udtName?: string): st
   if (dt === "integer" || udt === "int4") return "INTEGER";
   if (dt === "bigint" || udt === "int8") return "BIGINT";
   if (dt === "smallint" || udt === "int2") return "SMALLINT";
-  if (dt === "boolean" || udt === "bool") return "BOOLEAN";
+  if (dt === "boolean" || udt === "bool" || dt === "bool" || udt === "boolean") return "BOOLEAN";
   if (dt === "timestamp with time zone" || udt === "timestamptz") return "TIMESTAMPTZ";
   if (dt === "timestamp without time zone" || dt === "timestamp" || udt === "timestamp") return "TIMESTAMP";
   if (dt === "double precision" || udt === "float8") return "DOUBLE PRECISION";
