@@ -190,15 +190,22 @@ export async function checkDatabaseConnection(
     return localResult;
   }
 
-  try {
-    return await checkDbConnectionAction(payload);
-  } catch {
+  const cloudResult = await checkDbConnectionAction(payload);
+  if (
+    !cloudResult.success &&
+    cloudResult.error &&
+    (cloudResult.error.includes("Cloudflare Workers") ||
+      cloudResult.error.includes("Supabase poolers") ||
+      cloudResult.error.includes("private TLS certificate") ||
+      cloudResult.error.includes("ECONNREFUSED"))
+  ) {
     return {
-      success: false,
-      engine: payload.engine || "postgres",
-      error: "Local DB sync server is not running on port 9000. Please run 'pnpm db:server' in your terminal to start the sync server.",
+      ...cloudResult,
+      error:
+        "Database is not directly reachable from cloud. Please use the Dezign2App Desktop app or run 'pnpm db:server' in your terminal.",
     };
   }
+  return cloudResult;
 }
 
 /**
@@ -246,27 +253,22 @@ export async function checkDbTableSync(
     return localResult;
   }
 
-  try {
-    return await checkDbTableSyncAction(payload);
-  } catch {
+  const cloudResult = await checkDbTableSyncAction(payload);
+  if (
+    !cloudResult.success &&
+    cloudResult.error &&
+    (cloudResult.error.includes("Cloudflare Workers") ||
+      cloudResult.error.includes("Supabase poolers") ||
+      cloudResult.error.includes("private TLS certificate") ||
+      cloudResult.error.includes("ECONNREFUSED"))
+  ) {
     return {
-      success: false,
-      serverReachable: false,
-      tableExists: false,
-      inSync: false,
-      missingColumns: [],
-      extraColumns: [],
-      existingColumns: [],
-      missingIndexes: [],
-      extraIndexes: [],
-      existingIndexes: [],
-      missingForeignKeys: [],
-      extraForeignKeys: [],
-      existingForeignKeys: [],
-      missingPrerequisiteTables: [],
-      error: "Local DB sync server is not running on port 9000. Please run 'pnpm db:server' in your terminal, then click Validate DB again.",
+      ...cloudResult,
+      error:
+        "Database is not directly reachable from cloud. Please use the Dezign2App Desktop app or run 'pnpm db:server' in your terminal, then click Validate DB again.",
     };
   }
+  return cloudResult;
 }
 
 /**
@@ -305,18 +307,22 @@ export async function applyDbTableSync(
     return localResult;
   }
 
-  try {
-    return await applyDbTableSyncAction(payload);
-  } catch {
+  const cloudResult = await applyDbTableSyncAction(payload);
+  if (
+    !cloudResult.success &&
+    cloudResult.error &&
+    (cloudResult.error.includes("Cloudflare Workers") ||
+      cloudResult.error.includes("Supabase poolers") ||
+      cloudResult.error.includes("private TLS certificate") ||
+      cloudResult.error.includes("ECONNREFUSED"))
+  ) {
     return {
-      success: false,
-      createdTable: false,
-      appliedColumns: [],
-      appliedIndexes: [],
-      appliedForeignKeys: [],
-      error: "Local DB sync server is not running on port 9000. Please run 'pnpm db:server' in your terminal, then click Sync again.",
+      ...cloudResult,
+      error:
+        "Database is not directly reachable from cloud. Please use the Dezign2App Desktop app or run 'pnpm db:server' in your terminal, then click Sync again.",
     };
   }
+  return cloudResult;
 }
 
 /**

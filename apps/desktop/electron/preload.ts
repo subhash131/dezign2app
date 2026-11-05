@@ -4,6 +4,16 @@ import type {
   TestDbOperationResult,
   CheckDbConnectionPayload,
   CheckDbConnectionResult,
+  CheckDbTableSyncPayload,
+  CheckDbTableSyncResult,
+  ApplyDbTableSyncPayload,
+  ApplyDbTableSyncResult,
+  DropDbTablePayload,
+  DropDbTableResult,
+  RenameDbTablePayload,
+  RenameDbTableResult,
+  RenameDbColumnPayload,
+  RenameDbColumnResult,
 } from "./services/dbRunner";
 import type { UpdaterState } from "./services/updater";
 
@@ -108,6 +118,11 @@ export interface ElectronAPI {
   db: {
     executeOperation(payload: TestDbOperationPayload): Promise<TestDbOperationResult>;
     checkConnection(payload: CheckDbConnectionPayload): Promise<CheckDbConnectionResult>;
+    checkTableSync(payload: CheckDbTableSyncPayload): Promise<CheckDbTableSyncResult>;
+    applyTableSync(payload: ApplyDbTableSyncPayload): Promise<ApplyDbTableSyncResult>;
+    dropTable(payload: DropDbTablePayload): Promise<DropDbTableResult>;
+    renameTable(payload: RenameDbTablePayload): Promise<RenameDbTableResult>;
+    renameColumn(payload: RenameDbColumnPayload): Promise<RenameDbColumnResult>;
   };
 
   /** Background auto-updater service */
@@ -215,6 +230,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.invoke("db:execute-operation", payload),
     checkConnection: (payload: CheckDbConnectionPayload) =>
       ipcRenderer.invoke("db:check-connection", payload),
+    checkTableSync: (payload: CheckDbTableSyncPayload) =>
+      ipcRenderer.invoke("db:check-table-sync", payload),
+    applyTableSync: (payload: ApplyDbTableSyncPayload) =>
+      ipcRenderer.invoke("db:apply-table-sync", payload),
+    dropTable: (payload: DropDbTablePayload) =>
+      ipcRenderer.invoke("db:drop-table", payload),
+    renameTable: (payload: RenameDbTablePayload) =>
+      ipcRenderer.invoke("db:rename-table", payload),
+    renameColumn: (payload: RenameDbColumnPayload) =>
+      ipcRenderer.invoke("db:rename-column", payload),
   },
 
   updater: {
