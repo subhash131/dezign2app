@@ -13,16 +13,6 @@
   "observability": {
     "enabled": true
   },
-  // Cloudflare Hyperdrive binding for PostgreSQL (e.g. Supabase session pooler on port 5432).
-  // 1. Create with: npx wrangler hyperdrive create dezign2app-db --connection-string="postgresql://postgres.[ref]:[pass]@aws-0-[region].pooler.supabase.com:5432/postgres"
-  // 2. Uncomment below and paste your generated Hyperdrive ID:
-  // "hyperdrive": [
-  //   {
-  //     "binding": "HYPERDRIVE",
-  //     "id": "<YOUR_HYPERDRIVE_ID>",
-  //     "localConnectionString": "postgresql://postgres:postgres@localhost:5432/postgres"
-  //   }
-  // ],
   "vars": {
     "BETTER_AUTH_TRUSTED_ORIGINS": "https://dezign2app.com,https://www.dezign2app.com,dezign2app://",
     "BETTER_AUTH_URL": "https://dezign2app.com",
