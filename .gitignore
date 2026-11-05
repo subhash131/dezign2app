@@ -67,8 +67,3 @@ agent-checkpoints.json
 *.sqlite-shm
 
 .pnpm-store
-
-# Local DB sync runner / server (port 9000)
-scripts/local-db-bridge.ts
-.db-server/
-.db-runner/
