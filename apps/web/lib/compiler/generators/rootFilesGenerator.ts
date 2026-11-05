@@ -113,6 +113,9 @@ dist
 *.db-journal
 *.db-wal
 *.db-shm
+.helper-scripts/
+packages/db-postgres/.helper-scripts/
+packages/db/.helper-scripts/
 `;
   files.push({
     filename: ".gitignore",

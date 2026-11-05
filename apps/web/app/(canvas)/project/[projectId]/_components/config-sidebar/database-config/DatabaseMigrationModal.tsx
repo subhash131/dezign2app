@@ -57,7 +57,7 @@ export const DatabaseMigrationModal: React.FC<DatabaseMigrationModalProps> = ({
 
     const compiled = compilePostgresDatabase(nodes, edges);
     const sqlFile = compiled.files.find((f) => f.filename === "schema.sql");
-    const syncFile = compiled.files.find((f) => f.filename === "scripts/sync.ts");
+    const syncFile = compiled.files.find((f) => f.filename === ".helper-scripts/sync.ts");
 
     const attachedEntityNodes = nodes.filter(
       (n) => n.type === "entity" || n.type === "db_ref",
@@ -206,7 +206,7 @@ export const DatabaseMigrationModal: React.FC<DatabaseMigrationModalProps> = ({
             <TabsContent value="script" className="space-y-3 pt-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-foreground">
-                  Generated Runner Script (<code className="font-mono text-[11px]">packages/db-postgres/scripts/sync.ts</code>):
+                  Generated Runner Script (<code className="font-mono text-[11px]">packages/db-postgres/.helper-scripts/sync.ts</code>):
                 </span>
                 <Button
                   size="sm"

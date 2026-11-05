@@ -39,6 +39,7 @@ import {
   simulateUpdaterStatus,
   UpdaterState,
 } from "../services/updater";
+import { runScriptFile } from "../services/scriptRunner";
 
 /**
  * Registers all IPC handlers for the Electron main process.
@@ -223,6 +224,14 @@ export function registerIpcHandlers(): void {
   ipcMain.handle("db:rename-column", async (_event, payload: RenameDbColumnPayload) => {
     return renameDbColumn(payload);
   });
+
+  // ── Local Script Execution ─────────────────
+  ipcMain.handle(
+    "script:run-file",
+    async (_event, filePath: string, args: string[] = [], cwd?: string) => {
+      return runScriptFile(filePath, args, cwd);
+    }
+  );
 
   // ── App / Platform Info ────────────────────
   ipcMain.handle("app:platform", () => process.platform);

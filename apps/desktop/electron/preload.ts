@@ -16,6 +16,7 @@ import type {
   RenameDbColumnResult,
 } from "./services/dbRunner";
 import type { UpdaterState } from "./services/updater";
+import type { RunScriptResult } from "./services/scriptRunner";
 
 // ─────────────────────────────────────────────
 //  Types
@@ -123,6 +124,15 @@ export interface ElectronAPI {
     dropTable(payload: DropDbTablePayload): Promise<DropDbTableResult>;
     renameTable(payload: RenameDbTablePayload): Promise<RenameDbTableResult>;
     renameColumn(payload: RenameDbColumnPayload): Promise<RenameDbColumnResult>;
+  };
+
+  /** Local script execution */
+  script: {
+    runFile(
+      filePath: string,
+      args?: string[],
+      cwd?: string,
+    ): Promise<RunScriptResult>;
   };
 
   /** Background auto-updater service */
@@ -240,6 +250,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.invoke("db:rename-table", payload),
     renameColumn: (payload: RenameDbColumnPayload) =>
       ipcRenderer.invoke("db:rename-column", payload),
+  },
+
+  script: {
+    runFile: (filePath: string, args: string[] = [], cwd?: string) =>
+      ipcRenderer.invoke("script:run-file", filePath, args, cwd),
   },
 
   updater: {

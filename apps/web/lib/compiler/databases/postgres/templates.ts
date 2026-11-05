@@ -827,12 +827,12 @@ export function generateLocalSyncFile(
 }
 
 /**
- * Generates the scripts/validate.ts file for checking database table sync state locally on the developer machine.
+ * Generates the .helper-scripts/validate.ts file for checking database table sync state locally on the developer machine.
  */
 export function generateValidateScript(packageName: string): string {
   return [
     "/**",
-    ` * ${packageName}/scripts/validate.ts — Local Database Validation CLI`,
+    ` * ${packageName}/.helper-scripts/validate.ts — Local Database Validation CLI`,
     " *",
     " * Inspects your live database against canvas schemas directly from your local machine.",
     " * Run via 'pnpm db:validate' or 'pnpm db:check'.",
@@ -878,12 +878,12 @@ export function generateValidateScript(packageName: string): string {
 }
 
 /**
- * Generates the scripts/sync.ts file for executing schema synchronization locally on the developer machine.
+ * Generates the .helper-scripts/sync.ts file for executing schema synchronization locally on the developer machine.
  */
 export function generateSyncScript(packageName: string, connEnvKey: string): string {
   return [
     "/**",
-    ` * ${packageName}/scripts/sync.ts — Local Database Migration & Synchronization Script`,
+    ` * ${packageName}/.helper-scripts/sync.ts — Local Database Migration & Synchronization Script`,
     " *",
     " * Applies schema diffs directly on your machine. Runs safely across all PostgreSQL hosts",
     " * including Supabase, Neon, AWS RDS, Docker, and Localhost without cloud TLS restrictions.",
@@ -924,12 +924,12 @@ export function generateSyncScript(packageName: string, connEnvKey: string): str
 }
 
 /**
- * Generates the scripts/server.ts file for starting a local HTTP bridge daemon on port 9000.
+ * Generates the .helper-scripts/server.ts file for starting a local HTTP bridge daemon on port 9000.
  */
 export function generateBridgeServerScript(packageName: string): string {
   return [
     "/**",
-    ` * ${packageName}/scripts/server.ts — Local Database Bridge Daemon`,
+    ` * ${packageName}/.helper-scripts/server.ts — Local Database Bridge Daemon`,
     " *",
     " * Lightweight zero-dependency HTTP bridge listening on http://127.0.0.1:9000.",
     " * Allows the web canvas to execute live validation and migrations directly on this machine.",
@@ -1089,17 +1089,17 @@ export function generatePackageJson(packageName: string): string {
         "./helpers/*": "./helpers/*.ts",
       },
       scripts: {
-        dev: "tsx scripts/server.ts",
-        start: "tsx scripts/server.ts",
+        dev: "tsx .helper-scripts/server.ts",
+        start: "tsx .helper-scripts/server.ts",
         build: "tsc",
         "check-types": "tsc --noEmit",
         test: "vitest run",
-        "db:validate": "tsx scripts/validate.ts",
-        "db:check": "tsx scripts/validate.ts",
-        "db:push": "tsx scripts/sync.ts",
-        "db:sync": "tsx scripts/sync.ts",
-        "db:serve": "tsx scripts/server.ts",
-        "db:bridge": "tsx scripts/server.ts",
+        "db:validate": "tsx .helper-scripts/validate.ts",
+        "db:check": "tsx .helper-scripts/validate.ts",
+        "db:push": "tsx .helper-scripts/sync.ts",
+        "db:sync": "tsx .helper-scripts/sync.ts",
+        "db:serve": "tsx .helper-scripts/server.ts",
+        "db:bridge": "tsx .helper-scripts/server.ts",
       },
       dependencies: {
         "@workspace/logger": "workspace:*",
@@ -1128,7 +1128,7 @@ export function generateTsConfig(): string {
     {
       extends: "@workspace/typescript-config/base.json",
       compilerOptions: { outDir: "dist" },
-      include: ["index.ts", "connection.ts", "sync.ts", "helpers/**/*", "tests/**/*", "scripts/**/*"],
+      include: ["index.ts", "connection.ts", "sync.ts", "helpers/**/*", "tests/**/*", "scripts/**/*", ".helper-scripts/**/*"],
     },
     null,
     2,
