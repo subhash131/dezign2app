@@ -60,15 +60,16 @@ export const EntityNode = React.memo(({ id, data, selected }: NodeProps<BackendN
   const hasInitializedColumnsRef = useRef(false);
   React.useEffect(() => {
     if (hasInitializedColumnsRef.current) return;
-    if (isVector || data.dbType === "redis" || data.readOnly) return;
+    if (isVector || data.dbType === "redis") return;
 
     if (!data.columns || data.columns.length === 0) {
+      if (data.readOnly) return;
       hasInitializedColumnsRef.current = true;
       updateNode(id, {
         data: {
           ...data,
           columns: [
-            { name: "id", type: "TEXT", isPrimaryKey: true },
+            { name: "id", type: "UUID", isPrimaryKey: true },
             { name: "created_at", type: "TIMESTAMPTZ" },
             { name: "updated_at", type: "TIMESTAMPTZ" },
           ],
@@ -82,18 +83,104 @@ export const EntityNode = React.memo(({ id, data, selected }: NodeProps<BackendN
       data.columns[0]?.name?.toLowerCase() === "id"
     ) {
       hasInitializedColumnsRef.current = true;
+      const firstCol = data.columns[0];
+      const idType = (!firstCol.type || firstCol.type === "TEXT") ? "UUID" : firstCol.type;
       updateNode(id, {
         data: {
           ...data,
           columns: [
-            ...data.columns,
+            { ...firstCol, type: idType, isPrimaryKey: true },
             { name: "created_at", type: "TIMESTAMPTZ" },
             { name: "updated_at", type: "TIMESTAMPTZ" },
           ],
         },
       });
+      return;
     }
-  }, [id, isVector, data.dbType, data.readOnly, data.columns, updateNode]);
+
+    if (
+      !data.tableName &&
+      !data.label &&
+      data.columns.length === 3 &&
+      data.columns[0]?.name === "id" &&
+      data.columns[0]?.type === "TEXT" &&
+      data.columns[1]?.name === "created_at" &&
+      data.columns[2]?.name === "updated_at"
+    ) {
+      hasInitializedColumnsRef.current = true;
+      updateNode(id, {
+        data: {
+          ...data,
+          columns: [
+            { ...data.columns[0], type: "UUID" },
+            data.columns[1],
+            data.columns[2],
+          ],
+        },
+      });
+      return;
+    }
+
+    // Ensure created_at / createdAt and updated_at / updatedAt on relational entities (e.g. auth and langgraph tables)
+    const currentCols = data.columns;
+    const hasCreated = currentCols.some(
+      (c) => c.name?.toLowerCase().replace(/[^a-z0-9]/g, "") === "createdat",
+    );
+    const hasUpdated = currentCols.some(
+      (c) => c.name?.toLowerCase().replace(/[^a-z0-9]/g, "") === "updatedat",
+    );
+    if (!hasCreated || !hasUpdated) {
+      hasInitializedColumnsRef.current = true;
+      const isLangGraph =
+        data.systemBadge === "langgraph" ||
+        (data.label || "").toLowerCase().includes("checkpoint") ||
+        (data.tableName || "").toLowerCase().includes("checkpoint");
+      const isCamelCaseAuth =
+        !isLangGraph &&
+        currentCols.some(
+          (c) =>
+            c.name === "userId" ||
+            c.name === "createdAt" ||
+            c.name === "updatedAt" ||
+            c.name === "expiresAt" ||
+            c.name === "organizationId",
+        );
+
+      const createdColName = isLangGraph
+        ? "created_at"
+        : isCamelCaseAuth
+          ? "createdAt"
+          : "created_at";
+      const updatedColName = isLangGraph
+        ? "updated_at"
+        : isCamelCaseAuth
+          ? "updatedAt"
+          : "updated_at";
+
+      const toAdd: NonNullable<BackendNode["data"]["columns"]> = [];
+      if (!hasCreated) {
+        toAdd.push({
+          name: createdColName,
+          type: "TIMESTAMPTZ",
+          ...(isLangGraph ? {} : { isNotNull: true }),
+        });
+      }
+      if (!hasUpdated) {
+        toAdd.push({
+          name: updatedColName,
+          type: "TIMESTAMPTZ",
+          ...(isLangGraph ? {} : { isNotNull: true }),
+        });
+      }
+
+      updateNode(id, {
+        data: {
+          ...data,
+          columns: [...currentCols, ...toAdd],
+        },
+      });
+    }
+  }, [id, isVector, data.dbType, data.readOnly, data.columns, data.label, data.tableName, updateNode]);
 
   const [renameDialogOpen, setRenameDialogOpen] = React.useState(false);
   const [showSyncBanner, setShowSyncBanner] = React.useState(false);

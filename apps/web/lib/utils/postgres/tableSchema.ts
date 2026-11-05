@@ -85,7 +85,7 @@ export async function ensurePostgresTable(
     }
 
     if (pkColNames.length === 0 && !colDefs.some((d) => d.includes("PRIMARY KEY"))) {
-      colDefs.unshift(`"id" TEXT PRIMARY KEY`);
+      colDefs.unshift(`"id" UUID DEFAULT gen_random_uuid() PRIMARY KEY`);
     }
     if (!colDefs.some((d) => d.startsWith('"created_at"'))) {
       colDefs.push(`"created_at" TIMESTAMPTZ DEFAULT NOW()`);

@@ -119,6 +119,8 @@ export const LANGGRAPH_POSTGRES_TABLE_DEFINITIONS: LangGraphTableDefinition[] = 
       { name: "type", type: "TEXT", isNotNull: false },
       { name: "checkpoint", type: "JSON", isNotNull: true },
       { name: "metadata", type: "JSON", isNotNull: true },
+      { name: "created_at", type: "TIMESTAMPTZ" },
+      { name: "updated_at", type: "TIMESTAMPTZ" },
     ],
     indexes: [
       { name: "idx_checkpoints_thread_id", columns: "thread_id" },
@@ -143,6 +145,8 @@ export const LANGGRAPH_POSTGRES_TABLE_DEFINITIONS: LangGraphTableDefinition[] = 
       { name: "version", type: "TEXT", isPrimaryKey: true, isNotNull: true },
       { name: "type", type: "TEXT", isNotNull: true },
       { name: "blob", type: "BYTEA", isNotNull: false },
+      { name: "created_at", type: "TIMESTAMPTZ" },
+      { name: "updated_at", type: "TIMESTAMPTZ" },
     ],
     indexes: [
       { name: "idx_checkpoint_blobs_thread_id", columns: "thread_id" },
@@ -168,6 +172,8 @@ export const LANGGRAPH_POSTGRES_TABLE_DEFINITIONS: LangGraphTableDefinition[] = 
       { name: "channel", type: "TEXT", isNotNull: true },
       { name: "type", type: "TEXT", isNotNull: false },
       { name: "blob", type: "BYTEA", isNotNull: true },
+      { name: "created_at", type: "TIMESTAMPTZ" },
+      { name: "updated_at", type: "TIMESTAMPTZ" },
     ],
     indexes: [
       { name: "idx_checkpoint_writes_thread_id", columns: "thread_id" },
@@ -180,6 +186,8 @@ export const LANGGRAPH_POSTGRES_TABLE_DEFINITIONS: LangGraphTableDefinition[] = 
     description: "Database migration tracker for LangGraph schema versions",
     columns: [
       { name: "v", type: "INTEGER", isPrimaryKey: true, isNotNull: true },
+      { name: "created_at", type: "TIMESTAMPTZ" },
+      { name: "updated_at", type: "TIMESTAMPTZ" },
     ],
     indexes: [
       { name: "idx_checkpoint_migrations_v", columns: "v", isUnique: true },
@@ -199,6 +207,8 @@ export const LANGGRAPH_SQLITE_TABLE_DEFINITIONS: LangGraphTableDefinition[] = [
       { name: "type", type: "TEXT", isNotNull: false },
       { name: "checkpoint", type: "BLOB", isNotNull: false },
       { name: "metadata", type: "BLOB", isNotNull: false },
+      { name: "created_at", type: "TEXT" },
+      { name: "updated_at", type: "TEXT" },
     ],
     indexes: [
       { name: "idx_sqlite_checkpoints_thread_id", columns: "thread_id" },
@@ -223,6 +233,8 @@ export const LANGGRAPH_SQLITE_TABLE_DEFINITIONS: LangGraphTableDefinition[] = [
       { name: "channel", type: "TEXT", isNotNull: true },
       { name: "type", type: "TEXT", isNotNull: false },
       { name: "value", type: "BLOB", isNotNull: false },
+      { name: "created_at", type: "TEXT" },
+      { name: "updated_at", type: "TEXT" },
     ],
     indexes: [
       { name: "idx_sqlite_writes_thread_id", columns: "thread_id" },
