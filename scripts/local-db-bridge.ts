@@ -12,7 +12,6 @@ import "dotenv/config";
 import * as http from "node:http";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { fileURLToPath } from "node:url";
 import { Client } from "pg";
 import { DatabaseSync } from "node:sqlite";
 
@@ -20,7 +19,7 @@ const PORT = 9000;
 
 const currentDir = typeof __dirname !== "undefined"
   ? __dirname
-  : path.dirname(fileURLToPath(import.meta.url));
+  : path.resolve(process.cwd(), "scripts");
 
 function findEnvFiles(): string[] {
   const dirs = [
@@ -390,6 +389,10 @@ function areTypesEquivalent(cType: string, dbType: string): boolean {
   const normC = mapToPgType(cType);
   const normDb = dbType.toUpperCase().trim();
   if (normC === normDb) return true;
+  if (normC === "BOOLEAN" && (normDb === "BOOL" || normDb === "BOOLEAN")) return true;
+  if (normC === "SMALLINT" && (normDb === "INT2" || normDb === "SMALLINT")) return true;
+  if (normC === "REAL" && (normDb === "FLOAT4" || normDb === "REAL")) return true;
+  if (normC === "NUMERIC" && (normDb === "NUMERIC" || normDb === "DECIMAL")) return true;
   if (normC === "TEXT" && (normDb.includes("VARCHAR") || normDb.includes("CHAR") || normDb === "TEXT")) return true;
   if (normC === "INTEGER" && (normDb === "INT4" || normDb === "INT" || normDb === "INTEGER" || normDb.includes("SERIAL"))) return true;
   if (normC === "BIGINT" && (normDb === "INT8" || normDb === "BIGINT" || normDb.includes("BIGSERIAL"))) return true;
