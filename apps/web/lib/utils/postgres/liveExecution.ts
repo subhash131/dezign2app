@@ -276,12 +276,10 @@ export async function executePostgresLiveOperation(
     return {
       success: false,
       serverActive: !isConnectionError,
-      error: enhancePostgresError(error, connectionString),
+      error: enhancePostgresError(error instanceof Error ? error : new Error(String(error)), connectionString, isHyperdrive),
       durationMs: Math.max(0.5, durationMs),
     };
   } finally {
-    if (client) {
-      await client.end().catch(() => {});
-    }
+    await client.end().catch(() => {});
   }
 }

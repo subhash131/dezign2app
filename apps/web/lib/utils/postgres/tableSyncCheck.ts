@@ -439,10 +439,10 @@ export async function checkPostgresTableSync(
   } catch (error) {
     console.error(`[checkPostgresTableSync] ❌ Database error checking table "${safeTable}":`, {
       message: error instanceof Error ? error.message : String(error),
-      code: (error as any)?.code,
-      detail: (error as any)?.detail,
-      hint: (error as any)?.hint,
-      stack: (error as any)?.stack,
+      code: error instanceof Error && 'code' in error && typeof error.code === 'string' ? error.code : undefined,
+      detail: error instanceof Error && 'detail' in error && typeof error.detail === 'string' ? error.detail : undefined,
+      hint: error instanceof Error && 'hint' in error && typeof error.hint === 'string' ? error.hint : undefined,
+      stack: error instanceof Error ? error.stack : undefined,
     });
     return {
       success: false,
@@ -460,7 +460,7 @@ export async function checkPostgresTableSync(
       extraForeignKeys: [],
       existingForeignKeys: [],
       missingPrerequisiteTables: [],
-      error: enhancePostgresError(error, connectionString),
+      error: enhancePostgresError(error instanceof Error ? error : new Error(String(error)), connectionString, isHyperdrive),
     };
   } finally {
     if (client) {
