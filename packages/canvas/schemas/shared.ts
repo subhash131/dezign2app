@@ -473,8 +473,8 @@ export interface PipelineStep {
   /** State channel keys to include when outputMode = "specific_fields" */
   langGraphOutputFields?: string[];
   /**
-   * Whether to track and extract input/output/total token usage metrics for this invocation.
-   * When enabled, exposes `usage.input_tokens`, `usage.output_tokens`, `usage.total_tokens` on the step output.
+   * Whether to track and extract input/output/total/reasoning token usage metrics for this invocation.
+   * When enabled, exposes `usage.input_tokens`, `usage.output_tokens`, `usage.total_tokens`, `usage.reasoning_tokens` on the step output.
    */
   langGraphTrackTokenUsage?: boolean;
   /**

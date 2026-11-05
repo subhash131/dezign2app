@@ -1367,12 +1367,14 @@ export function renderLangGraphInvokeStep(
       if (langGraphTrackTokenUsage) {
         rawLines.push(
           `const ${outputVariable} = typeof ${outputVariable}Content === "object" && ${outputVariable}Content !== null`,
-          `  ? { ...${outputVariable}Content, usage: ${outputVariable}Usage }`,
+          `  ? { ...${outputVariable}Content, structuredResponse: ${outputVariable}Content, usage: ${outputVariable}Usage }`,
           `  : { response: ${outputVariable}Content, content: ${outputVariable}Content, usage: ${outputVariable}Usage };`,
         );
       } else {
         rawLines.push(
-          `const ${outputVariable} = ${outputVariable}Content;`,
+          `const ${outputVariable} = typeof ${outputVariable}Content === "object" && ${outputVariable}Content !== null`,
+          `  ? { ...${outputVariable}Content, structuredResponse: ${outputVariable}Content }`,
+          `  : { response: ${outputVariable}Content, content: ${outputVariable}Content };`,
         );
       }
     } else if (
@@ -1400,10 +1402,19 @@ export function renderLangGraphInvokeStep(
         `    }`,
         `  } catch {}`,
         `}`,
+        `let ${outputVariable}Structured = ${outputVariable}Raw?.structuredResponse;`,
+        `if (!${outputVariable}Structured && typeof ${outputVariable}Response === "string" && ${outputVariable}Response.startsWith("{")) {`,
+        `  try {`,
+        `    const _p = JSON.parse(${outputVariable}Response);`,
+        `    if (typeof _p === "object" && _p !== null) ${outputVariable}Structured = _p;`,
+        `  } catch {}`,
+        `}`,
         `const ${outputVariable} = {`,
         `  ...${outputVariable}Raw,`,
+        `  ...(typeof ${outputVariable}Structured === "object" && ${outputVariable}Structured !== null ? ${outputVariable}Structured : {}),`,
         `  response: ${outputVariable}Response,`,
         `  content: ${outputVariable}Response,`,
+        `  structuredResponse: ${outputVariable}Structured,`,
         `  threadId: ${threadIdExpr || "undefined"},`,
         `  state: ${outputVariable}Raw,${langGraphTrackTokenUsage ? `\n  usage: ${outputVariable}Usage,` : ""}
 };`,
