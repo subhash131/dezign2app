@@ -133,11 +133,11 @@ export function resolveSource(
           return `${varName}.state`;
         }
         if (field === "structuredResponse") {
-          return `(${varName}.structuredResponse ?? ${varName}.response)`;
+          return `((${varName} as any).structuredResponse ?? (${varName} as any).response)`;
         }
         if (field.startsWith("structuredResponse.")) {
           const sub = field.slice(19);
-          return `(${varName}.structuredResponse?.${sub} ?? ${varName}.${sub})`;
+          return `((${varName} as any).structuredResponse?.${sub} ?? (${varName} as any).${sub})`;
         }
 
         if (field.includes("[last]")) {
