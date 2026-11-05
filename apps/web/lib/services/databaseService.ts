@@ -52,20 +52,81 @@ export type {
   JsonArray,
 };
 
+const LOCAL_BRIDGE_URL = "http://127.0.0.1:46555";
+
+function isCheckDbConnectionResult(val: object): val is CheckDbConnectionResult {
+  return "success" in val && "engine" in val;
+}
+
+function isCheckDbTableSyncResult(val: object): val is CheckDbTableSyncResult {
+  return "tableExists" in val && "inSync" in val && "success" in val;
+}
+
+function isApplyDbTableSyncResult(val: object): val is ApplyDbTableSyncResult {
+  return "createdTable" in val && "appliedColumns" in val && "success" in val;
+}
+
+function isTestDbOperationResult(val: object): val is TestDbOperationResult {
+  return "success" in val && "mode" in val;
+}
+
+function isDropDbTableResult(val: object): val is DropDbTableResult {
+  return "success" in val && "droppedTable" in val;
+}
+
+function isRenameDbTableResult(val: object): val is RenameDbTableResult {
+  return "success" in val && "oldTableName" in val && "newTableName" in val;
+}
+
+function isRenameDbColumnResult(val: object): val is RenameDbColumnResult {
+  return "success" in val && "oldColumnName" in val && "newColumnName" in val;
+}
+
+async function postToLocalBridge<TPayload, TResult extends object>(
+  endpoint: string,
+  payload: TPayload,
+  isResultValid: (val: object) => val is TResult,
+): Promise<TResult | null> {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 1500);
+    const response = await fetch(`${LOCAL_BRIDGE_URL}${endpoint}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    if (!response.ok) {
+      return null;
+    }
+    const data = await response.json();
+    if (typeof data === "object" && data !== null && isResultValid(data)) {
+      return data;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Execute a database operation against live or sandbox data.
  *
  * Automatically routes:
  * 1. In Electron desktop app -> Native IPC pipe (`window.electronAPI.db.executeOperation`)
- * 2. In Browser development -> Next.js Server Action (`testDbOperationAction`)
- *
- * Zero manual `fetch()` or REST HTTP `/api` calls.
+ * 2. In Browser with local bridge -> Local machine runner (`http://127.0.0.1:46555/api/execute-operation`)
+ * 3. In Browser cloud mode -> Next.js Server Action (`testDbOperationAction`)
  */
 export async function testDatabaseOperation(
   payload: TestDbOperationPayload,
 ): Promise<TestDbOperationResult> {
   const electron = getElectronAPI();
-  // In Electron, always route through IPC — Server Actions are not available in the desktop shell.
   if (electron?.db?.executeOperation) {
     try {
       return await electron.db.executeOperation(payload);
@@ -77,6 +138,15 @@ export async function testDatabaseOperation(
     }
   }
 
+  const localResult = await postToLocalBridge(
+    "/api/execute-operation",
+    payload,
+    isTestDbOperationResult,
+  );
+  if (localResult !== null) {
+    return localResult;
+  }
+
   return testDbOperationAction(payload);
 }
 
@@ -85,18 +155,13 @@ export async function testDatabaseOperation(
  *
  * Automatically routes:
  * 1. In Electron desktop app -> Native IPC pipe (`window.electronAPI.db.checkConnection`)
- *    All engines (SQLite, Postgres, Redis, etc.) are handled by the Electron main process,
- *    which has direct Node.js network/filesystem access to localhost services.
- * 2. In Browser (dev/web) -> Next.js Server Action (`checkDbConnectionAction`)
- *
- * Zero manual `fetch()` or REST HTTP `/api` calls.
+ * 2. In Browser with local bridge -> Local machine runner (`http://127.0.0.1:46555/api/check-connection`)
+ * 3. In Browser cloud mode -> Next.js Server Action (`checkDbConnectionAction`)
  */
 export async function checkDatabaseConnection(
   payload: CheckDbConnectionPayload,
 ): Promise<CheckDbConnectionResult> {
   const electron = getElectronAPI();
-  // In Electron, always route through IPC — Server Actions are not available in the desktop shell.
-  // The main process handles Postgres, Redis, SQLite, and TCP checks natively.
   if (electron?.db?.checkConnection) {
     try {
       return await electron.db.checkConnection(payload);
@@ -108,11 +173,25 @@ export async function checkDatabaseConnection(
     }
   }
 
+  const localResult = await postToLocalBridge(
+    "/api/check-connection",
+    payload,
+    isCheckDbConnectionResult,
+  );
+  if (localResult !== null) {
+    return localResult;
+  }
+
   return checkDbConnectionAction(payload);
 }
 
 /**
  * Check whether a table and all its columns exist in the connected database.
+ *
+ * Automatically routes:
+ * 1. In Electron desktop app -> Native IPC pipe (`window.electronAPI.db.checkTableSync`)
+ * 2. In Browser with local bridge -> Local machine runner (`http://127.0.0.1:46555/api/check-table-sync`)
+ * 3. In Browser cloud mode -> Next.js Server Action (`checkDbTableSyncAction`)
  */
 export async function checkDbTableSync(
   payload: CheckDbTableSyncPayload,
@@ -138,11 +217,25 @@ export async function checkDbTableSync(
     }
   }
 
+  const localResult = await postToLocalBridge(
+    "/api/check-table-sync",
+    payload,
+    isCheckDbTableSyncResult,
+  );
+  if (localResult !== null) {
+    return localResult;
+  }
+
   return checkDbTableSyncAction(payload);
 }
 
 /**
  * Apply table creation or add missing columns to the connected live database.
+ *
+ * Automatically routes:
+ * 1. In Electron desktop app -> Native IPC pipe (`window.electronAPI.db.applyTableSync`)
+ * 2. In Browser with local bridge -> Local machine runner (`http://127.0.0.1:46555/api/apply-table-sync`)
+ * 3. In Browser cloud mode -> Next.js Server Action (`applyDbTableSyncAction`)
  */
 export async function applyDbTableSync(
   payload: ApplyDbTableSyncPayload,
@@ -160,6 +253,15 @@ export async function applyDbTableSync(
         error: `Desktop IPC error: ${err instanceof Error ? err.message : String(err)}`,
       };
     }
+  }
+
+  const localResult = await postToLocalBridge(
+    "/api/apply-table-sync",
+    payload,
+    isApplyDbTableSyncResult,
+  );
+  if (localResult !== null) {
+    return localResult;
   }
 
   return applyDbTableSyncAction(payload);
@@ -184,6 +286,15 @@ export async function dropDbTable(
     }
   }
 
+  const localResult = await postToLocalBridge(
+    "/api/drop-table",
+    payload,
+    isDropDbTableResult,
+  );
+  if (localResult !== null) {
+    return localResult;
+  }
+
   return dropDbTableAction(payload);
 }
 
@@ -205,6 +316,15 @@ export async function renameDbTable(
         error: `Desktop IPC error: ${err instanceof Error ? err.message : String(err)}`,
       };
     }
+  }
+
+  const localResult = await postToLocalBridge(
+    "/api/rename-table",
+    payload,
+    isRenameDbTableResult,
+  );
+  if (localResult !== null) {
+    return localResult;
   }
 
   return renameDbTableAction(payload);
@@ -231,6 +351,14 @@ export async function renameDbColumn(
     }
   }
 
+  const localResult = await postToLocalBridge(
+    "/api/rename-column",
+    payload,
+    isRenameDbColumnResult,
+  );
+  if (localResult !== null) {
+    return localResult;
+  }
+
   return renameDbColumnAction(payload);
 }
-

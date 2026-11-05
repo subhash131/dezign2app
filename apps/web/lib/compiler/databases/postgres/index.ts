@@ -19,7 +19,10 @@ import {
 import { generatePostgresTableHelpers } from "./helpers";
 import {
   generateConnectionFile,
+  generateLocalSyncFile,
+  generateValidateScript,
   generateSyncScript,
+  generateBridgeServerScript,
   generatePackageJson,
   generateTsConfig,
   generateIndexBarrel,
@@ -44,7 +47,10 @@ export * from "./templates";
  * Generated artifacts:
  * - schema.sql: Complete DDL with user tables, BetterAuth, Payments, and test seeds
  * - connection.ts: Connection pool (pg), parameterized query, withTransaction, health check, auto-migrations
- * - scripts/sync.ts: Local migration script to run directly on the developer's machine (pnpm db:push)
+ * - sync.ts: Programmatic local validation & migration functions matching dbSyncStore (validateTable, validateDatabase, applyTableSync, syncAll)
+ * - scripts/validate.ts: Local CLI runner (pnpm db:validate / pnpm db:check)
+ * - scripts/sync.ts: Local migration script to run directly on the developer's machine (pnpm db:push / pnpm db:sync)
+ * - scripts/server.ts: Local zero-dependency HTTP bridge daemon on port 46555 (pnpm db:serve / pnpm db:bridge)
  * - helpers/{entity}.ts: Typed async CRUD helpers with $1, $2 parameterized queries and RETURNING *
  * - helpers/index.ts: Re-exports all table helpers and types
  * - index.ts: Root package entry point
@@ -85,14 +91,71 @@ export function compilePostgresDatabase(
   const userDdlStatements: string[] = [];
   const createdTableNames = new Set<string>();
 
+  const compiledTableDefs: Record<string, {
+    tableName: string;
+    schema: string;
+    columns: Array<{
+      name: string;
+      type: string;
+      isPrimaryKey?: boolean;
+      isNotNull?: boolean;
+      isUnique?: boolean;
+      isForeignKey?: boolean;
+      references?: { table: string; column: string };
+    }>;
+    indexes: Array<{
+      name: string;
+      columns: string;
+      isUnique?: boolean;
+    }>;
+    foreignKeys: Array<{
+      name?: string;
+      column: string;
+      foreignTable: string;
+      foreignColumn: string;
+      onDelete?: string;
+    }>;
+  }> = {};
+
   tables.forEach((tableNode) => {
     const tableName = toTableName(tableNode.data?.label || "table");
     createdTableNames.add(tableName.toLowerCase());
     const cols = getColumns(tableNode);
-    const indexes = (tableNode.data?.indexes || []).filter(
+    const rawIndexes = (tableNode.data?.indexes || []).filter(
       (idx: { name?: string; columns?: string }) => idx && idx.columns,
     );
-    const stmts = buildTableDDL(tableName, cols, indexes, tableSchemas);
+    const validIndexes = rawIndexes.map((i: { name?: string; columns?: string; isUnique?: boolean }) => ({
+      name: i.name || `idx_${tableName}_${(i.columns || "").replace(/[^a-zA-Z0-9_]/g, "_")}`,
+      columns: i.columns || "",
+      isUnique: Boolean(i.isUnique),
+    }));
+    const fks = cols
+      .filter((c) => c.isForeignKey && c.references?.table && c.references?.column)
+      .map((c) => ({
+        name: `fk_${tableName}_${c.name}`,
+        column: c.name,
+        foreignTable: c.references!.table,
+        foreignColumn: c.references!.column,
+        onDelete: "CASCADE",
+      }));
+
+    compiledTableDefs[tableName.toLowerCase()] = {
+      tableName,
+      schema: tableNode.data?.schema || "public",
+      columns: cols.map((c) => ({
+        name: c.name,
+        type: c.type || "string",
+        isPrimaryKey: Boolean(c.isPrimaryKey),
+        isNotNull: Boolean(c.isNotNull),
+        isUnique: Boolean(c.isUnique),
+        isForeignKey: Boolean(c.isForeignKey),
+        references: c.references ? { table: c.references.table, column: c.references.column } : undefined,
+      })),
+      indexes: validIndexes,
+      foreignKeys: fks,
+    };
+
+    const stmts = buildTableDDL(tableName, cols, rawIndexes, tableSchemas);
     userDdlStatements.push(...stmts);
   });
 
@@ -133,6 +196,20 @@ export function compilePostgresDatabase(
         }
       });
     }
+
+    if (!compiledTableDefs[t.toLowerCase()]) {
+      compiledTableDefs[t.toLowerCase()] = {
+        tableName: t,
+        schema: "public",
+        columns: s.map((col) => ({
+          name: col.name,
+          type: col.pgType.toLowerCase(),
+          isPrimaryKey: col.name.toLowerCase() === "id",
+        })),
+        indexes: [],
+        foreignKeys: [],
+      };
+    }
   });
 
   // ── 3. Payments DDL ───────────────────────────────────────────────────────
@@ -143,13 +220,29 @@ export function compilePostgresDatabase(
   ) {
     paymentsDdlStatements.push(...PAYMENTS_PG_DDL);
     createdTableNames.add("subscription");
+    if (!compiledTableDefs["subscription"]) {
+      compiledTableDefs["subscription"] = {
+        tableName: "subscription",
+        schema: "public",
+        columns: [
+          { name: "id", type: "uuid", isPrimaryKey: true },
+          { name: "userId", type: "text", isNotNull: true },
+          { name: "status", type: "text", isNotNull: true },
+          { name: "planId", type: "text", isNotNull: true },
+          { name: "createdAt", type: "timestamptz" },
+          { name: "updatedAt", type: "timestamptz" },
+        ],
+        indexes: [],
+        foreignKeys: [],
+      };
+    }
   }
 
   // ── 4. schema.sql ─────────────────────────────────────────────────────────
   const seedSql =
     options.personas && options.personas.length > 0
       ? buildPgSeedSql(options.personas, createdTableNames, BETTERAUTH_PG_SCHEMAS)
-      : "";
+      : PG_SEED_SQL;
 
   files.push({
     filename: "schema.sql",
@@ -162,14 +255,37 @@ export function compilePostgresDatabase(
     ),
   });
 
-  // ── 5. scripts/sync.ts (Local execution migration runner) ─────────────────
+  const tableDefinitionsJson = JSON.stringify(compiledTableDefs, null, 2);
+
+  // ── 5. sync.ts (Programmatic local validation & migration functions) ──────
+  files.push({
+    filename: "sync.ts",
+    language: "typescript",
+    content: generateLocalSyncFile(packageName, connEnvKey, tableDefinitionsJson),
+  });
+
+  // ── 6. scripts/validate.ts (CLI validation runner: pnpm db:validate) ──────
+  files.push({
+    filename: "scripts/validate.ts",
+    language: "typescript",
+    content: generateValidateScript(packageName),
+  });
+
+  // ── 7. scripts/sync.ts (CLI migration runner: pnpm db:push) ───────────────
   files.push({
     filename: "scripts/sync.ts",
     language: "typescript",
     content: generateSyncScript(packageName, connEnvKey),
   });
 
-  // ── 6. Per-table helpers ───────────────────────────────────────────────────
+  // ── 8. scripts/server.ts (Local bridge daemon on port 46555: pnpm db:serve)
+  files.push({
+    filename: "scripts/server.ts",
+    language: "typescript",
+    content: generateBridgeServerScript(packageName),
+  });
+
+  // ── 9. Per-table helpers ──────────────────────────────────────────────────
   tables.forEach((tableNode) => {
     const rawName = tableNode.data?.label || tableNode.data?.tableRef || "table";
     const tableName = toTableName(rawName);
@@ -223,35 +339,35 @@ export function compilePostgresDatabase(
   // ── tests/connection.test.ts ──────────────────────────────────────────────
   files.push(generateDatabaseConnectionTest("postgres", packageName));
 
-  // ── 7. helpers/index.ts ───────────────────────────────────────────────────
+  // ── 10. helpers/index.ts ──────────────────────────────────────────────────
   files.push({
     filename: "helpers/index.ts",
     language: "typescript",
     content: generateHelpersBarrel(helperBarrel),
   });
 
-  // ── 8. connection.ts ──────────────────────────────────────────────────────
+  // ── 11. connection.ts ─────────────────────────────────────────────────────
   files.push({
     filename: "connection.ts",
     language: "typescript",
     content: generateConnectionFile(packageName, connEnvKey, tableSchemas),
   });
 
-  // ── 9. index.ts ───────────────────────────────────────────────────────────
+  // ── 12. index.ts ──────────────────────────────────────────────────────────
   files.push({
     filename: "index.ts",
     language: "typescript",
     content: generateIndexBarrel(packageName),
   });
 
-  // ── 10. package.json ──────────────────────────────────────────────────────
+  // ── 13. package.json ──────────────────────────────────────────────────────
   files.push({
     filename: "package.json",
     language: "json",
     content: generatePackageJson(packageName),
   });
 
-  // ── 11. tsconfig.json ─────────────────────────────────────────────────────
+  // ── 14. tsconfig.json ─────────────────────────────────────────────────────
   files.push({
     filename: "tsconfig.json",
     language: "json",

@@ -31,11 +31,32 @@ describe("compilePostgresDatabase", () => {
     const filenames = result.files.map((f) => f.filename);
     expect(filenames).toContain("connection.ts");
     expect(filenames).toContain("schema.sql");
+    expect(filenames).toContain("sync.ts");
+    expect(filenames).toContain("scripts/validate.ts");
+    expect(filenames).toContain("scripts/sync.ts");
+    expect(filenames).toContain("scripts/server.ts");
     expect(filenames).toContain("helpers/order.ts");
     expect(filenames).toContain("helpers/index.ts");
     expect(filenames).toContain("index.ts");
     expect(filenames).toContain("package.json");
     expect(filenames).toContain("tsconfig.json");
+  });
+
+  it("should generate programmatic local sync functions in sync.ts matching dbSyncStore", () => {
+    const result = compilePostgresDatabase([orderEntity], []);
+    const syncFile = result.files.find((f) => f.filename === "sync.ts");
+    expect(syncFile).toBeDefined();
+    const code = syncFile!.content;
+    expect(code).toContain("export async function validateTable");
+    expect(code).toContain("export async function validateDatabase");
+    expect(code).toContain("export async function validateAll");
+    expect(code).toContain("export async function applyTableSync");
+    expect(code).toContain("export async function syncAll");
+    expect(code).toContain("export async function checkConnection");
+    expect(code).toContain("export const TABLE_DEFINITIONS");
+    expect(code).toContain('"order"');
+    expect(code).not.toContain("as any");
+    expect(code).not.toContain("as unknown");
   });
 
   it("should generate async helper functions with $N params", () => {
@@ -69,6 +90,29 @@ describe("compilePostgresDatabase", () => {
     expect(sql).toContain('CREATE TABLE IF NOT EXISTS "user"');
     expect(sql).toContain('CREATE TABLE IF NOT EXISTS "session"');
     expect(sql).toContain('CREATE TABLE IF NOT EXISTS "subscription"');
+  });
+
+  it("should generate schema.sql with seed data when personas are provided", () => {
+    const result = compilePostgresDatabase([orderEntity], [], {
+      personas: [
+        {
+          id: "persona_admin",
+          name: "Admin",
+          records: [
+            {
+              tableName: "user",
+              fields: {
+                id: "admin_user_1",
+                name: "Admin User",
+                email: "admin@example.com",
+              },
+            },
+          ],
+        },
+      ],
+    });
+    const schema = result.files.find((f) => f.filename === "schema.sql");
+    const sql = schema!.content;
     expect(sql).toContain("ON CONFLICT");
   });
 
@@ -84,12 +128,15 @@ describe("compilePostgresDatabase", () => {
     expect(code).toContain("ADD COLUMN IF NOT EXISTS");
   });
 
-  it("should generate package.json with pg dependency", () => {
+  it("should generate package.json with pg dependency and local sync scripts", () => {
     const result = compilePostgresDatabase([orderEntity], []);
     const pkg = result.files.find((f) => f.filename === "package.json");
     const parsed = JSON.parse(pkg!.content);
     expect(parsed.dependencies).toHaveProperty("pg");
     expect(parsed.devDependencies).toHaveProperty("@types/pg");
+    expect(parsed.scripts).toHaveProperty("db:push");
+    expect(parsed.scripts).toHaveProperty("db:validate");
+    expect(parsed.scripts).toHaveProperty("db:serve");
   });
 
   it("should generate reusableFunctions with correct metadata", () => {
@@ -161,6 +208,40 @@ describe("compilePostgresDatabase", () => {
     expect(code).toContain("const row = res.rows[0];");
     expect(code).toContain("return row;");
     expect(code).toContain("return res.rows[0] || null;");
+  });
+
+  it("should avoid any, unknown, or as xyz type assertions in generated local sync files and scripts", () => {
+    const result = compilePostgresDatabase([orderEntity], []);
+    const syncFile = result.files.find((f) => f.filename === "sync.ts");
+    expect(syncFile).toBeDefined();
+    const syncCode = syncFile!.content;
+    // Check that there are no TS 'as' assertions or any/unknown keywords
+    expect(syncCode).not.toMatch(/\bas\s+[A-Za-z0-9_]/);
+    expect(syncCode).not.toMatch(/\bany\b/);
+    expect(syncCode).not.toMatch(/\bunknown\b/);
+
+    const validateScript = result.files.find((f) => f.filename === "scripts/validate.ts");
+    expect(validateScript).toBeDefined();
+    expect(validateScript!.content).not.toMatch(/\bas\s+[A-Za-z0-9_]/);
+    expect(validateScript!.content).not.toMatch(/\bany\b/);
+    expect(validateScript!.content).not.toMatch(/\bunknown\b/);
+
+    const syncScript = result.files.find((f) => f.filename === "scripts/sync.ts");
+    expect(syncScript).toBeDefined();
+    expect(syncScript!.content).not.toMatch(/\bas\s+[A-Za-z0-9_]/);
+    expect(syncScript!.content).not.toMatch(/\bany\b/);
+    expect(syncScript!.content).not.toMatch(/\bunknown\b/);
+
+    const serverScript = result.files.find((f) => f.filename === "scripts/server.ts");
+    expect(serverScript).toBeDefined();
+    const serverLines = serverScript!.content
+      .split("\n")
+      .filter((line) => !line.trim().startsWith("import "));
+    for (const line of serverLines) {
+      expect(line).not.toMatch(/\bas\s+[A-Za-z0-9_]/);
+    }
+    expect(serverScript!.content).not.toMatch(/\bany\b/);
+    expect(serverScript!.content).not.toMatch(/\bunknown\b/);
   });
 
   it("should provide prepare compatibility on postgres connection pool for better-sqlite3 style callers", () => {
