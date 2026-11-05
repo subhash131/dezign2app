@@ -52,7 +52,7 @@ export type {
   JsonArray,
 };
 
-const LOCAL_BRIDGE_URL = "http://127.0.0.1:46555";
+const LOCAL_BRIDGE_URL = "http://127.0.0.1:9000";
 
 function isCheckDbConnectionResult(val: object): val is CheckDbConnectionResult {
   return "success" in val && "engine" in val;
@@ -86,13 +86,14 @@ async function postToLocalBridge<TPayload, TResult extends object>(
   endpoint: string,
   payload: TPayload,
   isResultValid: (val: object) => val is TResult,
+  timeoutMs = 20000,
 ): Promise<TResult | null> {
   if (typeof window === "undefined") {
     return null;
   }
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 1500);
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     const response = await fetch(`${LOCAL_BRIDGE_URL}${endpoint}`, {
       method: "POST",
       headers: {
@@ -103,6 +104,12 @@ async function postToLocalBridge<TPayload, TResult extends object>(
     });
     clearTimeout(timeoutId);
     if (!response.ok) {
+      try {
+        const errJson = await response.json();
+        if (typeof errJson === "object" && errJson !== null && isResultValid(errJson)) {
+          return errJson;
+        }
+      } catch {}
       return null;
     }
     const data = await response.json();
@@ -110,7 +117,8 @@ async function postToLocalBridge<TPayload, TResult extends object>(
       return data;
     }
     return null;
-  } catch {
+  } catch (err) {
+    console.warn(`[LocalBridge ${endpoint}] Request failed or timed out:`, err);
     return null;
   }
 }
@@ -120,7 +128,7 @@ async function postToLocalBridge<TPayload, TResult extends object>(
  *
  * Automatically routes:
  * 1. In Electron desktop app -> Native IPC pipe (`window.electronAPI.db.executeOperation`)
- * 2. In Browser with local bridge -> Local machine runner (`http://127.0.0.1:46555/api/execute-operation`)
+ * 2. In Browser with local bridge -> Local machine runner (`http://127.0.0.1:9000/api/execute-operation`)
  * 3. In Browser cloud mode -> Next.js Server Action (`testDbOperationAction`)
  */
 export async function testDatabaseOperation(
@@ -155,7 +163,7 @@ export async function testDatabaseOperation(
  *
  * Automatically routes:
  * 1. In Electron desktop app -> Native IPC pipe (`window.electronAPI.db.checkConnection`)
- * 2. In Browser with local bridge -> Local machine runner (`http://127.0.0.1:46555/api/check-connection`)
+ * 2. In Browser with local bridge -> Local machine runner (`http://127.0.0.1:9000/api/check-connection`)
  * 3. In Browser cloud mode -> Next.js Server Action (`checkDbConnectionAction`)
  */
 export async function checkDatabaseConnection(
@@ -182,7 +190,15 @@ export async function checkDatabaseConnection(
     return localResult;
   }
 
-  return checkDbConnectionAction(payload);
+  try {
+    return await checkDbConnectionAction(payload);
+  } catch {
+    return {
+      success: false,
+      engine: payload.engine || "postgres",
+      error: "Local DB sync server is not running on port 9000. Please run 'pnpm db:server' in your terminal to start the sync server.",
+    };
+  }
 }
 
 /**
@@ -190,7 +206,7 @@ export async function checkDatabaseConnection(
  *
  * Automatically routes:
  * 1. In Electron desktop app -> Native IPC pipe (`window.electronAPI.db.checkTableSync`)
- * 2. In Browser with local bridge -> Local machine runner (`http://127.0.0.1:46555/api/check-table-sync`)
+ * 2. In Browser with local bridge -> Local machine runner (`http://127.0.0.1:9000/api/check-table-sync`)
  * 3. In Browser cloud mode -> Next.js Server Action (`checkDbTableSyncAction`)
  */
 export async function checkDbTableSync(
@@ -212,6 +228,10 @@ export async function checkDbTableSync(
         missingIndexes: [],
         extraIndexes: [],
         existingIndexes: [],
+        missingForeignKeys: [],
+        extraForeignKeys: [],
+        existingForeignKeys: [],
+        missingPrerequisiteTables: [],
         error: `Desktop IPC error: ${err instanceof Error ? err.message : String(err)}`,
       };
     }
@@ -226,7 +246,27 @@ export async function checkDbTableSync(
     return localResult;
   }
 
-  return checkDbTableSyncAction(payload);
+  try {
+    return await checkDbTableSyncAction(payload);
+  } catch {
+    return {
+      success: false,
+      serverReachable: false,
+      tableExists: false,
+      inSync: false,
+      missingColumns: [],
+      extraColumns: [],
+      existingColumns: [],
+      missingIndexes: [],
+      extraIndexes: [],
+      existingIndexes: [],
+      missingForeignKeys: [],
+      extraForeignKeys: [],
+      existingForeignKeys: [],
+      missingPrerequisiteTables: [],
+      error: "Local DB sync server is not running on port 9000. Please run 'pnpm db:server' in your terminal, then click Validate DB again.",
+    };
+  }
 }
 
 /**
@@ -234,7 +274,7 @@ export async function checkDbTableSync(
  *
  * Automatically routes:
  * 1. In Electron desktop app -> Native IPC pipe (`window.electronAPI.db.applyTableSync`)
- * 2. In Browser with local bridge -> Local machine runner (`http://127.0.0.1:46555/api/apply-table-sync`)
+ * 2. In Browser with local bridge -> Local machine runner (`http://127.0.0.1:9000/api/apply-table-sync`)
  * 3. In Browser cloud mode -> Next.js Server Action (`applyDbTableSyncAction`)
  */
 export async function applyDbTableSync(
@@ -250,6 +290,7 @@ export async function applyDbTableSync(
         createdTable: false,
         appliedColumns: [],
         appliedIndexes: [],
+        appliedForeignKeys: [],
         error: `Desktop IPC error: ${err instanceof Error ? err.message : String(err)}`,
       };
     }
@@ -264,7 +305,18 @@ export async function applyDbTableSync(
     return localResult;
   }
 
-  return applyDbTableSyncAction(payload);
+  try {
+    return await applyDbTableSyncAction(payload);
+  } catch {
+    return {
+      success: false,
+      createdTable: false,
+      appliedColumns: [],
+      appliedIndexes: [],
+      appliedForeignKeys: [],
+      error: "Local DB sync server is not running on port 9000. Please run 'pnpm db:server' in your terminal, then click Sync again.",
+    };
+  }
 }
 
 /**

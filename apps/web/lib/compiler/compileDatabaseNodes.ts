@@ -547,13 +547,18 @@ export function compileDatabaseNodes(
         exports: {
           ".": "./index.ts",
           "./connection": "./connection.ts",
+          "./sync": primaryFolder ? `./${primaryFolder}/sync.ts` : "./sync.ts",
           "./helpers": "./helpers/index.ts",
           "./helpers/*": "./helpers/*.ts",
         },
         scripts: {
+          dev: primaryFolder ? `tsx ./${primaryFolder}/scripts/server.ts` : "tsx ./scripts/server.ts",
+          start: primaryFolder ? `tsx ./${primaryFolder}/scripts/server.ts` : "tsx ./scripts/server.ts",
           build: "tsc",
           "check-types": "tsc --noEmit",
           test: "vitest run",
+          "db:validate": primaryFolder ? `tsx ./${primaryFolder}/scripts/validate.ts` : "tsx ./scripts/validate.ts",
+          "db:sync": primaryFolder ? `tsx ./${primaryFolder}/scripts/sync.ts` : "tsx ./scripts/sync.ts",
         },
         dependencies: {
           "@workspace/logger": "workspace:*",

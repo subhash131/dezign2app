@@ -2,16 +2,88 @@
  * local-db-bridge.ts
  *
  * Lightweight local database bridge daemon for dezign2app.
- * Runs on the developer's local machine (http://127.0.0.1:46555).
+ * Runs on the developer's local machine (http://127.0.0.1:9000).
  *
- * Executes live schema introspection, table sync validation, DDL migrations,
- * and operation tests directly via Node.js 'pg' client without cloud TLS limits.
+ * Executes live schema introspection, table sync validation, DDL migrations
+ * (CREATE TABLE, ALTER TABLE, DROP TABLE, RENAME TABLE/COLUMN),
+ * and operation tests directly via Node.js 'pg' and 'node:sqlite' clients.
  */
 import "dotenv/config";
 import * as http from "node:http";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import { Client } from "pg";
+import { DatabaseSync } from "node:sqlite";
 
-const PORT = 46555;
+const PORT = 9000;
+
+const currentDir = typeof __dirname !== "undefined"
+  ? __dirname
+  : path.dirname(fileURLToPath(import.meta.url));
+
+function findEnvFiles(): string[] {
+  const dirs = [
+    process.cwd(),
+    path.join(process.cwd(), "apps", "web"),
+    path.resolve(currentDir),
+    path.resolve(currentDir, ".."),
+    path.resolve(currentDir, "..", "apps", "web"),
+  ];
+  const filenames = [".env.local", ".env"];
+  const found: string[] = [];
+  for (const d of dirs) {
+    for (const f of filenames) {
+      const full = path.join(d, f);
+      if (fs.existsSync(full) && !found.includes(full)) {
+        found.push(full);
+      }
+    }
+  }
+  return found;
+}
+
+function parseEnvFile(filePath: string): Record<string, string> {
+  const res: Record<string, string> = {};
+  try {
+    const content = fs.readFileSync(filePath, "utf-8");
+    for (const line of content.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#") || !trimmed.includes("=")) continue;
+      const idx = trimmed.indexOf("=");
+      const key = trimmed.substring(0, idx).trim();
+      let val = trimmed.substring(idx + 1).trim();
+      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+        val = val.slice(1, -1);
+      }
+      res[key] = val;
+    }
+  } catch {}
+  return res;
+}
+
+// Initial populate of process.env from found env files
+for (const envFile of findEnvFiles()) {
+  const vars = parseEnvFile(envFile);
+  for (const [k, v] of Object.entries(vars)) {
+    if (!process.env[k]) {
+      process.env[k] = v;
+    }
+  }
+}
+
+function resolveEnvKey(key?: string): string | undefined {
+  if (!key) return undefined;
+  if (process.env[key]) return process.env[key];
+  for (const envFile of findEnvFiles()) {
+    const vars = parseEnvFile(envFile);
+    if (vars[key]) {
+      process.env[key] = vars[key];
+      return vars[key];
+    }
+  }
+  return undefined;
+}
 
 export interface PostgresConnectionConfig {
   host?: string;
@@ -26,6 +98,8 @@ export interface PostgresConnectionConfig {
   connectionStringPooledEnv?: string;
   sslMode?: string;
   provider?: string;
+  dbFilePath?: string;
+  dbFilePathEnv?: string;
 }
 
 export interface CanvasColumnDefinition {
@@ -78,10 +152,10 @@ export interface CheckDbTableSyncResult {
   serverReachable: boolean;
   tableExists: boolean;
   inSync: boolean;
-  missingColumns: string[];
+  missingColumns: Array<{ name: string; type: string }>;
   alteredColumns: AlteredColumnDefinition[];
-  extraColumns: string[];
-  existingColumns: string[];
+  extraColumns: Array<{ name: string; type: string }>;
+  existingColumns: Array<{ name: string; type: string }>;
   missingIndexes: CanvasIndexDefinition[];
   extraIndexes: CanvasIndexDefinition[];
   existingIndexes: CanvasIndexDefinition[];
@@ -119,8 +193,10 @@ export interface ApplyDbTableSyncResult {
   appliedIndexes?: string[];
   appliedForeignKeys?: string[];
   appliedPrerequisiteTables?: string[];
+  droppedColumns?: string[];
+  droppedIndexes?: string[];
+  droppedForeignKeys?: string[];
   error?: string;
-  tip?: string;
 }
 
 export interface CheckDbConnectionPayload {
@@ -131,19 +207,17 @@ export interface CheckDbConnectionPayload {
 
 export interface CheckDbConnectionResult {
   success: boolean;
-  engine?: string;
+  engine: string;
   latencyMs?: number;
   connectionUri?: string;
-  host?: string;
-  port?: number;
-  error?: string;
   info?: {
     version?: string;
     rawVersion?: string;
-    mode?: string;
+    database?: string;
     status?: string;
     reachable?: boolean;
   };
+  error?: string;
 }
 
 export interface DropDbTablePayload {
@@ -214,50 +288,101 @@ export interface TestDbOperationResult {
   error?: string;
 }
 
+function resolveSqliteFilePath(config?: PostgresConnectionConfig): string {
+  let file = config?.dbFilePath || "dev.db";
+  if (config?.dbFilePathEnv) {
+    const envVal = resolveEnvKey(config.dbFilePathEnv);
+    if (envVal) file = envVal;
+  }
+  if (path.isAbsolute(file)) return file;
+  return path.resolve(process.cwd(), file);
+}
+
 function resolveConnectionString(config?: PostgresConnectionConfig): string {
-  if (!config) {
-    return process.env.DATABASE_URL || "postgresql://postgres:postgres@127.0.0.1:5432/postgres";
+  if (config?.connectionString) return config.connectionString;
+  if (config?.connectionStringPooled) return config.connectionStringPooled;
+
+  if (config?.connectionStringEnv) {
+    const val = resolveEnvKey(config.connectionStringEnv);
+    if (val) return val;
   }
-  if (config.connectionString) return config.connectionString;
-  if (config.connectionStringPooled) return config.connectionStringPooled;
-  if (config.connectionStringEnv && process.env[config.connectionStringEnv]) {
-    return process.env[config.connectionStringEnv] || "";
+  if (config?.connectionStringPooledEnv) {
+    const val = resolveEnvKey(config.connectionStringPooledEnv);
+    if (val) return val;
   }
-  if (config.connectionStringPooledEnv && process.env[config.connectionStringPooledEnv]) {
-    return process.env[config.connectionStringPooledEnv] || "";
+
+  // Fallback to DATABASE_URL or DATABASE_URL_POOLED
+  const hasExplicitCredentials = Boolean(
+    config?.database || config?.user || config?.username || config?.password
+  );
+  if (!hasExplicitCredentials) {
+    const dbUrl = resolveEnvKey("DATABASE_URL") || resolveEnvKey("DATABASE_URL_POOLED");
+    if (dbUrl) return dbUrl;
   }
-  if (process.env.DATABASE_URL) {
-    return process.env.DATABASE_URL;
-  }
-  const host = config.host || "127.0.0.1";
-  const port = config.port || 5432;
-  const db = config.database || "postgres";
-  const user = config.user || config.username || "postgres";
-  const pass = config.password || "";
+
+  const host = config?.host || "127.0.0.1";
+  const port = config?.port || 5432;
+  const db = config?.database || "postgres";
+  const user = config?.user || config?.username || "postgres";
+  const pass = config?.password || "";
   const authPart = pass ? `${encodeURIComponent(user)}:${encodeURIComponent(pass)}` : encodeURIComponent(user);
-  return `postgresql://${authPart}@${host}:${port}/${encodeURIComponent(db)}`;
+  let url = `postgresql://${authPart}@${host}:${port}/${encodeURIComponent(db)}`;
+  if (
+    config?.sslMode === "require" ||
+    config?.provider === "supabase" ||
+    config?.provider === "neon"
+  ) {
+    url += "?sslmode=require";
+  }
+  return url;
 }
 
 function createPostgresClient(config?: PostgresConnectionConfig): { client: Client; connectionString: string } {
   const connectionString = resolveConnectionString(config);
   const isLocal = connectionString.includes("localhost") || connectionString.includes("127.0.0.1");
+  const requiresSsl =
+    !isLocal ||
+    config?.sslMode === "require" ||
+    config?.provider === "supabase" ||
+    config?.provider === "neon" ||
+    config?.provider === "aws_rds" ||
+    connectionString.includes("sslmode=require") ||
+    connectionString.includes("supabase.co") ||
+    connectionString.includes("pooler.supabase.com") ||
+    connectionString.includes("neon.tech");
+
   const client = new Client({
     connectionString,
-    ssl: isLocal ? undefined : { rejectUnauthorized: false },
+    ssl: requiresSsl ? { rejectUnauthorized: false } : undefined,
   });
   return { client, connectionString };
 }
 
-function mapToPgType(typeStr: string): string {
+function mapToPgType(typeStr: string, isSinglePk = false): string {
   const t = typeStr.toLowerCase().trim();
+  if (isSinglePk) {
+    if (t === "number" || t === "int" || t === "integer" || t === "serial") return "SERIAL";
+    if (t === "bigint" || t === "bigserial") return "BIGSERIAL";
+    if (t === "uuid") return "UUID";
+    return "TEXT";
+  }
   if (t === "string" || t === "text" || t === "varchar") return "TEXT";
   if (t === "number" || t === "int" || t === "integer") return "INTEGER";
+  if (t === "smallint") return "SMALLINT";
   if (t === "bigint") return "BIGINT";
-  if (t === "float" || t === "double" || t === "decimal") return "DOUBLE PRECISION";
+  if (t === "serial") return "SERIAL";
+  if (t === "bigserial") return "BIGSERIAL";
+  if (t === "float" || t === "double" || t === "decimal" || t === "double precision") return "DOUBLE PRECISION";
+  if (t === "real") return "REAL";
+  if (t === "numeric") return "NUMERIC";
   if (t === "boolean" || t === "bool") return "BOOLEAN";
   if (t === "timestamp" || t === "datetime") return "TIMESTAMPTZ";
+  if (t === "timestamptz") return "TIMESTAMPTZ";
+  if (t === "date") return "DATE";
+  if (t === "time") return "TIME";
   if (t === "json" || t === "jsonb" || t === "object") return "JSONB";
   if (t === "uuid") return "UUID";
+  if (t === "bytea" || t === "blob") return "BYTEA";
   return "TEXT";
 }
 
@@ -275,6 +400,38 @@ function areTypesEquivalent(cType: string, dbType: string): boolean {
 }
 
 async function handleCheckConnection(payload: CheckDbConnectionPayload): Promise<CheckDbConnectionResult> {
+  const engine = (payload.engine || "postgres").toLowerCase();
+
+  if (engine === "sqlite") {
+    const start = Date.now();
+    try {
+      const dbPath = resolveSqliteFilePath(payload.connection);
+      const dir = path.dirname(dbPath);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      const db = new DatabaseSync(dbPath);
+      db.exec("SELECT 1;");
+      db.close();
+      const latencyMs = Date.now() - start;
+      return {
+        success: true,
+        engine: "sqlite",
+        latencyMs,
+        connectionUri: `sqlite:${dbPath}`,
+        info: {
+          version: "SQLite 3",
+          status: "Ready",
+          reachable: true,
+        },
+      };
+    } catch (err) {
+      return {
+        success: false,
+        engine: "sqlite",
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
   const start = Date.now();
   const { client, connectionString } = createPostgresClient(payload.connection);
   try {
@@ -293,6 +450,7 @@ async function handleCheckConnection(payload: CheckDbConnectionPayload): Promise
       info: {
         version: row?.version || "PostgreSQL",
         rawVersion: row?.version,
+        database: row?.current_database,
         status: "Connected (Local Bridge)",
         reachable: true,
       },
@@ -317,6 +475,98 @@ async function handleCheckConnection(payload: CheckDbConnectionPayload): Promise
 }
 
 async function handleCheckTableSync(payload: CheckDbTableSyncPayload): Promise<CheckDbTableSyncResult> {
+  const engine = (payload.engine || "postgres").toLowerCase();
+
+  if (engine === "sqlite") {
+    try {
+      const dbPath = resolveSqliteFilePath(payload.connection);
+      const db = new DatabaseSync(dbPath);
+      const safeTable = payload.tableName.trim();
+      const chk = db.prepare(
+        "SELECT name FROM sqlite_master WHERE type='table' AND LOWER(name) = LOWER(?)"
+      ).get(safeTable) as { name?: string } | undefined;
+
+      if (!chk) {
+        db.close();
+        return {
+          success: true,
+          serverReachable: true,
+          tableExists: false,
+          inSync: false,
+          missingColumns: (payload.columns || []).map((c) => ({ name: c.name, type: c.type })),
+          alteredColumns: [],
+          extraColumns: [],
+          existingColumns: [],
+          missingIndexes: payload.indexes || [],
+          extraIndexes: [],
+          existingIndexes: [],
+          missingForeignKeys: payload.foreignKeys || [],
+          extraForeignKeys: [],
+          existingForeignKeys: [],
+          missingPrerequisiteTables: [],
+        };
+      }
+
+      const colRows = db.prepare(`PRAGMA table_info("${safeTable}")`).all() as Array<{ name: string; type: string }>;
+      db.close();
+
+      const dbColMap = new Map(colRows.map((r) => [r.name.toLowerCase(), r.type]));
+      const missingColumns: Array<{ name: string; type: string }> = [];
+      const existingColumns: Array<{ name: string; type: string }> = [];
+
+      for (const c of payload.columns || []) {
+        if (!dbColMap.has(c.name.toLowerCase())) {
+          missingColumns.push({ name: c.name, type: c.type });
+        } else {
+          existingColumns.push({ name: c.name, type: dbColMap.get(c.name.toLowerCase()) || c.type });
+        }
+      }
+
+      const canvasColSet = new Set((payload.columns || []).map((c) => c.name.toLowerCase()));
+      const extraColumns = colRows
+        .filter((r) => !canvasColSet.has(r.name.toLowerCase()))
+        .map((r) => ({ name: r.name, type: r.type }));
+
+      const inSync = missingColumns.length === 0;
+      return {
+        success: true,
+        serverReachable: true,
+        tableExists: true,
+        inSync,
+        missingColumns,
+        alteredColumns: [],
+        extraColumns,
+        existingColumns,
+        missingIndexes: [],
+        extraIndexes: [],
+        existingIndexes: [],
+        missingForeignKeys: [],
+        extraForeignKeys: [],
+        existingForeignKeys: [],
+        missingPrerequisiteTables: [],
+      };
+    } catch (err) {
+      return {
+        success: false,
+        serverReachable: false,
+        tableExists: false,
+        inSync: false,
+        missingColumns: (payload.columns || []).map((c) => ({ name: c.name, type: c.type })),
+        alteredColumns: [],
+        extraColumns: [],
+        existingColumns: [],
+        missingIndexes: payload.indexes || [],
+        extraIndexes: [],
+        existingIndexes: [],
+        missingForeignKeys: payload.foreignKeys || [],
+        extraForeignKeys: [],
+        existingForeignKeys: [],
+        missingPrerequisiteTables: [],
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
   const { tableName, schema = "public", columns = [], indexes = [], foreignKeys = [] } = payload;
   const safeTable = tableName.trim();
   const targetSchema = schema.trim() || "public";
@@ -340,7 +590,7 @@ async function handleCheckTableSync(payload: CheckDbTableSyncPayload): Promise<C
         serverReachable: true,
         tableExists: false,
         inSync: false,
-        missingColumns: columns.map((c) => c.name),
+        missingColumns: columns.map((c) => ({ name: c.name, type: c.type })),
         alteredColumns: [],
         extraColumns: [],
         existingColumns: [],
@@ -366,16 +616,16 @@ async function handleCheckTableSync(payload: CheckDbTableSyncPayload): Promise<C
     }));
     const dbColMap = new Map(dbCols.map((c) => [c.name.toLowerCase(), c.type]));
 
-    const missingColumns: string[] = [];
+    const missingColumns: Array<{ name: string; type: string }> = [];
     const alteredColumns: AlteredColumnDefinition[] = [];
-    const existingColumns: string[] = [];
+    const existingColumns: Array<{ name: string; type: string }> = [];
 
     for (const c of columns) {
       const dbType = dbColMap.get(c.name.toLowerCase());
       if (dbType === undefined) {
-        missingColumns.push(c.name);
+        missingColumns.push({ name: c.name, type: c.type });
       } else {
-        existingColumns.push(c.name);
+        existingColumns.push({ name: c.name, type: dbType });
         if (!areTypesEquivalent(c.type, dbType)) {
           alteredColumns.push({
             name: c.name,
@@ -387,9 +637,9 @@ async function handleCheckTableSync(payload: CheckDbTableSyncPayload): Promise<C
     }
 
     const canvasColSet = new Set(columns.map((c) => c.name.toLowerCase()));
-    const extraColumns = dbCols
+    const extraColumns: Array<{ name: string; type: string }> = dbCols
       .filter((c) => !canvasColSet.has(c.name.toLowerCase()))
-      .map((c) => c.name);
+      .map((c) => ({ name: c.name, type: c.type }));
 
     const idxRes = await client.query<{ index_name: string; is_unique: boolean; column_names: string }>(
       `SELECT i.relname AS index_name,
@@ -478,6 +728,7 @@ async function handleCheckTableSync(payload: CheckDbTableSyncPayload): Promise<C
     const inSync =
       missingColumns.length === 0 &&
       alteredColumns.length === 0 &&
+      extraColumns.length === 0 &&
       missingIndexes.length === 0 &&
       missingForeignKeys.length === 0;
 
@@ -504,7 +755,7 @@ async function handleCheckTableSync(payload: CheckDbTableSyncPayload): Promise<C
       serverReachable: false,
       tableExists: false,
       inSync: false,
-      missingColumns: [],
+      missingColumns: columns.map((c) => ({ name: c.name, type: c.type })),
       alteredColumns: [],
       extraColumns: [],
       existingColumns: [],
@@ -523,6 +774,65 @@ async function handleCheckTableSync(payload: CheckDbTableSyncPayload): Promise<C
 }
 
 async function handleApplyTableSync(payload: ApplyDbTableSyncPayload): Promise<ApplyDbTableSyncResult> {
+  const engine = (payload.engine || "postgres").toLowerCase();
+
+  if (engine === "sqlite") {
+    try {
+      const dbPath = resolveSqliteFilePath(payload.connection);
+      const dir = path.dirname(dbPath);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      const db = new DatabaseSync(dbPath);
+      const safeTable = payload.tableName.trim();
+
+      const chk = db.prepare(
+        "SELECT name FROM sqlite_master WHERE type='table' AND LOWER(name) = LOWER(?)"
+      ).get(safeTable);
+
+      const appliedColumns: string[] = [];
+      const droppedColumns: string[] = [];
+      let createdTable = false;
+
+      if (!chk) {
+        const colDefs = (payload.columns || []).map((c) => {
+          let def = `"${c.name}" ${c.type.toUpperCase() === "INTEGER" || c.type.toUpperCase() === "NUMBER" ? "INTEGER" : "TEXT"}`;
+          if (c.isPrimaryKey || c.name.toLowerCase() === "id") def += " PRIMARY KEY";
+          if (c.isNotNull) def += " NOT NULL";
+          return def;
+        });
+        if (!colDefs.some((d) => d.includes("PRIMARY KEY"))) {
+          colDefs.unshift('"id" TEXT PRIMARY KEY');
+        }
+        db.exec(`CREATE TABLE IF NOT EXISTS "${safeTable}" (${colDefs.join(", ")});`);
+        createdTable = true;
+      } else {
+        // Table exists, add missing columns
+        const colRows = db.prepare(`PRAGMA table_info("${safeTable}")`).all() as Array<{ name: string; type: string }>;
+        const existingNames = new Set(colRows.map((r) => r.name.toLowerCase()));
+        for (const col of payload.columns || []) {
+          if (!existingNames.has(col.name.toLowerCase())) {
+            db.exec(`ALTER TABLE "${safeTable}" ADD COLUMN "${col.name}" ${col.type.toUpperCase() === "INTEGER" ? "INTEGER" : "TEXT"};`);
+            appliedColumns.push(col.name);
+          }
+        }
+      }
+      db.close();
+
+      return {
+        success: true,
+        createdTable,
+        appliedColumns,
+        droppedColumns,
+      };
+    } catch (err) {
+      return {
+        success: false,
+        createdTable: false,
+        appliedColumns: [],
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
   const {
     tableName,
     schema = "public",
@@ -537,18 +847,29 @@ async function handleApplyTableSync(payload: ApplyDbTableSyncPayload): Promise<A
 
   const appliedColumns: string[] = [];
   const alteredColumns: AlteredColumnDefinition[] = [];
+  const droppedColumns: string[] = [];
   const appliedIndexes: string[] = [];
+  const droppedIndexes: string[] = [];
   const appliedForeignKeys: string[] = [];
+  const droppedForeignKeys: string[] = [];
   const appliedPrerequisiteTables: string[] = [];
   let createdTable = false;
 
   try {
     await client.connect();
 
+    // 0. Ensure schema exists
+    if (targetSchema && targetSchema !== "public") {
+      await client.query(`CREATE SCHEMA IF NOT EXISTS "${targetSchema}"`);
+    }
+
     // 1. Create prerequisite tables if needed
     for (const prereq of prerequisiteTables) {
       const pTable = prereq.tableName.trim();
       const pSchema = prereq.schema?.trim() || targetSchema;
+      if (pSchema && pSchema !== "public") {
+        await client.query(`CREATE SCHEMA IF NOT EXISTS "${pSchema}"`);
+      }
       const chk = await client.query<{ exists: boolean }>(
         `SELECT EXISTS (
           SELECT 1 FROM information_schema.tables
@@ -557,18 +878,31 @@ async function handleApplyTableSync(payload: ApplyDbTableSyncPayload): Promise<A
         [pTable, pSchema]
       );
       if (!chk.rows[0]?.exists) {
-        const colSql = prereq.columns.map((c) => {
-          const pgType = mapToPgType(c.type);
+        const pExplicitPks = (prereq.columns || []).filter((c) => c.isPrimaryKey || c.name.toLowerCase() === "id");
+        const pColDefs: string[] = [];
+        const pPkNames: string[] = [];
+
+        for (const c of prereq.columns || []) {
+          const isPk = Boolean(c.isPrimaryKey || (pExplicitPks.length === 0 && c.name.toLowerCase() === "id"));
+          if (isPk) pPkNames.push(c.name);
+          const pgType = mapToPgType(c.type, isPk && pExplicitPks.length <= 1);
           let def = `"${c.name}" ${pgType}`;
-          if (c.isPrimaryKey || c.name.toLowerCase() === "id") def += " PRIMARY KEY";
-          if (c.isNotNull) def += " NOT NULL";
+          if (isPk && pExplicitPks.length <= 1) {
+            def += " PRIMARY KEY";
+          } else if (c.isNotNull || isPk) {
+            def += " NOT NULL";
+          }
           if (c.isUnique) def += " UNIQUE";
-          return def;
-        });
-        if (!colSql.some((s) => s.includes("PRIMARY KEY"))) {
-          colSql.unshift('"id" TEXT PRIMARY KEY');
+          pColDefs.push(def);
         }
-        await client.query(`CREATE TABLE IF NOT EXISTS "${pSchema}"."${pTable}" (${colSql.join(", ")})`);
+
+        if (pPkNames.length === 0) {
+          pColDefs.unshift('"id" TEXT PRIMARY KEY');
+        } else if (pPkNames.length > 1) {
+          pColDefs.push(`PRIMARY KEY (${pPkNames.map((n) => `"${n}"`).join(", ")})`);
+        }
+
+        await client.query(`CREATE TABLE IF NOT EXISTS "${pSchema}"."${pTable}" (${pColDefs.join(", ")})`);
         appliedPrerequisiteTables.push(pTable);
       }
     }
@@ -583,41 +917,70 @@ async function handleApplyTableSync(payload: ApplyDbTableSyncPayload): Promise<A
     );
 
     if (!tableChk.rows[0]?.exists) {
-      const colSql = columns.map((c) => {
-        const pgType = mapToPgType(c.type);
+      const explicitPks = (columns || []).filter((c) => c.isPrimaryKey || c.name.toLowerCase() === "id");
+      const colDefs: string[] = [];
+      const pkNames: string[] = [];
+
+      for (const c of columns || []) {
+        const isPk = Boolean(c.isPrimaryKey || (explicitPks.length === 0 && c.name.toLowerCase() === "id"));
+        if (isPk) pkNames.push(c.name);
+        const pgType = mapToPgType(c.type, isPk && explicitPks.length <= 1);
         let def = `"${c.name}" ${pgType}`;
-        if (c.isPrimaryKey || c.name.toLowerCase() === "id") def += " PRIMARY KEY";
-        if (c.isNotNull) def += " NOT NULL";
+        if (isPk && explicitPks.length <= 1) {
+          def += " PRIMARY KEY";
+        } else if (c.isNotNull || isPk) {
+          def += " NOT NULL";
+        }
         if (c.isUnique) def += " UNIQUE";
-        return def;
-      });
-      if (!colSql.some((s) => s.includes("PRIMARY KEY"))) {
-        colSql.unshift('"id" TEXT PRIMARY KEY');
+        colDefs.push(def);
       }
-      await client.query(`CREATE TABLE IF NOT EXISTS "${targetSchema}"."${safeTable}" (${colSql.join(", ")})`);
+
+      if (pkNames.length === 0) {
+        colDefs.unshift('"id" TEXT PRIMARY KEY');
+      } else if (pkNames.length > 1) {
+        colDefs.push(`PRIMARY KEY (${pkNames.map((n) => `"${n}"`).join(", ")})`);
+      }
+
+      await client.query(`CREATE TABLE IF NOT EXISTS "${targetSchema}"."${safeTable}" (${colDefs.join(", ")})`);
       createdTable = true;
     } else {
-      // Add missing columns & alter changed types
+      // Table exists: ALTER TABLE operations (ADD COLUMN, ALTER COLUMN TYPE, DROP COLUMN)
       const dbColRes = await client.query<{ column_name: string; udt_name: string }>(
         `SELECT column_name, udt_name FROM information_schema.columns
          WHERE LOWER(table_name) = LOWER($1) AND table_schema = $2`,
         [safeTable, targetSchema]
       );
       const dbColMap = new Map(dbColRes.rows.map((r) => [r.column_name.toLowerCase(), r.udt_name]));
+      const canvasColNames = new Set(columns.map((c) => c.name.toLowerCase()));
 
+      // A. Add missing columns and alter existing types
       for (const col of columns) {
         const dbType = dbColMap.get(col.name.toLowerCase());
         const targetType = mapToPgType(col.type);
+
         if (dbType === undefined) {
+          // Add column with safe default if not null
           let addDef = `ADD COLUMN IF NOT EXISTS "${col.name}" ${targetType}`;
-          if (col.isNotNull && !col.isPrimaryKey) addDef += " NOT NULL DEFAULT ''";
+          if (col.isNotNull && !col.isPrimaryKey) {
+            const defVal = targetType === "INTEGER" || targetType === "BIGINT" ? "0"
+              : targetType === "BOOLEAN" ? "FALSE"
+              : targetType === "JSONB" ? "'{}'::jsonb"
+              : "''";
+            addDef += ` NOT NULL DEFAULT ${defVal}`;
+          }
           if (col.isUnique) addDef += " UNIQUE";
           await client.query(`ALTER TABLE "${targetSchema}"."${safeTable}" ${addDef}`);
           appliedColumns.push(col.name);
         } else if (!areTypesEquivalent(col.type, dbType)) {
+          // Safely alter type: drop default first to prevent "cannot alter type of a column used in a default expression"
+          try {
+            await client.query(`ALTER TABLE "${targetSchema}"."${safeTable}" ALTER COLUMN "${col.name}" DROP DEFAULT`);
+          } catch {}
+
           await client.query(
             `ALTER TABLE "${targetSchema}"."${safeTable}" ALTER COLUMN "${col.name}" TYPE ${targetType} USING "${col.name}"::text::${targetType}`
           );
+
           alteredColumns.push({
             name: col.name,
             oldType: dbType,
@@ -625,9 +988,43 @@ async function handleApplyTableSync(payload: ApplyDbTableSyncPayload): Promise<A
           });
         }
       }
+
+      // B. Drop removed columns that are no longer on the canvas
+      for (const row of dbColRes.rows) {
+        const lowerName = row.column_name.toLowerCase();
+        // Do not auto-drop standard audit columns or id if implicit
+        if (!canvasColNames.has(lowerName) && lowerName !== "id") {
+          try {
+            await client.query(`ALTER TABLE "${targetSchema}"."${safeTable}" DROP COLUMN IF EXISTS "${row.column_name}" CASCADE`);
+            droppedColumns.push(row.column_name);
+          } catch {}
+        }
+      }
     }
 
-    // 3. Create missing indexes
+    // 3. Sync indexes (CREATE missing, DROP removed)
+    const idxRes = await client.query<{ index_name: string; is_unique: boolean; column_names: string }>(
+      `SELECT i.relname AS index_name,
+              ix.indisunique AS is_unique,
+              ARRAY_TO_STRING(ARRAY_AGG(a.attname ORDER BY array_position(ix.indkey, a.attnum)), ', ') AS column_names
+       FROM pg_class t
+       JOIN pg_index ix ON t.oid = ix.indrelid
+       JOIN pg_class i ON i.oid = ix.indexrelid
+       JOIN pg_namespace n ON n.oid = t.relnamespace
+       JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(ix.indkey)
+       WHERE LOWER(t.relname) = LOWER($1)
+         AND n.nspname = $2
+         AND NOT ix.indisprimary
+       GROUP BY i.relname, ix.indisunique`,
+      [safeTable, targetSchema]
+    );
+    const existingDbIndexes = idxRes.rows.map((r) => ({
+      name: r.index_name,
+      columns: r.column_names,
+      isUnique: Boolean(r.is_unique),
+    }));
+
+    // Create missing indexes
     for (const idx of indexes) {
       if (!idx.columns) continue;
       const safeIdxName = idx.name || `idx_${safeTable}_${idx.columns.replace(/[^a-zA-Z0-9_]/g, "_")}`;
@@ -642,7 +1039,46 @@ async function handleApplyTableSync(payload: ApplyDbTableSyncPayload): Promise<A
       appliedIndexes.push(safeIdxName);
     }
 
-    // 4. Create missing foreign keys
+    // Drop removed indexes
+    const canvasIdxNames = new Set(indexes.map((i) => i.name.toLowerCase()));
+    for (const dIdx of existingDbIndexes) {
+      if (!canvasIdxNames.has(dIdx.name.toLowerCase())) {
+        try {
+          await client.query(`DROP INDEX IF EXISTS "${targetSchema}"."${dIdx.name}" CASCADE`);
+          droppedIndexes.push(dIdx.name);
+        } catch {}
+      }
+    }
+
+    // 4. Sync foreign keys (ADD missing, DROP removed)
+    const fkRes = await client.query<{
+      constraint_name: string;
+      column_name: string;
+      foreign_table: string;
+      foreign_column: string;
+    }>(
+      `SELECT c.conname AS constraint_name,
+              att.attname AS column_name,
+              cl_ref.relname AS foreign_table,
+              att_ref.attname AS foreign_column
+       FROM pg_constraint c
+       JOIN pg_class cl ON cl.oid = c.conrelid
+       JOIN pg_namespace n ON n.oid = cl.relnamespace
+       JOIN pg_attribute att ON att.attrelid = c.conrelid AND att.attnum = ANY(c.conkey)
+       JOIN pg_class cl_ref ON cl_ref.oid = c.confrelid
+       JOIN pg_attribute att_ref ON att_ref.attrelid = c.confrelid AND att_ref.attnum = ANY(c.confkey)
+       WHERE c.contype = 'f'
+         AND LOWER(cl.relname) = LOWER($1)
+         AND n.nspname = $2`,
+      [safeTable, targetSchema]
+    );
+    const existingDbFks = fkRes.rows.map((r) => ({
+      name: r.constraint_name,
+      column: r.column_name,
+      foreignTable: r.foreign_table,
+      foreignColumn: r.foreign_column,
+    }));
+
     for (const fk of foreignKeys) {
       if (!fk.column || !fk.foreignTable || !fk.foreignColumn) continue;
       const safeFkName = fk.name || `fk_${safeTable}_${fk.column}`;
@@ -662,13 +1098,27 @@ async function handleApplyTableSync(payload: ApplyDbTableSyncPayload): Promise<A
       }
     }
 
+    // Drop removed foreign keys
+    const canvasFkCols = new Set(foreignKeys.map((f) => f.column.toLowerCase()));
+    for (const dFk of existingDbFks) {
+      if (!canvasFkCols.has(dFk.column.toLowerCase())) {
+        try {
+          await client.query(`ALTER TABLE "${targetSchema}"."${safeTable}" DROP CONSTRAINT IF EXISTS "${dFk.name}" CASCADE`);
+          droppedForeignKeys.push(dFk.name);
+        } catch {}
+      }
+    }
+
     return {
       success: true,
       createdTable,
       appliedColumns,
       alteredColumns,
+      droppedColumns,
       appliedIndexes,
+      droppedIndexes,
       appliedForeignKeys,
+      droppedForeignKeys,
       appliedPrerequisiteTables,
     };
   } catch (err) {
@@ -684,8 +1134,26 @@ async function handleApplyTableSync(payload: ApplyDbTableSyncPayload): Promise<A
 }
 
 async function handleDropTable(payload: DropDbTablePayload): Promise<DropDbTableResult> {
-  const { tableName, schema = "public" } = payload;
-  const safeTable = tableName.trim();
+  const engine = (payload.engine || "postgres").toLowerCase();
+  const safeTable = payload.tableName.trim();
+
+  if (engine === "sqlite") {
+    try {
+      const dbPath = resolveSqliteFilePath(payload.connection);
+      const db = new DatabaseSync(dbPath);
+      db.exec(`DROP TABLE IF EXISTS "${safeTable}";`);
+      db.close();
+      return { success: true, droppedTable: safeTable };
+    } catch (err) {
+      return {
+        success: false,
+        droppedTable: safeTable,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
+  const { schema = "public" } = payload;
   const targetSchema = schema.trim() || "public";
   const { client } = createPostgresClient(payload.connection);
   try {
@@ -704,20 +1172,41 @@ async function handleDropTable(payload: DropDbTablePayload): Promise<DropDbTable
 }
 
 async function handleRenameTable(payload: RenameDbTablePayload): Promise<RenameDbTableResult> {
-  const { oldTableName, newTableName, schema = "public" } = payload;
+  const engine = (payload.engine || "postgres").toLowerCase();
+  const oldName = payload.oldTableName.trim();
+  const newName = payload.newTableName.trim();
+
+  if (engine === "sqlite") {
+    try {
+      const dbPath = resolveSqliteFilePath(payload.connection);
+      const db = new DatabaseSync(dbPath);
+      db.exec(`ALTER TABLE "${oldName}" RENAME TO "${newName}";`);
+      db.close();
+      return { success: true, oldTableName: oldName, newTableName: newName };
+    } catch (err) {
+      return {
+        success: false,
+        oldTableName: oldName,
+        newTableName: newName,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
+  const { schema = "public" } = payload;
   const targetSchema = schema.trim() || "public";
   const { client } = createPostgresClient(payload.connection);
   try {
     await client.connect();
     await client.query(
-      `ALTER TABLE "${targetSchema}"."${oldTableName.trim()}" RENAME TO "${newTableName.trim()}"`
+      `ALTER TABLE "${targetSchema}"."${oldName}" RENAME TO "${newName}"`
     );
-    return { success: true, oldTableName, newTableName };
+    return { success: true, oldTableName: oldName, newTableName: newName };
   } catch (err) {
     return {
       success: false,
-      oldTableName,
-      newTableName,
+      oldTableName: oldName,
+      newTableName: newName,
       error: err instanceof Error ? err.message : String(err),
     };
   } finally {
@@ -726,21 +1215,44 @@ async function handleRenameTable(payload: RenameDbTablePayload): Promise<RenameD
 }
 
 async function handleRenameColumn(payload: RenameDbColumnPayload): Promise<RenameDbColumnResult> {
-  const { tableName, oldColumnName, newColumnName, schema = "public" } = payload;
+  const engine = (payload.engine || "postgres").toLowerCase();
+  const table = payload.tableName.trim();
+  const oldCol = payload.oldColumnName.trim();
+  const newCol = payload.newColumnName.trim();
+
+  if (engine === "sqlite") {
+    try {
+      const dbPath = resolveSqliteFilePath(payload.connection);
+      const db = new DatabaseSync(dbPath);
+      db.exec(`ALTER TABLE "${table}" RENAME COLUMN "${oldCol}" TO "${newCol}";`);
+      db.close();
+      return { success: true, tableName: table, oldColumnName: oldCol, newColumnName: newCol };
+    } catch (err) {
+      return {
+        success: false,
+        tableName: table,
+        oldColumnName: oldCol,
+        newColumnName: newCol,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
+  const { schema = "public" } = payload;
   const targetSchema = schema.trim() || "public";
   const { client } = createPostgresClient(payload.connection);
   try {
     await client.connect();
     await client.query(
-      `ALTER TABLE "${targetSchema}"."${tableName.trim()}" RENAME COLUMN "${oldColumnName.trim()}" TO "${newColumnName.trim()}"`
+      `ALTER TABLE "${targetSchema}"."${table}" RENAME COLUMN "${oldCol}" TO "${newCol}"`
     );
-    return { success: true, tableName, oldColumnName, newColumnName };
+    return { success: true, tableName: table, oldColumnName: oldCol, newColumnName: newCol };
   } catch (err) {
     return {
       success: false,
-      tableName,
-      oldColumnName,
-      newColumnName,
+      tableName: table,
+      oldColumnName: oldCol,
+      newColumnName: newCol,
       error: err instanceof Error ? err.message : String(err),
     };
   } finally {
@@ -749,7 +1261,39 @@ async function handleRenameColumn(payload: RenameDbColumnPayload): Promise<Renam
 }
 
 async function handleExecuteOperation(payload: TestDbOperationPayload): Promise<TestDbOperationResult> {
-  const { operation, args = {}, tableName = "records" } = payload;
+  const engine = (payload.engine || "postgres").toLowerCase();
+
+  if (engine === "sqlite") {
+    const start = Date.now();
+    try {
+      const dbPath = resolveSqliteFilePath(payload.connection);
+      const db = new DatabaseSync(dbPath);
+      const querySql = payload.operation?.query || payload.operation?.code || `SELECT * FROM "${payload.tableName || "records"}" LIMIT 20`;
+      const rows = db.prepare(querySql).all() as Record<string, string | number | boolean | null>[];
+      db.close();
+      const durationMs = Date.now() - start;
+      return {
+        success: true,
+        output: rows,
+        durationMs,
+        rawCommand: querySql,
+        mode: "live",
+        connection: `sqlite:${dbPath}`,
+        serverActive: true,
+      };
+    } catch (err) {
+      const durationMs = Date.now() - start;
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+        durationMs,
+        mode: "live",
+        serverActive: false,
+      };
+    }
+  }
+
+  const { operation, tableName = "records" } = payload;
   const start = Date.now();
   const { client, connectionString } = createPostgresClient(payload.connection);
   const querySql = operation?.query || operation?.code || `SELECT * FROM "${tableName}" LIMIT 20`;
@@ -1000,3 +1544,4 @@ export function startLocalBridgeServer(): http.Server {
 if (process.argv[1]?.includes("local-db-bridge")) {
   startLocalBridgeServer();
 }
+

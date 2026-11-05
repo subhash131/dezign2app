@@ -17,10 +17,21 @@ import { BackendNode } from "@/types/canvas";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useDbSyncStore } from "@/lib/stores/dbSyncStore";
 import {
+  dropDbTable,
   applyDbTableSync,
   CanvasForeignKey,
   PrerequisiteTableDefinition,
 } from "@/lib/services/databaseService";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@workspace/ui/components/alert-dialog";
 import { toast } from "sonner";
 
 export interface EntityDbSyncBannerProps {
@@ -46,6 +57,8 @@ export interface EntityDbSyncBannerProps {
   }>;
   foreignKeys?: Array<CanvasForeignKey>;
   databaseNode?: BackendNode;
+  forceShow?: boolean;
+  onToggleForceShow?: () => void;
 }
 
 export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
@@ -56,6 +69,8 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
   indexes = [],
   foreignKeys,
   databaseNode,
+  forceShow = false,
+  onToggleForceShow,
 }) => {
   const syncState = useDbSyncStore((s) => s.entitySyncStatus[entityId]);
   const syncStatus = syncState?.status || null;
@@ -63,6 +78,8 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
   const validateEntity = useDbSyncStore((s) => s.validateEntity);
 
   const [isApplying, setIsApplying] = useState(false);
+  const [isDropping, setIsDropping] = useState(false);
+  const [showDropConfirm, setShowDropConfirm] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [justSynced, setJustSynced] = useState(false);
 
@@ -230,6 +247,45 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
     }
   };
 
+  const handleDropTable = async () => {
+    if (!databaseNode || isDropping) return;
+    setIsDropping(true);
+    try {
+      const res = await dropDbTable({
+        engine,
+        connection: {
+          host: dbData.host,
+          port: dbData.port,
+          database: dbData.database,
+          user: dbData.user || dbData.username,
+          password: dbData.password,
+          connectionString: dbData.connectionString || dbData.connectionStringPooled,
+          connectionStringEnv: dbData.connectionStringEnv,
+          connectionStringPooled: dbData.connectionStringPooled,
+          connectionStringPooledEnv: dbData.connectionStringPooledEnv,
+          sslMode: dbData.sslMode,
+          provider: dbData.provider,
+          dbFilePath: dbData.dbFilePath,
+          dbFilePathEnv: dbData.dbFilePathEnv,
+        },
+        tableName,
+        schema: schema || dbData.schema || "public",
+      });
+
+      if (res.success) {
+        toast.success(`Dropped table "${tableName}" from ${dbLabel}`);
+        setShowDropConfirm(false);
+        await performCheck();
+      } else {
+        toast.error(`Failed to drop table "${tableName}": ${res.error || "Unknown error"}`);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error dropping table");
+    } finally {
+      setIsDropping(false);
+    }
+  };
+
   const handlePullFromDb = (e: React.MouseEvent) => {
     e.stopPropagation();
     const extraCols = syncStatus?.extraColumns || [];
@@ -316,24 +372,117 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
     return null;
   }
 
-  // If table is verified and in sync (and not just synced), hide banner to keep canvas clean
-  if (syncStatus.inSync && !justSynced) {
-    return null;
-  }
-
-  // If DB server is unreachable, don't show false alarms unless expanded
-  if (!syncStatus.serverReachable && !isExpanded) {
-    return null;
-  }
-
-  // Just synced confirmation notice
-  if (justSynced && syncStatus?.inSync) {
+  // If table is verified and in sync (and not just synced), hide banner unless forced open
+  if (syncStatus.inSync) {
+    if (!justSynced && !forceShow) {
+      return null;
+    }
     return (
-      <div className="mx-3 my-1.5 p-2 rounded-lg border border-emerald-500/50 bg-emerald-500/10 text-emerald-300 flex items-center justify-between text-[10px] nodrag animate-in fade-in duration-200">
-        <div className="flex items-center gap-1.5 font-semibold">
-          <CheckCircle2 size={12} className="text-emerald-400" />
-          <span>Table &quot;{tableName}&quot; in sync with {dbLabel}</span>
+      <div className="mx-3 my-1.5 p-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 flex flex-col gap-1.5 nodrag transition-all animate-in fade-in duration-200">
+        <div className="flex items-center justify-between gap-1.5">
+          <div className="flex items-center gap-1.5 font-semibold text-[10px]">
+            <CheckCircle2 size={12} className="text-emerald-400" />
+            <span className="truncate">Table &quot;{tableName}&quot; in sync with {dbLabel}</span>
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsExpanded((prev) => !prev);
+              }}
+              className="text-emerald-400/80 hover:text-emerald-200 p-0.5 rounded hover:bg-emerald-500/20 transition-colors cursor-pointer shrink-0"
+              title={isExpanded ? "Collapse banner" : "Expand banner"}
+            >
+              {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+            </button>
+            {onToggleForceShow && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleForceShow();
+                }}
+                className="text-emerald-400/80 hover:text-emerald-200 text-[9px] px-1 py-0.5 rounded hover:bg-emerald-500/20 transition-colors cursor-pointer shrink-0"
+                title="Dismiss banner"
+              >
+                ✕
+              </button>
+            )}
+          </div>
         </div>
+
+        {isExpanded && (
+          <div className="flex flex-col gap-1.5 pt-1.5 border-t border-emerald-500/20 mt-0.5">
+            <div className="flex items-center justify-between text-[8.5px] text-emerald-300/80 font-mono">
+              <span>Target: {dbLabel} ({dbProvider})</span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  performCheck();
+                }}
+                disabled={isChecking}
+                className="hover:text-emerald-100 flex items-center gap-1 cursor-pointer"
+                title="Re-check database schema"
+              >
+                <RefreshCw size={9} className={isChecking ? "animate-spin" : ""} />
+                <span>{isChecking ? "Checking..." : "Re-check"}</span>
+              </button>
+            </div>
+
+            <div className="text-[8.5px] font-mono text-emerald-300/90 bg-black/40 px-1.5 py-1 rounded border border-emerald-500/30">
+              All {columns.length} column(s) and {indexes.length} index(es) match the live database.
+            </div>
+
+            {/* Drop Live Table */}
+            <div className="pt-1.5 flex items-center justify-between border-t border-rose-500/20 text-[8.5px]">
+              <span className="text-rose-300/80">Need to drop table from database?</span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowDropConfirm(true);
+                }}
+                disabled={isDropping}
+                className="px-2 py-0.5 rounded bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 font-semibold text-[8.5px] flex items-center gap-1 cursor-pointer border border-rose-500/40 transition-colors"
+                title={`Drop table "${tableName}" from ${dbLabel}`}
+              >
+                <Trash2 size={9} />
+                <span>{isDropping ? "Dropping..." : "Drop Live Table"}</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Drop Confirmation Dialog */}
+        <AlertDialog open={showDropConfirm} onOpenChange={setShowDropConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2 text-rose-500 text-sm">
+                <Trash2 size={16} />
+                Drop table &quot;{tableName}&quot;?
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-xs text-muted-foreground">
+                This will permanently drop the physical table <strong>&quot;{tableName}&quot;</strong> from your connected <strong>{dbLabel}</strong> database.
+                <br /><br />
+                All rows and data stored in this table will be deleted. The entity node on your Dezign2App canvas will remain so you can re-create or edit it anytime.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isDropping} className="text-xs">
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDropTable}
+                disabled={isDropping}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90 text-xs font-semibold"
+              >
+                {isDropping ? "Dropping..." : "Drop Table"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     );
   }
@@ -645,8 +794,57 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
               </button>
             </div>
           )}
+
+          {/* Drop Live Table Danger Zone */}
+          {!isMissingTable && syncStatus?.tableExists && (
+            <div className="pt-1.5 flex items-center justify-between border-t border-rose-500/20 text-[8.5px]">
+              <span className="text-rose-300/80">Danger zone:</span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowDropConfirm(true);
+                }}
+                disabled={isDropping}
+                className="px-2 py-0.5 rounded bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 font-semibold text-[8.5px] flex items-center gap-1 cursor-pointer border border-rose-500/40 transition-colors"
+                title={`Drop table "${tableName}" from ${dbLabel}`}
+              >
+                <Trash2 size={9} />
+                <span>{isDropping ? "Dropping..." : "Drop Live Table"}</span>
+              </button>
+            </div>
+          )}
         </div>
       )}
+
+      {/* Drop Confirmation Dialog */}
+      <AlertDialog open={showDropConfirm} onOpenChange={setShowDropConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-rose-500 text-sm">
+              <Trash2 size={16} />
+              Drop table &quot;{tableName}&quot;?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-muted-foreground">
+              This will permanently drop the physical table <strong>&quot;{tableName}&quot;</strong> from your connected <strong>{dbLabel}</strong> database.
+              <br /><br />
+              All rows and data stored in this table will be deleted. The entity node on your Dezign2App canvas will remain so you can re-create or edit it anytime.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDropping} className="text-xs">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDropTable}
+              disabled={isDropping}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 text-xs font-semibold"
+            >
+              {isDropping ? "Dropping..." : "Drop Table"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

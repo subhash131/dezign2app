@@ -96,6 +96,7 @@ export const EntityNode = React.memo(({ id, data, selected }: NodeProps<BackendN
   }, [id, isVector, data.dbType, data.readOnly, data.columns, updateNode]);
 
   const [renameDialogOpen, setRenameDialogOpen] = React.useState(false);
+  const [showSyncBanner, setShowSyncBanner] = React.useState(false);
   const [pendingRename, setPendingRename] = React.useState<{
     oldName: string;
     newName: string;
@@ -198,6 +199,26 @@ export const EntityNode = React.memo(({ id, data, selected }: NodeProps<BackendN
           )),
     );
   }, [allNodes, id, edges]);
+
+  // Auto-validate schema against connected live database on debounced entity changes
+  React.useEffect(() => {
+    if (!hasLiveConnection || isVector || data.readOnly) return;
+    const timer = setTimeout(() => {
+      validateEntity(id);
+    }, 700);
+    return () => clearTimeout(timer);
+  }, [
+    id,
+    hasLiveConnection,
+    isVector,
+    data.readOnly,
+    data.columns,
+    data.indexes,
+    data.tableName,
+    data.label,
+    data.databaseId,
+    validateEntity,
+  ]);
 
   const currentNode = React.useMemo(() => {
     return (
@@ -413,7 +434,11 @@ export const EntityNode = React.memo(({ id, data, selected }: NodeProps<BackendN
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  validateEntity(id);
+                  if (isInSync) {
+                    setShowSyncBanner((prev) => !prev);
+                  } else {
+                    validateEntity(id);
+                  }
                 }}
                 disabled={isCheckingThisEntity}
                 className={cn(
@@ -430,7 +455,7 @@ export const EntityNode = React.memo(({ id, data, selected }: NodeProps<BackendN
                     : isOutOfSync
                       ? "Schema out of sync with live database (click to re-validate)"
                       : isInSync
-                        ? "Schema in sync with live database (click to re-validate)"
+                        ? "Schema in sync with live database (click to toggle sync card / drop table)"
                         : "Validate this table against the connected live database"
                 }
               >
@@ -503,6 +528,8 @@ export const EntityNode = React.memo(({ id, data, selected }: NodeProps<BackendN
           columns={columns}
           indexes={indexes}
           databaseNode={parentDbNode}
+          forceShow={showSyncBanner}
+          onToggleForceShow={() => setShowSyncBanner((prev) => !prev)}
         />
       )}
 

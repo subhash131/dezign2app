@@ -915,14 +915,14 @@ export function generateSyncScript(packageName: string, connEnvKey: string): str
 }
 
 /**
- * Generates the scripts/server.ts file for starting a local HTTP bridge daemon on port 46555.
+ * Generates the scripts/server.ts file for starting a local HTTP bridge daemon on port 9000.
  */
 export function generateBridgeServerScript(packageName: string): string {
   return [
     "/**",
     ` * ${packageName}/scripts/server.ts — Local Database Bridge Daemon`,
     " *",
-    " * Lightweight zero-dependency HTTP bridge listening on http://127.0.0.1:46555.",
+    " * Lightweight zero-dependency HTTP bridge listening on http://127.0.0.1:9000.",
     " * Allows the web canvas to execute live validation and migrations directly on this machine.",
     " * Run via 'pnpm db:serve' or 'pnpm db:bridge'.",
     " */",
@@ -938,7 +938,7 @@ export function generateBridgeServerScript(packageName: string): string {
     "  TableDefinition,",
     '} from "../sync";',
     "",
-    "const PORT = 46555;",
+    "const PORT = 9000;",
     "",
     "function sendJson(res: http.ServerResponse, statusCode: number, data: object): void {",
     "  const payload = JSON.stringify(data);",
@@ -983,7 +983,14 @@ export function generateBridgeServerScript(packageName: string): string {
     "    req.on('end', async () => {",
     "      try {",
     "        const parsed: Record<string, string | number | boolean | null | undefined | object> = body ? JSON.parse(body) : {};",
-    '        const connStr = typeof parsed.connectionString === "string" ? parsed.connectionString : undefined;',
+    '        const rawConn = (typeof parsed.connection === "object" && parsed.connection !== null) ? parsed.connection : {};',
+    '        const connStr = typeof parsed.connectionString === "string"',
+    '          ? parsed.connectionString',
+    '          : ("connectionString" in rawConn && typeof rawConn.connectionString === "string")',
+    '            ? rawConn.connectionString',
+    '            : ("connectionStringEnv" in rawConn && typeof rawConn.connectionStringEnv === "string" && process.env[rawConn.connectionStringEnv])',
+    '              ? process.env[rawConn.connectionStringEnv]',
+    '              : undefined;',
     "",
     '        if (url === "/api/check-connection") {',
     "          const result = await checkConnection(connStr);",
@@ -1073,6 +1080,8 @@ export function generatePackageJson(packageName: string): string {
         "./helpers/*": "./helpers/*.ts",
       },
       scripts: {
+        dev: "tsx scripts/server.ts",
+        start: "tsx scripts/server.ts",
         build: "tsc",
         "check-types": "tsc --noEmit",
         test: "vitest run",
