@@ -34,7 +34,7 @@ describe("compilePostgresDatabase", () => {
     expect(filenames).toContain("sync.ts");
     expect(filenames).toContain("scripts/validate.ts");
     expect(filenames).toContain("scripts/sync.ts");
-    expect(filenames).toContain("scripts/server.ts");
+    expect(filenames).not.toContain("scripts/server.ts");
     expect(filenames).toContain("helpers/order.ts");
     expect(filenames).toContain("helpers/index.ts");
     expect(filenames).toContain("index.ts");
@@ -141,7 +141,8 @@ describe("compilePostgresDatabase", () => {
     expect(parsed.devDependencies).toHaveProperty("@types/pg");
     expect(parsed.scripts).toHaveProperty("db:push");
     expect(parsed.scripts).toHaveProperty("db:validate");
-    expect(parsed.scripts).toHaveProperty("db:serve");
+    expect(parsed.scripts).not.toHaveProperty("db:serve");
+    expect(parsed.scripts).not.toHaveProperty("dev");
   });
 
   it("should generate reusableFunctions with correct metadata", () => {
@@ -236,17 +237,6 @@ describe("compilePostgresDatabase", () => {
     expect(syncScript!.content).not.toMatch(/\bas\s+[A-Za-z0-9_]/);
     expect(syncScript!.content).not.toMatch(/\bany\b/);
     expect(syncScript!.content).not.toMatch(/\bunknown\b/);
-
-    const serverScript = result.files.find((f) => f.filename === "scripts/server.ts");
-    expect(serverScript).toBeDefined();
-    const serverLines = serverScript!.content
-      .split("\n")
-      .filter((line) => !line.trim().startsWith("import "));
-    for (const line of serverLines) {
-      expect(line).not.toMatch(/\bas\s+[A-Za-z0-9_]/);
-    }
-    expect(serverScript!.content).not.toMatch(/\bany\b/);
-    expect(serverScript!.content).not.toMatch(/\bunknown\b/);
   });
 
   it("should provide prepare compatibility on postgres connection pool for better-sqlite3 style callers", () => {

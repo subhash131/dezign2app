@@ -888,6 +888,9 @@ export const StreamingAndOutputSection: React.FC<StreamingAndOutputSectionProps>
               <span className="px-1.5 py-0.5 rounded bg-background/60 border border-amber-500/30 text-amber-300">
                 usage.total_tokens
               </span>
+              <span className="px-1.5 py-0.5 rounded bg-background/60 border border-amber-500/30 text-amber-300">
+                usage.reasoning_tokens
+              </span>
             </div>
           </div>
         )}

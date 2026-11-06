@@ -222,10 +222,11 @@ export function resolveRealtimePayloadPaths({
     addPath("tool_calls", "any[]", "List of tool calls executed during streaming");
 
     // Token usage metrics
-    addPath("usage", "object", "Token usage metrics ({ input_tokens, output_tokens, total_tokens })");
+    addPath("usage", "object", "Token usage metrics ({ input_tokens, output_tokens, total_tokens, reasoning_tokens })");
     addPath("usage.input_tokens", "number", "Input / prompt tokens consumed");
     addPath("usage.output_tokens", "number", "Output / completion tokens consumed");
     addPath("usage.total_tokens", "number", "Total tokens consumed");
+    addPath("usage.reasoning_tokens", "number", "Reasoning / thinking tokens consumed");
 
     // Stream status & convenience helpers
     addPath("done", "boolean", "Stream completion indicator (true when done)");

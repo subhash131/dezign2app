@@ -519,6 +519,7 @@ describe("LangGraphInvokeStepSection Payload Mapping", () => {
     expect(screen.getByText("usage.input_tokens")).toBeDefined();
     expect(screen.getByText("usage.output_tokens")).toBeDefined();
     expect(screen.getByText("usage.total_tokens")).toBeDefined();
+    expect(screen.getByText("usage.reasoning_tokens")).toBeDefined();
   });
 
   it("resolves token usage paths for downstream steps when langGraphTrackTokenUsage is true", () => {
@@ -537,7 +538,10 @@ describe("LangGraphInvokeStepSection Payload Mapping", () => {
     expect(paths).toContain("usage.input_tokens");
     expect(paths).toContain("usage.output_tokens");
     expect(paths).toContain("usage.total_tokens");
-    expect(paths).toContain("usage.inputTokens");
+    expect(paths).toContain("usage.reasoning_tokens");
+    expect(paths).not.toContain("usage.inputTokens");
+    expect(paths).not.toContain("usage.outputTokens");
+    expect(paths).not.toContain("usage.totalTokens");
   });
 
   it("resolves streaming lifecycle and content paths when langGraphStreamingEnabled is true", () => {
@@ -618,9 +622,120 @@ describe("LangGraphInvokeStepSection Payload Mapping", () => {
     expect(pathKeys).toContain("usage.input_tokens");
     expect(pathKeys).toContain("usage.output_tokens");
     expect(pathKeys).toContain("usage.total_tokens");
+    expect(pathKeys).toContain("usage.reasoning_tokens");
     expect(pathKeys).toContain("done");
     expect(pathKeys).toContain("content");
     expect(pathKeys).toContain("response");
     expect(pathKeys).toContain("threadId");
+  });
+
+  it("resolves structured output fields from child agent responseFormat into stepPaths", () => {
+    const agentNodeWithStructured: BackendNode = {
+      id: "agent-structured-1",
+      type: "langgraph",
+      fractionalIndex: "a2",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "Analysis Graph",
+        nodes: [
+          {
+            id: "child-agent-1",
+            type: "langgraph_agent",
+            data: {
+              name: "classifierAgent",
+              label: "Classifier Agent",
+              responseFormat: {
+                enabled: true,
+                schemaJson: JSON.stringify({
+                  type: "object",
+                  properties: {
+                    sentiment: { type: "string", description: "Classified sentiment" },
+                    score: { type: "number", description: "Confidence score" },
+                    tags: { type: "array", items: { type: "string" } },
+                  },
+                  required: ["sentiment", "score"],
+                }),
+              },
+            },
+          } as any,
+        ],
+      },
+    };
+
+    const step: PipelineStepDraft = {
+      id: "step-structured-invoke",
+      name: "Invoke Classifier",
+      type: "langgraph_invoke",
+      langGraphTargetNodeId: "agent-structured-1",
+    };
+
+    const stepPaths: AvailablePath[] = [];
+    resolveLangGraphStepPaths(step, [agentNodeWithStructured], stepPaths);
+
+    const paths = stepPaths.map((p) => p.path);
+    // Root structuredResponse object
+    expect(paths).toContain("structuredResponse");
+    expect(paths).not.toContain("output");
+
+    // structuredResponse.<field>
+    expect(paths).toContain("structuredResponse.sentiment");
+    expect(paths).toContain("structuredResponse.score");
+    expect(paths).toContain("structuredResponse.tags");
+
+    // Direct <field>
+    expect(paths).toContain("sentiment");
+    expect(paths).toContain("score");
+    expect(paths).toContain("tags");
+
+    // output.<field> should NOT be present (removed as per user request to avoid confusion)
+    expect(paths).not.toContain("output.sentiment");
+    expect(paths).not.toContain("output.score");
+
+    const sentimentPath = stepPaths.find((p) => p.path === "structuredResponse.sentiment");
+    expect(sentimentPath?.type).toBe("string");
+    expect(sentimentPath?.description).toContain("Classifier Agent");
+
+    const tagsPath = stepPaths.find((p) => p.path === "structuredResponse.tags");
+    expect(tagsPath?.type).toBe("string[]");
+  });
+
+  it("resolves structured output from shorthand schema JSON on agentDefinitions", () => {
+    const agentNodeWithDefs: BackendNode = {
+      id: "agent-structured-2",
+      type: "langgraph",
+      fractionalIndex: "a3",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "Extractor Graph",
+        agentDefinitions: [
+          {
+            name: "Extractor Agent",
+            responseFormat: {
+              enabled: true,
+              schemaJson: `{ "summary": "string", "confidence": "number" }`,
+            },
+          },
+        ],
+      },
+    };
+
+    const step: PipelineStepDraft = {
+      id: "step-extractor-invoke",
+      name: "Invoke Extractor",
+      type: "langgraph_invoke",
+      langGraphTargetNodeId: "agent-structured-2",
+    };
+
+    const stepPaths: AvailablePath[] = [];
+    resolveLangGraphStepPaths(step, [agentNodeWithDefs], stepPaths);
+
+    const paths = stepPaths.map((p) => p.path);
+    expect(paths).toContain("structuredResponse");
+    expect(paths).toContain("structuredResponse.summary");
+    expect(paths).toContain("structuredResponse.confidence");
+    expect(paths).toContain("summary");
+    expect(paths).toContain("confidence");
+    expect(paths).not.toContain("output");
+    expect(paths).not.toContain("output.summary");
   });
 });

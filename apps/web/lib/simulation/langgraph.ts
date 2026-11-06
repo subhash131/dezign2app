@@ -6,7 +6,9 @@ export function resolveRouterFieldValue(
   field: string,
   state: Record<string, unknown>,
 ): unknown {
-  const cleanField = field.replace(/^state\./, "");
+  const cleanField = field
+    .replace(/^state\./, "")
+    .replace(/^structuredResponse\./, "");
   // 1. Direct path in state
   let val = getPath(state, cleanField);
   if (val !== undefined && val !== null) return val;

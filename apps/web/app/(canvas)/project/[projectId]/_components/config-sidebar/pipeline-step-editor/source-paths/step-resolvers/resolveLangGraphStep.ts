@@ -1,9 +1,60 @@
 import { BackendNode } from "@workspace/canvas/types";
 import { AvailablePath, PipelineStepDraft } from "../../types";
+import { parseRelaxedJson } from "@/lib/compiler/generators/routeGenerator/jsonInterpolation";
 
 interface ChannelInfo {
   key: string;
   type?: string;
+}
+
+interface StructuredFieldItem {
+  name: string;
+  type: string;
+  description?: string;
+}
+
+function extractStructuredSchemaFields(schemaJson?: string): StructuredFieldItem[] {
+  if (!schemaJson || !schemaJson.trim()) return [];
+  const clean = schemaJson.trim();
+  try {
+    const { parsed, error } = parseRelaxedJson(clean);
+    if (error || !parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return [];
+    }
+    const obj = parsed as Record<string, unknown>;
+
+    // Case 1: Standard JSON Schema with properties
+    if (obj.properties && typeof obj.properties === "object" && !Array.isArray(obj.properties)) {
+      const props = obj.properties as Record<string, Record<string, unknown>>;
+      const fields: StructuredFieldItem[] = [];
+      for (const [key, def] of Object.entries(props)) {
+        if (!key || typeof key !== "string" || !key.trim()) continue;
+        const cleanKey = key.trim();
+        const isArray = def?.type === "array";
+        const baseType = isArray
+          ? (typeof def?.items === "object" && def?.items && "type" in def.items
+              ? String((def.items as Record<string, unknown>).type)
+              : "string")
+          : String(def?.type || "string");
+        const typeStr = isArray ? `${baseType}[]` : baseType;
+        const desc = typeof def?.description === "string" ? def.description : undefined;
+        fields.push({ name: cleanKey, type: typeStr, description: desc });
+      }
+      return fields;
+    }
+
+    // Case 2: Shorthand key-value map, e.g. { summary: "string", sentiment: "string" }
+    const fields: StructuredFieldItem[] = [];
+    for (const [key, val] of Object.entries(obj)) {
+      if (!key || typeof key !== "string" || !key.trim()) continue;
+      const cleanKey = key.trim();
+      const valStr = typeof val === "string" ? val.toLowerCase() : "string";
+      fields.push({ name: cleanKey, type: valStr });
+    }
+    return fields;
+  } catch {
+    return [];
+  }
 }
 
 export function resolveLangGraphStepPaths(
@@ -140,6 +191,131 @@ export function resolveLangGraphStepPaths(
     });
   }
 
+  // 1b. Structured output fields configured on child agents
+  interface AgentCandidate {
+    name: string;
+    responseFormat?: {
+      enabled?: boolean;
+      schemaJson?: string;
+    };
+  }
+
+  const agentCandidates: AgentCandidate[] = [];
+
+  // Child nodes inside lgNode.data.nodes
+  const childNodes = lgNode?.data?.nodes;
+  if (Array.isArray(childNodes)) {
+    for (const cn of childNodes) {
+      if (cn && typeof cn === "object") {
+        const d = (cn as any).data;
+        if (d && typeof d === "object") {
+          const rf = d.responseFormat;
+          if (rf && typeof rf === "object") {
+            const name = d.label || d.name || (cn as any).id || "Agent";
+            agentCandidates.push({ name, responseFormat: rf });
+          }
+        }
+      }
+    }
+  }
+
+  // agentDefinitions on lgNode.data
+  const agentDefs = lgNode?.data?.agentDefinitions;
+  if (Array.isArray(agentDefs)) {
+    for (const ad of agentDefs) {
+      if (ad && typeof ad === "object") {
+        const rf = (ad as any).responseFormat;
+        if (rf && typeof rf === "object") {
+          const name = (ad as any).name || (ad as any).label || "Agent";
+          agentCandidates.push({ name, responseFormat: rf });
+        }
+      }
+    }
+  }
+
+  // graphSteps on lgNode.data
+  const graphSteps = lgNode?.data?.graphSteps;
+  if (Array.isArray(graphSteps)) {
+    for (const gs of graphSteps) {
+      if (gs && typeof gs === "object") {
+        const rf = (gs as any).responseFormat;
+        if (rf && typeof rf === "object") {
+          const name = (gs as any).name || (gs as any).label || "Step";
+          agentCandidates.push({ name, responseFormat: rf });
+        }
+      }
+    }
+  }
+
+  // Direct on lgNode.data
+  const lgNodeData = lgNode?.data as any;
+  if (lgNodeData?.responseFormat && typeof lgNodeData.responseFormat === "object") {
+    agentCandidates.push({
+      name: lgNodeData.label || lgNode?.id || "Agent",
+      responseFormat: lgNodeData.responseFormat as any,
+    });
+  }
+
+  // Standalone matching canvas nodes in allNodes
+  for (const n of allNodes) {
+    const nodeType = n.type as string;
+    if (
+      (n.id === step.langGraphTargetNodeId ||
+        nodeType === "agent" ||
+        nodeType === "langgraph_agent" ||
+        nodeType === "llm") &&
+      n !== lgNode
+    ) {
+      const d = (n as any).data;
+      if (d?.responseFormat && typeof d.responseFormat === "object") {
+        const name = d.label || d.name || n.id || "Agent";
+        agentCandidates.push({ name, responseFormat: d.responseFormat });
+      }
+    }
+  }
+
+  for (const candidate of agentCandidates) {
+    const rf = candidate.responseFormat;
+    if (!rf || rf.enabled === false || !rf.schemaJson) continue;
+
+    const schemaFields = extractStructuredSchemaFields(rf.schemaJson);
+    if (schemaFields.length === 0) continue;
+
+    // Structured response root object
+    if (!stepPaths.some((p) => p.path === "structuredResponse")) {
+      stepPaths.push({
+        path: "structuredResponse",
+        type: "object",
+        description: `Structured response payload (${candidate.name})`,
+      });
+    }
+
+    for (const f of schemaFields) {
+      const fieldDesc = f.description
+        ? `${f.description} (${candidate.name})`
+        : `Structured field: ${f.name} (${candidate.name})`;
+
+      // 1. structuredResponse.<fieldName>
+      const srPath = `structuredResponse.${f.name}`;
+      if (!stepPaths.some((p) => p.path === srPath)) {
+        stepPaths.push({
+          path: srPath,
+          type: f.type,
+          description: fieldDesc,
+        });
+      }
+
+      // 2. Direct <fieldName>
+      if (!stepPaths.some((p) => p.path === f.name)) {
+        stepPaths.push({
+          path: f.name,
+          type: f.type,
+          description: fieldDesc,
+        });
+      }
+    }
+  }
+
   // 2. Custom state channels from the LangGraph node
   if (channels.length > 0) {
     channels.forEach((ch) => {
@@ -188,7 +364,7 @@ export function resolveLangGraphStepPaths(
       stepPaths.push({
         path: "usage",
         type: "object",
-        description: "Token usage metrics (input, output, and total tokens)",
+        description: "Token usage metrics (input, output, total, and reasoning tokens)",
       });
     }
     if (!stepPaths.some((p) => p.path === "usage.input_tokens")) {
@@ -212,25 +388,11 @@ export function resolveLangGraphStepPaths(
         description: "Total tokens consumed",
       });
     }
-    if (!stepPaths.some((p) => p.path === "usage.inputTokens")) {
+    if (!stepPaths.some((p) => p.path === "usage.reasoning_tokens")) {
       stepPaths.push({
-        path: "usage.inputTokens",
+        path: "usage.reasoning_tokens",
         type: "number",
-        description: "Input / prompt tokens consumed (camelCase alias)",
-      });
-    }
-    if (!stepPaths.some((p) => p.path === "usage.outputTokens")) {
-      stepPaths.push({
-        path: "usage.outputTokens",
-        type: "number",
-        description: "Output / completion tokens consumed (camelCase alias)",
-      });
-    }
-    if (!stepPaths.some((p) => p.path === "usage.totalTokens")) {
-      stepPaths.push({
-        path: "usage.totalTokens",
-        type: "number",
-        description: "Total tokens consumed (camelCase alias)",
+        description: "Reasoning / thinking tokens consumed (models with extended thinking/reasoning)",
       });
     }
   }

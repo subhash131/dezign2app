@@ -132,6 +132,13 @@ export function resolveSource(
         if (field === "finalState") {
           return `${varName}.state`;
         }
+        if (field === "structuredResponse") {
+          return `((${varName} as any).structuredResponse ?? (${varName} as any).response)`;
+        }
+        if (field.startsWith("structuredResponse.")) {
+          const sub = field.slice(19);
+          return `((${varName} as any).structuredResponse?.${sub} ?? (${varName} as any).${sub})`;
+        }
 
         if (field.includes("[last]")) {
           const resolvedField = field.replace(

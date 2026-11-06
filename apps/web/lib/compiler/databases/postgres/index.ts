@@ -22,7 +22,6 @@ import {
   generateLocalSyncFile,
   generateValidateScript,
   generateSyncScript,
-  generateBridgeServerScript,
   generatePackageJson,
   generateTsConfig,
   generateIndexBarrel,
@@ -50,7 +49,6 @@ export * from "./templates";
  * - sync.ts: Programmatic local validation & migration functions matching dbSyncStore (validateTable, validateDatabase, applyTableSync, syncAll)
  * - scripts/validate.ts: Local CLI runner (pnpm db:validate / pnpm db:check)
  * - scripts/sync.ts: Local migration script to run directly on the developer's machine (pnpm db:push / pnpm db:sync)
- * - scripts/server.ts: Local zero-dependency HTTP bridge daemon on port 46555 (pnpm db:serve / pnpm db:bridge)
  * - helpers/{entity}.ts: Typed async CRUD helpers with $1, $2 parameterized queries and RETURNING *
  * - helpers/index.ts: Re-exports all table helpers and types
  * - index.ts: Root package entry point
@@ -278,14 +276,7 @@ export function compilePostgresDatabase(
     content: generateSyncScript(packageName, connEnvKey),
   });
 
-  // ── 8. scripts/server.ts (Local bridge daemon on port 46555: pnpm db:serve)
-  files.push({
-    filename: "scripts/server.ts",
-    language: "typescript",
-    content: generateBridgeServerScript(packageName),
-  });
-
-  // ── 9. Per-table helpers ──────────────────────────────────────────────────
+  // ── 8. Per-table helpers ──────────────────────────────────────────────────
   tables.forEach((tableNode) => {
     const rawName = tableNode.data?.label || tableNode.data?.tableRef || "table";
     const tableName = toTableName(rawName);
