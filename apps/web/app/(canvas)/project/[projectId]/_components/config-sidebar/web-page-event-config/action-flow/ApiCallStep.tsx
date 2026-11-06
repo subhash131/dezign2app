@@ -35,6 +35,7 @@ import type {
   BackendNode,
   FrontendActionStepDraft,
   AvailablePath,
+  Endpoint,
 } from "./types";
 import type { PageSection } from "@/types/canvas";
 import { ResponseFieldPicker } from "./ResponseFieldPicker";
@@ -73,6 +74,7 @@ interface BindingSlotRowProps {
   itemKeyField?: string;
   itemSourceStateName?: string;
   itemPropSuggestions?: ComboboxOption[];
+  endpoints?: (Endpoint & { nodeId: string })[];
 }
 
 const BindingSlotRow: React.FC<BindingSlotRowProps> = ({
@@ -92,6 +94,7 @@ const BindingSlotRow: React.FC<BindingSlotRowProps> = ({
   itemKeyField,
   itemSourceStateName,
   itemPropSuggestions,
+  endpoints = [],
 }) => {
   const isAuth = binding.slot === "header" && isAuthHeaderName(binding.targetField);
 
@@ -703,65 +706,78 @@ const BindingSlotRow: React.FC<BindingSlotRowProps> = ({
           );
         })()}
 
-        {binding.source.kind === "prev_response" && (
-          <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-1">
-              <Label className="text-[10px] text-muted-foreground">
-                From Step
-              </Label>
-              <Select
-                value={binding.source.stepId}
-                onValueChange={(val) => {
-                  onUpdate((prev) => ({
-                    ...prev,
-                    source: {
-                      kind: "prev_response",
-                      stepId: val,
-                      fieldPath:
-                        prev.source.kind === "prev_response"
-                          ? prev.source.fieldPath
-                          : "",
-                    },
-                  }));
-                }}
-              >
-                <SelectTrigger className="h-7 text-xs bg-background">
-                  <SelectValue placeholder="Select step" />
-                </SelectTrigger>
-                <SelectContent>
-                  {priorSteps.map((pStep, pIdx) => (
-                    <SelectItem key={pStep.id} value={pStep.id}>
-                      Step {pIdx + 1}: {pStep.name || pStep.type}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+        {binding.source.kind === "prev_response" && (() => {
+          const source = binding.source;
+          if (source.kind !== "prev_response") return null;
 
-            <div className="space-y-1">
-              <Label className="text-[10px] text-muted-foreground">
-                Response Field Path
-              </Label>
-              <ResponseFieldPicker
-                value={binding.source.fieldPath}
-                onChange={(val) => {
-                  onUpdate((prev) => ({
-                    ...prev,
-                    source: {
-                      kind: "prev_response",
-                      stepId:
-                        prev.source.kind === "prev_response"
-                          ? prev.source.stepId
-                          : priorSteps[0]?.id || "",
-                      fieldPath: val,
-                    },
-                  }));
-                }}
-                placeholder="e.g. data.id or token"
-              />
+          const selectedPriorStep = priorSteps.find(
+            (s) => s.id === source.stepId,
+          );
+          const priorEndpoint = selectedPriorStep?.endpointId
+            ? endpoints.find((ep) => ep.id === selectedPriorStep.endpointId)
+            : undefined;
+
+          return (
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label className="text-[10px] text-muted-foreground">
+                  From Step
+                </Label>
+                <Select
+                  value={source.stepId}
+                  onValueChange={(val) => {
+                    onUpdate((prev) => ({
+                      ...prev,
+                      source: {
+                        kind: "prev_response",
+                        stepId: val,
+                        fieldPath:
+                          prev.source.kind === "prev_response"
+                            ? prev.source.fieldPath
+                            : "",
+                      },
+                    }));
+                  }}
+                >
+                  <SelectTrigger className="h-7 text-xs bg-background">
+                    <SelectValue placeholder="Select step" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {priorSteps.map((pStep, pIdx) => (
+                      <SelectItem key={pStep.id} value={pStep.id}>
+                        Step {pIdx + 1}: {pStep.name || pStep.type}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-[10px] text-muted-foreground">
+                  Response Field Path
+                </Label>
+                <ResponseFieldPicker
+                  value={source.fieldPath}
+                  onChange={(val) => {
+                    onUpdate((prev) => ({
+                      ...prev,
+                      source: {
+                        kind: "prev_response",
+                        stepId:
+                          prev.source.kind === "prev_response"
+                            ? prev.source.stepId
+                            : priorSteps[0]?.id || "",
+                        fieldPath: val,
+                      },
+                    }));
+                  }}
+                  endpoint={priorEndpoint}
+                  placeholder="e.g. data.id or token"
+                />
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {binding.source.kind === "realtime_payload" && (
           <div className="space-y-1">
@@ -1040,14 +1056,6 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
       }
     });
 
-    const common = ["page", "limit", "offset", "search", "sort", "filter", "tab"];
-    common.forEach((c) => {
-      if (!seen.has(c)) {
-        seen.add(c);
-        list.push({ value: c, label: c, type: "query" });
-      }
-    });
-
     return list;
   }, [selectedEndpoint]);
 
@@ -1062,24 +1070,26 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
       }
     });
 
-    const common = [
-      { value: "id", type: "string" },
-      { value: "userId", type: "string" },
-      { value: "email", type: "string" },
-      { value: "name", type: "string" },
-      { value: "query", type: "string" },
-      { value: "fileName", type: "string" },
-      { value: "fileType", type: "string" },
-      { value: "fileSize", type: "number" },
-      { value: "fileKey", type: "string" },
-    ];
-
-    common.forEach((c) => {
-      if (!seen.has(c.value)) {
-        seen.add(c.value);
-        list.push(c);
-      }
-    });
+    const rawJson = selectedEndpoint?.requestBody?.rawJson || selectedEndpoint?.body;
+    if (rawJson) {
+      try {
+        const parsed = JSON.parse(rawJson);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          for (const [key, val] of Object.entries(parsed)) {
+            if (!seen.has(key)) {
+              seen.add(key);
+              let valType = "body";
+              if (typeof val === "string") valType = "string";
+              else if (typeof val === "number") valType = "number";
+              else if (typeof val === "boolean") valType = "boolean";
+              else if (Array.isArray(val)) valType = "array";
+              else if (typeof val === "object" && val !== null) valType = "object";
+              list.push({ value: key, label: key, type: valType });
+            }
+          }
+        }
+      } catch {}
+    }
 
     return list;
   }, [selectedEndpoint]);
@@ -1475,6 +1485,7 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
                       onDelete={() => handleDeleteBinding(b.id)}
                       onKindChange={(kind) => handleKindChange(b.id, kind)}
                       priorSteps={priorSteps}
+                      endpoints={endpoints}
                       routeParamSuggestions={routeParamSuggestions}
                       queryParamSuggestions={queryParamSuggestions}
                       stateStores={stateStores}
@@ -1536,6 +1547,7 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
                       onDelete={() => handleDeleteBinding(b.id)}
                       onKindChange={(kind) => handleKindChange(b.id, kind)}
                       priorSteps={priorSteps}
+                      endpoints={endpoints}
                       routeParamSuggestions={routeParamSuggestions}
                       queryParamSuggestions={queryParamSuggestions}
                       stateStores={stateStores}
@@ -1596,6 +1608,7 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
                       onDelete={() => handleDeleteBinding(b.id)}
                       onKindChange={(kind) => handleKindChange(b.id, kind)}
                       priorSteps={priorSteps}
+                      endpoints={endpoints}
                       routeParamSuggestions={routeParamSuggestions}
                       queryParamSuggestions={queryParamSuggestions}
                       stateStores={stateStores}
@@ -1658,6 +1671,7 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
                       onDelete={() => handleDeleteBinding(b.id)}
                       onKindChange={(kind) => handleKindChange(b.id, kind)}
                       priorSteps={priorSteps}
+                      endpoints={endpoints}
                       routeParamSuggestions={routeParamSuggestions}
                       queryParamSuggestions={queryParamSuggestions}
                       stateStores={stateStores}

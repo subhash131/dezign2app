@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
-import type { BackendNode, UIEventItem } from "@workspace/canvas";
+import type { BackendNode, UIEventItem, Endpoint } from "@workspace/canvas";
 import type {
   FrontendActionStepDraft,
   FrontendFieldSource,
@@ -35,6 +35,7 @@ export interface StateMutationStepProps {
   allSteps: FrontendActionStepDraft[];
   stepIndex: number;
   allNodes: BackendNode[];
+  endpoints?: (Endpoint & { nodeId: string })[];
   webPageNodeId?: string;
   actionId?: string;
   actionItem?: UIEventItem;
@@ -50,6 +51,7 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
   allSteps,
   stepIndex,
   allNodes,
+  endpoints = [],
   webPageNodeId,
   actionId,
   actionItem,
@@ -667,59 +669,70 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
             </div>
           )}
 
-          {valueSource.kind === "prev_response" && (
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <Label className="text-[10px] text-muted-foreground">
-                  From Step
-                </Label>
-                <Select
-                  value={valueSource.stepId}
-                  onValueChange={(val) =>
-                    onChange({
-                      ...draft,
-                      stateValueSource: {
-                        kind: "prev_response",
-                        stepId: val,
-                        fieldPath: valueSource.fieldPath || "",
-                      },
-                    })
-                  }
-                >
-                  <SelectTrigger className="h-7 text-xs bg-background">
-                    <SelectValue placeholder="Select step" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {priorSteps.map((pStep, pIdx) => (
-                      <SelectItem key={pStep.id} value={pStep.id}>
-                        Step {pIdx + 1}: {pStep.name || pStep.type}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+          {valueSource.kind === "prev_response" && (() => {
+            if (valueSource.kind !== "prev_response") return null;
+            const selectedPriorStep = priorSteps.find(
+              (s) => s.id === (valueSource.stepId || priorSteps[0]?.id),
+            );
+            const priorEndpoint = selectedPriorStep?.endpointId
+              ? endpoints.find((ep) => ep.id === selectedPriorStep.endpointId)
+              : undefined;
 
-              <div className="space-y-1">
-                <Label className="text-[10px] text-muted-foreground">
-                  Response Property
-                </Label>
-                <ResponseFieldPicker
-                  value={valueSource.fieldPath}
-                  onChange={(val) =>
-                    onChange({
-                      ...draft,
-                      stateValueSource: {
-                        kind: "prev_response",
-                        stepId: valueSource.stepId || priorSteps[0]?.id || "",
-                        fieldPath: val,
-                      },
-                    })
-                  }
-                  placeholder="e.g. data.user or token"
-                />
+            return (
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-[10px] text-muted-foreground">
+                    From Step
+                  </Label>
+                  <Select
+                    value={valueSource.stepId}
+                    onValueChange={(val) =>
+                      onChange({
+                        ...draft,
+                        stateValueSource: {
+                          kind: "prev_response",
+                          stepId: val,
+                          fieldPath: valueSource.fieldPath || "",
+                        },
+                      })
+                    }
+                  >
+                    <SelectTrigger className="h-7 text-xs bg-background">
+                      <SelectValue placeholder="Select step" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {priorSteps.map((pStep, pIdx) => (
+                        <SelectItem key={pStep.id} value={pStep.id}>
+                          Step {pIdx + 1}: {pStep.name || pStep.type}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-[10px] text-muted-foreground">
+                    Response Property
+                  </Label>
+                  <ResponseFieldPicker
+                    value={valueSource.fieldPath}
+                    onChange={(val) =>
+                      onChange({
+                        ...draft,
+                        stateValueSource: {
+                          kind: "prev_response",
+                          stepId: valueSource.stepId || priorSteps[0]?.id || "",
+                          fieldPath: val,
+                        },
+                      })
+                    }
+                    endpoint={priorEndpoint}
+                    placeholder="e.g. data.user or token"
+                  />
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {valueSource.kind === "session_storage" && (
             <div className="space-y-1">

@@ -118,6 +118,7 @@ export interface ResponseFieldPickerProps {
   endpoint?: Endpoint;
   placeholder?: string;
   disabled?: boolean;
+  isStorage?: boolean;
 }
 
 export interface QueryParamsStepProps {

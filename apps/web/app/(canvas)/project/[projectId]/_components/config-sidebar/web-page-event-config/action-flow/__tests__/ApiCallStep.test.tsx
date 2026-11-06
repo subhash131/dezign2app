@@ -376,4 +376,54 @@ describe("ApiCallStep UI component", () => {
       expect(binding.source.fieldPath).toBe("messages[messages.length - 1]?.id");
     }
   });
+
+  it("should only suggest real endpoint request body fields without hardcoded fallbacks", () => {
+    const customEndpoint: Endpoint & { nodeId: string } = {
+      id: "ep-chat",
+      nodeId: "service-1",
+      name: "/api/chat",
+      type: "POST",
+      requestBody: {
+        id: "rb-1",
+        fields: [
+          { id: "f1", name: "user_message", type: "string", required: true },
+        ],
+      },
+    };
+
+    const draft: FrontendActionStepDraft = {
+      id: "step-1",
+      order: 1,
+      type: "api_call",
+      serviceNodeId: "service-1",
+      endpointId: "ep-chat",
+      requestBindings: [
+        {
+          id: "bind-1",
+          slot: "body",
+          targetField: "user_message",
+          source: { kind: "literal", value: "hello" },
+        },
+      ],
+    };
+
+    const handleChange = vi.fn();
+    render(
+      <ApiCallStep
+        draft={draft}
+        stepIndex={0}
+        allSteps={[draft]}
+        allCanvasSteps={[]}
+        serviceNodes={[serviceNode]}
+        allNodes={[serviceNode]}
+        endpoints={[customEndpoint]}
+        onChange={handleChange}
+      />,
+    );
+
+    expect(screen.getByDisplayValue("user_message")).toBeDefined();
+    expect(screen.queryByText("fileKey")).toBeNull();
+    expect(screen.queryByText("fileName")).toBeNull();
+    expect(screen.queryByText("fileSize")).toBeNull();
+  });
 });

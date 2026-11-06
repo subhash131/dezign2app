@@ -250,6 +250,7 @@ export const StoragePutStep: React.FC<StoragePutStepProps> = ({
               endpoint={selectedPriorEndpoint}
               placeholder="e.g. presignedUrl or data.url"
               disabled={priorSteps.length === 0}
+              isStorage={true}
             />
           </div>
         </div>

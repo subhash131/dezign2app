@@ -30,11 +30,12 @@ export const ResponseFieldPicker: React.FC<ResponseFieldPickerProps> = ({
   value,
   onChange,
   endpoint,
-  placeholder = "e.g. presignedUrl or data.url",
+  placeholder = "e.g. data.id or token",
   disabled = false,
+  isStorage = false,
 }) => {
   const suggestions = useMemo(() => {
-    const raw = extractResponseFieldSuggestions(endpoint);
+    const raw = extractResponseFieldSuggestions(endpoint, { isStorage });
     const options: ComboboxOption[] = [];
 
     // Map known field types or types from endpoint definition
@@ -42,6 +43,13 @@ export const ResponseFieldPicker: React.FC<ResponseFieldPickerProps> = ({
     if (endpoint?.responseBody?.fields) {
       for (const f of endpoint.responseBody.fields) {
         if (f.name && f.type) endpointFieldTypes.set(f.name, f.type);
+      }
+    }
+    if (endpoint?.responseFields) {
+      for (const rf of endpoint.responseFields) {
+        if (rf.name && rf.type) {
+          endpointFieldTypes.set(rf.name, rf.type);
+        }
       }
     }
 
@@ -54,7 +62,7 @@ export const ResponseFieldPicker: React.FC<ResponseFieldPickerProps> = ({
     });
 
     return options;
-  }, [endpoint]);
+  }, [endpoint, isStorage]);
 
   return (
     <ActionFlowCombobox
