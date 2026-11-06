@@ -150,6 +150,12 @@ export function isNodeDerivedFromEntity(
 ): boolean {
   if (node.type !== "types") return false;
 
+  // Extended TypesNodes extend another TypesNode, they are never derived from an entity
+  if (node.data?.isExtended || node.data?.extendedFromNodeId) return false;
+
+  // Never match self
+  if (node.id === entityId) return false;
+
   // Consolidated node containing type from this entity
   if (
     node.id === "types-entity-schemas" ||
@@ -188,14 +194,15 @@ export function isNodeDerivedFromEntity(
     return true;
   }
 
-  // Direct edge from entity (either source or target)
+  // Direct edge from entity to types node (entity generates types)
   const hasEdge = edges.some(
     (e) =>
-      ((e.source === entityId && e.target === node.id) ||
-        (e.target === entityId && e.source === node.id)) &&
+      e.source === entityId &&
+      e.target === node.id &&
       (e.type === "type-reference" ||
         e.data?.label === "generates" ||
-        e.data?.isTypeReference),
+        e.data?.isTypeReference) &&
+      !e.data?.isExtensionEdge,
   );
   if (hasEdge) return true;
 
@@ -253,6 +260,14 @@ export function resolveCascadeDeletedNodeIds(
 
       // 3. Associated TypesNode derived from any deleted entity / redis_schema node
       if (node.type === "types") {
+        const deletedEntityIds = Array.from(allIdsSet).filter((deletedId) => {
+          const target = nodes.find((n) => n.id === deletedId);
+          return (
+            target &&
+            (target.type === "entity" || target.type === "redis_schema")
+          );
+        });
+
         const isConsolidated =
           node.id === "types-entity-schemas" ||
           Boolean(node.data?.isEntitySchemas) ||
@@ -260,7 +275,7 @@ export function resolveCascadeDeletedNodeIds(
 
         if (!isConsolidated) {
           let isDerivedFromDeletedEntity = false;
-          for (const deletedId of allIdsSet) {
+          for (const deletedId of deletedEntityIds) {
             if (isNodeDerivedFromEntity(node, deletedId, edges)) {
               isDerivedFromDeletedEntity = true;
               break;
@@ -275,7 +290,7 @@ export function resolveCascadeDeletedNodeIds(
           // If all types in the consolidated Entity Types node are from deleted entities, delete the node
           const currentTypes = node.data?.types || [];
           const hasRemainingType = currentTypes.some((t) => {
-            for (const deletedId of allIdsSet) {
+            for (const deletedId of deletedEntityIds) {
               if (
                 t.id === `type-entity-${deletedId}` ||
                 t.id.startsWith(`type-entity-${deletedId}`) ||

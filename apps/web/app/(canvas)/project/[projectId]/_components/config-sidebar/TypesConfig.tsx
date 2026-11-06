@@ -24,6 +24,10 @@ export const TypesConfig: React.FC<TypesConfigProps> = ({
     s.nodes.find((n) => n.id === (nodeId || id)),
   );
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
+  const deleteNode = useBackendCanvasStore((s) => s.deleteNode);
+  const setActiveConfigItem = useBackendCanvasStore(
+    (s) => s.setActiveConfigItem,
+  );
   const allNodes = useBackendCanvasStore((s) => s.nodes);
 
   const [activeTypeId, setActiveTypeId] = useState<string | undefined>(
@@ -160,9 +164,22 @@ export const TypesConfig: React.FC<TypesConfigProps> = ({
   const handleDeleteCurrentType = useCallback(() => {
     if (!currentType) return;
     const remaining = types.filter((t) => t.id !== currentType.id);
+    if (remaining.length === 0 && Boolean(data?.isExtended) && node?.id) {
+      deleteNode(node.id);
+      setActiveConfigItem(null);
+      return;
+    }
     updateTypesList(remaining);
     setActiveTypeId(remaining[0]?.id);
-  }, [currentType, types, updateTypesList]);
+  }, [
+    currentType,
+    types,
+    updateTypesList,
+    data?.isExtended,
+    node?.id,
+    deleteNode,
+    setActiveConfigItem,
+  ]);
 
   if (!node || !data) return null;
 
