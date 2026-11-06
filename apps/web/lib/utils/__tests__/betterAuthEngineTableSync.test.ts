@@ -78,10 +78,37 @@ describe("Better Auth Engine-Aware Table Generation & Sync", () => {
     expect(sqliteCheck.isValid).toBe(true);
   });
 
-  it("does not include createdAt or updatedAt across BETTER_AUTH_TABLE_DEFINITIONS tables", () => {
+  it("defines nullable createdAt and updatedAt for core tables and nullable createdAt-only for org/passkey tables", () => {
+    const coreTableNames = ["user", "session", "account", "verification"];
+    for (const name of coreTableNames) {
+      const def = BETTER_AUTH_TABLE_DEFINITIONS.find((d) => d.name === name);
+      expect(def).toBeDefined();
+      const createdAt = def!.defaultColumns.find((c) => c.name === "createdAt");
+      const updatedAt = def!.defaultColumns.find((c) => c.name === "updatedAt");
+      expect(createdAt).toBeDefined();
+      expect(createdAt?.isNotNull).toBeFalsy();
+      expect(updatedAt).toBeDefined();
+      expect(updatedAt?.isNotNull).toBeFalsy();
+    }
+
+    const pluginTableNames = ["organization", "member", "invitation", "passkey"];
+    for (const name of pluginTableNames) {
+      const def = BETTER_AUTH_TABLE_DEFINITIONS.find((d) => d.name === name);
+      expect(def).toBeDefined();
+      const createdAt = def!.defaultColumns.find((c) => c.name === "createdAt");
+      const updatedAt = def!.defaultColumns.find((c) => c.name === "updatedAt");
+      expect(createdAt).toBeDefined();
+      expect(createdAt?.isNotNull).toBeFalsy();
+      // Plugin tables never define updatedAt
+      expect(updatedAt).toBeUndefined();
+    }
+
+    // No Better Auth table definition should have isNotNull: true on timestamp columns
     for (const def of BETTER_AUTH_TABLE_DEFINITIONS) {
-      expect(def.defaultColumns.some((c) => c.name === "createdAt")).toBe(false);
-      expect(def.defaultColumns.some((c) => c.name === "updatedAt")).toBe(false);
+      const tsCols = def.defaultColumns.filter((c) => c.name === "createdAt" || c.name === "updatedAt");
+      for (const col of tsCols) {
+        expect(col.isNotNull).toBeFalsy();
+      }
     }
   });
 
@@ -100,7 +127,7 @@ describe("Better Auth Engine-Aware Table Generation & Sync", () => {
     expect(result.cols.find((c) => c.name === "id")?.type).toBe(DB_COLUMN_TYPES.UUID);
   });
 
-  it("repairEntityColumns strips rogue timestamp columns from Better Auth tables (such as organization, passkey, member, invitation)", () => {
+  it("repairEntityColumns strips rogue timestamp columns from Better Auth tables (such as snake_case created_at and unsupported updated_at on organization)", () => {
     const orgDef = BETTER_AUTH_TABLE_DEFINITIONS.find((d) => d.name === "organization")!;
     const existingCols = [
       { name: "id", type: DB_COLUMN_TYPES.UUID, isPrimaryKey: true, isNotNull: true },
@@ -114,9 +141,12 @@ describe("Better Auth Engine-Aware Table Generation & Sync", () => {
 
     const result = repairEntityColumns(existingCols, orgDef.defaultColumns, "postgres");
     expect(result.changed).toBe(true);
-    expect(result.cols.some((c) => c.name === "created_at" || c.name === "createdAt")).toBe(false);
+    expect(result.cols.some((c) => c.name === "created_at")).toBe(false);
     expect(result.cols.some((c) => c.name === "updated_at" || c.name === "updatedAt")).toBe(false);
-    expect(result.cols.map((c) => c.name)).toEqual(["id", "name", "slug", "logo", "metadata"]);
+    const createdAtCol = result.cols.find((c) => c.name === "createdAt");
+    expect(createdAtCol).toBeDefined();
+    expect(createdAtCol?.isNotNull).toBeFalsy();
+    expect(result.cols.map((c) => c.name)).toEqual(["id", "name", "slug", "logo", "metadata", "createdAt"]);
   });
 
   it("checkEntitySchemaDiscrepancies flags schema as invalid when rogue timestamp columns are present", () => {
@@ -140,5 +170,30 @@ describe("Better Auth Engine-Aware Table Generation & Sync", () => {
 
     const check = checkEntitySchemaDiscrepancies(entityNode, orgDef, "postgres");
     expect(check.isValid).toBe(false);
+  });
+
+  it("checkEntitySchemaDiscrepancies marks organization valid when it has canonical nullable createdAt and no updatedAt", () => {
+    const orgDef = BETTER_AUTH_TABLE_DEFINITIONS.find((d) => d.name === "organization")!;
+    const entityNode: BackendNode = {
+      id: "node-org-valid",
+      type: "entity",
+      fractionalIndex: "a0",
+      data: {
+        label: "organization",
+        columns: [
+          { name: "id", type: DB_COLUMN_TYPES.UUID, isPrimaryKey: true, isNotNull: true },
+          { name: "name", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
+          { name: "slug", type: DB_COLUMN_TYPES.TEXT, isNotNull: true, isUnique: true },
+          { name: "logo", type: DB_COLUMN_TYPES.TEXT },
+          { name: "metadata", type: DB_COLUMN_TYPES.TEXT },
+          { name: "createdAt", type: DB_COLUMN_TYPES.TIMESTAMPTZ, isNotNull: false },
+        ],
+        indexes: orgDef.defaultIndexes ? [...orgDef.defaultIndexes] : [],
+      },
+      position: { x: 0, y: 0 },
+    };
+
+    const check = checkEntitySchemaDiscrepancies(entityNode, orgDef, "postgres");
+    expect(check.isValid).toBe(true);
   });
 });

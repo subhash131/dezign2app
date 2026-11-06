@@ -24,7 +24,7 @@ import { DbOperationsList } from "./DbOperationsList";
 import { EntityAffectedTypesBanner } from "./EntityAffectedTypesBanner";
 import { EntityDbSyncBanner } from "./EntityDbSyncBanner";
 import { EntityGroupSelect } from "./EntityGroupSelect";
-import { getUniqueNodeLabel, isBetterAuthTableName } from "@workspace/canvas";
+import { getUniqueNodeLabel, isBetterAuthTableName, BETTER_AUTH_TABLE_DEFINITIONS } from "@workspace/canvas";
 import { NodeHeader } from "../graph-nodes/common";
 import { EntityRenameDialog } from "./EntityRenameDialog";
 import { renameDbTable } from "@/lib/services/databaseService";
@@ -62,34 +62,79 @@ export const EntityNode = React.memo(({ id, data, selected }: NodeProps<BackendN
     if (hasInitializedColumnsRef.current) return;
     if (isVector || data.dbType === "redis") return;
 
-    // Prune rogue timestamp columns from Better Auth / Authentication entities
+    // Prune rogue timestamp columns from Better Auth / Authentication entities:
+    // Better Auth requires canonical camelCase timestamps with JS-level defaults (nullable in DB).
+    // - organization, member, invitation, passkey: createdAt only (NO updatedAt)
+    // - user, session, account, verification: createdAt and updatedAt
+    // - snake_case (created_at, updated_at) or isNotNull: true are sanitized to canonical definitions.
     const isAuth =
       data.group?.toLowerCase() === "authentication" ||
       isBetterAuthTableName(data.tableName || data.label || "");
 
-    if (
-      isAuth &&
-      data.columns &&
-      data.columns.some((c) => {
-        const n = (c.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-        return n === "createdat" || n === "updatedat";
-      })
-    ) {
-      hasInitializedColumnsRef.current = true;
-      const cleaned = data.columns.filter((c) => {
-        const n = (c.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-        return n !== "createdat" && n !== "updatedat";
+    if (isAuth && data.columns && data.columns.length > 0) {
+      const entityLabel = (data.tableName || data.label || "").toLowerCase().replace(/[-_\s]/g, "");
+      const matchingDef = BETTER_AUTH_TABLE_DEFINITIONS.find((d) => {
+        const dName = d.name.toLowerCase().replace(/[-_\s]/g, "");
+        return dName === entityLabel || `${dName}s` === entityLabel;
       });
-      updateNode(id, {
-        data: {
-          ...data,
-          columns: cleaned,
-        },
-      });
-      return;
+
+      if (matchingDef) {
+        const allowedTimestamps = new Set(
+          matchingDef.defaultColumns
+            .filter((c) => c.name === "createdAt" || c.name === "updatedAt")
+            .map((c) => c.name),
+        );
+
+        let hasTimestampDiscrepancy = false;
+        for (const c of data.columns) {
+          const n = (c.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+          if (n === "createdat" || n === "updatedat") {
+            const canonical = n === "createdat" ? "createdAt" : "updatedAt";
+            if (!allowedTimestamps.has(canonical) || c.name !== canonical || c.isNotNull === true) {
+              hasTimestampDiscrepancy = true;
+              break;
+            }
+          }
+        }
+
+        if (hasTimestampDiscrepancy) {
+          hasInitializedColumnsRef.current = true;
+          const cleaned = data.columns
+            .filter((c) => {
+              const n = (c.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+              if (n === "createdat" || n === "updatedat") {
+                const canonical = n === "createdat" ? "createdAt" : "updatedAt";
+                // Strip completely if not allowed on this Better Auth table (e.g. updatedAt on organization)
+                return allowedTimestamps.has(canonical);
+              }
+              return true;
+            })
+            .map((c) => {
+              const n = (c.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+              if (n === "createdat" || n === "updatedat") {
+                const canonical = n === "createdat" ? "createdAt" : "updatedAt";
+                const { isNotNull: _, ...rest } = c;
+                return {
+                  ...rest,
+                  name: canonical,
+                  type: c.type || "TIMESTAMPTZ",
+                };
+              }
+              return c;
+            });
+
+          updateNode(id, {
+            data: {
+              ...data,
+              columns: cleaned,
+            },
+          });
+          return;
+        }
+      }
     }
 
-    if (!data.columns || data.columns.length === 0) {
+    if (!isAuth && (!data.columns || data.columns.length === 0)) {
       if (data.readOnly) return;
       hasInitializedColumnsRef.current = true;
       updateNode(id, {
@@ -106,6 +151,7 @@ export const EntityNode = React.memo(({ id, data, selected }: NodeProps<BackendN
     }
 
     if (
+      !isAuth &&
       data.columns.length === 1 &&
       data.columns[0]?.name?.toLowerCase() === "id"
     ) {
@@ -126,6 +172,7 @@ export const EntityNode = React.memo(({ id, data, selected }: NodeProps<BackendN
     }
 
     if (
+      !isAuth &&
       !data.tableName &&
       !data.label &&
       data.columns.length === 3 &&
