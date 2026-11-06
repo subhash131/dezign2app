@@ -1,11 +1,53 @@
-import type { Endpoint, UIEventItem } from "@workspace/canvas";
+import type { BackendNode, Endpoint, UIEventItem } from "@workspace/canvas";
+import type {
+  TransformerHelperNodeData,
+  CustomTypeItem,
+  CustomTypeField,
+} from "@workspace/canvas/types";
+import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { toVarName } from "@/lib/compiler/utils";
+import {
+  inferReturnSchemaFromCode,
+  InferredFieldDraft,
+} from "@/lib/utils/inferReturnSchema";
+import { extractNestedPaths, parseRawJsonSafe } from "@/lib/utils/nestedJsonSchema";
 import type { ActionStepItem } from "../TargetEndpointSection";
+import type { ComboboxOption } from "./ActionFlowCombobox";
 import type {
   FrontendActionStepDraft,
   FrontendActionStepType,
   FrontendFieldSource,
   FrontendRequestFieldBinding,
 } from "./types";
+
+interface ReturnSchemaFieldItem {
+  name: string;
+  type?: string;
+  description?: string;
+  isArray?: boolean;
+  nestedFields?: ReturnSchemaFieldItem[];
+}
+
+export const KNOWN_FIELD_TYPES: Record<string, string> = {
+  presignedUrl: "url",
+  signedUrl: "url",
+  uploadUrl: "url",
+  downloadUrl: "url",
+  url: "url",
+  fileUrl: "url",
+  "data.presignedUrl": "url",
+  "data.url": "url",
+  key: "string",
+  fileKey: "string",
+  id: "string",
+  fileName: "string",
+  fileType: "string",
+  fileSize: "number",
+  status: "string",
+  success: "boolean",
+  data: "object",
+  error: "string",
+};
 
 export const FILE_STORAGE_RESPONSE_FIELD_SUGGESTIONS = [
   "presignedUrl",
@@ -68,6 +110,387 @@ export function extractResponseFieldSuggestions(
   }
 
   return Array.from(suggestions);
+}
+
+export interface ExtractStepFieldOptions {
+  isStorage?: boolean;
+  allNodes?: BackendNode[];
+  endpoints?: (Endpoint & { nodeId?: string })[];
+}
+
+/**
+ * Extracts available field suggestions from a prior action step (transformer, API call, storage, etc.)
+ */
+export function extractStepFieldOptions(
+  step?: FrontendActionStepDraft,
+  options?: ExtractStepFieldOptions,
+): ComboboxOption[] {
+  if (!step) return [];
+
+  const results: ComboboxOption[] = [];
+  const seen = new Set<string>();
+
+  const addOption = (path: string, type?: string) => {
+    if (!path || seen.has(path)) return;
+    seen.add(path);
+    results.push({
+      value: path,
+      label: path,
+      type: type || KNOWN_FIELD_TYPES[path] || "property",
+    });
+  };
+
+  const isTransform =
+    step.type === "transform" ||
+    Boolean(step.transformerNodeId) ||
+    Boolean(step.transformerRefNodeId) ||
+    Boolean(step.transformerName) ||
+    Boolean(step.functionRef);
+
+  if (isTransform) {
+    const nodesPool: BackendNode[] =
+      options?.allNodes && options.allNodes.length > 0
+        ? options.allNodes
+        : useBackendCanvasStore.getState().nodes || [];
+
+    // Find transformer node
+    let matchedNode: BackendNode | undefined;
+
+    // 1. By transformerNodeId
+    if (step.transformerNodeId) {
+      matchedNode = nodesPool.find((n) => n.id === step.transformerNodeId);
+      if (matchedNode?.type === "transformer_ref") {
+        const refTarget = matchedNode.data?.transformerRef;
+        if (typeof refTarget === "string" && refTarget.length > 0) {
+          const master = nodesPool.find(
+            (m) =>
+              m.type === "transformer" &&
+              (m.id === refTarget ||
+                m.data?.functionName === refTarget ||
+                m.data?.label === refTarget ||
+                (typeof m.data?.functionName === "string" && toVarName(m.data.functionName) === toVarName(refTarget)) ||
+                (typeof m.data?.label === "string" && toVarName(m.data.label) === toVarName(refTarget))),
+          );
+          if (master) matchedNode = master;
+        }
+      }
+    }
+
+    // 2. By transformerRefNodeId
+    if (!matchedNode && step.transformerRefNodeId) {
+      const refNode = nodesPool.find((n) => n.id === step.transformerRefNodeId);
+      if (refNode) {
+        const refTarget = refNode.data?.transformerRef;
+        if (typeof refTarget === "string" && refTarget.length > 0) {
+          const master = nodesPool.find(
+            (m) =>
+              m.type === "transformer" &&
+              (m.id === refTarget ||
+                m.data?.functionName === refTarget ||
+                m.data?.label === refTarget ||
+                (typeof m.data?.functionName === "string" && toVarName(m.data.functionName) === toVarName(refTarget)) ||
+                (typeof m.data?.label === "string" && toVarName(m.data.label) === toVarName(refTarget))),
+          );
+          matchedNode = master || refNode;
+        } else {
+          matchedNode = refNode;
+        }
+      }
+    }
+
+    // 3. By functionRef name
+    if (!matchedNode && typeof step.functionRef?.name === "string" && step.functionRef.name.length > 0) {
+      const fnName = step.functionRef.name;
+      matchedNode = nodesPool.find(
+        (n) =>
+          (n.type === "transformer" || n.type === "transformer_ref") &&
+          (n.id === fnName ||
+            n.data?.functionName === fnName ||
+            n.data?.label === fnName ||
+            (typeof n.data?.functionName === "string" && toVarName(n.data.functionName) === toVarName(fnName)) ||
+            (typeof n.data?.label === "string" && toVarName(n.data.label) === toVarName(fnName))),
+      );
+      if (matchedNode?.type === "transformer_ref") {
+        const refTarget = matchedNode.data?.transformerRef;
+        if (typeof refTarget === "string" && refTarget.length > 0) {
+          const master = nodesPool.find(
+            (m) =>
+              m.type === "transformer" &&
+              (m.id === refTarget ||
+                m.data?.functionName === refTarget ||
+                m.data?.label === refTarget ||
+                (typeof m.data?.functionName === "string" && toVarName(m.data.functionName) === toVarName(refTarget)) ||
+                (typeof m.data?.label === "string" && toVarName(m.data.label) === toVarName(refTarget))),
+          );
+          if (master) matchedNode = master;
+        }
+      }
+    }
+
+    // 4. By transformerName
+    if (!matchedNode && typeof step.transformerName === "string" && step.transformerName.length > 0) {
+      const trName = step.transformerName;
+      matchedNode = nodesPool.find(
+        (n) =>
+          (n.type === "transformer" || n.type === "transformer_ref") &&
+          (n.id === trName ||
+            n.data?.label === trName ||
+            n.data?.functionName === trName ||
+            (typeof n.data?.label === "string" && toVarName(n.data.label) === toVarName(trName)) ||
+            (typeof n.data?.functionName === "string" && toVarName(n.data.functionName) === toVarName(trName))),
+      );
+      if (matchedNode?.type === "transformer_ref") {
+        const refTarget = matchedNode.data?.transformerRef;
+        if (typeof refTarget === "string" && refTarget.length > 0) {
+          const master = nodesPool.find(
+            (m) =>
+              m.type === "transformer" &&
+              (m.id === refTarget ||
+                m.data?.functionName === refTarget ||
+                m.data?.label === refTarget ||
+                (typeof m.data?.functionName === "string" && toVarName(m.data.functionName) === toVarName(refTarget)) ||
+                (typeof m.data?.label === "string" && toVarName(m.data.label) === toVarName(refTarget))),
+          );
+          if (master) matchedNode = master;
+        }
+      }
+    }
+
+    // 5. By step.outputVariable or step.name (e.g. generateChatIdResult -> generateChatId)
+    if (!matchedNode && (step.outputVariable || step.name)) {
+      const rawName = step.outputVariable || step.name || "";
+      const baseName = rawName.replace(/Result$/i, "");
+      matchedNode = nodesPool.find(
+        (n) =>
+          (n.type === "transformer" || n.type === "transformer_ref") &&
+          (n.id === baseName ||
+            n.data?.label === baseName ||
+            n.data?.functionName === baseName ||
+            (typeof n.data?.label === "string" && toVarName(n.data.label) === toVarName(baseName)) ||
+            (typeof n.data?.functionName === "string" && toVarName(n.data.functionName) === toVarName(baseName)) ||
+            (typeof n.data?.label === "string" && toVarName(n.data.label) === toVarName(rawName)) ||
+            (typeof n.data?.functionName === "string" && toVarName(n.data.functionName) === toVarName(rawName))),
+      );
+      if (matchedNode?.type === "transformer_ref") {
+        const refTarget = matchedNode.data?.transformerRef;
+        if (typeof refTarget === "string" && refTarget.length > 0) {
+          const master = nodesPool.find(
+            (m) =>
+              m.type === "transformer" &&
+              (m.id === refTarget ||
+                m.data?.functionName === refTarget ||
+                m.data?.label === refTarget ||
+                (typeof m.data?.functionName === "string" && toVarName(m.data.functionName) === toVarName(refTarget)) ||
+                (typeof m.data?.label === "string" && toVarName(m.data.label) === toVarName(refTarget))),
+          );
+          if (master) matchedNode = master;
+        }
+      }
+    }
+
+    // 6. Check any transformer_ref node referencing step.transformerNodeId
+    if (!matchedNode && step.transformerNodeId) {
+      const refNode = nodesPool.find(
+        (n) =>
+          n.type === "transformer_ref" &&
+          n.data?.transformerRef === step.transformerNodeId,
+      );
+      if (refNode) {
+        matchedNode = nodesPool.find(
+          (n) => n.type === "transformer" && n.id === step.transformerNodeId,
+        );
+      }
+    }
+
+    // 7. Check service nodes transformerHelpers
+    if (!matchedNode) {
+      for (const svc of nodesPool.filter((n) => n.type === "service")) {
+        const helpers = svc.data?.transformerHelpers;
+        if (Array.isArray(helpers)) {
+          const helper = helpers.find((h: TransformerHelperNodeData) => {
+            if (step.transformerNodeId && h.id === step.transformerNodeId) return true;
+            const targetName = step.functionRef?.name || step.transformerName;
+            if (typeof targetName === "string" && typeof h.name === "string") {
+              return h.name === targetName || toVarName(h.name) === toVarName(targetName);
+            }
+            return false;
+          });
+          if (helper && Array.isArray(helper.returnSchema)) {
+            helper.returnSchema.forEach((rf: { name: string; type: string }) => {
+              if (rf.name) addOption(rf.name, rf.type);
+            });
+            break;
+          }
+        }
+      }
+    }
+
+    // A) Raw JSON return schema mode
+    if (
+      matchedNode?.data?.returnSchemaMode === "raw_json" &&
+      typeof matchedNode.data.returnSchemaRawJson === "string"
+    ) {
+      const { parsed, error } = parseRawJsonSafe(matchedNode.data.returnSchemaRawJson);
+      if (!error && parsed !== null) {
+        const nested = extractNestedPaths(parsed);
+        nested.forEach((item) => {
+          if (item.path) {
+            addOption(item.path, item.type);
+          }
+        });
+      }
+    }
+
+    // B) Structured returnSchema array
+    const rawReturnSchema: ReturnSchemaFieldItem[] = [];
+    if (Array.isArray(matchedNode?.data?.returnSchema)) {
+      for (const item of matchedNode.data.returnSchema) {
+        rawReturnSchema.push({
+          name: item.name,
+          type: item.type,
+          description: item.description,
+          isArray: item.isArray,
+          nestedFields: item.nestedFields,
+        });
+      }
+    }
+    if (rawReturnSchema.length === 0 && Array.isArray(step.functionRef?.returnSchema)) {
+      for (const item of step.functionRef.returnSchema) {
+        rawReturnSchema.push({
+          name: item.name,
+          type: item.type,
+        });
+      }
+    }
+
+    if (rawReturnSchema.length > 0) {
+      const addParams = (params: readonly ReturnSchemaFieldItem[], prefix = "") => {
+        params.forEach((param) => {
+          if (!param || !param.name) return;
+          const fullPath = prefix ? `${prefix}.${param.name}` : param.name;
+          const pType = param.type || (param.isArray ? "array" : "string");
+          addOption(fullPath, pType);
+
+          if (Array.isArray(param.nestedFields) && param.nestedFields.length > 0) {
+            addParams(param.nestedFields, fullPath);
+          } else if (pType && nodesPool.some((n) => n.type === "types")) {
+            for (const typesNode of nodesPool.filter((n) => n.type === "types")) {
+              const typesList = typesNode.data?.types;
+              if (Array.isArray(typesList)) {
+                const matchedType = typesList.find(
+                  (t: CustomTypeItem) =>
+                    t.name === pType ||
+                    (typeof t.name === "string" && toVarName(t.name) === toVarName(pType)),
+                );
+                if (matchedType && Array.isArray(matchedType.fields)) {
+                  matchedType.fields.forEach((tf: CustomTypeField) => {
+                    if (tf.name) {
+                      addOption(`${fullPath}.${tf.name}`, tf.type || "string");
+                    }
+                  });
+                }
+              }
+            }
+          }
+        });
+      };
+      addParams(rawReturnSchema);
+    }
+
+    // C) Dynamic code inference from transformer code
+    const code = matchedNode?.data?.code;
+    const inSchema = matchedNode?.data?.inputSchema || [];
+    if (typeof code === "string" && code.trim().length > 0) {
+      const inferred = inferReturnSchemaFromCode(code, inSchema);
+      if (inferred.length > 0) {
+        const isDummy = inferred.length === 1 && inferred[0]?.name === "result";
+        if (!isDummy || results.length === 0) {
+          if (results.length === 1 && results[0]?.value === "result" && !isDummy) {
+            results.length = 0;
+            seen.clear();
+          }
+          const addInferred = (items: readonly InferredFieldDraft[], prefix = "") => {
+            items.forEach((item) => {
+              if (!item || !item.name) return;
+              const fullPath = prefix ? `${prefix}.${item.name}` : item.name;
+              addOption(fullPath, item.type || "string");
+              if (Array.isArray(item.nestedFields) && item.nestedFields.length > 0) {
+                addInferred(item.nestedFields, fullPath);
+              }
+            });
+          };
+          addInferred(inferred);
+        }
+      }
+    }
+
+    // Filter out dummy "result" if real fields exist
+    if (results.some((r) => r.value !== "result")) {
+      const idx = results.findIndex((r) => r.value === "result");
+      if (idx !== -1) {
+        results.splice(idx, 1);
+        seen.delete("result");
+      }
+    }
+
+    return results;
+  }
+
+  // 2. Api Call Step
+  if (step.type === "api_call" || step.endpointId) {
+    const endpointsPool =
+      options?.endpoints && options.endpoints.length > 0
+        ? options.endpoints
+        : useBackendCanvasStore.getState().endpoints || [];
+
+    const ep = endpointsPool.find((e) => e.id === step.endpointId);
+    if (ep) {
+      if (ep.responseBody?.fields) {
+        for (const f of ep.responseBody.fields) {
+          if (f.name) addOption(f.name, f.type);
+        }
+      }
+      if (ep.responseFields) {
+        for (const rf of ep.responseFields) {
+          if (rf.name) addOption(rf.name, rf.type);
+        }
+      }
+      if (ep.responseBody?.rawJson) {
+        const { parsed, error } = parseRawJsonSafe(ep.responseBody.rawJson);
+        if (!error && parsed !== null) {
+          const nested = extractNestedPaths(parsed);
+          nested.forEach((item) => {
+            if (item.path) {
+              addOption(item.path, item.type);
+            }
+          });
+        }
+      }
+    }
+    return results;
+  }
+
+  // 3. Storage Put Step
+  if (step.type === "storage_put") {
+    FILE_STORAGE_RESPONSE_FIELD_SUGGESTIONS.forEach((s) => {
+      addOption(s, KNOWN_FIELD_TYPES[s] || "string");
+    });
+    return results;
+  }
+
+  // 4. State Mutation Step
+  if (step.type === "state_mutation" && step.stateKey) {
+    addOption(step.stateKey, "property");
+    return results;
+  }
+
+  // 5. Browser Storage Step
+  if (step.type === "browser_storage" && step.storageKey) {
+    addOption(step.storageKey, "string");
+    return results;
+  }
+
+  return results;
 }
 
 /**
@@ -293,8 +716,8 @@ export function deriveStepsFromEdges(
           existingByEndpoint.set(`${draft.serviceNodeId}:${draft.endpointId}`, draft);
         }
       } else {
-        // Retain steps without a canvas edge (e.g. state_mutation, update_query_params, navigate)
-        if (draft.type !== "api_call" && draft.type !== "storage_put") {
+        // Retain steps without a canvas edge (e.g. state_mutation, update_query_params, navigate, transform)
+        if (draft.type !== "api_call" && draft.type !== "storage_put" && draft.type !== "transform") {
           nonEdgeSteps.push(draft);
         }
       }
@@ -307,6 +730,52 @@ export function deriveStepsFromEdges(
       (cStep.targetNodeId && cStep.endpointId
         ? existingByEndpoint.get(`${cStep.targetNodeId}:${cStep.endpointId}`)
         : undefined);
+
+    const isTransformer =
+      cStep.targetNode?.type === "transformer" ||
+      cStep.targetNode?.type === "transformer_ref" ||
+      existingDraft?.type === "transform";
+
+    if (isTransformer) {
+      const targetNode = cStep.targetNode;
+      const fnName =
+        existingDraft?.transformerName ||
+        targetNode?.data?.label ||
+        targetNode?.data?.functionName ||
+        "transformer";
+      const cleanFn = toVarName(fnName);
+      const defaultVar =
+        existingDraft?.outputVariable ||
+        existingDraft?.name ||
+        (cleanFn ? `${cleanFn}Result` : "transformerResult");
+      const isRef = targetNode?.type === "transformer_ref";
+      const masterId = isRef
+        ? targetNode?.data?.transformerRef || targetNode?.id
+        : targetNode?.id;
+
+      const draft: FrontendActionStepDraft = {
+        id: existingDraft?.id || cStep.edgeId,
+        order: existingDraft?.order ?? (cStep.step ?? idx + 1),
+        type: "transform",
+        name: existingDraft?.name || defaultVar,
+        outputVariable: defaultVar,
+        edgeId: cStep.edgeId,
+        transformerNodeId: existingDraft?.transformerNodeId || masterId,
+        transformerRefNodeId:
+          existingDraft?.transformerRefNodeId || (isRef ? targetNode?.id : undefined),
+        transformerName: fnName,
+        functionRef: existingDraft?.functionRef || {
+          name: cleanFn,
+          importPath: "@workspace/transformers",
+          isGlobal: true,
+          inputSchema: targetNode?.data?.inputSchema,
+          returnSchema: targetNode?.data?.returnSchema,
+        },
+        transformBindings: existingDraft?.transformBindings || [],
+      };
+
+      return draft;
+    }
 
     const stepType: FrontendActionStepType = cStep.isStorageRef
       ? "storage_put"

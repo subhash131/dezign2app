@@ -247,6 +247,9 @@ export const StoragePutStep: React.FC<StoragePutStepProps> = ({
                   },
                 });
               }}
+              step={selectedPriorStep}
+              allNodes={allNodes}
+              endpoints={endpoints}
               endpoint={selectedPriorEndpoint}
               placeholder="e.g. presignedUrl or data.url"
               disabled={priorSteps.length === 0}

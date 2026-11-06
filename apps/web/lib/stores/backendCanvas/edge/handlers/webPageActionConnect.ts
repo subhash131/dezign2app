@@ -220,6 +220,19 @@ export function handleWebPageActionConnect({
         ? otherNode.data?.transformerRef || otherNode.id
         : otherNode.id;
 
+    const masterNode =
+      otherNode.type === "transformer_ref"
+        ? currentNodes.find(
+            (n) =>
+              n.type === "transformer" &&
+              (n.id === masterId ||
+                n.data?.functionName === masterId ||
+                n.data?.label === masterId ||
+                toVarName(n.data?.functionName || "") === toVarName(masterId) ||
+                toVarName(n.data?.label || "") === toVarName(masterId)),
+          ) || otherNode
+        : otherNode;
+
     targetDesc = `transformer ${trName}`;
     configuredStep = {
       id: `step-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
@@ -238,10 +251,10 @@ export function handleWebPageActionConnect({
           ? "@workspace/transformers"
           : `../transformers/${cleanFn}`,
         isGlobal,
-        inputSchema: otherNode.data?.inputSchema,
-        returnSchema: otherNode.data?.returnSchema,
+        inputSchema: masterNode.data?.inputSchema || otherNode.data?.inputSchema,
+        returnSchema: masterNode.data?.returnSchema || otherNode.data?.returnSchema,
       },
-      transformBindings: (otherNode.data?.inputSchema || []).map(
+      transformBindings: (masterNode.data?.inputSchema || otherNode.data?.inputSchema || []).map(
         (field: { name: string }) => ({
           argName: field.name,
           source: { kind: "literal", value: "" },

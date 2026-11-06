@@ -100,6 +100,8 @@ describe("actionStepCanvasSync - previous edge update and removal", () => {
     store.addNode(ordersServiceNode);
     store.addNode(storageNode);
     store.addNode(stateStoreNode);
+    // Clear companion type-reference edges auto-created with services so tests isolate action edges
+    useBackendCanvasStore.setState({ edges: [] });
 
     return { webPageNode, usersServiceNode, ordersServiceNode, storageNode, stateStoreNode };
   };
