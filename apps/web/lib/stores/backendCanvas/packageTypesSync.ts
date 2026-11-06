@@ -453,25 +453,21 @@ export function createExtendedTypeNode(sourceNodeId: string, sourceTypeId: strin
       n.data?.extendedFromNodeId === sourceNodeId,
   );
 
-  // If this type is already extended in the existing extended node, highlight it
-  if (existingExtendedNode) {
-    const existingExtType = (existingExtendedNode.data?.types || []).find(
-      (t) => t.extendedFromTypeId === baseType.id || t.extendedFrom === baseType.name,
-    );
-    if (existingExtType) {
-      store.setActiveConfigItem({
-        id: existingExtendedNode.id,
-        nodeId: existingExtendedNode.id,
-        type: "types",
-        selectedTypeId: existingExtType.id,
-      });
-      toast.info(`"${baseType.name}" is already extended as "${existingExtType.name}".`);
-      return;
+  // Generate a unique extended type name (e.g. CustomUser, CustomUser2, CustomUser3...)
+  const allExistingTypeNames = new Set(
+    nodes.flatMap((n) => (n.data?.types || []).map((t) => t.name)),
+  );
+
+  let extendedTypeName = `Custom${baseType.name}`;
+  if (allExistingTypeNames.has(extendedTypeName)) {
+    let suffix = 2;
+    while (allExistingTypeNames.has(`Custom${baseType.name}${suffix}`)) {
+      suffix++;
     }
+    extendedTypeName = `Custom${baseType.name}${suffix}`;
   }
 
-  const newTypeId = `type-ext-${Date.now()}-${baseType.name.toLowerCase()}`;
-  const extendedTypeName = `Custom${baseType.name}`;
+  const newTypeId = `type-ext-${Date.now()}-${extendedTypeName.toLowerCase()}`;
 
   // Clone fields from base type so user has a complete starting model.
   // Mark each cloned field as inherited so the preview can emit proper extends syntax.
