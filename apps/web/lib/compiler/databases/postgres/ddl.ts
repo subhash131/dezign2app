@@ -148,9 +148,7 @@ export const BETTERAUTH_PG_DDL: string[] = [
   "name" TEXT NOT NULL,
   "slug" TEXT UNIQUE NOT NULL,
   "logo" TEXT,
-  "metadata" TEXT,
-  "createdAt" TIMESTAMPTZ DEFAULT NOW(),
-  "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+  "metadata" TEXT
 );`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "idx_organization_slug" ON "organization" ("slug");`,
 
@@ -158,9 +156,7 @@ export const BETTERAUTH_PG_DDL: string[] = [
   "id" UUID PRIMARY KEY NOT NULL,
   "organizationId" UUID NOT NULL,
   "userId" UUID NOT NULL,
-  "role" TEXT NOT NULL,
-  "createdAt" TIMESTAMPTZ DEFAULT NOW(),
-  "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+  "role" TEXT NOT NULL
 );`,
   `CREATE INDEX IF NOT EXISTS "idx_member_organizationId" ON "member" ("organizationId");`,
   `CREATE INDEX IF NOT EXISTS "idx_member_userId" ON "member" ("userId");`,
@@ -174,8 +170,6 @@ export const BETTERAUTH_PG_DDL: string[] = [
   "teamId" UUID,
   "status" TEXT,
   "expiresAt" TIMESTAMPTZ,
-  "createdAt" TIMESTAMPTZ DEFAULT NOW(),
-  "updatedAt" TIMESTAMPTZ DEFAULT NOW(),
   "inviterId" UUID
 );`,
   `CREATE INDEX IF NOT EXISTS "idx_invitation_organizationId" ON "invitation" ("organizationId");`,
@@ -184,9 +178,7 @@ export const BETTERAUTH_PG_DDL: string[] = [
   `CREATE TABLE IF NOT EXISTS "team" (
   "id" UUID PRIMARY KEY NOT NULL,
   "organizationId" UUID NOT NULL,
-  "name" TEXT NOT NULL,
-  "createdAt" TIMESTAMPTZ DEFAULT NOW(),
-  "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+  "name" TEXT NOT NULL
 );`,
   `CREATE INDEX IF NOT EXISTS "idx_team_organizationId" ON "team" ("organizationId");`,
 
@@ -194,9 +186,7 @@ export const BETTERAUTH_PG_DDL: string[] = [
   "id" UUID PRIMARY KEY NOT NULL,
   "teamId" UUID NOT NULL,
   "userId" UUID NOT NULL,
-  "role" TEXT NOT NULL,
-  "createdAt" TIMESTAMPTZ DEFAULT NOW(),
-  "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+  "role" TEXT NOT NULL
 );`,
   `CREATE INDEX IF NOT EXISTS "idx_teamMember_teamId" ON "teamMember" ("teamId");`,
   `CREATE INDEX IF NOT EXISTS "idx_teamMember_userId" ON "teamMember" ("userId");`,
@@ -207,7 +197,6 @@ export const BETTERAUTH_PG_DDL: string[] = [
   "publicKey" TEXT,
   "privateKey" TEXT,
   "createdAt" TIMESTAMPTZ DEFAULT NOW(),
-  "updatedAt" TIMESTAMPTZ DEFAULT NOW(),
   "expiresAt" TIMESTAMPTZ,
   "alg" TEXT,
   "crv" TEXT
@@ -224,8 +213,6 @@ export const BETTERAUTH_PG_DDL: string[] = [
   "deviceType" TEXT,
   "backedUp" BOOLEAN DEFAULT FALSE,
   "transports" TEXT,
-  "createdAt" TIMESTAMPTZ DEFAULT NOW(),
-  "updatedAt" TIMESTAMPTZ DEFAULT NOW(),
   "aaguid" TEXT
 );`,
   `CREATE INDEX IF NOT EXISTS "idx_passkey_userId" ON "passkey" ("userId");`,
@@ -238,18 +225,14 @@ export const BETTERAUTH_PG_DDL: string[] = [
   "backupCodes" TEXT,
   "verified" BOOLEAN DEFAULT FALSE,
   "failedVerificationCount" INTEGER DEFAULT 0,
-  "lockedUntil" TIMESTAMPTZ,
-  "createdAt" TIMESTAMPTZ DEFAULT NOW(),
-  "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+  "lockedUntil" TIMESTAMPTZ
 );`,
   `CREATE INDEX IF NOT EXISTS "idx_twoFactor_userId" ON "twoFactor" ("userId");`,
 
   `CREATE TABLE IF NOT EXISTS "rateLimit" (
   "key" TEXT PRIMARY KEY NOT NULL,
   "count" INTEGER DEFAULT 0,
-  "lastRequest" BIGINT,
-  "createdAt" TIMESTAMPTZ DEFAULT NOW(),
-  "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+  "lastRequest" BIGINT
 );`,
   `CREATE INDEX IF NOT EXISTS "idx_rateLimit_lastRequest" ON "rateLimit" ("lastRequest");`,
 ];
@@ -344,15 +327,11 @@ export const BETTERAUTH_PG_SCHEMAS: Record<string, Array<{ name: string; pgType:
     { name: "slug", pgType: "TEXT" },
     { name: "logo", pgType: "TEXT" },
     { name: "metadata", pgType: "TEXT" },
-    { name: "createdAt", pgType: "TIMESTAMPTZ" },
-    { name: "updatedAt", pgType: "TIMESTAMPTZ" },
   ],
   member: [
     { name: "organizationId", pgType: "UUID" },
     { name: "userId", pgType: "UUID" },
     { name: "role", pgType: "TEXT" },
-    { name: "createdAt", pgType: "TIMESTAMPTZ" },
-    { name: "updatedAt", pgType: "TIMESTAMPTZ" },
   ],
   invitation: [
     { name: "organizationId", pgType: "UUID" },
@@ -361,22 +340,16 @@ export const BETTERAUTH_PG_SCHEMAS: Record<string, Array<{ name: string; pgType:
     { name: "teamId", pgType: "UUID" },
     { name: "status", pgType: "TEXT" },
     { name: "expiresAt", pgType: "TIMESTAMPTZ" },
-    { name: "createdAt", pgType: "TIMESTAMPTZ" },
-    { name: "updatedAt", pgType: "TIMESTAMPTZ" },
     { name: "inviterId", pgType: "UUID" },
   ],
   team: [
     { name: "organizationId", pgType: "UUID" },
     { name: "name", pgType: "TEXT" },
-    { name: "createdAt", pgType: "TIMESTAMPTZ" },
-    { name: "updatedAt", pgType: "TIMESTAMPTZ" },
   ],
   teamMember: [
     { name: "teamId", pgType: "UUID" },
     { name: "userId", pgType: "UUID" },
     { name: "role", pgType: "TEXT" },
-    { name: "createdAt", pgType: "TIMESTAMPTZ" },
-    { name: "updatedAt", pgType: "TIMESTAMPTZ" },
   ],
   passkey: [
     { name: "name", pgType: "TEXT" },
@@ -387,8 +360,6 @@ export const BETTERAUTH_PG_SCHEMAS: Record<string, Array<{ name: string; pgType:
     { name: "deviceType", pgType: "TEXT" },
     { name: "backedUp", pgType: "BOOLEAN" },
     { name: "transports", pgType: "TEXT" },
-    { name: "createdAt", pgType: "TIMESTAMPTZ" },
-    { name: "updatedAt", pgType: "TIMESTAMPTZ" },
     { name: "aaguid", pgType: "TEXT" },
   ],
   twoFactor: [
@@ -398,14 +369,11 @@ export const BETTERAUTH_PG_SCHEMAS: Record<string, Array<{ name: string; pgType:
     { name: "verified", pgType: "BOOLEAN" },
     { name: "failedVerificationCount", pgType: "INTEGER" },
     { name: "lockedUntil", pgType: "TIMESTAMPTZ" },
-    { name: "createdAt", pgType: "TIMESTAMPTZ" },
-    { name: "updatedAt", pgType: "TIMESTAMPTZ" },
   ],
   jwks: [
     { name: "publicKey", pgType: "TEXT" },
     { name: "privateKey", pgType: "TEXT" },
     { name: "createdAt", pgType: "TIMESTAMPTZ" },
-    { name: "updatedAt", pgType: "TIMESTAMPTZ" },
     { name: "expiresAt", pgType: "TIMESTAMPTZ" },
     { name: "alg", pgType: "TEXT" },
     { name: "crv", pgType: "TEXT" },
@@ -413,8 +381,6 @@ export const BETTERAUTH_PG_SCHEMAS: Record<string, Array<{ name: string; pgType:
   rateLimit: [
     { name: "count", pgType: "INTEGER" },
     { name: "lastRequest", pgType: "BIGINT" },
-    { name: "createdAt", pgType: "TIMESTAMPTZ" },
-    { name: "updatedAt", pgType: "TIMESTAMPTZ" },
   ],
 };
 

@@ -799,8 +799,6 @@ export function compileRawSqliteDatabase(
     "teamId" TEXT,
     "status" TEXT,
     "expiresAt" TEXT,
-    "createdAt" TEXT,
-    "updatedAt" TEXT,
     "inviterId" TEXT
   );`);
     ddlStatements.push(`  CREATE INDEX IF NOT EXISTS "idx_invitation_organizationId" ON "invitation" ("organizationId");`);
@@ -833,9 +831,7 @@ export function compileRawSqliteDatabase(
     "userId" TEXT,
     "credentialID" TEXT UNIQUE,
     "counter" INTEGER,
-    "transports" TEXT,
-    "createdAt" TEXT,
-    "updatedAt" TEXT
+    "transports" TEXT
   );`);
     ddlStatements.push(`  CREATE INDEX IF NOT EXISTS "idx_passkey_userId" ON "passkey" ("userId");`);
     ddlStatements.push(`  CREATE UNIQUE INDEX IF NOT EXISTS "idx_passkey_credentialID" ON "passkey" ("credentialID");`);
@@ -847,9 +843,7 @@ export function compileRawSqliteDatabase(
     "id" TEXT PRIMARY KEY,
     "userId" TEXT,
     "secret" TEXT,
-    "backupCodes" TEXT,
-    "createdAt" TEXT,
-    "updatedAt" TEXT
+    "backupCodes" TEXT
   );`);
     ddlStatements.push(`  CREATE INDEX IF NOT EXISTS "idx_twoFactor_userId" ON "twoFactor" ("userId");`);
     createdTableNames.add("twoFactor");
@@ -919,15 +913,11 @@ export function compileRawSqliteDatabase(
       { name: "slug", type: "TEXT" },
       { name: "logo", type: "TEXT" },
       { name: "metadata", type: "TEXT" },
-      { name: "createdAt", type: "TEXT" },
-      { name: "updatedAt", type: "TEXT" },
     ],
     member: [
       { name: "organizationId", type: "TEXT" },
       { name: "userId", type: "TEXT" },
       { name: "role", type: "TEXT" },
-      { name: "createdAt", type: "TEXT" },
-      { name: "updatedAt", type: "TEXT" },
     ],
     invitation: [
       { name: "organizationId", type: "TEXT" },
@@ -936,8 +926,6 @@ export function compileRawSqliteDatabase(
       { name: "teamId", type: "TEXT" },
       { name: "status", type: "TEXT" },
       { name: "expiresAt", type: "TEXT" },
-      { name: "createdAt", type: "TEXT" },
-      { name: "updatedAt", type: "TEXT" },
       { name: "inviterId", type: "TEXT" },
     ],
     jwks: [
@@ -955,21 +943,15 @@ export function compileRawSqliteDatabase(
       { name: "credentialID", type: "TEXT" },
       { name: "counter", type: "INTEGER" },
       { name: "transports", type: "TEXT" },
-      { name: "createdAt", type: "TEXT" },
-      { name: "updatedAt", type: "TEXT" },
     ],
     twoFactor: [
       { name: "userId", type: "TEXT" },
       { name: "secret", type: "TEXT" },
       { name: "backupCodes", type: "TEXT" },
-      { name: "createdAt", type: "TEXT" },
-      { name: "updatedAt", type: "TEXT" },
     ],
     rateLimit: [
       { name: "count", type: "INTEGER" },
       { name: "lastRequest", type: "INTEGER" },
-      { name: "createdAt", type: "TEXT" },
-      { name: "updatedAt", type: "TEXT" },
     ],
   };
 
