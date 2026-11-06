@@ -99,4 +99,46 @@ describe("Better Auth Engine-Aware Table Generation & Sync", () => {
     expect(result.cols.find((c) => c.name === "id")?.isPrimaryKey).toBe(true);
     expect(result.cols.find((c) => c.name === "id")?.type).toBe(DB_COLUMN_TYPES.UUID);
   });
+
+  it("repairEntityColumns strips rogue timestamp columns from Better Auth tables (such as organization, passkey, member, invitation)", () => {
+    const orgDef = BETTER_AUTH_TABLE_DEFINITIONS.find((d) => d.name === "organization")!;
+    const existingCols = [
+      { name: "id", type: DB_COLUMN_TYPES.UUID, isPrimaryKey: true, isNotNull: true },
+      { name: "name", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
+      { name: "slug", type: DB_COLUMN_TYPES.TEXT, isNotNull: true, isUnique: true },
+      { name: "logo", type: DB_COLUMN_TYPES.TEXT },
+      { name: "metadata", type: DB_COLUMN_TYPES.TEXT },
+      { name: "created_at", type: DB_COLUMN_TYPES.TIMESTAMPTZ, isNotNull: true },
+      { name: "updated_at", type: DB_COLUMN_TYPES.TIMESTAMPTZ, isNotNull: true },
+    ];
+
+    const result = repairEntityColumns(existingCols, orgDef.defaultColumns, "postgres");
+    expect(result.changed).toBe(true);
+    expect(result.cols.some((c) => c.name === "created_at" || c.name === "createdAt")).toBe(false);
+    expect(result.cols.some((c) => c.name === "updated_at" || c.name === "updatedAt")).toBe(false);
+    expect(result.cols.map((c) => c.name)).toEqual(["id", "name", "slug", "logo", "metadata"]);
+  });
+
+  it("checkEntitySchemaDiscrepancies flags schema as invalid when rogue timestamp columns are present", () => {
+    const orgDef = BETTER_AUTH_TABLE_DEFINITIONS.find((d) => d.name === "organization")!;
+    const entityNode: BackendNode = {
+      id: "node-org",
+      type: "entity",
+      fractionalIndex: "a0",
+      data: {
+        label: "organization",
+        columns: [
+          { name: "id", type: DB_COLUMN_TYPES.UUID, isPrimaryKey: true, isNotNull: true },
+          { name: "name", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
+          { name: "slug", type: DB_COLUMN_TYPES.TEXT, isNotNull: true, isUnique: true },
+          { name: "created_at", type: DB_COLUMN_TYPES.TIMESTAMPTZ, isNotNull: true },
+          { name: "updated_at", type: DB_COLUMN_TYPES.TIMESTAMPTZ, isNotNull: true },
+        ],
+      },
+      position: { x: 0, y: 0 },
+    };
+
+    const check = checkEntitySchemaDiscrepancies(entityNode, orgDef, "postgres");
+    expect(check.isValid).toBe(false);
+  });
 });

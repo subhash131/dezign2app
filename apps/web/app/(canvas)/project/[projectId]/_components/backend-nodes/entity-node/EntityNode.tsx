@@ -24,7 +24,7 @@ import { DbOperationsList } from "./DbOperationsList";
 import { EntityAffectedTypesBanner } from "./EntityAffectedTypesBanner";
 import { EntityDbSyncBanner } from "./EntityDbSyncBanner";
 import { EntityGroupSelect } from "./EntityGroupSelect";
-import { getUniqueNodeLabel } from "@workspace/canvas";
+import { getUniqueNodeLabel, isBetterAuthTableName } from "@workspace/canvas";
 import { NodeHeader } from "../graph-nodes/common";
 import { EntityRenameDialog } from "./EntityRenameDialog";
 import { renameDbTable } from "@/lib/services/databaseService";
@@ -56,11 +56,38 @@ export const EntityNode = React.memo(({ id, data, selected }: NodeProps<BackendN
   const indexes = data.indexes || [];
   const isVector = data.dbType === "vector";
 
-  // Ensure default columns (id, created_at, updated_at) for relational tables
+  // Ensure default columns for relational tables, and sanitize Better Auth entities
   const hasInitializedColumnsRef = useRef(false);
   React.useEffect(() => {
     if (hasInitializedColumnsRef.current) return;
     if (isVector || data.dbType === "redis") return;
+
+    // Prune rogue timestamp columns from Better Auth / Authentication entities
+    const isAuth =
+      data.group?.toLowerCase() === "authentication" ||
+      isBetterAuthTableName(data.tableName || data.label || "");
+
+    if (
+      isAuth &&
+      data.columns &&
+      data.columns.some((c) => {
+        const n = (c.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+        return n === "createdat" || n === "updatedat";
+      })
+    ) {
+      hasInitializedColumnsRef.current = true;
+      const cleaned = data.columns.filter((c) => {
+        const n = (c.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+        return n !== "createdat" && n !== "updatedat";
+      });
+      updateNode(id, {
+        data: {
+          ...data,
+          columns: cleaned,
+        },
+      });
+      return;
+    }
 
     if (!data.columns || data.columns.length === 0) {
       if (data.readOnly) return;
@@ -120,67 +147,7 @@ export const EntityNode = React.memo(({ id, data, selected }: NodeProps<BackendN
       });
       return;
     }
-
-    // Ensure created_at / createdAt and updated_at / updatedAt on relational entities (e.g. auth and langgraph tables)
-    const currentCols = data.columns;
-    const hasCreated = currentCols.some(
-      (c) => c.name?.toLowerCase().replace(/[^a-z0-9]/g, "") === "createdat",
-    );
-    const hasUpdated = currentCols.some(
-      (c) => c.name?.toLowerCase().replace(/[^a-z0-9]/g, "") === "updatedat",
-    );
-    if (!hasCreated || !hasUpdated) {
-      hasInitializedColumnsRef.current = true;
-      const isLangGraph =
-        data.systemBadge === "langgraph" ||
-        (data.label || "").toLowerCase().includes("checkpoint") ||
-        (data.tableName || "").toLowerCase().includes("checkpoint");
-      const isCamelCaseAuth =
-        !isLangGraph &&
-        currentCols.some(
-          (c) =>
-            c.name === "userId" ||
-            c.name === "createdAt" ||
-            c.name === "updatedAt" ||
-            c.name === "expiresAt" ||
-            c.name === "organizationId",
-        );
-
-      const createdColName = isLangGraph
-        ? "created_at"
-        : isCamelCaseAuth
-          ? "createdAt"
-          : "created_at";
-      const updatedColName = isLangGraph
-        ? "updated_at"
-        : isCamelCaseAuth
-          ? "updatedAt"
-          : "updated_at";
-
-      const toAdd: NonNullable<BackendNode["data"]["columns"]> = [];
-      if (!hasCreated) {
-        toAdd.push({
-          name: createdColName,
-          type: "TIMESTAMPTZ",
-          ...(isLangGraph ? {} : { isNotNull: true }),
-        });
-      }
-      if (!hasUpdated) {
-        toAdd.push({
-          name: updatedColName,
-          type: "TIMESTAMPTZ",
-          ...(isLangGraph ? {} : { isNotNull: true }),
-        });
-      }
-
-      updateNode(id, {
-        data: {
-          ...data,
-          columns: [...currentCols, ...toAdd],
-        },
-      });
-    }
-  }, [id, isVector, data.dbType, data.readOnly, data.columns, data.label, data.tableName, updateNode]);
+  }, [id, isVector, data.dbType, data.readOnly, data.columns, data.label, data.tableName, data.group, updateNode]);
 
   const [renameDialogOpen, setRenameDialogOpen] = React.useState(false);
   const [showSyncBanner, setShowSyncBanner] = React.useState(false);
