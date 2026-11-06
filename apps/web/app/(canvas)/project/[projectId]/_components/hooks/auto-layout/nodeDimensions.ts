@@ -130,7 +130,14 @@ export function getNodeDimensions(node: LayoutNodeLike): {
       measuredHeight > 0,
   );
 
-  if (isMeasured && node.type !== "entity" && node.type !== "redis_schema" && measuredWidth !== undefined && measuredHeight !== undefined) {
+  if (
+    isMeasured &&
+    node.type !== "entity" &&
+    node.type !== "redis_schema" &&
+    node.type !== "webPage" &&
+    measuredWidth !== undefined &&
+    measuredHeight !== undefined
+  ) {
     return {
       width: measuredWidth,
       height: measuredHeight,
@@ -297,12 +304,30 @@ export function getNodeDimensions(node: LayoutNodeLike): {
     }
     case "webPage": {
       const data = getLayoutNodeData(node);
-      const sections = data?.sections || [];
-      const totalActions = sections.reduce(
-        (acc: number, s) => acc + (s.actions?.length || 0),
-        0,
+      const sections = (data?.sections || []) as any[];
+      let sectionsTotalHeight = 0;
+      sections.forEach((sec) => {
+        const stateCount = Array.isArray(sec.stateObjects) ? sec.stateObjects.length : 0;
+        const actCount = Array.isArray(sec.actions) ? sec.actions.length : 0;
+        const compCount = Array.isArray(sec.componentBindings) ? sec.componentBindings.length : 0;
+        const rtCount = Array.isArray(sec.realtimeConnections) ? sec.realtimeConnections.length : 0;
+        const secH =
+          36 + // Section header
+          (stateCount > 0 ? 26 + stateCount * 28 : 58) + // Rendered State block
+          (26 + 28 + actCount * 34) + // Actions & Triggers block (+ add action button)
+          (compCount > 0 ? 26 + compCount * 28 : 58) + // UI Components block
+          (rtCount > 0 ? 26 + rtCount * 28 : 58); // Real-time connections block
+        sectionsTotalHeight += secH;
+      });
+
+      const hasDesc = Boolean(
+        node.data &&
+        typeof node.data === "object" &&
+        "description" in node.data &&
+        node.data.description,
       );
-      const estHeight = 220 + sections.length * 34 + totalActions * 28;
+      const baseChrome = 160 + (hasDesc ? 44 : 0);
+      const estHeight = Math.max(260, baseChrome + sectionsTotalHeight);
       const estWidth = 380;
       if (isMeasured && measuredWidth !== undefined && measuredHeight !== undefined) {
         return {
@@ -310,7 +335,7 @@ export function getNodeDimensions(node: LayoutNodeLike): {
           height: Math.max(measuredHeight, estHeight),
         };
       }
-      return { width: estWidth, height: Math.max(260, estHeight) };
+      return { width: estWidth, height: estHeight };
     }
     case "hook":
     case "hook_ref": {

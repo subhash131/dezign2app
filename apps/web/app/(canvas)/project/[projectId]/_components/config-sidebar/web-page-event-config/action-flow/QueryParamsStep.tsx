@@ -20,6 +20,7 @@ import type {
   QueryParamUpdateItem,
 } from "./types";
 import { ActionFlowCombobox } from "./ActionFlowCombobox";
+import { ResponseFieldPicker } from "./ResponseFieldPicker";
 
 export interface QueryParamsStepProps {
   draft: FrontendActionStepDraft;
@@ -523,53 +524,60 @@ export const QueryParamsStep: React.FC<QueryParamsStepProps> = ({
                     />
                   )}
 
-                  {currentAction === "prev_response" && (
-                    <div className="flex items-center gap-1 min-w-0">
-                      <Select
-                        value={vSource.kind === "prev_response" ? vSource.stepId || "" : ""}
-                        onValueChange={(val) =>
-                          handleUpdateParam(pIdx, {
-                            valueSource: {
-                              kind: "prev_response",
-                              stepId: val,
-                              fieldPath:
-                                vSource.kind === "prev_response"
-                                  ? vSource.fieldPath
-                                  : "",
-                            },
-                          })
-                        }
-                      >
-                        <SelectTrigger className="h-7 text-xs bg-background w-24 shrink-0">
-                          <SelectValue placeholder="Step" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {priorSteps.map((s, idx) => (
-                            <SelectItem key={s.id} value={s.id}>
-                              Step {idx + 1}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Input
-                        value={vSource.kind === "prev_response" ? vSource.fieldPath || "" : ""}
-                        onChange={(e) =>
-                          handleUpdateParam(pIdx, {
-                            valueSource: {
-                              kind: "prev_response",
-                              stepId:
-                                vSource.kind === "prev_response"
-                                  ? vSource.stepId
-                                  : priorSteps[0]?.id || "",
-                              fieldPath: e.target.value,
-                            },
-                          })
-                        }
-                        placeholder="Path: e.g. data.id"
-                        className="h-7 text-xs bg-background font-mono flex-1 min-w-0"
-                      />
-                    </div>
-                  )}
+                  {currentAction === "prev_response" && (() => {
+                    const selStepId = vSource.kind === "prev_response" ? vSource.stepId || priorSteps[0]?.id : priorSteps[0]?.id;
+                    const selectedPriorStep = priorSteps.find((s) => s.id === selStepId);
+                    return (
+                      <div className="flex items-center gap-1 min-w-0 flex-1">
+                        <Select
+                          value={vSource.kind === "prev_response" ? vSource.stepId || "" : ""}
+                          onValueChange={(val) =>
+                            handleUpdateParam(pIdx, {
+                              valueSource: {
+                                kind: "prev_response",
+                                stepId: val,
+                                fieldPath:
+                                  vSource.kind === "prev_response"
+                                    ? vSource.fieldPath
+                                    : "",
+                              },
+                            })
+                          }
+                        >
+                          <SelectTrigger className="h-7 text-xs bg-background w-24 shrink-0">
+                            <SelectValue placeholder="Step" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {priorSteps.map((s, idx) => (
+                              <SelectItem key={s.id} value={s.id}>
+                                Step {idx + 1}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <div className="flex-1 min-w-0">
+                          <ResponseFieldPicker
+                            value={vSource.kind === "prev_response" ? vSource.fieldPath || "" : ""}
+                            onChange={(val) =>
+                              handleUpdateParam(pIdx, {
+                                valueSource: {
+                                  kind: "prev_response",
+                                  stepId:
+                                    vSource.kind === "prev_response"
+                                      ? vSource.stepId
+                                      : priorSteps[0]?.id || "",
+                                  fieldPath: val,
+                                },
+                              })
+                            }
+                            step={selectedPriorStep}
+                            allNodes={allNodes}
+                            placeholder="Path: e.g. data.id"
+                          />
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {currentAction === "session_storage" && (
                     <Input

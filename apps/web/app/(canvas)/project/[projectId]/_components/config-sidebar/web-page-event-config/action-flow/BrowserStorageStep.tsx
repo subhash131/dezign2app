@@ -359,6 +359,9 @@ export const BrowserStorageStep: React.FC<BrowserStorageStepProps> = ({
                       storageValueSource: { ...valueSource, fieldPath: val },
                     })
                   }
+                  step={targetPriorStep}
+                  allNodes={allNodes}
+                  endpoints={endpoints}
                   endpoint={targetEndpoint}
                   placeholder="e.g. token, data.id, session.user.id"
                 />

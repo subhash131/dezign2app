@@ -726,6 +726,9 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
                         },
                       })
                     }
+                    step={selectedPriorStep}
+                    allNodes={allNodes}
+                    endpoints={endpoints}
                     endpoint={priorEndpoint}
                     placeholder="e.g. data.user or token"
                   />

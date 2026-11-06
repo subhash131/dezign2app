@@ -116,9 +116,13 @@ export interface ResponseFieldPickerProps {
   value: string;
   onChange: (val: string) => void;
   endpoint?: Endpoint;
+  step?: FrontendActionStepDraft;
+  allNodes?: BackendNode[];
+  endpoints?: (Endpoint & { nodeId?: string })[];
   placeholder?: string;
   disabled?: boolean;
   isStorage?: boolean;
+  customSuggestions?: ComboboxOption[];
 }
 
 export interface QueryParamsStepProps {

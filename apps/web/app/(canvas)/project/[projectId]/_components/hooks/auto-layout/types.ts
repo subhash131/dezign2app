@@ -15,6 +15,7 @@ export type LayoutNode = Node<BackendNodeData> & {
   style?: CSSProperties;
   width?: number;
   height?: number;
+  measured?: { width?: number; height?: number };
   sourcePosition?: string;
   targetPosition?: string;
 };

@@ -185,7 +185,7 @@ describe("ActionFlowEditor component", () => {
     fireEvent.click(addMutateStateBtn);
 
     expect(handleSave).toHaveBeenCalled();
-    const savedDrafts = handleSave.mock.calls[0]?.[0];
+    const savedDrafts = handleSave.mock.lastCall?.[0];
     expect(savedDrafts).toBeDefined();
     expect(savedDrafts).toHaveLength(3);
     expect(savedDrafts?.[2]?.type).toBe("state_mutation");
@@ -224,7 +224,7 @@ describe("ActionFlowEditor component", () => {
     fireEvent.click(addTransformerBtn);
 
     expect(handleSave).toHaveBeenCalled();
-    const savedDrafts = handleSave.mock.calls[0]?.[0];
+    const savedDrafts = handleSave.mock.lastCall?.[0];
     expect(savedDrafts).toBeDefined();
     expect(savedDrafts).toHaveLength(3);
     expect(savedDrafts?.[2]?.type).toBe("transform");
