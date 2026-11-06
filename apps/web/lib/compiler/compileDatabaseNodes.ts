@@ -173,7 +173,16 @@ export function compileDatabaseNodes(
         if (existingEntity) {
           const existingCols: CanvasEntityColumn[] = existingEntity.data?.columns || [];
           let hasColChanges = false;
-          const repairedCols: CanvasEntityColumn[] = existingCols.map((c: CanvasEntityColumn) => {
+          // Filter out rogue createdAt / updatedAt / created_at / updated_at from Better Auth entities
+          const filteredCols = existingCols.filter((c: CanvasEntityColumn) => {
+            const n = (c.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+            if (n === "createdat" || n === "updatedat") {
+              hasColChanges = true;
+              return false;
+            }
+            return true;
+          });
+          const repairedCols: CanvasEntityColumn[] = filteredCols.map((c: CanvasEntityColumn) => {
             const defCol = def.defaultColumns.find(
               (dc) => (dc.name || "").toLowerCase() === (c.name || "").toLowerCase(),
             );
