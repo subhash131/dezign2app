@@ -38,7 +38,9 @@ export function computeTierRanks({
     n.type === "gateway" ||
     n.type === "api_gateway" ||
     n.type === "start" ||
-    n.type === "START";
+    n.type === "START" ||
+    n.type === "payments" ||
+    n.type === "auth";
 
   const clientNodes = mainGraphNodes.filter(isClientNode);
   const clientNodeIdSet = new Set(clientNodes.map((n) => n.id));

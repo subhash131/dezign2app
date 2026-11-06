@@ -360,5 +360,142 @@ describe("zoneHandAutoLayout - Auto-Layout for Stacked WebPage Cards", () => {
     expect(pConvs.x).toBeGreaterThan(webPos.x);
     expect(srvPos.x).toBeGreaterThan(pConvs.x);
   });
+
+  it("takes into account the full height length of all stacked webpage cards and avoids overlap between stacks", () => {
+    const nodes: LayoutNode[] = [
+      {
+        id: "web-1",
+        type: "webApp",
+        position: { x: 0, y: 0 },
+        data: {
+          label: "web",
+          zones: [
+            { id: "zone-public", handleId: "public-in", name: "Public Section", accessType: "public" },
+            { id: "zone-private", handleId: "private-in", name: "Private Section", accessType: "protected" },
+          ],
+          expandedZones: [],
+        },
+      },
+      // Stack 1: Private Section pages with tall front card
+      {
+        id: "page-priv-layout",
+        type: "webPage",
+        position: { x: 0, y: 0 },
+        data: { label: "layout", isLayout: true, stackOrder: 0 },
+      },
+      {
+        id: "page-chat-new",
+        type: "webPage",
+        position: { x: 0, y: 0 },
+        data: { label: "/chat/new", stackOrder: 1 },
+      },
+      {
+        id: "page-chat-id",
+        type: "webPage",
+        position: { x: 0, y: 0 },
+        data: {
+          label: "/chat/[id]",
+          stackOrder: 2,
+          description: "Chat conversation page",
+          sections: [
+            {
+              id: "sec-main",
+              name: "Main Section",
+              actions: [
+                { id: "act-1", name: "pageLoad" },
+                { id: "act-2", name: "send message" },
+              ],
+            },
+          ],
+        },
+      },
+      // Stack 2: Public Section pages
+      {
+        id: "page-pub-root",
+        type: "webPage",
+        position: { x: 0, y: 0 },
+        data: { label: "/", isRoot: true, stackOrder: 0 },
+      },
+      {
+        id: "page-not-found",
+        type: "webPage",
+        position: { x: 0, y: 0 },
+        data: { label: "/not-found", stackOrder: 1 },
+      },
+      {
+        id: "page-pub-layout",
+        type: "webPage",
+        position: { x: 0, y: 0 },
+        data: {
+          label: "layout",
+          isLayout: true,
+          stackOrder: 2,
+          sections: [
+            { id: "sec-hdr", name: "Header Navigation", actions: [] },
+            { id: "sec-content", name: "Page Content", actions: [] },
+          ],
+        },
+      },
+    ];
+
+    const edges: LayoutEdge[] = [
+      { id: "e-priv-0", source: "web-1", sourceHandle: "private-in", target: "page-priv-layout", targetHandle: "page-in", type: "connection" },
+      { id: "e-priv-1", source: "web-1", sourceHandle: "private-in", target: "page-chat-new", targetHandle: "page-in", type: "connection" },
+      { id: "e-priv-2", source: "web-1", sourceHandle: "private-in", target: "page-chat-id", targetHandle: "page-in", type: "connection" },
+      { id: "e-pub-0", source: "web-1", sourceHandle: "public-in", target: "page-pub-root", targetHandle: "page-in", type: "connection" },
+      { id: "e-pub-1", source: "web-1", sourceHandle: "public-in", target: "page-not-found", targetHandle: "page-in", type: "connection" },
+      { id: "e-pub-2", source: "web-1", sourceHandle: "public-in", target: "page-pub-layout", targetHandle: "page-in", type: "connection" },
+    ];
+
+    let appliedChanges: PositionNodeChange[] = [];
+    performGraphLayout({
+      nodes,
+      edges,
+      onNodesChange: (c) => {
+        appliedChanges = c;
+      },
+      fitView: vi.fn(),
+      direction: "LR",
+    });
+
+    const posMap = new Map(appliedChanges.map((c) => [c.id, c.position]));
+
+    const stack1Pages = [nodes[1]!, nodes[2]!, nodes[3]!];
+    const stack2Pages = [nodes[4]!, nodes[5]!, nodes[6]!];
+
+    // Verify no vertical bounding box overlap between stack 1 and stack 2
+    const stack1Bounds = stack1Pages.map((p) => {
+      const pos = posMap.get(p.id)!;
+      // import getNodeDimensions or compute from nodeDimensions
+      const sections = Array.isArray(p.data?.sections) ? (p.data.sections as any[]) : [];
+      let secH = 0;
+      sections.forEach((s) => {
+        secH += 36 + 58 + 54 + (s.actions?.length || 0) * 34 + 58 + 58;
+      });
+      const h = Math.max(260, 160 + secH);
+      return { top: pos.y, bottom: pos.y + h };
+    });
+
+    const stack2Bounds = stack2Pages.map((p) => {
+      const pos = posMap.get(p.id)!;
+      const sections = Array.isArray(p.data?.sections) ? (p.data.sections as any[]) : [];
+      let secH = 0;
+      sections.forEach((s) => {
+        secH += 36 + 58 + 54 + (s.actions?.length || 0) * 34 + 58 + 58;
+      });
+      const h = Math.max(260, 160 + secH);
+      return { top: pos.y, bottom: pos.y + h };
+    });
+
+    const stack1Top = Math.min(...stack1Bounds.map((b) => b.top));
+    const stack1Bottom = Math.max(...stack1Bounds.map((b) => b.bottom));
+
+    const stack2Top = Math.min(...stack2Bounds.map((b) => b.top));
+    const stack2Bottom = Math.max(...stack2Bounds.map((b) => b.bottom));
+
+    // Either Stack 1 is strictly above Stack 2, or Stack 2 is strictly above Stack 1
+    const noOverlap = stack1Bottom <= stack2Top || stack2Bottom <= stack1Top;
+    expect(noOverlap).toBe(true);
+  });
 });
 

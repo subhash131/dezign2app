@@ -247,12 +247,24 @@ export function useZoneHandLayout(
   const maxStackHeight = useMemo(() => {
     if (!isStacked || siblingPages.length === 0) return undefined;
     return siblingPages.reduce((maxH, p) => {
-      const sections = Array.isArray(p.data?.sections) ? p.data.sections : [];
-      const totalActions = sections.reduce(
-        (acc: number, s) => acc + (Array.isArray(s?.actions) ? s.actions.length : 0),
-        0,
-      );
-      const estH = Math.max(260, 220 + sections.length * 34 + totalActions * 28);
+      const sections = Array.isArray(p.data?.sections) ? (p.data.sections as any[]) : [];
+      let sectionsTotalHeight = 0;
+      sections.forEach((sec) => {
+        const stateCount = Array.isArray(sec.stateObjects) ? sec.stateObjects.length : 0;
+        const actCount = Array.isArray(sec.actions) ? sec.actions.length : 0;
+        const compCount = Array.isArray(sec.componentBindings) ? sec.componentBindings.length : 0;
+        const rtCount = Array.isArray(sec.realtimeConnections) ? sec.realtimeConnections.length : 0;
+        const secH =
+          36 +
+          (stateCount > 0 ? 26 + stateCount * 28 : 58) +
+          (26 + 28 + actCount * 34) +
+          (compCount > 0 ? 26 + compCount * 28 : 58) +
+          (rtCount > 0 ? 26 + rtCount * 28 : 58);
+        sectionsTotalHeight += secH;
+      });
+      const hasDesc = Boolean(p.data?.description);
+      const baseChrome = 160 + (hasDesc ? 44 : 0);
+      const estH = Math.max(260, baseChrome + sectionsTotalHeight);
       return Math.max(maxH, estH);
     }, 260);
   }, [isStacked, siblingPages]);
