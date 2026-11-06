@@ -495,11 +495,23 @@ export function performGraphLayout({
         if (!leadPage) return;
 
         const count = sortedPages.length;
-        const frontCard = sortedPages[count - 1] ?? leadPage;
-        const frontDim = getNodeDimensions(frontCard);
-        const leadDim = getNodeDimensions(leadPage);
-        const stackWidth = Math.max(frontDim.width, leadDim.width) + (count - 1) * Math.abs(CARD_HEADER_OFFSET_X);
-        const stackHeight = frontDim.height + (count - 1) * CARD_HEADER_OFFSET_Y;
+        let maxStackBottom = 0;
+        let maxStackWidth = 0;
+
+        sortedPages.forEach((page, idx) => {
+          const dim = getNodeDimensions(page);
+          const cardBottom = idx * CARD_HEADER_OFFSET_Y + dim.height;
+          if (cardBottom > maxStackBottom) {
+            maxStackBottom = cardBottom;
+          }
+          const cardRight = dim.width + (count - 1 - idx) * Math.abs(CARD_HEADER_OFFSET_X);
+          if (cardRight > maxStackWidth) {
+            maxStackWidth = cardRight;
+          }
+        });
+
+        const stackWidth = Math.max(380, maxStackWidth);
+        const stackHeight = Math.max(260, maxStackBottom);
 
         dimensionOverrides.set(leadPage.id, { width: stackWidth, height: stackHeight });
 
@@ -857,12 +869,8 @@ export function performGraphLayout({
         const nodeA = graphNodes[i]!;
         const posA = positionsMap.get(nodeA.id);
         if (!posA) continue;
-        const stackA = stackByNodeId.get(nodeA.id);
-        const isSecondaryA = Boolean(stackA && stackA[stackA.length - 1]?.id !== nodeA.id);
         const rawDimA = getNodeDimensions(nodeA);
-        const dimA = isSecondaryA
-          ? { width: rawDimA.width, height: CARD_HEADER_OFFSET_Y }
-          : rawDimA;
+        const dimA = rawDimA;
 
         for (let j = i + 1; j < graphNodes.length; j++) {
           const nodeB = graphNodes[j]!;
@@ -888,12 +896,8 @@ export function performGraphLayout({
           );
           if (inSameRefDeck) continue;
 
-          const stackB = stackByNodeId.get(nodeB.id);
-          const isSecondaryB = Boolean(stackB && stackB[stackB.length - 1]?.id !== nodeB.id);
           const rawDimB = getNodeDimensions(nodeB);
-          const dimB = isSecondaryB
-            ? { width: rawDimB.width, height: CARD_HEADER_OFFSET_Y }
-            : rawDimB;
+          const dimB = rawDimB;
 
           const overlapX =
             Math.min(posA.x + dimA.width + padding, posB.x + dimB.width + padding) -
