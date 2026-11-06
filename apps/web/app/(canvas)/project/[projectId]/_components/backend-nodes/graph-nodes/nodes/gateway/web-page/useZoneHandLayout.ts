@@ -18,6 +18,7 @@ export interface ZoneHandLayoutInfo {
   hasMultipleCards: boolean;
   isStacked: boolean;
   isZoneExpanded: boolean;
+  maxStackHeight?: number;
   toggleZoneHand: () => void;
   selectCard: (targetIndex: number) => void;
   moveCard: (direction: "up" | "down") => void;
@@ -243,6 +244,19 @@ export function useZoneHandLayout(
 
   const isStacked = hasMultipleCards && !isZoneExpanded;
 
+  const maxStackHeight = useMemo(() => {
+    if (!isStacked || siblingPages.length === 0) return undefined;
+    return siblingPages.reduce((maxH, p) => {
+      const sections = Array.isArray(p.data?.sections) ? p.data.sections : [];
+      const totalActions = sections.reduce(
+        (acc: number, s) => acc + (Array.isArray(s?.actions) ? s.actions.length : 0),
+        0,
+      );
+      const estH = Math.max(260, 220 + sections.length * 34 + totalActions * 28);
+      return Math.max(maxH, estH);
+    }, 260);
+  }, [isStacked, siblingPages]);
+
   // Auto-pack / re-align legacy projects or cards where indentations or offsets don't match (runs once per hand state, avoiding loops during node drag)
   const hasAlignedRef = React.useRef(false);
   React.useEffect(() => {
@@ -413,6 +427,7 @@ export function useZoneHandLayout(
     hasMultipleCards,
     isStacked,
     isZoneExpanded,
+    maxStackHeight,
     toggleZoneHand,
     selectCard,
     moveCard,
