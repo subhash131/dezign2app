@@ -85,7 +85,15 @@ function generateTableHelpers(
   const Pascal = toPascal(tableName);
   const pascalSingular = toSingular(Pascal);
   const pascalPlural = toPlural(Pascal);
-  const cols = getColumns(tableNode, allNodes);
+  const rawCols = getColumns(tableNode, allNodes);
+  // Deduplicate columns by variable name to prevent TS2300 duplicate identifier errors
+  const seenColVars = new Set<string>();
+  const cols = rawCols.filter((c) => {
+    const vName = toVarName(c.name).toLowerCase();
+    if (!vName || seenColVars.has(vName)) return false;
+    seenColVars.add(vName);
+    return true;
+  });
   const pkCol: SqliteColumn =
     cols.find((c) => c.isPrimaryKey) ||
     cols[0] || {
@@ -715,7 +723,9 @@ export function compileRawSqliteDatabase(
     "banReason" TEXT,
     "banExpires" TEXT,
     "plan" TEXT,
-    "creemCustomerId" TEXT
+    "creemCustomerId" TEXT,
+    "createdAt" TEXT,
+    "updatedAt" TEXT
   );`);
     ddlStatements.push(`  CREATE UNIQUE INDEX IF NOT EXISTS "idx_user_email" ON "user" ("email");`);
     ddlStatements.push(`  CREATE VIEW IF NOT EXISTS "users" AS SELECT * FROM "user";`);
@@ -739,7 +749,9 @@ export function compileRawSqliteDatabase(
     "userAgent" TEXT,
     "impersonatedBy" TEXT,
     "activeOrganizationId" TEXT,
-    "activeTeamId" TEXT
+    "activeTeamId" TEXT,
+    "createdAt" TEXT,
+    "updatedAt" TEXT
   );`);
     ddlStatements.push(`  CREATE INDEX IF NOT EXISTS "idx_session_userId" ON "session" ("userId");`);
     ddlStatements.push(`  CREATE UNIQUE INDEX IF NOT EXISTS "idx_session_token" ON "session" ("token");`);
@@ -760,7 +772,9 @@ export function compileRawSqliteDatabase(
     "accessTokenExpiresAt" TEXT,
     "refreshTokenExpiresAt" TEXT,
     "scope" TEXT,
-    "idToken" TEXT
+    "idToken" TEXT,
+    "createdAt" TEXT,
+    "updatedAt" TEXT
   );`);
     ddlStatements.push(`  CREATE INDEX IF NOT EXISTS "idx_account_userId" ON "account" ("userId");`);
     ddlStatements.push(`  CREATE INDEX IF NOT EXISTS "idx_account_provider_account" ON "account" ("providerId", "accountId");`);
@@ -774,7 +788,9 @@ export function compileRawSqliteDatabase(
     "id" TEXT PRIMARY KEY,
     "identifier" TEXT,
     "value" TEXT,
-    "expiresAt" TEXT
+    "expiresAt" TEXT,
+    "createdAt" TEXT,
+    "updatedAt" TEXT
   );`);
     ddlStatements.push(`  CREATE INDEX IF NOT EXISTS "idx_verification_identifier" ON "verification" ("identifier");`);
     ddlStatements.push(`  CREATE VIEW IF NOT EXISTS "verifications" AS SELECT * FROM "verification";`);
@@ -791,7 +807,8 @@ export function compileRawSqliteDatabase(
     "teamId" TEXT,
     "status" TEXT,
     "expiresAt" TEXT,
-    "inviterId" TEXT
+    "inviterId" TEXT,
+    "createdAt" TEXT
   );`);
     ddlStatements.push(`  CREATE INDEX IF NOT EXISTS "idx_invitation_organizationId" ON "invitation" ("organizationId");`);
     ddlStatements.push(`  CREATE INDEX IF NOT EXISTS "idx_invitation_email" ON "invitation" ("email");`);
@@ -821,7 +838,8 @@ export function compileRawSqliteDatabase(
     "userId" TEXT,
     "credentialID" TEXT UNIQUE,
     "counter" INTEGER,
-    "transports" TEXT
+    "transports" TEXT,
+    "createdAt" TEXT
   );`);
     ddlStatements.push(`  CREATE INDEX IF NOT EXISTS "idx_passkey_userId" ON "passkey" ("userId");`);
     ddlStatements.push(`  CREATE UNIQUE INDEX IF NOT EXISTS "idx_passkey_credentialID" ON "passkey" ("credentialID");`);
@@ -862,6 +880,8 @@ export function compileRawSqliteDatabase(
       { name: "banExpires", type: "TEXT" },
       { name: "plan", type: "TEXT" },
       { name: "creemCustomerId", type: "TEXT" },
+      { name: "createdAt", type: "TEXT" },
+      { name: "updatedAt", type: "TEXT" },
     ],
     session: [
       { name: "userId", type: "TEXT" },
@@ -872,6 +892,8 @@ export function compileRawSqliteDatabase(
       { name: "impersonatedBy", type: "TEXT" },
       { name: "activeOrganizationId", type: "TEXT" },
       { name: "activeTeamId", type: "TEXT" },
+      { name: "createdAt", type: "TEXT" },
+      { name: "updatedAt", type: "TEXT" },
     ],
     account: [
       { name: "userId", type: "TEXT" },
@@ -884,22 +906,28 @@ export function compileRawSqliteDatabase(
       { name: "refreshTokenExpiresAt", type: "TEXT" },
       { name: "scope", type: "TEXT" },
       { name: "idToken", type: "TEXT" },
+      { name: "createdAt", type: "TEXT" },
+      { name: "updatedAt", type: "TEXT" },
     ],
     verification: [
       { name: "identifier", type: "TEXT" },
       { name: "value", type: "TEXT" },
       { name: "expiresAt", type: "TEXT" },
+      { name: "createdAt", type: "TEXT" },
+      { name: "updatedAt", type: "TEXT" },
     ],
     organization: [
       { name: "name", type: "TEXT" },
       { name: "slug", type: "TEXT" },
       { name: "logo", type: "TEXT" },
       { name: "metadata", type: "TEXT" },
+      { name: "createdAt", type: "TEXT" },
     ],
     member: [
       { name: "organizationId", type: "TEXT" },
       { name: "userId", type: "TEXT" },
       { name: "role", type: "TEXT" },
+      { name: "createdAt", type: "TEXT" },
     ],
     invitation: [
       { name: "organizationId", type: "TEXT" },
@@ -909,6 +937,7 @@ export function compileRawSqliteDatabase(
       { name: "status", type: "TEXT" },
       { name: "expiresAt", type: "TEXT" },
       { name: "inviterId", type: "TEXT" },
+      { name: "createdAt", type: "TEXT" },
     ],
     jwks: [
       { name: "publicKey", type: "TEXT" },
@@ -924,6 +953,7 @@ export function compileRawSqliteDatabase(
       { name: "credentialID", type: "TEXT" },
       { name: "counter", type: "INTEGER" },
       { name: "transports", type: "TEXT" },
+      { name: "createdAt", type: "TEXT" },
     ],
     twoFactor: [
       { name: "userId", type: "TEXT" },
