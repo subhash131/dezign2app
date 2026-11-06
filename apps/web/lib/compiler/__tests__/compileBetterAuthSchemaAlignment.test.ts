@@ -48,7 +48,7 @@ describe("Better Auth Database Schema Alignment", () => {
     const connectionFile = result.files.find((f) => f.filename === "connection.ts");
     expect(connectionFile).toBeDefined();
 
-    // Verify DDL / connection has all 8 required columns
+    // Verify DDL / connection has synthesized plugin columns
     const content = connectionFile!.content;
     expect(content).toContain('"plan"');
     expect(content).toContain('"creemCustomerId"');
@@ -57,7 +57,7 @@ describe("Better Auth Database Schema Alignment", () => {
     expect(content).toContain('"expiresAt"');
     expect(content).toContain('"alg"');
     expect(content).toContain('"crv"');
-    expect(content).toContain('"createdAt"');
+    expect(content).toContain('"publicKey"');
   });
 
   it("backfills pre-existing user & session canvas entities with missing auth and payments columns", () => {
@@ -171,9 +171,9 @@ describe("Better Auth Database Schema Alignment", () => {
     expect(code).toContain('\\"impersonatedBy\\" TEXT');
     expect(code).toContain('\\"activeOrganizationId\\" TEXT');
 
-    // Verify invitation has createdAt
+    // Verify invitation has status and role
     expect(code).toContain('\\"invitation\\"');
-    expect(code).toContain('\\"createdAt\\" TEXT');
+    expect(code).toContain('\\"status\\" TEXT');
 
     // Verify jwks has expiresAt, alg, crv
     expect(code).toContain('\\"jwks\\"');
@@ -189,7 +189,6 @@ describe("Better Auth Database Schema Alignment", () => {
     expect(code).toContain('CREATE INDEX IF NOT EXISTS \\"idx_verification_identifier\\" ON \\"verification\\" (\\"identifier\\")');
     expect(code).toContain('CREATE INDEX IF NOT EXISTS \\"idx_invitation_organizationId\\" ON \\"invitation\\" (\\"organizationId\\")');
     expect(code).toContain('CREATE INDEX IF NOT EXISTS \\"idx_jwks_expiresAt\\" ON \\"jwks\\" (\\"expiresAt\\")');
-    expect(code).toContain('CREATE INDEX IF NOT EXISTS \\"idx_jwks_createdAt\\" ON \\"jwks\\" (\\"createdAt\\")');
 
     // Also verify tableSchemas contains them for auto-migration
     expect(code).toContain('"name": "plan"');

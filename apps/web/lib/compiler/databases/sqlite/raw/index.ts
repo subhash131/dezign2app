@@ -710,8 +710,6 @@ export function compileRawSqliteDatabase(
     "email" TEXT UNIQUE,
     "emailVerified" INTEGER,
     "image" TEXT,
-    "createdAt" TEXT,
-    "updatedAt" TEXT,
     "role" TEXT,
     "banned" INTEGER,
     "banReason" TEXT,
@@ -739,8 +737,6 @@ export function compileRawSqliteDatabase(
     "expiresAt" TEXT,
     "ipAddress" TEXT,
     "userAgent" TEXT,
-    "createdAt" TEXT,
-    "updatedAt" TEXT,
     "impersonatedBy" TEXT,
     "activeOrganizationId" TEXT,
     "activeTeamId" TEXT
@@ -764,9 +760,7 @@ export function compileRawSqliteDatabase(
     "accessTokenExpiresAt" TEXT,
     "refreshTokenExpiresAt" TEXT,
     "scope" TEXT,
-    "idToken" TEXT,
-    "createdAt" TEXT,
-    "updatedAt" TEXT
+    "idToken" TEXT
   );`);
     ddlStatements.push(`  CREATE INDEX IF NOT EXISTS "idx_account_userId" ON "account" ("userId");`);
     ddlStatements.push(`  CREATE INDEX IF NOT EXISTS "idx_account_provider_account" ON "account" ("providerId", "accountId");`);
@@ -780,9 +774,7 @@ export function compileRawSqliteDatabase(
     "id" TEXT PRIMARY KEY,
     "identifier" TEXT,
     "value" TEXT,
-    "expiresAt" TEXT,
-    "createdAt" TEXT,
-    "updatedAt" TEXT
+    "expiresAt" TEXT
   );`);
     ddlStatements.push(`  CREATE INDEX IF NOT EXISTS "idx_verification_identifier" ON "verification" ("identifier");`);
     ddlStatements.push(`  CREATE VIEW IF NOT EXISTS "verifications" AS SELECT * FROM "verification";`);
@@ -813,13 +805,11 @@ export function compileRawSqliteDatabase(
     "id" TEXT PRIMARY KEY,
     "publicKey" TEXT,
     "privateKey" TEXT,
-    "createdAt" TEXT,
     "expiresAt" TEXT,
     "alg" TEXT,
     "crv" TEXT
   );`);
     ddlStatements.push(`  CREATE INDEX IF NOT EXISTS "idx_jwks_expiresAt" ON "jwks" ("expiresAt");`);
-    ddlStatements.push(`  CREATE INDEX IF NOT EXISTS "idx_jwks_createdAt" ON "jwks" ("createdAt");`);
     createdTableNames.add("jwks");
   }
 
@@ -866,8 +856,6 @@ export function compileRawSqliteDatabase(
       { name: "email", type: "TEXT" },
       { name: "emailVerified", type: "INTEGER" },
       { name: "image", type: "TEXT" },
-      { name: "createdAt", type: "TEXT" },
-      { name: "updatedAt", type: "TEXT" },
       { name: "role", type: "TEXT" },
       { name: "banned", type: "INTEGER" },
       { name: "banReason", type: "TEXT" },
@@ -881,8 +869,6 @@ export function compileRawSqliteDatabase(
       { name: "expiresAt", type: "TEXT" },
       { name: "ipAddress", type: "TEXT" },
       { name: "userAgent", type: "TEXT" },
-      { name: "createdAt", type: "TEXT" },
-      { name: "updatedAt", type: "TEXT" },
       { name: "impersonatedBy", type: "TEXT" },
       { name: "activeOrganizationId", type: "TEXT" },
       { name: "activeTeamId", type: "TEXT" },
@@ -898,15 +884,11 @@ export function compileRawSqliteDatabase(
       { name: "refreshTokenExpiresAt", type: "TEXT" },
       { name: "scope", type: "TEXT" },
       { name: "idToken", type: "TEXT" },
-      { name: "createdAt", type: "TEXT" },
-      { name: "updatedAt", type: "TEXT" },
     ],
     verification: [
       { name: "identifier", type: "TEXT" },
       { name: "value", type: "TEXT" },
       { name: "expiresAt", type: "TEXT" },
-      { name: "createdAt", type: "TEXT" },
-      { name: "updatedAt", type: "TEXT" },
     ],
     organization: [
       { name: "name", type: "TEXT" },
@@ -931,7 +913,6 @@ export function compileRawSqliteDatabase(
     jwks: [
       { name: "publicKey", type: "TEXT" },
       { name: "privateKey", type: "TEXT" },
-      { name: "createdAt", type: "TEXT" },
       { name: "expiresAt", type: "TEXT" },
       { name: "alg", type: "TEXT" },
       { name: "crv", type: "TEXT" },
