@@ -495,9 +495,11 @@ export function performGraphLayout({
         if (!leadPage) return;
 
         const count = sortedPages.length;
+        const frontCard = sortedPages[count - 1] ?? leadPage;
+        const frontDim = getNodeDimensions(frontCard);
         const leadDim = getNodeDimensions(leadPage);
-        const stackWidth = leadDim.width + (count - 1) * Math.abs(CARD_HEADER_OFFSET_X);
-        const stackHeight = leadDim.height + (count - 1) * CARD_HEADER_OFFSET_Y;
+        const stackWidth = Math.max(frontDim.width, leadDim.width) + (count - 1) * Math.abs(CARD_HEADER_OFFSET_X);
+        const stackHeight = frontDim.height + (count - 1) * CARD_HEADER_OFFSET_Y;
 
         dimensionOverrides.set(leadPage.id, { width: stackWidth, height: stackHeight });
 
@@ -826,6 +828,27 @@ export function performGraphLayout({
     let hasOverlaps = true;
     let iter = 0;
 
+    // Build stack lookup so stacked cards move together rigidly without separating
+    const stackByNodeId = new Map<string, LayoutNode[]>();
+    stackedZonesList.forEach(({ sortedPages }) => {
+      sortedPages.forEach((p) => {
+        stackByNodeId.set(p.id, sortedPages);
+      });
+    });
+
+    const shiftNode = (node: LayoutNode, dx: number, dy: number) => {
+      const stack = stackByNodeId.get(node.id);
+      if (stack) {
+        stack.forEach((p) => {
+          const pPos = positionsMap.get(p.id);
+          if (pPos) positionsMap.set(p.id, { x: pPos.x + dx, y: pPos.y + dy });
+        });
+      } else {
+        const pPos = positionsMap.get(node.id);
+        if (pPos) positionsMap.set(node.id, { x: pPos.x + dx, y: pPos.y + dy });
+      }
+    };
+
     while (hasOverlaps && iter < maxIters) {
       hasOverlaps = false;
       iter++;
@@ -834,7 +857,12 @@ export function performGraphLayout({
         const nodeA = graphNodes[i]!;
         const posA = positionsMap.get(nodeA.id);
         if (!posA) continue;
-        const dimA = getNodeDimensions(nodeA);
+        const stackA = stackByNodeId.get(nodeA.id);
+        const isSecondaryA = Boolean(stackA && stackA[stackA.length - 1]?.id !== nodeA.id);
+        const rawDimA = getNodeDimensions(nodeA);
+        const dimA = isSecondaryA
+          ? { width: rawDimA.width, height: CARD_HEADER_OFFSET_Y }
+          : rawDimA;
 
         for (let j = i + 1; j < graphNodes.length; j++) {
           const nodeB = graphNodes[j]!;
@@ -860,7 +888,12 @@ export function performGraphLayout({
           );
           if (inSameRefDeck) continue;
 
-          const dimB = getNodeDimensions(nodeB);
+          const stackB = stackByNodeId.get(nodeB.id);
+          const isSecondaryB = Boolean(stackB && stackB[stackB.length - 1]?.id !== nodeB.id);
+          const rawDimB = getNodeDimensions(nodeB);
+          const dimB = isSecondaryB
+            ? { width: rawDimB.width, height: CARD_HEADER_OFFSET_Y }
+            : rawDimB;
 
           const overlapX =
             Math.min(posA.x + dimA.width + padding, posB.x + dimB.width + padding) -
@@ -873,15 +906,15 @@ export function performGraphLayout({
             hasOverlaps = true;
             if (isHorizontal) {
               if (posA.y <= posB.y) {
-                positionsMap.set(nodeB.id, { x: posB.x, y: posB.y + overlapY });
+                shiftNode(nodeB, 0, overlapY);
               } else {
-                positionsMap.set(nodeA.id, { x: posA.x, y: posA.y + overlapY });
+                shiftNode(nodeA, 0, overlapY);
               }
             } else {
               if (posA.x <= posB.x) {
-                positionsMap.set(nodeB.id, { x: posB.x + overlapX, y: posB.y });
+                shiftNode(nodeB, overlapX, 0);
               } else {
-                positionsMap.set(nodeA.id, { x: posA.x + overlapX, y: posA.y });
+                shiftNode(nodeA, overlapX, 0);
               }
             }
           }

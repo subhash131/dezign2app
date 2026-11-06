@@ -294,8 +294,8 @@ describe("zoneHandAutoLayout - Auto-Layout for Stacked WebPage Cards", () => {
     // 2. Vertically, srvPos is positioned near the bottom private stack rather than overlapping web-1
     expect(srvPos.y).toBeGreaterThan(webPos.y);
 
-    // 3. WebPages are placed to the right of web and service
-    expect(pConvs.x).toBeGreaterThan(srvPos.x);
+    // 3. Service is placed downstream to the right of WebPage
+    expect(srvPos.x).toBeGreaterThan(pConvs.x);
   });
 
   it("places serviceNode downstream (to the right) when WebPage action connects to service endpoint (webPage -> service)", () => {

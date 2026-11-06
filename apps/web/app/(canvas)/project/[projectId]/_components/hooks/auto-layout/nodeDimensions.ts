@@ -303,7 +303,7 @@ export function getNodeDimensions(node: LayoutNodeLike): {
         0,
       );
       const estHeight = 220 + sections.length * 34 + totalActions * 28;
-      const estWidth = 280;
+      const estWidth = 380;
       if (isMeasured && measuredWidth !== undefined && measuredHeight !== undefined) {
         return {
           width: Math.max(measuredWidth, estWidth),

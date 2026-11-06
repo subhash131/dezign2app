@@ -1381,12 +1381,12 @@ export const WebPageNode = React.memo(({
       />
 
       {/* Disconnected error banner */}
-          {isDisconnected && (
-            <div className="px-3 py-1.5 bg-destructive/10 border-b border-destructive/25 flex items-center gap-1.5 text-[10px] text-destructive font-medium leading-tight nodrag">
-              <AlertCircle size={12} className="shrink-0 text-destructive animate-pulse" />
-              <span>Connect to a WebApp node to build</span>
-            </div>
-          )}
+      {isDisconnected && (
+        <div className="px-3 py-1.5 bg-destructive/10 border-b border-destructive/25 flex items-center gap-1.5 text-[10px] text-destructive font-medium leading-tight nodrag">
+          <AlertCircle size={12} className="shrink-0 text-destructive animate-pulse" />
+          <span>Connect to a WebApp node to build</span>
+        </div>
+      )}
 
           {/* Duplicate layout warning banner */}
           {isDuplicateLayout && (
