@@ -136,6 +136,7 @@ export const FrontendStepRow: React.FC<FrontendStepRowProps> = ({
                   allSteps={allSteps}
                   stepIndex={index}
                   allNodes={allNodes}
+                  endpoints={endpoints}
                   webPageNodeId={webPageNodeId}
                   actionId={actionId}
                   actionItem={actionItem}

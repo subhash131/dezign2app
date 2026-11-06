@@ -7,7 +7,7 @@ import type {
   FrontendRequestFieldBinding,
 } from "./types";
 
-const COMMON_RESPONSE_FIELD_SUGGESTIONS = [
+export const FILE_STORAGE_RESPONSE_FIELD_SUGGESTIONS = [
   "presignedUrl",
   "url",
   "uploadUrl",
@@ -19,11 +19,26 @@ const COMMON_RESPONSE_FIELD_SUGGESTIONS = [
   "id",
 ];
 
+/** @deprecated Use FILE_STORAGE_RESPONSE_FIELD_SUGGESTIONS for file storage contexts */
+export const COMMON_RESPONSE_FIELD_SUGGESTIONS = FILE_STORAGE_RESPONSE_FIELD_SUGGESTIONS;
+
+export interface ExtractResponseFieldSuggestionsOptions {
+  isStorage?: boolean;
+}
+
 /**
- * Extracts candidate response field paths from an endpoint or returns defaults.
+ * Extracts candidate response field paths from an endpoint, or defaults for file storage when isStorage is true.
  */
-export function extractResponseFieldSuggestions(endpoint?: Endpoint): string[] {
-  const suggestions = new Set<string>(COMMON_RESPONSE_FIELD_SUGGESTIONS);
+export function extractResponseFieldSuggestions(
+  endpoint?: Endpoint,
+  options?: ExtractResponseFieldSuggestionsOptions,
+): string[] {
+  const suggestions = new Set<string>();
+
+  // Only include file-upload/storage default suggestions if explicitly in a storage context
+  if (options?.isStorage) {
+    FILE_STORAGE_RESPONSE_FIELD_SUGGESTIONS.forEach((s) => suggestions.add(s));
+  }
 
   if (endpoint?.responseBody?.fields) {
     for (const field of endpoint.responseBody.fields) {
@@ -33,23 +48,23 @@ export function extractResponseFieldSuggestions(endpoint?: Endpoint): string[] {
     }
   }
 
+  if (endpoint?.responseFields) {
+    for (const rf of endpoint.responseFields) {
+      if (rf.name) {
+        suggestions.add(rf.name);
+      }
+    }
+  }
+
   if (endpoint?.responseBody?.rawJson) {
     try {
       const parsed = JSON.parse(endpoint.responseBody.rawJson);
-      if (parsed && typeof parsed === "object") {
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
         for (const key of Object.keys(parsed)) {
           suggestions.add(key);
         }
       }
     } catch {}
-  }
-
-  if (endpoint?.requestBody?.fields) {
-    for (const field of endpoint.requestBody.fields) {
-      if (field.name) {
-        suggestions.add(field.name);
-      }
-    }
   }
 
   return Array.from(suggestions);

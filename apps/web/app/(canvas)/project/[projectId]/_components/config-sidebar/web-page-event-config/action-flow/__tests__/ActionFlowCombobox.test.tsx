@@ -97,5 +97,23 @@ describe("ActionFlowCombobox & ResponseFieldPicker", () => {
     const input = screen.getByPlaceholderText("e.g. presignedUrl or data.url") as HTMLInputElement;
     expect(input.value).toBe("presignedUrl");
     expect(screen.getByText("customSignedUrl")).toBeDefined();
+    // Non-storage picker should not suggest hardcoded upload fields
+    expect(screen.queryByText("uploadUrl")).toBeNull();
+    expect(screen.queryByText("downloadUrl")).toBeNull();
+  });
+
+  it("suggests storage fields when isStorage is true", () => {
+    const handleChange = vi.fn();
+    render(
+      <ResponseFieldPicker
+        value=""
+        onChange={handleChange}
+        isStorage={true}
+      />,
+    );
+
+    expect(screen.getByText("presignedUrl")).toBeDefined();
+    expect(screen.getByText("uploadUrl")).toBeDefined();
+    expect(screen.getByText("downloadUrl")).toBeDefined();
   });
 });
