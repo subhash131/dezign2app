@@ -29,6 +29,8 @@ import type {
 } from "./types";
 import { ensureActionTransformerConnection } from "./actionStepCanvasSync";
 import { ActionFlowCombobox, ComboboxOption } from "./ActionFlowCombobox";
+import { ResponseFieldPicker } from "./ResponseFieldPicker";
+import { inferReturnSchemaFromCode } from "@/lib/utils/inferReturnSchema";
 
 interface TransformerSchemaField {
   id?: string;
@@ -108,21 +110,53 @@ export const TransformerStep: React.FC<TransformerStepProps> = ({
     draft.transformerName,
   ]);
 
+  const masterTransformerNode = useMemo(() => {
+    if (!selectedTransformerNode) return undefined;
+    if (selectedTransformerNode.type === "transformer_ref") {
+      const refId = selectedTransformerNode.data?.transformerRef;
+      if (typeof refId === "string" && refId.length > 0) {
+        return canvasTransformers.find(
+          (t) =>
+            t.type === "transformer" &&
+            (t.id === refId ||
+              t.data?.functionName === refId ||
+              t.data?.label === refId ||
+              (typeof t.data?.functionName === "string" && toVarName(t.data.functionName) === toVarName(refId)) ||
+              (typeof t.data?.label === "string" && toVarName(t.data.label) === toVarName(refId))),
+        );
+      }
+    }
+    return selectedTransformerNode;
+  }, [selectedTransformerNode, canvasTransformers]);
+
+  const effectiveTransformerNode = masterTransformerNode || selectedTransformerNode;
+
   const inputSchema: TransformerSchemaField[] = useMemo(() => {
     const rawSchema =
-      selectedTransformerNode?.data?.inputSchema ||
+      effectiveTransformerNode?.data?.inputSchema ||
       draft.functionRef?.inputSchema ||
       [];
     return rawSchema;
-  }, [selectedTransformerNode, draft.functionRef?.inputSchema]);
+  }, [effectiveTransformerNode, draft.functionRef?.inputSchema]);
 
   const returnSchema: TransformerSchemaField[] = useMemo(() => {
-    const rawSchema =
-      selectedTransformerNode?.data?.returnSchema ||
+    let rawSchema =
+      effectiveTransformerNode?.data?.returnSchema ||
       draft.functionRef?.returnSchema ||
       [];
+    if ((!rawSchema || rawSchema.length === 0) && effectiveTransformerNode?.data?.code) {
+      try {
+        const inferred = inferReturnSchemaFromCode(
+          effectiveTransformerNode.data.code,
+          effectiveTransformerNode.data.inputSchema || [],
+        );
+        if (inferred.length > 0) {
+          rawSchema = inferred;
+        }
+      } catch {}
+    }
     return rawSchema;
-  }, [selectedTransformerNode, draft.functionRef?.returnSchema]);
+  }, [effectiveTransformerNode, draft.functionRef?.returnSchema]);
 
   // Handle selecting an existing transformer node
   const handleSelectTransformer = (nodeId: string) => {
@@ -136,6 +170,19 @@ export const TransformerStep: React.FC<TransformerStepProps> = ({
       t.data?.scope === "global" || t.type === "transformer_ref";
     const masterId =
       t.type === "transformer_ref" ? t.data?.transformerRef || t.id : t.id;
+
+    const masterNode =
+      t.type === "transformer_ref" && typeof masterId === "string" && masterId.length > 0
+        ? canvasTransformers.find(
+            (tr) =>
+              tr.type === "transformer" &&
+              (tr.id === masterId ||
+                tr.data?.functionName === masterId ||
+                tr.data?.label === masterId ||
+                (typeof tr.data?.functionName === "string" && toVarName(tr.data.functionName) === toVarName(masterId)) ||
+                (typeof tr.data?.label === "string" && toVarName(tr.data.label) === toVarName(masterId))),
+          ) || t
+        : t;
 
     let effectiveEdgeId = draft.edgeId;
     let effectiveRefNodeId = draft.transformerRefNodeId;
@@ -154,7 +201,17 @@ export const TransformerStep: React.FC<TransformerStepProps> = ({
     }
 
     const currentBindings = draft.transformBindings || [];
-    const sourceSchema: TransformerSchemaField[] = t.data?.inputSchema || [];
+    const sourceSchema: TransformerSchemaField[] =
+      masterNode.data?.inputSchema || t.data?.inputSchema || [];
+    let sourceReturnSchema: TransformerSchemaField[] =
+      masterNode.data?.returnSchema || t.data?.returnSchema || [];
+    if ((!sourceReturnSchema || sourceReturnSchema.length === 0) && masterNode.data?.code) {
+      try {
+        const inferred = inferReturnSchemaFromCode(masterNode.data.code, sourceSchema);
+        if (inferred.length > 0) sourceReturnSchema = inferred;
+      } catch {}
+    }
+
     const nextBindings: FrontendTransformBinding[] = sourceSchema
       .filter((field: TransformerSchemaField) => Boolean(field.name && field.name.trim()))
       .map((field: TransformerSchemaField) => {
@@ -185,8 +242,16 @@ export const TransformerStep: React.FC<TransformerStepProps> = ({
           ? "@workspace/transformers"
           : `../transformers/${cleanFn}`,
         isGlobal,
-        inputSchema: t.data?.inputSchema,
-        returnSchema: t.data?.returnSchema,
+        inputSchema: sourceSchema.map((f) => ({
+          name: f.name,
+          type: f.type || "string",
+          required: f.required,
+        })),
+        returnSchema: sourceReturnSchema.map((f) => ({
+          name: f.name,
+          type: f.type || "string",
+          required: f.required,
+        })),
       },
       transformBindings: nextBindings,
     });
@@ -857,41 +922,47 @@ export const TransformerStep: React.FC<TransformerStepProps> = ({
                       />
                     )}
 
-                    {src.kind === "prev_response" && (
-                      <div className="flex gap-1">
-                        <Select
-                          value={src.stepId || ""}
-                          onValueChange={(sid) =>
-                            handleBindingChange(binding.argName, {
-                              ...src,
-                              stepId: sid,
-                            })
-                          }
-                        >
-                          <SelectTrigger className="h-6 text-[10px] bg-background w-1/2">
-                            <SelectValue placeholder="Step..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {priorSteps.map((ps, pi) => (
-                              <SelectItem key={ps.id} value={ps.id} className="text-xs">
-                                #{pi + 1} {ps.name || ps.type}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <Input
-                          value={src.fieldPath || ""}
-                          onChange={(e) =>
-                            handleBindingChange(binding.argName, {
-                              ...src,
-                              fieldPath: e.target.value,
-                            })
-                          }
-                          placeholder="field.path"
-                          className="h-6 text-[10px] font-mono bg-background w-1/2"
-                        />
-                      </div>
-                    )}
+                    {src.kind === "prev_response" && (() => {
+                      const selStep = priorSteps.find((ps) => ps.id === src.stepId);
+                      return (
+                        <div className="flex gap-1 w-full items-center">
+                          <Select
+                            value={src.stepId || ""}
+                            onValueChange={(sid) =>
+                              handleBindingChange(binding.argName, {
+                                ...src,
+                                stepId: sid,
+                              })
+                            }
+                          >
+                            <SelectTrigger className="h-6 text-[10px] bg-background w-1/2">
+                              <SelectValue placeholder="Step..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {priorSteps.map((ps, pi) => (
+                                <SelectItem key={ps.id} value={ps.id} className="text-xs">
+                                  #{pi + 1} {ps.name || ps.type}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <div className="w-1/2">
+                            <ResponseFieldPicker
+                              value={src.fieldPath || ""}
+                              onChange={(val) =>
+                                handleBindingChange(binding.argName, {
+                                  ...src,
+                                  fieldPath: val,
+                                })
+                              }
+                              step={selStep}
+                              allNodes={allNodes}
+                              placeholder="field.path"
+                            />
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {src.kind === "state_var" && (
                       <ActionFlowCombobox

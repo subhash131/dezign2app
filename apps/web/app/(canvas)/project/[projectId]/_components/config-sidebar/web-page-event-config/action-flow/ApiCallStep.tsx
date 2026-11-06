@@ -75,6 +75,7 @@ interface BindingSlotRowProps {
   itemSourceStateName?: string;
   itemPropSuggestions?: ComboboxOption[];
   endpoints?: (Endpoint & { nodeId: string })[];
+  allNodes?: BackendNode[];
 }
 
 const BindingSlotRow: React.FC<BindingSlotRowProps> = ({
@@ -95,6 +96,7 @@ const BindingSlotRow: React.FC<BindingSlotRowProps> = ({
   itemSourceStateName,
   itemPropSuggestions,
   endpoints = [],
+  allNodes = [],
 }) => {
   const isAuth = binding.slot === "header" && isAuthHeaderName(binding.targetField);
 
@@ -771,6 +773,9 @@ const BindingSlotRow: React.FC<BindingSlotRowProps> = ({
                       },
                     }));
                   }}
+                  step={selectedPriorStep}
+                  allNodes={allNodes}
+                  endpoints={endpoints}
                   endpoint={priorEndpoint}
                   placeholder="e.g. data.id or token"
                 />
@@ -1486,6 +1491,7 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
                       onKindChange={(kind) => handleKindChange(b.id, kind)}
                       priorSteps={priorSteps}
                       endpoints={endpoints}
+                      allNodes={allNodes}
                       routeParamSuggestions={routeParamSuggestions}
                       queryParamSuggestions={queryParamSuggestions}
                       stateStores={stateStores}
@@ -1548,6 +1554,7 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
                       onKindChange={(kind) => handleKindChange(b.id, kind)}
                       priorSteps={priorSteps}
                       endpoints={endpoints}
+                      allNodes={allNodes}
                       routeParamSuggestions={routeParamSuggestions}
                       queryParamSuggestions={queryParamSuggestions}
                       stateStores={stateStores}
@@ -1609,6 +1616,7 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
                       onKindChange={(kind) => handleKindChange(b.id, kind)}
                       priorSteps={priorSteps}
                       endpoints={endpoints}
+                      allNodes={allNodes}
                       routeParamSuggestions={routeParamSuggestions}
                       queryParamSuggestions={queryParamSuggestions}
                       stateStores={stateStores}
@@ -1672,6 +1680,7 @@ export const ApiCallStep: React.FC<ApiCallStepProps> = ({
                       onKindChange={(kind) => handleKindChange(b.id, kind)}
                       priorSteps={priorSteps}
                       endpoints={endpoints}
+                      allNodes={allNodes}
                       routeParamSuggestions={routeParamSuggestions}
                       queryParamSuggestions={queryParamSuggestions}
                       stateStores={stateStores}

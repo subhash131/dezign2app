@@ -20,17 +20,30 @@ vi.mock("../ActionFlowCombobox", () => ({
     value,
     onChange,
     placeholder,
+    options,
   }: {
     value?: string;
     onChange: (val: string) => void;
     placeholder?: string;
+    options?: Array<{ value: string; label: string }>;
   }) => (
-    <input
-      data-testid="mock-combobox"
-      value={value || ""}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-    />
+    <div data-testid="mock-combobox-wrapper">
+      <input
+        data-testid="mock-combobox"
+        value={value || ""}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+      />
+      {options && (
+        <div data-testid="mock-combobox-options">
+          {options.map((opt) => (
+            <span key={opt.value} data-testid={`option-${opt.value}`}>
+              {opt.label}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
   ),
 }));
 
@@ -425,5 +438,67 @@ describe("ApiCallStep UI component", () => {
     expect(screen.queryByText("fileKey")).toBeNull();
     expect(screen.queryByText("fileName")).toBeNull();
     expect(screen.queryByText("fileSize")).toBeNull();
+  });
+
+  it("renders transformer return fields when binding source is prev_response pointing to transform step", () => {
+    const transformStep: FrontendActionStepDraft = {
+      id: "step-trans-1",
+      order: 1,
+      type: "transform",
+      name: "generateChatIdResult",
+      outputVariable: "generateChatIdResult",
+      transformerNodeId: "node-transformer-1",
+      transformerName: "generateChatId",
+    };
+
+    const stepWithPrevResponse: FrontendActionStepDraft = {
+      id: "step-api-2",
+      order: 2,
+      type: "api_call",
+      serviceNodeId: "service-1",
+      endpointId: "ep-1",
+      requestBindings: [
+        {
+          id: "bind-prev-1",
+          slot: "path_param",
+          targetField: "id",
+          source: {
+            kind: "prev_response",
+            stepId: "step-trans-1",
+            fieldPath: "",
+          },
+        },
+      ],
+    };
+
+    const transformerNode: BackendNode = {
+      id: "node-transformer-1",
+      type: "transformer",
+      position: { x: 100, y: 100 },
+      fractionalIndex: "a0",
+      data: {
+        label: "generateChatId",
+        functionName: "generateChatId",
+        returnSchema: [
+          { id: "ret-1", name: "id", type: "string", required: true },
+        ],
+      },
+    };
+
+    render(
+      <ApiCallStep
+        draft={stepWithPrevResponse}
+        stepIndex={1}
+        allSteps={[transformStep, stepWithPrevResponse]}
+        allCanvasSteps={[]}
+        serviceNodes={[serviceNode]}
+        allNodes={[serviceNode, transformerNode]}
+        endpoints={[endpoint]}
+        onChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Step 1: generateChatIdResult")).toBeDefined();
+    expect(screen.getByTestId("option-id")).toBeDefined();
   });
 });
