@@ -57,17 +57,35 @@ export function repairEntityColumns(
 ): { cols: CanvasEntityColumn[]; changed: boolean } {
   let changed = false;
 
-  // Filter out any rogue createdAt / updatedAt / created_at / updated_at columns from Better Auth tables
-  const filteredCols = currentCols.filter((c) => {
-    const n = (c.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-    if (n === "createdat" || n === "updatedat") {
-      changed = true;
-      return false;
-    }
-    return true;
-  });
-
+  // Filter out any timestamps not matching canonical Better Auth definitions:
+  // - Non-canonical names (e.g. snake_case "created_at" / "updated_at") are stripped so missingCols adds canonical "createdAt" / "updatedAt"
+  // - Timestamps not defined for this table (e.g. updatedAt on organization, member, invitation, passkey) are stripped
+  // - Canonical timestamps with isNotNull: true have isNotNull stripped (Better Auth provides JS defaults)
   const expectedCols = resolveBetterAuthTableColumns(defCols, engine);
+  const expectedNames = new Set(expectedCols.map((c) => c.name.toLowerCase()));
+
+  const filteredCols = currentCols
+    .filter((c) => {
+      const n = (c.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (n === "createdat" || n === "updatedat") {
+        const canonicalName = n === "createdat" ? "createdAt" : "updatedAt";
+        const inDef = expectedNames.has(canonicalName.toLowerCase());
+        if (!inDef || c.name !== canonicalName) {
+          changed = true;
+          return false;
+        }
+      }
+      return true;
+    })
+    .map((c) => {
+      const n = (c.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      if ((n === "createdat" || n === "updatedat") && c.isNotNull === true) {
+        changed = true;
+        const { isNotNull: _, ...rest } = c;
+        return rest as CanvasEntityColumn;
+      }
+      return c;
+    });
 
   const repaired = filteredCols.map((c) => {
     const defCol = expectedCols.find(
@@ -223,7 +241,13 @@ export function checkEntitySchemaDiscrepancies(
 
   const hasRogueTimestamps = existingCols.some((c) => {
     const n = (c.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-    return n === "createdat" || n === "updatedat";
+    if (n !== "createdat" && n !== "updatedat") return false;
+    const canonicalName = n === "createdat" ? "createdAt" : "updatedAt";
+    const inDef = expectedCols.some((ec) => ec.name.toLowerCase() === canonicalName.toLowerCase());
+    if (!inDef) return true; // Table should not have this timestamp (e.g. updatedAt on organization)
+    if (c.name !== canonicalName) return true; // snake_case (e.g. created_at) is not canonical for Better Auth
+    if (c.isNotNull === true) return true; // Better Auth timestamps must be nullable (JS-level defaults)
+    return false;
   });
 
   const isValid =

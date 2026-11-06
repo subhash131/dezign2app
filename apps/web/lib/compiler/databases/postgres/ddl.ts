@@ -93,7 +93,9 @@ export const BETTERAUTH_PG_DDL: string[] = [
   "banExpires" TIMESTAMPTZ,
   "twoFactorEnabled" BOOLEAN DEFAULT FALSE,
   "plan" TEXT,
-  "creemCustomerId" TEXT
+  "creemCustomerId" TEXT,
+  "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+  "updatedAt" TIMESTAMPTZ DEFAULT NOW()
 );`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "idx_user_email" ON "user" ("email");`,
 
@@ -106,7 +108,9 @@ export const BETTERAUTH_PG_DDL: string[] = [
   "userAgent" TEXT,
   "impersonatedBy" TEXT,
   "activeOrganizationId" UUID,
-  "activeTeamId" UUID
+  "activeTeamId" UUID,
+  "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+  "updatedAt" TIMESTAMPTZ DEFAULT NOW()
 );`,
   `CREATE INDEX IF NOT EXISTS "idx_session_userId" ON "session" ("userId");`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "idx_session_token" ON "session" ("token");`,
@@ -122,7 +126,9 @@ export const BETTERAUTH_PG_DDL: string[] = [
   "accessTokenExpiresAt" TIMESTAMPTZ,
   "refreshTokenExpiresAt" TIMESTAMPTZ,
   "scope" TEXT,
-  "idToken" TEXT
+  "idToken" TEXT,
+  "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+  "updatedAt" TIMESTAMPTZ DEFAULT NOW()
 );`,
   `CREATE INDEX IF NOT EXISTS "idx_account_userId" ON "account" ("userId");`,
   `CREATE INDEX IF NOT EXISTS "idx_account_provider_account" ON "account" ("providerId", "accountId");`,
@@ -131,7 +137,9 @@ export const BETTERAUTH_PG_DDL: string[] = [
   "id" UUID PRIMARY KEY NOT NULL,
   "identifier" TEXT,
   "value" TEXT,
-  "expiresAt" TIMESTAMPTZ
+  "expiresAt" TIMESTAMPTZ,
+  "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+  "updatedAt" TIMESTAMPTZ DEFAULT NOW()
 );`,
   `CREATE INDEX IF NOT EXISTS "idx_verification_identifier" ON "verification" ("identifier");`,
 
@@ -140,7 +148,8 @@ export const BETTERAUTH_PG_DDL: string[] = [
   "name" TEXT NOT NULL,
   "slug" TEXT UNIQUE NOT NULL,
   "logo" TEXT,
-  "metadata" TEXT
+  "metadata" TEXT,
+  "createdAt" TIMESTAMPTZ DEFAULT NOW()
 );`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "idx_organization_slug" ON "organization" ("slug");`,
 
@@ -148,7 +157,8 @@ export const BETTERAUTH_PG_DDL: string[] = [
   "id" UUID PRIMARY KEY NOT NULL,
   "organizationId" UUID NOT NULL,
   "userId" UUID NOT NULL,
-  "role" TEXT NOT NULL
+  "role" TEXT NOT NULL,
+  "createdAt" TIMESTAMPTZ DEFAULT NOW()
 );`,
   `CREATE INDEX IF NOT EXISTS "idx_member_organizationId" ON "member" ("organizationId");`,
   `CREATE INDEX IF NOT EXISTS "idx_member_userId" ON "member" ("userId");`,
@@ -162,7 +172,8 @@ export const BETTERAUTH_PG_DDL: string[] = [
   "teamId" UUID,
   "status" TEXT,
   "expiresAt" TIMESTAMPTZ,
-  "inviterId" UUID
+  "inviterId" UUID,
+  "createdAt" TIMESTAMPTZ DEFAULT NOW()
 );`,
   `CREATE INDEX IF NOT EXISTS "idx_invitation_organizationId" ON "invitation" ("organizationId");`,
   `CREATE INDEX IF NOT EXISTS "idx_invitation_email" ON "invitation" ("email");`,
@@ -204,7 +215,8 @@ export const BETTERAUTH_PG_DDL: string[] = [
   "deviceType" TEXT,
   "backedUp" BOOLEAN DEFAULT FALSE,
   "transports" TEXT,
-  "aaguid" TEXT
+  "aaguid" TEXT,
+  "createdAt" TIMESTAMPTZ DEFAULT NOW()
 );`,
   `CREATE INDEX IF NOT EXISTS "idx_passkey_userId" ON "passkey" ("userId");`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "idx_passkey_credentialID" ON "passkey" ("credentialID");`,
@@ -275,6 +287,8 @@ export const BETTERAUTH_PG_SCHEMAS: Record<string, Array<{ name: string; pgType:
     { name: "twoFactorEnabled", pgType: "BOOLEAN" },
     { name: "plan", pgType: "TEXT" },
     { name: "creemCustomerId", pgType: "TEXT" },
+    { name: "createdAt", pgType: "TIMESTAMPTZ" },
+    { name: "updatedAt", pgType: "TIMESTAMPTZ" },
   ],
   session: [
     { name: "userId", pgType: "TEXT" },
@@ -285,6 +299,8 @@ export const BETTERAUTH_PG_SCHEMAS: Record<string, Array<{ name: string; pgType:
     { name: "impersonatedBy", pgType: "TEXT" },
     { name: "activeOrganizationId", pgType: "TEXT" },
     { name: "activeTeamId", pgType: "TEXT" },
+    { name: "createdAt", pgType: "TIMESTAMPTZ" },
+    { name: "updatedAt", pgType: "TIMESTAMPTZ" },
   ],
   account: [
     { name: "userId", pgType: "UUID" },
@@ -297,22 +313,28 @@ export const BETTERAUTH_PG_SCHEMAS: Record<string, Array<{ name: string; pgType:
     { name: "refreshTokenExpiresAt", pgType: "TIMESTAMPTZ" },
     { name: "scope", pgType: "TEXT" },
     { name: "idToken", pgType: "TEXT" },
+    { name: "createdAt", pgType: "TIMESTAMPTZ" },
+    { name: "updatedAt", pgType: "TIMESTAMPTZ" },
   ],
   verification: [
     { name: "identifier", pgType: "TEXT" },
     { name: "value", pgType: "TEXT" },
     { name: "expiresAt", pgType: "TIMESTAMPTZ" },
+    { name: "createdAt", pgType: "TIMESTAMPTZ" },
+    { name: "updatedAt", pgType: "TIMESTAMPTZ" },
   ],
   organization: [
     { name: "name", pgType: "TEXT" },
     { name: "slug", pgType: "TEXT" },
     { name: "logo", pgType: "TEXT" },
     { name: "metadata", pgType: "TEXT" },
+    { name: "createdAt", pgType: "TIMESTAMPTZ" },
   ],
   member: [
     { name: "organizationId", pgType: "UUID" },
     { name: "userId", pgType: "UUID" },
     { name: "role", pgType: "TEXT" },
+    { name: "createdAt", pgType: "TIMESTAMPTZ" },
   ],
   invitation: [
     { name: "organizationId", pgType: "UUID" },
@@ -322,6 +344,7 @@ export const BETTERAUTH_PG_SCHEMAS: Record<string, Array<{ name: string; pgType:
     { name: "status", pgType: "TEXT" },
     { name: "expiresAt", pgType: "TIMESTAMPTZ" },
     { name: "inviterId", pgType: "UUID" },
+    { name: "createdAt", pgType: "TIMESTAMPTZ" },
   ],
   team: [
     { name: "organizationId", pgType: "UUID" },
@@ -342,6 +365,7 @@ export const BETTERAUTH_PG_SCHEMAS: Record<string, Array<{ name: string; pgType:
     { name: "backedUp", pgType: "BOOLEAN" },
     { name: "transports", pgType: "TEXT" },
     { name: "aaguid", pgType: "TEXT" },
+    { name: "createdAt", pgType: "TIMESTAMPTZ" },
   ],
   twoFactor: [
     { name: "userId", pgType: "UUID" },

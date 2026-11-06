@@ -163,25 +163,58 @@ export function compileDatabaseNodes(
         }
 
         const existingEntity = entityNodes.find((n) => {
-          const raw = n.data?.label || n.data?.tableRef || "";
+          const raw = (n.data?.label || n.data?.tableRef || "").trim();
           if (!raw) return false;
-          const clean = toTableName(raw).toLowerCase();
-          const target = def.name.toLowerCase();
-          return clean === target || toSingular(clean) === target || toPlural(clean) === target;
+          const normRaw = raw.toLowerCase().replace(/[-_\s]/g, "");
+          const normDef = def.name.toLowerCase().replace(/[-_\s]/g, "");
+          if (normRaw === normDef) return true;
+          if (toSingular(normRaw) === normDef || toPlural(normRaw) === normDef) return true;
+          const cleanRaw = toTableName(raw).replace(/[-_\s]/g, "");
+          const cleanDef = toTableName(def.name).replace(/[-_\s]/g, "");
+          return cleanRaw === cleanDef;
         });
 
         if (existingEntity) {
           const existingCols: CanvasEntityColumn[] = existingEntity.data?.columns || [];
           let hasColChanges = false;
-          // Filter out rogue createdAt / updatedAt / created_at / updated_at from Better Auth entities
-          const filteredCols = existingCols.filter((c: CanvasEntityColumn) => {
-            const n = (c.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-            if (n === "createdat" || n === "updatedat") {
+          // Deduplicate columns by case-insensitive name to prevent duplicate columns
+          const seenColNames = new Set<string>();
+          const dedupedExistingCols = existingCols.filter((c: CanvasEntityColumn) => {
+            const lower = (c.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+            if (!lower) return false;
+            if (seenColNames.has(lower)) {
               hasColChanges = true;
               return false;
             }
+            seenColNames.add(lower);
             return true;
           });
+
+          // Filter out timestamps not expected on this Better Auth table (e.g. updatedAt on org plugin tables, or any timestamps on rateLimit),
+          // and ensure any expected timestamps are nullable (strip isNotNull: true).
+          const expectedNames = new Set(def.defaultColumns.map((c) => (c.name || "").toLowerCase()));
+          const filteredCols = dedupedExistingCols
+            .filter((c: CanvasEntityColumn) => {
+              const n = (c.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+              if (n === "createdat" || n === "updatedat") {
+                const canonicalName = n === "createdat" ? "createdAt" : "updatedAt";
+                const inDef = expectedNames.has(canonicalName.toLowerCase());
+                if (!inDef || c.name !== canonicalName) {
+                  hasColChanges = true;
+                  return false;
+                }
+              }
+              return true;
+            })
+            .map((c: CanvasEntityColumn) => {
+              const n = (c.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+              if ((n === "createdat" || n === "updatedat") && c.isNotNull === true) {
+                hasColChanges = true;
+                const { isNotNull: _, ...rest } = c;
+                return rest as CanvasEntityColumn;
+              }
+              return c;
+            });
           const repairedCols: CanvasEntityColumn[] = filteredCols.map((c: CanvasEntityColumn) => {
             const defCol = def.defaultColumns.find(
               (dc) => (dc.name || "").toLowerCase() === (c.name || "").toLowerCase(),

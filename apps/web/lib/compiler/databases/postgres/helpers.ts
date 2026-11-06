@@ -251,7 +251,15 @@ export function generatePostgresTableHelpers(
   const pascalSingular = toPascal(singularName);
   const pascalPlural = toPascal(pluralName);
   const varName = toVarName(singularName);
-  const cols = getColumns(tableNode);
+  const rawCols = getColumns(tableNode);
+  // Deduplicate columns by variable name to prevent TS2300 duplicate identifier errors
+  const seenColVars = new Set<string>();
+  const cols = rawCols.filter((c) => {
+    const vName = toVarName(c.name).toLowerCase();
+    if (!vName || seenColVars.has(vName)) return false;
+    seenColVars.add(vName);
+    return true;
+  });
   const pkCol =
     cols.find((c) => c.isPrimaryKey) || cols[0] || { name: "id", type: "string" };
   const pkColName = pkCol.name || "id";

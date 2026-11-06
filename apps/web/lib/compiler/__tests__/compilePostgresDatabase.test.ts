@@ -255,4 +255,43 @@ describe("compilePostgresDatabase", () => {
     expect(code).not.toMatch(/\bunknown\b/);
     expect(code).not.toMatch(/\bas\s+[A-Za-z0-9_]+\b/);
   });
+
+  it("should deduplicate columns with duplicate or colliding names in generated helpers", () => {
+    const rateLimitEntity: BackendNode = {
+      id: "node-rate-limit",
+      type: "entity",
+      fractionalIndex: "a0",
+      data: {
+        label: "rateLimit",
+        columns: [
+          { name: "key", type: "TEXT", isPrimaryKey: true, isNotNull: true },
+          { name: "count", type: "INTEGER", isNotNull: true },
+          { name: "lastRequest", type: "INTEGER", isNotNull: true },
+          { name: "createdAt", type: "TIMESTAMPTZ" },
+          { name: "updatedAt", type: "TIMESTAMPTZ" },
+          { name: "created_at", type: "TIMESTAMPTZ" },
+          { name: "updated_at", type: "TIMESTAMPTZ" },
+          { name: "createdAt", type: "TIMESTAMPTZ" },
+          { name: "updatedAt", type: "TIMESTAMPTZ" },
+        ],
+      },
+      position: { x: 0, y: 0 },
+    };
+
+    const result = compilePostgresDatabase([rateLimitEntity], []);
+    const helper = result.files.find((f) => f.filename === "helpers/rateLimit.ts");
+    expect(helper).toBeDefined();
+
+    // Verify no duplicate identifiers in RateLimit interface
+    const rateLimitInterface = helper!.content.match(/export interface RateLimit\s*\{([^}]+)\}/)?.[1] || "";
+    const interfaceCreatedAt = rateLimitInterface.match(/\bcreatedAt\??:/g);
+    expect(interfaceCreatedAt?.length).toBe(1);
+
+    const createRateLimitInterface = helper!.content.match(/export interface CreateRateLimitData\s*\{([^}]+)\}/)?.[1] || "";
+    const createCreatedAt = createRateLimitInterface.match(/\bcreatedAt\??:/g);
+    expect(createCreatedAt?.length).toBe(1);
+
+    const interfaceUpdatedAt = rateLimitInterface.match(/\bupdatedAt\??:/g);
+    expect(interfaceUpdatedAt?.length).toBe(1);
+  });
 });
