@@ -188,6 +188,12 @@ export function compileDatabaseNodes(
               updated.isNotNull = true;
               colChanged = true;
             }
+            // Do NOT mark columns as non-nullable if the definition does not require it (e.g. createdAt/updatedAt),
+            // preventing Better Auth SCHEMA_MISMATCH (unexpected-required-column) errors.
+            if (!defCol.isNotNull && !defCol.isPrimaryKey && updated.isNotNull) {
+              delete updated.isNotNull;
+              colChanged = true;
+            }
             if (defCol.isUnique && !updated.isUnique) {
               updated.isUnique = true;
               colChanged = true;
