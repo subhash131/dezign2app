@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Plus, ChevronDown, ChevronRight, Clock } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
+import { isBetterAuthTableName } from "@workspace/canvas";
 import { ColumnItem, ColumnRow } from "./ColumnRow";
 import { EntityRenameDialog } from "./EntityRenameDialog";
 import { renameDbColumn } from "@/lib/services/databaseService";
@@ -87,7 +88,10 @@ export const ColumnList = ({
   const hasUpdatedAt = items.some(
     (c) => c.name?.toLowerCase().replace(/[^a-z0-9]/g, "") === "updatedat",
   );
-  const missingTimestamps = !isVector && data?.dbType !== "redis" && (!hasCreatedAt || !hasUpdatedAt);
+  const isAuthEntity =
+    data?.group?.toLowerCase() === "authentication" ||
+    isBetterAuthTableName(data?.tableName || data?.label || "");
+  const missingTimestamps = !isAuthEntity && !isVector && data?.dbType !== "redis" && (!hasCreatedAt || !hasUpdatedAt);
 
   const handleAddTimestamps = (e: React.MouseEvent) => {
     e.stopPropagation();

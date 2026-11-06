@@ -335,6 +335,20 @@ export const BETTER_AUTH_PLUGINS = {
 
 export type BetterAuthPluginId = (typeof BETTER_AUTH_PLUGINS)[keyof typeof BETTER_AUTH_PLUGINS];
 
+const ALL_BETTER_AUTH_TABLE_NAMES = new Set([
+  ...Object.values(BETTER_AUTH_TABLE_NAMES).map((n) => n.toLowerCase()),
+  "subscription",
+]);
+
+export function isBetterAuthTableName(name?: string): boolean {
+  if (!name) return false;
+  const clean = name.toLowerCase().replace(/[-_\s]/g, "");
+  for (const n of ALL_BETTER_AUTH_TABLE_NAMES) {
+    if (clean === n.replace(/[-_\s]/g, "")) return true;
+  }
+  return false;
+}
+
 // ─── Better Auth Table Definitions ───────────────────────────────────────────
 // IMPORTANT: Do not define createdAt and updatedAt on Better Auth table definitions.
 // Defining them on table definitions causes schema validation mismatches (unexpected-required-column).

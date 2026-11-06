@@ -56,9 +56,20 @@ export function repairEntityColumns(
   engine?: string,
 ): { cols: CanvasEntityColumn[]; changed: boolean } {
   let changed = false;
+
+  // Filter out any rogue createdAt / updatedAt / created_at / updated_at columns from Better Auth tables
+  const filteredCols = currentCols.filter((c) => {
+    const n = (c.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (n === "createdat" || n === "updatedat") {
+      changed = true;
+      return false;
+    }
+    return true;
+  });
+
   const expectedCols = resolveBetterAuthTableColumns(defCols, engine);
 
-  const repaired = currentCols.map((c) => {
+  const repaired = filteredCols.map((c) => {
     const defCol = expectedCols.find(
       (dc) => dc.name.toLowerCase() === c.name.toLowerCase(),
     );
@@ -210,10 +221,16 @@ export function checkEntitySchemaDiscrepancies(
       ),
   );
 
+  const hasRogueTimestamps = existingCols.some((c) => {
+    const n = (c.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    return n === "createdat" || n === "updatedat";
+  });
+
   const isValid =
     missingColumns.length === 0 &&
     outdatedColumns.length === 0 &&
-    missingIndexes.length === 0;
+    missingIndexes.length === 0 &&
+    !hasRogueTimestamps;
 
   return {
     isMapped: true,
