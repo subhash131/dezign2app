@@ -35,7 +35,11 @@ export const TypesNodeList: React.FC<TypesNodeListProps> = ({
               {connectedTypes.length > 0 && restTypes.length > 0 && (
                 <div className="flex items-center gap-1.5 px-2 py-0.5 border-b border-border/30 bg-purple-500/5">
                   <span className="text-[7px] uppercase font-bold tracking-wider text-purple-400/70">
-                    Extended
+                    {connectedTypes.some((t) => Boolean(t.extendedFrom))
+                      ? connectedTypes.some((t) => !t.extendedFrom)
+                        ? "Extended & Connected"
+                        : "Extended"
+                      : "Connected"}
                   </span>
                   <span className="text-[7px] font-mono text-purple-400/50">
                     {connectedTypes.length}
