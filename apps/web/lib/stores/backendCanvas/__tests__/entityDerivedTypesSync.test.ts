@@ -632,6 +632,68 @@ describe("Entity to TypesNode Derivation & Out-of-Sync Banner Sync", () => {
     expect(finalState.nodes.find((n) => n.id === baseNodeId)).toBeDefined();
   });
 
+  it("allows extending the same base type multiple times with unique auto-incremented names and distinct edges", () => {
+    const store = useBackendCanvasStore.getState();
+    const baseNodeId = "types-multi-ext-base";
+    store.addNode({
+      id: baseNodeId,
+      type: "types",
+      position: { x: 100, y: 100 },
+      data: {
+        label: "Domain Types",
+        scope: "global",
+        types: [
+          {
+            id: "type-base-account",
+            name: "Account",
+            kind: "interface",
+            fields: [
+              { id: "f-id", name: "id", type: "string", required: true, isArray: false },
+              { id: "f-email", name: "email", type: "string", required: true, isArray: false },
+            ],
+          },
+        ],
+      },
+    });
+
+    // 1. First extension: CustomAccount
+    createExtendedTypeNode(baseNodeId, "type-base-account");
+
+    const state1 = useBackendCanvasStore.getState();
+    const extNode1 = state1.nodes.find((n) => n.data?.extendedFromNodeId === baseNodeId)!;
+    expect(extNode1).toBeDefined();
+    expect(extNode1.data.types).toHaveLength(1);
+    expect(extNode1.data.types![0].name).toBe("CustomAccount");
+
+    // 2. Second extension of the same base type: CustomAccount2
+    createExtendedTypeNode(baseNodeId, "type-base-account");
+
+    const state2 = useBackendCanvasStore.getState();
+    const extNode2 = state2.nodes.find((n) => n.data?.extendedFromNodeId === baseNodeId)!;
+    expect(extNode2.data.types).toHaveLength(2);
+    expect(extNode2.data.types![1].name).toBe("CustomAccount2");
+    expect(extNode2.data.types![1].extendedFrom).toBe("Account");
+    expect(extNode2.data.types![1].extendedFromTypeId).toBe("type-base-account");
+
+    // 3. Third extension: CustomAccount3
+    createExtendedTypeNode(baseNodeId, "type-base-account");
+
+    const state3 = useBackendCanvasStore.getState();
+    const extNode3 = state3.nodes.find((n) => n.data?.extendedFromNodeId === baseNodeId)!;
+    expect(extNode3.data.types).toHaveLength(3);
+    expect(extNode3.data.types![2].name).toBe("CustomAccount3");
+
+    // Verify 3 distinct extension edges exist
+    const extEdges = state3.edges.filter(
+      (e) =>
+        e.data?.isExtensionEdge === true &&
+        e.source === baseNodeId &&
+        e.target === extNode3.id &&
+        e.sourceHandle === "type-out-type-base-account",
+    );
+    expect(extEdges).toHaveLength(3);
+  });
+
   it("consolidates multiple entities into 1 Entity Types node, removes only deleted entity type on partial deletion, and removes node on last entity deletion", () => {
     const store = useBackendCanvasStore.getState();
 
