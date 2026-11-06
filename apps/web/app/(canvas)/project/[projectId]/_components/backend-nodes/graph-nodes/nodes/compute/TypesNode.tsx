@@ -204,6 +204,10 @@ export const TypesNode = ({
   const handleDeleteType = (typeId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const updated = rawTypesList.filter((t) => t.id !== typeId);
+    if (updated.length === 0 && Boolean(data.isExtended)) {
+      deleteNode(id);
+      return;
+    }
     updateNode(id, {
       data: {
         ...data,

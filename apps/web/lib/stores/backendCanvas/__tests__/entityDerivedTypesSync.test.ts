@@ -591,6 +591,47 @@ describe("Entity to TypesNode Derivation & Out-of-Sync Banner Sync", () => {
     expect(finalState.nodes.find((n) => n.id === extTypesNode!.id)).toBeUndefined();
   });
 
+  it("deleting an extended TypesNode does NOT delete the base TypesNode", () => {
+    const store = useBackendCanvasStore.getState();
+    const baseNodeId = "types-custom-app-regression-test";
+    store.addNode({
+      id: baseNodeId,
+      type: "types",
+      position: { x: 100, y: 100 },
+      data: {
+        label: "App Types",
+        scope: "global",
+        types: [
+          {
+            id: "type-app-user-1",
+            name: "AppUser",
+            kind: "interface",
+            fields: [
+              { id: "f-1", name: "id", type: "string", required: true, isArray: false },
+            ],
+          },
+        ],
+      },
+    });
+
+    createExtendedTypeNode(baseNodeId, "type-app-user-1");
+
+    const stateWithExt = useBackendCanvasStore.getState();
+    const extTypesNode = stateWithExt.nodes.find(
+      (n) => n.data?.extendedFromNodeId === baseNodeId,
+    )!;
+    expect(extTypesNode).toBeDefined();
+
+    // Now delete the extended types node directly
+    store.deleteNode(extTypesNode.id);
+
+    const finalState = useBackendCanvasStore.getState();
+    // The extended node MUST be deleted
+    expect(finalState.nodes.find((n) => n.id === extTypesNode.id)).toBeUndefined();
+    // The base types node MUST NOT be deleted!
+    expect(finalState.nodes.find((n) => n.id === baseNodeId)).toBeDefined();
+  });
+
   it("consolidates multiple entities into 1 Entity Types node, removes only deleted entity type on partial deletion, and removes node on last entity deletion", () => {
     const store = useBackendCanvasStore.getState();
 
