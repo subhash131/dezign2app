@@ -251,8 +251,6 @@ export const PAYMENTS_SUBSCRIPTION_TABLE_DEFINITION: PaymentsTableDefinition = {
     { name: "currentPeriodStart", type: DB_COLUMN_TYPES.TIMESTAMPTZ },
     { name: "currentPeriodEnd", type: DB_COLUMN_TYPES.TIMESTAMPTZ },
     { name: "cancelAtPeriodEnd", type: DB_COLUMN_TYPES.BOOLEAN },
-    { name: "createdAt", type: DB_COLUMN_TYPES.TIMESTAMPTZ, isNotNull: false },
-    { name: "updatedAt", type: DB_COLUMN_TYPES.TIMESTAMPTZ, isNotNull: false },
   ],
   defaultIndexes: [
     { name: "idx_subscription_userId", columns: "userId" },
@@ -338,11 +336,8 @@ export const BETTER_AUTH_PLUGINS = {
 export type BetterAuthPluginId = (typeof BETTER_AUTH_PLUGINS)[keyof typeof BETTER_AUTH_PLUGINS];
 
 // ─── Better Auth Table Definitions ───────────────────────────────────────────
-// IMPORTANT: Better Auth only expects createdAt / updatedAt on core tables (user, session, account, verification).
-// Plugin tables (organization, member, invitation, team, teamMember, passkey, twoFactor, rateLimit) do NOT have
-// createdAt / updatedAt in Better Auth's schema specifications — Better Auth never writes to them. Including them
-// causes Better Auth database schema validation to fail with SCHEMA_MISMATCH (unexpected-required-column).
-// On core tables, keep createdAt and updatedAt nullable (isNotNull: false) to avoid schema mismatches.
+// IMPORTANT: Do not define createdAt and updatedAt on Better Auth table definitions.
+// Defining them on table definitions causes schema validation mismatches (unexpected-required-column).
 export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
   {
     key: BETTER_AUTH_TABLE_KEYS.USER,
@@ -355,8 +350,6 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
       { name: "email", type: DB_COLUMN_TYPES.TEXT, isUnique: true, isNotNull: true },
       { name: "emailVerified", type: DB_COLUMN_TYPES.BOOLEAN, isNotNull: true },
       { name: "image", type: DB_COLUMN_TYPES.TEXT },
-      { name: "createdAt", type: DB_COLUMN_TYPES.TIMESTAMPTZ, isNotNull: false },
-      { name: "updatedAt", type: DB_COLUMN_TYPES.TIMESTAMPTZ, isNotNull: false },
       { name: "role", type: DB_COLUMN_TYPES.TEXT },
       { name: "banned", type: DB_COLUMN_TYPES.BOOLEAN },
       { name: "banReason", type: DB_COLUMN_TYPES.TEXT },
@@ -381,8 +374,6 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
       { name: "expiresAt", type: DB_COLUMN_TYPES.TIMESTAMPTZ, isNotNull: true },
       { name: "ipAddress", type: DB_COLUMN_TYPES.TEXT },
       { name: "userAgent", type: DB_COLUMN_TYPES.TEXT },
-      { name: "createdAt", type: DB_COLUMN_TYPES.TIMESTAMPTZ, isNotNull: false },
-      { name: "updatedAt", type: DB_COLUMN_TYPES.TIMESTAMPTZ, isNotNull: false },
       { name: "impersonatedBy", type: DB_COLUMN_TYPES.TEXT },
       { name: "activeOrganizationId", type: DB_COLUMN_TYPES.UUID },
       { name: "activeTeamId", type: DB_COLUMN_TYPES.UUID },
@@ -410,8 +401,6 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
       { name: "refreshTokenExpiresAt", type: DB_COLUMN_TYPES.TIMESTAMPTZ },
       { name: "scope", type: DB_COLUMN_TYPES.TEXT },
       { name: "idToken", type: DB_COLUMN_TYPES.TEXT },
-      { name: "createdAt", type: DB_COLUMN_TYPES.TIMESTAMPTZ, isNotNull: false },
-      { name: "updatedAt", type: DB_COLUMN_TYPES.TIMESTAMPTZ, isNotNull: false },
     ],
     defaultIndexes: [
       { name: "idx_account_userId", columns: "userId" },
@@ -428,8 +417,6 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
       { name: "identifier", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
       { name: "value", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
       { name: "expiresAt", type: DB_COLUMN_TYPES.TIMESTAMPTZ, isNotNull: true },
-      { name: "createdAt", type: DB_COLUMN_TYPES.TIMESTAMPTZ, isNotNull: false },
-      { name: "updatedAt", type: DB_COLUMN_TYPES.TIMESTAMPTZ, isNotNull: false },
     ],
     defaultIndexes: [
       { name: "idx_verification_identifier", columns: "identifier" },
@@ -568,14 +555,12 @@ export const BETTER_AUTH_TABLE_DEFINITIONS: BetterAuthTableDefinition[] = [
       { name: "id", type: DB_COLUMN_TYPES.UUID, isPrimaryKey: true, isNotNull: true },
       { name: "publicKey", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
       { name: "privateKey", type: DB_COLUMN_TYPES.TEXT, isNotNull: true },
-      { name: "createdAt", type: DB_COLUMN_TYPES.TIMESTAMPTZ, isNotNull: false },
       { name: "expiresAt", type: DB_COLUMN_TYPES.TIMESTAMPTZ },
       { name: "alg", type: DB_COLUMN_TYPES.TEXT },
       { name: "crv", type: DB_COLUMN_TYPES.TEXT },
     ],
     defaultIndexes: [
       { name: "idx_jwks_expiresAt", columns: "expiresAt" },
-      { name: "idx_jwks_createdAt", columns: "createdAt" },
     ],
   },
   {

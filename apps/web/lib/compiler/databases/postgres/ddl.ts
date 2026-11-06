@@ -87,8 +87,6 @@ export const BETTERAUTH_PG_DDL: string[] = [
   "email" TEXT UNIQUE,
   "emailVerified" BOOLEAN,
   "image" TEXT,
-  "createdAt" TIMESTAMPTZ DEFAULT NOW(),
-  "updatedAt" TIMESTAMPTZ DEFAULT NOW(),
   "role" TEXT,
   "banned" BOOLEAN,
   "banReason" TEXT,
@@ -106,8 +104,6 @@ export const BETTERAUTH_PG_DDL: string[] = [
   "expiresAt" TIMESTAMPTZ,
   "ipAddress" TEXT,
   "userAgent" TEXT,
-  "createdAt" TIMESTAMPTZ DEFAULT NOW(),
-  "updatedAt" TIMESTAMPTZ DEFAULT NOW(),
   "impersonatedBy" TEXT,
   "activeOrganizationId" UUID,
   "activeTeamId" UUID
@@ -126,9 +122,7 @@ export const BETTERAUTH_PG_DDL: string[] = [
   "accessTokenExpiresAt" TIMESTAMPTZ,
   "refreshTokenExpiresAt" TIMESTAMPTZ,
   "scope" TEXT,
-  "idToken" TEXT,
-  "createdAt" TIMESTAMPTZ DEFAULT NOW(),
-  "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+  "idToken" TEXT
 );`,
   `CREATE INDEX IF NOT EXISTS "idx_account_userId" ON "account" ("userId");`,
   `CREATE INDEX IF NOT EXISTS "idx_account_provider_account" ON "account" ("providerId", "accountId");`,
@@ -137,9 +131,7 @@ export const BETTERAUTH_PG_DDL: string[] = [
   "id" UUID PRIMARY KEY NOT NULL,
   "identifier" TEXT,
   "value" TEXT,
-  "expiresAt" TIMESTAMPTZ,
-  "createdAt" TIMESTAMPTZ DEFAULT NOW(),
-  "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+  "expiresAt" TIMESTAMPTZ
 );`,
   `CREATE INDEX IF NOT EXISTS "idx_verification_identifier" ON "verification" ("identifier");`,
 
@@ -196,7 +188,6 @@ export const BETTERAUTH_PG_DDL: string[] = [
   "id" UUID PRIMARY KEY NOT NULL,
   "publicKey" TEXT,
   "privateKey" TEXT,
-  "createdAt" TIMESTAMPTZ DEFAULT NOW(),
   "expiresAt" TIMESTAMPTZ,
   "alg" TEXT,
   "crv" TEXT
@@ -247,9 +238,7 @@ export const PAYMENTS_PG_DDL: string[] = [
   "creemSubscriptionId" TEXT,
   "currentPeriodStart" TIMESTAMPTZ,
   "currentPeriodEnd" TIMESTAMPTZ,
-  "cancelAtPeriodEnd" BOOLEAN DEFAULT FALSE,
-  "createdAt" TIMESTAMPTZ DEFAULT NOW(),
-  "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+  "cancelAtPeriodEnd" BOOLEAN DEFAULT FALSE
 );`,
   `CREATE INDEX IF NOT EXISTS "idx_subscription_userId" ON "subscription" ("userId");`,
   `CREATE INDEX IF NOT EXISTS "idx_subscription_status" ON "subscription" ("status");`,
@@ -279,8 +268,6 @@ export const BETTERAUTH_PG_SCHEMAS: Record<string, Array<{ name: string; pgType:
     { name: "email", pgType: "TEXT" },
     { name: "emailVerified", pgType: "BOOLEAN" },
     { name: "image", pgType: "TEXT" },
-    { name: "createdAt", pgType: "TIMESTAMPTZ" },
-    { name: "updatedAt", pgType: "TIMESTAMPTZ" },
     { name: "role", pgType: "TEXT" },
     { name: "banned", pgType: "BOOLEAN" },
     { name: "banReason", pgType: "TEXT" },
@@ -295,8 +282,6 @@ export const BETTERAUTH_PG_SCHEMAS: Record<string, Array<{ name: string; pgType:
     { name: "expiresAt", pgType: "TIMESTAMPTZ" },
     { name: "ipAddress", pgType: "TEXT" },
     { name: "userAgent", pgType: "TEXT" },
-    { name: "createdAt", pgType: "TIMESTAMPTZ" },
-    { name: "updatedAt", pgType: "TIMESTAMPTZ" },
     { name: "impersonatedBy", pgType: "TEXT" },
     { name: "activeOrganizationId", pgType: "TEXT" },
     { name: "activeTeamId", pgType: "TEXT" },
@@ -312,15 +297,11 @@ export const BETTERAUTH_PG_SCHEMAS: Record<string, Array<{ name: string; pgType:
     { name: "refreshTokenExpiresAt", pgType: "TIMESTAMPTZ" },
     { name: "scope", pgType: "TEXT" },
     { name: "idToken", pgType: "TEXT" },
-    { name: "createdAt", pgType: "TIMESTAMPTZ" },
-    { name: "updatedAt", pgType: "TIMESTAMPTZ" },
   ],
   verification: [
     { name: "identifier", pgType: "TEXT" },
     { name: "value", pgType: "TEXT" },
     { name: "expiresAt", pgType: "TIMESTAMPTZ" },
-    { name: "createdAt", pgType: "TIMESTAMPTZ" },
-    { name: "updatedAt", pgType: "TIMESTAMPTZ" },
   ],
   organization: [
     { name: "name", pgType: "TEXT" },
@@ -373,7 +354,6 @@ export const BETTERAUTH_PG_SCHEMAS: Record<string, Array<{ name: string; pgType:
   jwks: [
     { name: "publicKey", pgType: "TEXT" },
     { name: "privateKey", pgType: "TEXT" },
-    { name: "createdAt", pgType: "TIMESTAMPTZ" },
     { name: "expiresAt", pgType: "TIMESTAMPTZ" },
     { name: "alg", pgType: "TEXT" },
     { name: "crv", pgType: "TEXT" },
