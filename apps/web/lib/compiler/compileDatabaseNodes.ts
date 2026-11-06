@@ -552,8 +552,6 @@ export function compileDatabaseNodes(
           "./helpers/*": "./helpers/*.ts",
         },
         scripts: {
-          dev: primaryFolder ? `tsx ./${primaryFolder}/scripts/server.ts` : "tsx ./scripts/server.ts",
-          start: primaryFolder ? `tsx ./${primaryFolder}/scripts/server.ts` : "tsx ./scripts/server.ts",
           build: "tsc",
           "check-types": "tsc --noEmit",
           test: "vitest run",

@@ -10,11 +10,6 @@
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",
-    "db:bridge": "tsx scripts/local-db-bridge.ts",
-    "db:runner": "tsx scripts/local-db-bridge.ts",
-    "db:dev": "tsx scripts/local-db-bridge.ts",
-    "db:server": "tsx scripts/local-db-bridge.ts",
-    "db:sync": "tsx scripts/local-db-bridge.ts",
     "desktop:dev": "concurrently -n web,electron -c blue,green \"pnpm --filter web dev\" \"pnpm --filter desktop dev\"",
     "build:desktop": "pnpm --filter web run build:prod && pnpm --filter desktop run build:electron:prod",
     "build:desktop:prod": "pnpm --filter web run build:prod && pnpm --filter desktop run build:electron:prod",
