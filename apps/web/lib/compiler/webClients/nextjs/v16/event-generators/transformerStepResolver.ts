@@ -260,6 +260,24 @@ export function renderTransformerInvocationList(
     if (step.name) {
       stepOutputMap.set(step.name, outVar);
     }
+    if (step.outputVariable) {
+      stepOutputMap.set(step.outputVariable, outVar);
+    }
+    if (step.transformerName) {
+      stepOutputMap.set(step.transformerName, outVar);
+    }
+    if (step.functionRef?.name) {
+      stepOutputMap.set(step.functionRef.name, outVar);
+    }
+    if (step.transformerNodeId) {
+      stepOutputMap.set(step.transformerNodeId, outVar);
+    }
+    if (step.transformerRefNodeId) {
+      stepOutputMap.set(step.transformerRefNodeId, outVar);
+    }
+    if (step.edgeId) {
+      stepOutputMap.set(step.edgeId, outVar);
+    }
 
     const bindings = step.transformBindings || [];
     if (bindings.length > 0) {
@@ -293,6 +311,8 @@ export function renderActionStepNavigation(
   ctx: {
     hasTriggerResult?: boolean;
     resDataVar?: string;
+    lastTransformerOutputVar?: string;
+    apiStepId?: string;
     indent?: string;
   },
 ): NavigationRenderResult {
@@ -350,10 +370,19 @@ export function renderActionStepNavigation(
       const field = src.fieldPath || param;
       if (src.stepId && stepOutputMap.has(src.stepId)) {
         const varName = stepOutputMap.get(src.stepId);
-        expr = `String(${varName}?.${field} ?? "")`;
-      } else if (ctx.hasTriggerResult) {
+        expr = `String((typeof ${varName} === "object" && ${varName} !== null ? (${varName} as Record<string, unknown>)?.["${field}"] : ${varName}) ?? "")`;
+      } else if (ctx.apiStepId && src.stepId === ctx.apiStepId) {
         const target = ctx.resDataVar || "resData";
-        expr = `String(${target}?.${field} ?? "")`;
+        expr = `String((typeof ${target} === "object" && ${target} !== null ? (${target} as Record<string, unknown>)?.["${field}"] : ${target}) ?? "")`;
+      } else if (ctx.lastTransformerOutputVar) {
+        const varName = ctx.lastTransformerOutputVar;
+        expr = `String((typeof ${varName} === "object" && ${varName} !== null ? (${varName} as Record<string, unknown>)?.["${field}"] : ${varName}) ?? "")`;
+      } else if (ctx.resDataVar) {
+        const target = ctx.resDataVar;
+        expr = `String((typeof ${target} === "object" && ${target} !== null ? (${target} as Record<string, unknown>)?.["${field}"] : ${target}) ?? "")`;
+      } else if (ctx.hasTriggerResult) {
+        const target = "resData";
+        expr = `String((typeof ${target} === "object" && ${target} !== null ? (${target} as Record<string, unknown>)?.["${field}"] : ${target}) ?? "")`;
       } else {
         expr = `""`;
       }
@@ -394,12 +423,22 @@ export function renderActionStepNavigation(
     if (src.kind === "literal") {
       valExpr = JSON.stringify(src.value);
     } else if (src.kind === "prev_response") {
+      const field = src.fieldPath || q.key;
       if (src.stepId && stepOutputMap.has(src.stepId)) {
         const varName = stepOutputMap.get(src.stepId);
-        valExpr = `String(${varName}?.${src.fieldPath || q.key} ?? "")`;
-      } else if (ctx.hasTriggerResult) {
+        valExpr = `String((typeof ${varName} === "object" && ${varName} !== null ? (${varName} as Record<string, unknown>)?.["${field}"] : ${varName}) ?? "")`;
+      } else if (ctx.apiStepId && src.stepId === ctx.apiStepId) {
         const target = ctx.resDataVar || "resData";
-        valExpr = `String(${target}?.${src.fieldPath || q.key} ?? "")`;
+        valExpr = `String((typeof ${target} === "object" && ${target} !== null ? (${target} as Record<string, unknown>)?.["${field}"] : ${target}) ?? "")`;
+      } else if (ctx.lastTransformerOutputVar) {
+        const varName = ctx.lastTransformerOutputVar;
+        valExpr = `String((typeof ${varName} === "object" && ${varName} !== null ? (${varName} as Record<string, unknown>)?.["${field}"] : ${varName}) ?? "")`;
+      } else if (ctx.resDataVar) {
+        const target = ctx.resDataVar;
+        valExpr = `String((typeof ${target} === "object" && ${target} !== null ? (${target} as Record<string, unknown>)?.["${field}"] : ${target}) ?? "")`;
+      } else if (ctx.hasTriggerResult) {
+        const target = "resData";
+        valExpr = `String((typeof ${target} === "object" && ${target} !== null ? (${target} as Record<string, unknown>)?.["${field}"] : ${target}) ?? "")`;
       }
     } else if (src.kind === "state_var" && src.storeName) {
       const cleanStore = src.storeName.replace(/Store$/i, "");
