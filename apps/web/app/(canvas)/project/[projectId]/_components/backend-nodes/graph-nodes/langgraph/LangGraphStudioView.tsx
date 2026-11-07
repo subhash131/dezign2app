@@ -175,14 +175,11 @@ export function LangGraphStudioView({
   const handleSelectionChange = useCallback(
     ({
       nodes: selNodes,
-      edges: selEdges,
     }: {
       nodes: LangGraphCanvasNode[];
       edges: LangGraphCanvasEdge[];
     }) => {
-      if (selEdges.length > 0 && selNodes.length === 0) {
-        setSelectedNodeId(null);
-      } else if (selNodes.length > 0) {
+      if (selNodes.length > 0) {
         const activeNode = selNodes[0];
         if (activeNode) {
           setSelectedNodeId((prev) =>
@@ -432,6 +429,9 @@ export function LangGraphStudioView({
     }
 
     return nodes.map((n) => {
+      const isSelected = Boolean(
+        n.selected || (selectedNodeId && n.id === selectedNodeId),
+      );
       const isCurrent = currentNodeId === n.id;
       const isActive = activeNodeIds.includes(n.id);
       const loopWarning = loopWarningMap.get(n.id);
@@ -449,6 +449,7 @@ export function LangGraphStudioView({
       if (!isCurrent && !isActive) {
         return {
           ...n,
+          selected: isSelected,
           data: nextData,
           className: `${n.className || ""} ${baseRounded} ${
             isLoopNode && (n.type === "langgraph_agent_ref" || n.type === "langgraph_node_ref")
@@ -461,6 +462,7 @@ export function LangGraphStudioView({
       const existingClass = n.className || "";
       return {
         ...n,
+        selected: isSelected,
         data: nextData,
         className: `${existingClass} ${baseRounded} ${
           isCurrent
@@ -469,7 +471,7 @@ export function LangGraphStudioView({
         }`,
       };
     });
-  }, [nodes, activeNodeIds, currentNodeId, loopWarnings]);
+  }, [nodes, activeNodeIds, currentNodeId, loopWarnings, selectedNodeId]);
 
   const runGraphTestCase = async (testCase: SimulationTestCase) => {
     // If the test case has explicit mock overrides configured, simulate with those mocks.
@@ -751,10 +753,6 @@ export function LangGraphStudioView({
             minZoom={0.01}
             maxZoom={3}
             onEdgeClick={(_: React.MouseEvent, edge: LangGraphCanvasEdge) => {
-              setSelectedNodeId(null);
-              setNodes((nds) =>
-                nds.map((n) => (n.selected ? { ...n, selected: false } : n)),
-              );
               setEdges((eds) =>
                 eds.map((e) => ({ ...e, selected: e.id === edge.id })),
               );
@@ -768,7 +766,13 @@ export function LangGraphStudioView({
               else if (n.id === "STATE_GLOBAL") setActiveSideTab("state");
               else setActiveSideTab("inspector");
             }}
-            onPaneClick={handleCloseInspector}
+            onPaneClick={() => {
+              setEdges((eds) =>
+                eds.some((e) => e.selected)
+                  ? eds.map((e) => (e.selected ? { ...e, selected: false } : e))
+                  : eds,
+              );
+            }}
             onSelectionChange={handleSelectionChange}
             fitView
             fitViewOptions={useMemo(() => {
