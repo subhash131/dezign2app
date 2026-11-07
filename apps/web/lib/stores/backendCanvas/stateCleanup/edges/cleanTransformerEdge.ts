@@ -1,4 +1,4 @@
-import { BackendEdge } from "@/types/canvas";
+import { BackendEdge, PipelineStep } from "@/types/canvas";
 import { EdgeCleanupContext } from "../types";
 
 /**
@@ -18,12 +18,35 @@ export function cleanTransformerEdge(
       (srcNode.type === "transformer" || srcNode.type === "transformer_ref")
     ) {
       const fnName = srcNode.data?.functionName || srcNode.data?.label;
+      const cleanName = fnName?.replace(/\s*\(Ref\)$/, "");
       ctx.nextEndpoints = ctx.nextEndpoints.map((ep) => {
         if (ep.id === epId && ep.pipelineSteps && ep.pipelineSteps.length > 0) {
           const updatedSteps = ep.pipelineSteps.filter((step) => {
             if (step.type !== "transform") return true;
+            if (step.transformerRefNodeId === srcNode.id) return false;
             if (step.transformerNodeId === srcNode.id) return false;
-            if (fnName && step.functionRef?.name === fnName) return false;
+            if (step.edgeId && step.edgeId === edge.id) return false;
+            if (
+              srcNode.type === "transformer_ref" &&
+              srcNode.data?.transformerRef &&
+              step.transformerNodeId === srcNode.data.transformerRef
+            ) {
+              return false;
+            }
+            if (
+              cleanName &&
+              (step.functionRef?.name === cleanName ||
+                step.transformerName === cleanName)
+            ) {
+              return false;
+            }
+            if (
+              fnName &&
+              (step.functionRef?.name === fnName ||
+                step.transformerName === fnName)
+            ) {
+              return false;
+            }
             return true;
           });
           if (updatedSteps.length !== ep.pipelineSteps.length) {
@@ -115,6 +138,42 @@ export function cleanTransformerEdge(
 
       const fnName =
         transformerNode.data?.functionName || transformerNode.data?.label;
+      const cleanName = fnName?.replace(/\s*\(Ref\)$/, "");
+
+      const matchesTransformer = (s: {
+        type: string;
+        transformerNodeId?: string;
+        transformerRefNodeId?: string;
+        transformerName?: string;
+        edgeId?: string;
+        functionRef?: { name?: string };
+      }) => {
+        if (s.type !== "transform") return false;
+        if (s.transformerRefNodeId === transformerNode.id) return true;
+        if (s.transformerNodeId === transformerNode.id) return true;
+        if (s.edgeId && s.edgeId === edge.id) return true;
+        if (
+          transformerNode.type === "transformer_ref" &&
+          transformerNode.data?.transformerRef &&
+          s.transformerNodeId === transformerNode.data.transformerRef
+        ) {
+          return true;
+        }
+        if (
+          cleanName &&
+          (s.functionRef?.name === cleanName ||
+            s.transformerName === cleanName)
+        ) {
+          return true;
+        }
+        if (
+          fnName &&
+          (s.functionRef?.name === fnName || s.transformerName === fnName)
+        ) {
+          return true;
+        }
+        return false;
+      };
 
       // Clean up endpoint pipelineSteps
       if (targetEpId) {
@@ -125,12 +184,7 @@ export function cleanTransformerEdge(
             ep.pipelineSteps.length > 0
           ) {
             const filteredSteps = ep.pipelineSteps.filter(
-              (s) =>
-                !(
-                  s.type === "transform" &&
-                  (s.transformerNodeId === transformerNode.id ||
-                    (fnName && s.functionRef?.name === fnName))
-                ),
+              (s: PipelineStep) => !matchesTransformer(s),
             );
             if (filteredSteps.length !== ep.pipelineSteps.length) {
               ctx.endpointsChanged = true;
@@ -152,12 +206,7 @@ export function cleanTransformerEdge(
             ev.pipelineSteps.length > 0
           ) {
             const filteredSteps = ev.pipelineSteps.filter(
-              (s) =>
-                !(
-                  s.type === "transform" &&
-                  (s.transformerNodeId === transformerNode.id ||
-                    (fnName && s.functionRef?.name === fnName))
-                ),
+              (s: PipelineStep) => !matchesTransformer(s),
             );
             if (filteredSteps.length !== ev.pipelineSteps.length) {
               ctx.eventsChanged = true;
@@ -169,6 +218,35 @@ export function cleanTransformerEdge(
           return ev;
         });
       }
+    }
+  }
+
+  // 3. If transformerNode is a transformer_ref, check if it is now orphaned
+  if (transformerNode && transformerNode.type === "transformer_ref") {
+    const remainingEdges = ctx.nextEdges.filter(
+      (e) =>
+        !ctx.removedSet.has(e.id) &&
+        e.id !== edge.id &&
+        (e.target === transformerNode.id || e.source === transformerNode.id),
+    );
+    const onlyRefEdges = remainingEdges.every(
+      (e) => e.type === "transformer-reference" || e.type === "reference",
+    );
+    if (onlyRefEdges) {
+      remainingEdges.forEach((re) => {
+        ctx.removedSet.add(re.id);
+        ctx.additionalRemovedEdgeIds = [
+          ...(ctx.additionalRemovedEdgeIds || []),
+          re.id,
+        ];
+      });
+      ctx.nextEdges = ctx.nextEdges.filter((e) => !ctx.removedSet.has(e.id));
+      ctx.deletedNodeIds = [...(ctx.deletedNodeIds || []), transformerNode.id];
+      ctx.nextNodes = ctx.nextNodes.filter((n) => n.id !== transformerNode.id);
+      ctx.pendingNodeUpserts = ctx.pendingNodeUpserts.filter(
+        (n) => n.id !== transformerNode.id,
+      );
+      ctx.nodesChanged = true;
     }
   }
 }

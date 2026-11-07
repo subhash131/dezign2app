@@ -7,6 +7,124 @@ import {
 } from "@workspace/canvas/types";
 import { DeletedNodesMeta } from "../types";
 
+function cleanFrontendActionSteps(
+  steps: any[],
+  meta: DeletedNodesMeta,
+): { steps: any[]; changed: boolean } {
+  if (!steps || !Array.isArray(steps) || steps.length === 0) {
+    return { steps, changed: false };
+  }
+  let changed = false;
+  const filtered = steps.filter((step: any) => {
+    if (!step) return false;
+
+    // 1. Transform step
+    if (step.type === "transform") {
+      if (
+        step.transformerRefNodeId &&
+        meta.allIdsSet.has(step.transformerRefNodeId)
+      ) {
+        changed = true;
+        return false;
+      }
+      if (
+        step.transformerNodeId &&
+        meta.allIdsSet.has(step.transformerNodeId)
+      ) {
+        changed = true;
+        return false;
+      }
+      if (
+        step.transformerName &&
+        (meta.deletedTransformerNames.has(step.transformerName) ||
+          meta.allIdsSet.has(step.transformerName))
+      ) {
+        changed = true;
+        return false;
+      }
+      if (
+        step.functionRef?.name &&
+        (meta.deletedTransformerNames.has(step.functionRef.name) ||
+          meta.allIdsSet.has(step.functionRef.name))
+      ) {
+        changed = true;
+        return false;
+      }
+    }
+
+    // 2. API call step
+    if (step.type === "api_call") {
+      if (step.serviceNodeId && meta.allIdsSet.has(step.serviceNodeId)) {
+        changed = true;
+        return false;
+      }
+      if (step.endpointId && meta.allIdsSet.has(step.endpointId)) {
+        changed = true;
+        return false;
+      }
+    }
+
+    // 3. Storage step
+    if (step.type === "storage_put" || step.type === "storage_operation") {
+      if (
+        step.storageRefNodeId &&
+        meta.allIdsSet.has(step.storageRefNodeId)
+      ) {
+        changed = true;
+        return false;
+      }
+      if (step.storageNodeId && meta.allIdsSet.has(step.storageNodeId)) {
+        changed = true;
+        return false;
+      }
+    }
+
+    // 4. Browser storage step
+    if (step.type === "browser_storage") {
+      if (
+        step.browserStorageNodeId &&
+        meta.allIdsSet.has(step.browserStorageNodeId)
+      ) {
+        changed = true;
+        return false;
+      }
+    }
+
+    // 5. State store step
+    if (step.type === "state_store" || step.type === "state_store_update") {
+      if (
+        step.stateStoreNodeId &&
+        meta.allIdsSet.has(step.stateStoreNodeId)
+      ) {
+        changed = true;
+        return false;
+      }
+    }
+
+    // 6. LangGraph invoke step
+    if (step.type === "langgraph_invoke") {
+      if (
+        step.langGraphTargetNodeId &&
+        meta.allIdsSet.has(step.langGraphTargetNodeId)
+      ) {
+        changed = true;
+        return false;
+      }
+    }
+
+    return true;
+  });
+
+  if (!changed && filtered.length === steps.length) {
+    return { steps, changed: false };
+  }
+
+  return {
+    steps: filtered.map((s, idx) => ({ ...s, order: idx + 1 })),
+    changed: true,
+  };
+}
+
 /**
  * Cleans up internal references on remaining nodes (auth, types, transformer_ref,
  * webPage, service) when other nodes have been deleted.
@@ -151,13 +269,26 @@ export function cleanRemainingNodes(
           let remainingActions = section.actions;
           if (section.actions && Array.isArray(section.actions)) {
             remainingActions = section.actions.map((act: any) => {
+              let actModified = false;
+              let nextAct = act;
               if (
                 act.storeActionBinding?.storeNodeId &&
                 allIdsSet.has(act.storeActionBinding.storeNodeId)
               ) {
+                actModified = true;
+                const { storeActionBinding, ...rest } = nextAct;
+                nextAct = rest;
+              }
+              if (nextAct.actionSteps && Array.isArray(nextAct.actionSteps)) {
+                const cleaned = cleanFrontendActionSteps(nextAct.actionSteps, meta);
+                if (cleaned.changed) {
+                  actModified = true;
+                  nextAct = { ...nextAct, actionSteps: cleaned.steps };
+                }
+              }
+              if (actModified) {
                 secChanged = true;
-                const { storeActionBinding, ...rest } = act;
-                return rest;
+                return nextAct;
               }
               return act;
             });
@@ -174,19 +305,46 @@ export function cleanRemainingNodes(
           return section;
         });
 
+        let newEvents = node.data.events;
+        if (node.data.events && Array.isArray(node.data.events)) {
+          newEvents = node.data.events.map((evt: any) => {
+            if (evt.actionSteps && Array.isArray(evt.actionSteps)) {
+              const cleaned = cleanFrontendActionSteps(evt.actionSteps, meta);
+              if (cleaned.changed) {
+                changed = true;
+                return { ...evt, actionSteps: cleaned.steps };
+              }
+            }
+            return evt;
+          });
+        }
+
         let newRealtime = node.data.realtimeConnections;
         if (
           node.data.realtimeConnections &&
           Array.isArray(node.data.realtimeConnections)
         ) {
           newRealtime = node.data.realtimeConnections.map((c: any) => {
+            let connModified = false;
+            let nextConn = c;
             if (
               c.storeActionBinding?.storeNodeId &&
               allIdsSet.has(c.storeActionBinding.storeNodeId)
             ) {
+              connModified = true;
+              const { storeActionBinding, ...rest } = nextConn;
+              nextConn = rest;
+            }
+            if (nextConn.actionSteps && Array.isArray(nextConn.actionSteps)) {
+              const cleaned = cleanFrontendActionSteps(nextConn.actionSteps, meta);
+              if (cleaned.changed) {
+                connModified = true;
+                nextConn = { ...nextConn, actionSteps: cleaned.steps };
+              }
+            }
+            if (connModified) {
               changed = true;
-              const { storeActionBinding, ...rest } = c;
-              return rest;
+              return nextConn;
             }
             return c;
           });
@@ -198,6 +356,7 @@ export function cleanRemainingNodes(
             data: {
               ...node.data,
               sections: newSections,
+              ...(newEvents ? { events: newEvents } : {}),
               realtimeConnections: newRealtime,
             },
           };

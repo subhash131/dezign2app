@@ -703,7 +703,7 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
       return;
     }
 
-    const timer = setTimeout(() => {
+    const timer = setTimeout(async () => {
       const pid = projectId as Id<"projects">;
 
       // Capture the exact references being synced so we can clear only them
@@ -755,7 +755,10 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
           syncingEdges
             .filter(
               (e): e is typeof e =>
-                Boolean(e?.id) && !uniqueEdgeRemovalSet.has(e.id),
+                Boolean(e?.id) &&
+                !uniqueEdgeRemovalSet.has(e.id) &&
+                !uniqueNodeRemovalSet.has(e.source) &&
+                !uniqueNodeRemovalSet.has(e.target),
             )
             .map((e) => [e.id, e]),
         ).values(),
@@ -803,159 +806,159 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
         ).values(),
       );
 
-      Promise.all([
-        ...uniqueNodesToSync.map((n) => {
-          let position = n.position;
+      try {
+        // 1. Execute all removals first so old edges and nodes in Convex are removed before any upserts
+        await Promise.all([
+          ...uniqueEdgeRemovals.map((id) =>
+            removeEdge({ projectId: pid, edgeId: id }),
+          ),
+          ...uniqueNodeRemovals.map((id) =>
+            removeNode({ projectId: pid, nodeId: id }),
+          ),
+          ...syncingEndpointRemovals.map((r) =>
+            removeEndpoint({
+              projectId: pid,
+              nodeId: r.nodeId,
+              endpointId: r.endpointId,
+            }),
+          ),
+          ...syncingEventRemovals.map((r) =>
+            removeEvent({ projectId: pid, nodeId: r.nodeId, eventId: r.eventId }),
+          ),
+          ...syncingIdentityProviderRemovals.map((r) =>
+            removeIdentityProvider({
+              projectId: pid,
+              nodeId: r.nodeId,
+              providerId: r.providerId,
+            }),
+          ),
+        ]);
 
-          let cleanStyle:
-            | Record<string, string | number | boolean | null>
-            | undefined = undefined;
-          if (n.style) {
-            const temp: Record<string, string | number | boolean | null> = {};
-            for (const [k, v] of Object.entries(n.style)) {
-              if (v !== undefined) {
-                temp[k] = v;
+        // 2. Execute all upserts after removals have completed
+        await Promise.all([
+          ...uniqueNodesToSync.map((n) => {
+            let position = n.position;
+
+            let cleanStyle:
+              | Record<string, string | number | boolean | null>
+              | undefined = undefined;
+            if (n.style) {
+              const temp: Record<string, string | number | boolean | null> = {};
+              for (const [k, v] of Object.entries(n.style)) {
+                if (v !== undefined) {
+                  temp[k] = v;
+                }
               }
+              cleanStyle = temp;
             }
-            cleanStyle = temp;
-          }
 
-          const rawData = {
-            ...n.data,
-            position,
-            ...(n.parentId !== undefined && { parentId: n.parentId }),
-            ...(cleanStyle !== undefined && { style: cleanStyle }),
-            ...(n.width !== undefined && { width: n.width }),
-            ...(n.height !== undefined && { height: n.height }),
-          };
+            const rawData = {
+              ...n.data,
+              position,
+              ...(n.parentId !== undefined && { parentId: n.parentId }),
+              ...(cleanStyle !== undefined && { style: cleanStyle }),
+              ...(n.width !== undefined && { width: n.width }),
+              ...(n.height !== undefined && { height: n.height }),
+            };
 
-          const baseData =
-            n.type === "langgraph"
-              ? ensureLangGraphDataReachability(rawData)
-              : rawData;
+            const baseData =
+              n.type === "langgraph"
+                ? ensureLangGraphDataReachability(rawData)
+                : rawData;
 
-          const finalData = sanitizeForConvex(baseData) as typeof baseData;
+            const finalData = sanitizeForConvex(baseData) as typeof baseData;
 
-          return upsertNode({
-            projectId: pid,
-            nodeId: n.id,
-            type: n.type,
-            position: position,
-            data: finalData,
-            fractionalIndex: n.fractionalIndex,
-          }).catch((err) => {
-            console.warn(`[useBackendSync] Error upserting node ${n.id}:`, err);
-          });
-        }),
-        ...uniqueNodeRemovals.map((id) =>
-          removeNode({ projectId: pid, nodeId: id }),
-        ),
-        ...uniqueEdgesToSync.map((e) =>
-          upsertEdge({
-            projectId: pid,
-            edgeId: e.id,
-            source: e.source,
-            target: e.target,
-            type: e.type,
-            sourceHandle: e.sourceHandle ?? undefined,
-            targetHandle: e.targetHandle ?? undefined,
-            data: e.data,
-            fractionalIndex: e.fractionalIndex,
-          }).catch((err) => {
-            const errMsg = err?.message || String(err);
-            const errCode = err?.data?.code;
-            if (
-              errCode === "DUPLICATE_EDGE" ||
-              errMsg.includes("DUPLICATE_EDGE") ||
-              errMsg.includes("An edge already exists between these exact handles")
-            ) {
-              console.warn(
-                `[useBackendSync] Edge ${e.id} already exists in database; dropping duplicate.`,
-              );
-              const currentEdges = useBackendCanvasStore.getState().edges;
-              const hasOriginal = currentEdges.some(
-                (other) =>
-                  other.id !== e.id &&
-                  other.source === e.source &&
-                  other.target === e.target &&
-                  (other.sourceHandle ?? null) === (e.sourceHandle ?? null) &&
-                  (other.targetHandle ?? null) === (e.targetHandle ?? null),
-              );
-              if (hasOriginal) {
+            return upsertNode({
+              projectId: pid,
+              nodeId: n.id,
+              type: n.type,
+              position: position,
+              data: finalData,
+              fractionalIndex: n.fractionalIndex,
+            }).catch((err) => {
+              console.warn(`[useBackendSync] Error upserting node ${n.id}:`, err);
+            });
+          }),
+          ...uniqueEdgesToSync.map((e) =>
+            upsertEdge({
+              projectId: pid,
+              edgeId: e.id,
+              source: e.source,
+              target: e.target,
+              type: e.type,
+              sourceHandle: e.sourceHandle ?? undefined,
+              targetHandle: e.targetHandle ?? undefined,
+              data: e.data,
+              fractionalIndex: e.fractionalIndex,
+            }).catch((err) => {
+              const errMsg = err?.message || String(err);
+              const errCode = err?.data?.code;
+              if (
+                errCode === "DUPLICATE_EDGE" ||
+                errMsg.includes("DUPLICATE_EDGE") ||
+                errMsg.includes("An edge already exists between these exact handles")
+              ) {
+                console.warn(
+                  `[useBackendSync] Edge ${e.id} already exists in database; dropping duplicate.`,
+                );
+                const currentStore = useBackendCanvasStore.getState();
                 useBackendCanvasStore.setState({
-                  edges: currentEdges.filter((item) => item.id !== e.id),
+                  edges: currentStore.edges.filter((item) => item.id !== e.id),
+                  pendingEdgeUpserts: currentStore.pendingEdgeUpserts.filter(
+                    (item) => item.id !== e.id,
+                  ),
                 });
+                return;
               }
-              return;
-            }
-            throw err;
+              throw err;
+            }),
+          ),
+          ...uniqueEndpointsToSync.map((e) =>
+            upsertEndpoint({
+              projectId: pid,
+              nodeId: e.nodeId,
+              endpointId: e.id,
+              data: endpointSchema.parse(e),
+            }),
+          ),
+          ...uniqueEventsToSync.map((e) => {
+            const data =
+              e.variant === "publish"
+                ? publishedEventSchema.parse(e)
+                : consumedEventSchema.parse(e);
+            return upsertEvent({
+              projectId: pid,
+              nodeId: e.nodeId,
+              eventId: e.id,
+              variant: e.variant,
+              data,
+            });
           }),
-        ),
-        ...uniqueEdgeRemovals.map((id) =>
-          removeEdge({ projectId: pid, edgeId: id }),
-        ),
-        ...uniqueEndpointsToSync.map((e) =>
-          upsertEndpoint({
-            projectId: pid,
-            nodeId: e.nodeId,
-            endpointId: e.id,
-            data: endpointSchema.parse(e),
-          }),
-        ),
-        ...syncingEndpointRemovals.map((r) =>
-          removeEndpoint({
-            projectId: pid,
-            nodeId: r.nodeId,
-            endpointId: r.endpointId,
-          }),
-        ),
-        ...uniqueEventsToSync.map((e) => {
-          const data =
-            e.variant === "publish"
-              ? publishedEventSchema.parse(e)
-              : consumedEventSchema.parse(e);
-          return upsertEvent({
-            projectId: pid,
-            nodeId: e.nodeId,
-            eventId: e.id,
-            variant: e.variant,
-            data,
-          });
-        }),
-        ...syncingEventRemovals.map((r) =>
-          removeEvent({ projectId: pid, nodeId: r.nodeId, eventId: r.eventId }),
-        ),
-        ...uniqueIdentityProvidersToSync.map((p) =>
-          upsertIdentityProvider({
-            projectId: pid,
-            nodeId: p.nodeId,
-            providerId: p.id,
-            data: identityProviderSchema.parse(p),
-          }),
-        ),
-        ...syncingIdentityProviderRemovals.map((r) =>
-          removeIdentityProvider({
-            projectId: pid,
-            nodeId: r.nodeId,
-            providerId: r.providerId,
-          }),
-        ),
-      ])
-        .then(() => {
-          clearPending(
-            syncingNodes,
-            syncingNodeRemovals,
-            syncingEdges,
-            syncingEdgeRemovals,
-            syncingEndpoints,
-            syncingEndpointRemovals,
-            syncingEvents,
-            syncingEventRemovals,
-            syncingIdentityProviders,
-            syncingIdentityProviderRemovals,
-          );
-        })
-        .catch((err) => console.error("Canvas backend sync failed:", err));
+          ...uniqueIdentityProvidersToSync.map((p) =>
+            upsertIdentityProvider({
+              projectId: pid,
+              nodeId: p.nodeId,
+              providerId: p.id,
+              data: identityProviderSchema.parse(p),
+            }),
+          ),
+        ]);
+
+        clearPending(
+          syncingNodes,
+          syncingNodeRemovals,
+          syncingEdges,
+          syncingEdgeRemovals,
+          syncingEndpoints,
+          syncingEndpointRemovals,
+          syncingEvents,
+          syncingEventRemovals,
+          syncingIdentityProviders,
+          syncingIdentityProviderRemovals,
+        );
+      } catch (err) {
+        console.error("Canvas backend sync failed:", err);
+      }
     }, 500);
 
     return () => clearTimeout(timer);

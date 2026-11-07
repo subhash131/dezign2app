@@ -338,6 +338,12 @@ export interface PipelineStep {
   };
   /** Optional reference to the canvas transformer node ID */
   transformerNodeId?: string;
+  /** Optional reference to the canvas transformer_ref node ID */
+  transformerRefNodeId?: string;
+  /** Optional name or label of the transformer */
+  transformerName?: string;
+  /** Optional ID of the connecting canvas edge */
+  edgeId?: string;
   /** Explicit per-argument input bindings - user decides where every arg comes from */
   inputBindings?: PipelineStepInputBinding[];
   /** Variable name assigned to this step's return value (usable by subsequent steps) */
@@ -565,6 +571,9 @@ export const pipelineStepSchema: z.ZodType<PipelineStep> = z.lazy(() =>
       })
       .optional(),
     transformerNodeId: z.string().optional(),
+    transformerRefNodeId: z.string().optional(),
+    transformerName: z.string().optional(),
+    edgeId: z.string().optional(),
     inputBindings: z.array(pipelineStepInputBindingSchema).optional().default([]),
     outputVariable: z.string().optional().default(""),
     declarationKind: z.enum(["const", "let", "reassign"]).optional().default("const"),

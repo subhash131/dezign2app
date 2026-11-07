@@ -258,6 +258,17 @@ export function resolveCascadeDeletedNodeIds(
         continue;
       }
 
+      // 2b. Transformer ref nodes pointing to a deleted master transformer
+      if (
+        node.type === "transformer_ref" &&
+        node.data?.transformerRef &&
+        allIdsSet.has(node.data.transformerRef)
+      ) {
+        allIdsSet.add(node.id);
+        addedNew = true;
+        continue;
+      }
+
       // 3. Associated TypesNode derived from any deleted entity / redis_schema node
       if (node.type === "types") {
         const deletedEntityIds = Array.from(allIdsSet).filter((deletedId) => {

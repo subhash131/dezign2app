@@ -1137,29 +1137,18 @@ export function healDirectTransformerEdges({
       );
     }
 
-    if (!targetWebPage && !refNode.data?.targetServiceId) {
-      const webPages = nextNodes.filter((n) => n.type === "webPage");
-      if (webPages.length === 1) {
-        targetWebPage = webPages[0];
-      } else if (webPages.length > 1) {
-        const refX = refNode.position?.x ?? 0;
-        const refY = refNode.position?.y ?? 0;
-        let closestDist = Infinity;
-        for (const wp of webPages) {
-          const wpX = wp.position?.x ?? 0;
-          const wpY = wp.position?.y ?? 0;
-          const dx = wpX >= refX ? wpX - refX : (refX - wpX) * 2;
-          const dy = Math.abs(wpY - refY);
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < closestDist) {
-            closestDist = dist;
-            targetWebPage = wp;
-          }
-        }
-      }
-    }
-
     if (targetWebPage) {
+      // If an edge between this ref node and target was marked for removal, do NOT recreate it
+      const isBeingRemoved = Array.from(nextEdgeRemovals).some((removedId) => {
+        const oldE = edges.find((e) => e.id === removedId);
+        return (
+          oldE &&
+          ((oldE.source === refNode.id && oldE.target === targetWebPage.id) ||
+            (oldE.target === refNode.id && oldE.source === targetWebPage.id))
+        );
+      });
+      if (isBeingRemoved) continue;
+
       let targetActId =
         refNode.data?.targetActionId ||
         refNode.data?.targetActionIds?.[0] ||
