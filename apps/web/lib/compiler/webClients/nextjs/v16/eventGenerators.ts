@@ -38,9 +38,26 @@ export function generateEventComponent(
   serviceName?: string,
   storageConfig?: StorageUploadConfig,
 ): string {
-  // 1. Navigation Event (e.g. navigateToPage)
-  if (eventType === "navigateToPage") {
-    return generateNavigationEventTemplate(componentName, eventName, targetRoute);
+  // 1. Navigation Event (e.g. navigateToPage or action step with navigation)
+  const navStep = Array.isArray(eventItem?.actionSteps)
+    ? eventItem?.actionSteps.find((s) => s.type === "navigation")
+    : undefined;
+
+  if (eventType === "navigateToPage" || (navStep && !endpoint && !url)) {
+    const effectiveRoute =
+      navStep?.targetRoute || targetRoute || eventItem?.targetRoute;
+    const pathParamBindings =
+      navStep?.pathParamBindings || eventItem?.pathParamBindings;
+    const queryParamBindings =
+      navStep?.queryParamBindings || eventItem?.queryParamBindings;
+
+    return generateNavigationEventTemplate(
+      componentName,
+      eventName,
+      effectiveRoute,
+      pathParamBindings,
+      queryParamBindings,
+    );
   }
 
   // 2. Resolve Parameters & Schemas

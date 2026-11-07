@@ -57,6 +57,7 @@ export function createDefaultFrontendStep(
         navType: "route",
         targetRoute: "/",
         navCondition: "direct",
+        pathParamBindings: [],
         ...defaults,
       };
 

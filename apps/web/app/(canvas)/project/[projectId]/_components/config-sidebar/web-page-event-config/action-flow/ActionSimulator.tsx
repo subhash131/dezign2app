@@ -81,6 +81,7 @@ interface SimulatedStepLog {
     };
     navigation?: {
       targetRoute: string;
+      resolvedRoute?: string;
     };
     storage?: {
       engine: string;
@@ -567,6 +568,19 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
           },
         });
       } else if (step.type === "navigation") {
+        let resolvedRoute = step.targetRoute || "/";
+        const bindings = step.pathParamBindings || [];
+        bindings.forEach((b) => {
+          const val = resolveSourceValue(b.source);
+          const strVal =
+            val !== undefined && val !== null && val !== ""
+              ? String(val)
+              : `[${b.paramName}]`;
+          resolvedRoute = resolvedRoute.replace(
+            new RegExp(`\\[${b.paramName}\\]`, "g"),
+            strVal,
+          );
+        });
         logs.push({
           stepIndex: idx + 1,
           stepId: step.id,
@@ -576,6 +590,7 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
           details: {
             navigation: {
               targetRoute: step.targetRoute || "/",
+              resolvedRoute,
             },
           },
         });
@@ -1128,7 +1143,11 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
                       {log.details.navigation && (
                         <div className="flex items-center gap-1.5 p-2 rounded bg-background border text-indigo-400">
                           <Navigation size={12} />
-                          <span>Navigated to: {log.details.navigation.targetRoute}</span>
+                          <span>
+                            Navigated to:{" "}
+                            {log.details.navigation.resolvedRoute ||
+                              log.details.navigation.targetRoute}
+                          </span>
                         </div>
                       )}
 
