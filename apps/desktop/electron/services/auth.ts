@@ -177,7 +177,7 @@ export async function openBrowserLogin(customUrl?: string): Promise<{ success: b
   const authUrl =
     process.env.NEXT_PUBLIC_DESKTOP_AUTH_URL ||
     process.env.NEXT_PUBLIC_APP_URL ||
-    "";
+    (IS_DEV ? "http://127.0.0.1:46500" : "https://dezign2app.com");
 
   const loginUrl =
     customUrl ||

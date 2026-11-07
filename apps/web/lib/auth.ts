@@ -36,11 +36,34 @@ log("[auth.ts]  BETTER_AUTH_SECRET   :", process.env.BETTER_AUTH_SECRET ? "SET" 
 log("[auth.ts]  trustedOrigins       :", Array.from(new Set(trustedOrigins)));
 log("[auth.ts] ────────────────────────────────────────────────────────");
 
+const isProd =
+  process.env.NODE_ENV === "production" ||
+  Boolean(appUrl?.includes("dezign2app.com"));
+const cookieDomain = isProd ? ".dezign2app.com" : undefined;
+
 export const auth = betterAuth({
   appName: "Dezign2App",
   baseURL: appUrl,
   secret: process.env.BETTER_AUTH_SECRET,
   trustedOrigins: Array.from(new Set(trustedOrigins)),
+  session: {
+    expiresIn: 30 * 24 * 60 * 60, // 30 days persistent session
+    updateAge: 24 * 60 * 60, // refresh session age daily
+    cookieCache: {
+      enabled: true,
+      maxAge: 5 * 60,
+    },
+  },
+  advanced: {
+    crossSubDomainCookies: {
+      enabled: isProd,
+      domain: cookieDomain,
+    },
+    defaultCookieAttributes: {
+      sameSite: "lax",
+      secure: isProd,
+    },
+  },
   emailAndPassword: {
     enabled: true,
     async sendResetPassword(data, _request) {

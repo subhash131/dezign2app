@@ -80,6 +80,7 @@ export function compileBetterAuthV16(
     dbAdapter: resolvedDbAdapter,
     dbEngine: resolvedDbEngine || rawData.dbEngine,
     connectionString: resolvedConnectionString,
+    validateSchema: rawData.validateSchema ?? false,
     paymentsPlugin: rawData.paymentsPlugin || (connectedPaymentsNode
       ? {
           provider: "creem",

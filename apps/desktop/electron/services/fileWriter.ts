@@ -1,4 +1,4 @@
-import { dialog, BrowserWindow } from "electron";
+import { dialog, BrowserWindow, app } from "electron";
 import path from "path";
 import fs from "fs";
 
@@ -462,5 +462,59 @@ export async function listProjectDirectory(
     console.warn(`[fileWriter] Failed to list directory ${outputDir}:`, err);
     return { success: false, tree: [], totalFiles: 0, path: outputDir };
   }
+}
+
+/**
+ * Persists project workspace directory mappings in the Electron userData directory.
+ * Ensures the desktop application permanently remembers each project's folder location
+ * even across Chromium profile refreshes, cache wipes, or domain changes.
+ */
+function getWorkspaceConfigPath(): string {
+  return path.join(app.getPath("userData"), "project-workspaces.json");
+}
+
+export function getStoredProjectWorkspaceDir(projectId: string): string | null {
+  if (!projectId) return null;
+  try {
+    const configPath = getWorkspaceConfigPath();
+    if (!fs.existsSync(configPath)) return null;
+    const raw = fs.readFileSync(configPath, "utf-8");
+    const parsed = JSON.parse(raw);
+    return typeof parsed[projectId] === "string" ? parsed[projectId] : null;
+  } catch (err) {
+    console.warn("[fileWriter] Failed to read project-workspaces.json:", err);
+    return null;
+  }
+}
+
+export function setStoredProjectWorkspaceDir(
+  projectId: string,
+  dir: string
+): { success: boolean } {
+  if (!projectId) return { success: false };
+  try {
+    const configPath = getWorkspaceConfigPath();
+    let currentMap: Record<string, string> = {};
+    if (fs.existsSync(configPath)) {
+      try {
+        const raw = fs.readFileSync(configPath, "utf-8");
+        currentMap = JSON.parse(raw);
+      } catch {}
+    }
+    if (dir) {
+      currentMap[projectId] = dir;
+    } else {
+      delete currentMap[projectId];
+    }
+    fs.writeFileSync(configPath, JSON.stringify(currentMap, null, 2), "utf-8");
+    return { success: true };
+  } catch (err) {
+    console.warn("[fileWriter] Failed to write project-workspaces.json:", err);
+    return { success: false };
+  }
+}
+
+export function deleteStoredProjectWorkspaceDir(projectId: string): { success: boolean } {
+  return setStoredProjectWorkspaceDir(projectId, "");
 }
 

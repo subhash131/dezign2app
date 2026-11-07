@@ -35,6 +35,9 @@ export interface ElectronAPI {
   /** File system */
   fs: {
     pickDirectory(): Promise<string | null>;
+    getProjectWorkspaceDir(projectId: string): Promise<string | null>;
+    setProjectWorkspaceDir(projectId: string, dir: string): Promise<{ success: boolean }>;
+    deleteProjectWorkspaceDir(projectId: string): Promise<{ success: boolean }>;
     writeProject(
       outputDir: string,
       files: CompiledFile[],
@@ -90,6 +93,8 @@ export interface ElectronAPI {
     getPendingAuthCallback(): Promise<{ token?: string; ticket?: string; rawUrl?: string } | null>;
     /** Clears the pending auth ticket cache in the main process after consumption */
     clearPendingAuthCallback(): Promise<{ success: boolean }>;
+    /** Flushes all in-memory Chromium session cookies to SQLite disk storage */
+    flushCookies(): Promise<{ success: boolean }>;
   };
 
   /** PTY terminal sessions */
@@ -167,10 +172,18 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.invoke("auth:get-pending-callback"),
     clearPendingAuthCallback: () =>
       ipcRenderer.invoke("auth:clear-pending-callback"),
+    flushCookies: () =>
+      ipcRenderer.invoke("auth:flush-cookies"),
   },
 
   fs: {
     pickDirectory: () => ipcRenderer.invoke("fs:pick-directory"),
+    getProjectWorkspaceDir: (projectId: string) =>
+      ipcRenderer.invoke("fs:get-project-workspace-dir", projectId),
+    setProjectWorkspaceDir: (projectId: string, dir: string) =>
+      ipcRenderer.invoke("fs:set-project-workspace-dir", projectId, dir),
+    deleteProjectWorkspaceDir: (projectId: string) =>
+      ipcRenderer.invoke("fs:delete-project-workspace-dir", projectId),
     writeProject: (
       outputDir: string,
       files: CompiledFile[],

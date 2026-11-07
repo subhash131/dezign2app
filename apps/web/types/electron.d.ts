@@ -23,12 +23,27 @@ export interface ElectronUpdaterState {
   error?: string;
 }
 
+export interface ElectronDirectoryNode {
+  name: string;
+  path: string;
+  isFolder: boolean;
+  children?: ElectronDirectoryNode[];
+}
+
 export interface ElectronAPI {
   isElectron: true;
-  platform(): Promise<NodeJS.Platform>;
+  platform?(): Promise<NodeJS.Platform>;
 
-  fs: {
+  fs?: {
     pickDirectory(): Promise<string | null>;
+    getProjectWorkspaceDir?(projectId: string): Promise<string | null>;
+    setProjectWorkspaceDir?(
+      projectId: string,
+      dir: string
+    ): Promise<{ success: boolean }>;
+    deleteProjectWorkspaceDir?(
+      projectId: string
+    ): Promise<{ success: boolean }>;
     writeProject(
       outputDir: string,
       files: ElectronCompiledFile[],
@@ -59,7 +74,7 @@ export interface ElectronAPI {
       outputDir: string
     ): Promise<{
       success: boolean;
-      tree: Array<{ name: string; path: string; isFolder: boolean; children?: Array<any> }>;
+      tree: ElectronDirectoryNode[];
       totalFiles: number;
       path: string;
     }>;
@@ -69,7 +84,7 @@ export interface ElectronAPI {
     openExternal(url: string): Promise<{ success: boolean }>;
   };
 
-  auth: {
+  auth?: {
     /** Opens the default browser to complete web-based authentication */
     openBrowserLogin(url?: string): Promise<void>;
     /** Subscribes to the auth:callback IPC event containing deep-link credentials */
@@ -80,9 +95,11 @@ export interface ElectronAPI {
     getPendingAuthCallback?(): Promise<{ token?: string; ticket?: string; rawUrl?: string } | null>;
     /** Clears pending auth cache in the main process once consumed by the renderer */
     clearPendingAuthCallback?(): Promise<{ success: boolean }>;
+    /** Flushes all in-memory Chromium session cookies to SQLite disk storage */
+    flushCookies?(): Promise<{ success: boolean }>;
   };
 
-  docker: {
+  docker?: {
     up(projectDir: string): void;
     down(projectDir: string): void;
     write(data: string): void;
@@ -90,14 +107,14 @@ export interface ElectronAPI {
     preflight(): Promise<{ ok: boolean; reason: string | null }>;
   };
 
-  dev: {
+  dev?: {
     run(projectDir: string): Promise<{ ok: boolean; reason: string | null }>;
     stop(projectDir: string): void;
     write(data: string): void;
     onLog(cb: (line: string) => void): () => void;
   };
 
-  terminal: {
+  terminal?: {
     create(
       id: string,
       cwd: string,

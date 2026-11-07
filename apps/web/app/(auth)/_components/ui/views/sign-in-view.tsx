@@ -110,11 +110,16 @@ export const SignInView = () => {
   }, [session, navigateTo, redirectUrl, ensureUser, isSignedOut, inDesktop, isSessionLoading]);
 
   const getAuthBaseUrl = () => {
-    return (
+    const configured =
       process.env.NEXT_PUBLIC_DESKTOP_AUTH_URL ||
       process.env.NEXT_PUBLIC_APP_URL ||
-      ""
-    );
+      (typeof window !== "undefined" && window.location.origin ? window.location.origin : "");
+
+    // Normalize canonical domain: Cloudflare routes production through https://dezign2app.com
+    if (configured.includes("www.dezign2app.com")) {
+      return configured.replace("www.dezign2app.com", "dezign2app.com");
+    }
+    return configured;
   };
 
   /**
@@ -223,12 +228,32 @@ export const SignInView = () => {
         log("[desktop-auth:view] Exchange succeeded! Setting session cookies in document.cookie...");
         const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
         const secureFlag = isHttps ? "; Secure" : "";
+        const isProdDomain =
+          typeof window !== "undefined" && window.location.hostname.includes("dezign2app.com");
+        const domainFlag = isProdDomain ? "; Domain=.dezign2app.com" : "";
+
+        // Set host-level and subdomain-wide cookies for maximum compatibility across www and apex
         document.cookie = `better-auth.session_token=${data.token}; path=/; max-age=2592000; SameSite=Lax${secureFlag}`;
+        document.cookie = `better-auth.session_token=${data.token}; path=/; max-age=2592000; SameSite=Lax${secureFlag}${domainFlag}`;
         if (isHttps) {
           document.cookie = `__Secure-better-auth.session_token=${data.token}; path=/; max-age=2592000; SameSite=Lax; Secure`;
+          document.cookie = `__Secure-better-auth.session_token=${data.token}; path=/; max-age=2592000; SameSite=Lax; Secure${domainFlag}`;
         }
         document.cookie = `is_electron=1; path=/; max-age=2592000; SameSite=Lax${secureFlag}`;
+        document.cookie = `is_electron=1; path=/; max-age=2592000; SameSite=Lax${secureFlag}${domainFlag}`;
         log("[desktop-auth:view] Cookies after setting:", document.cookie);
+
+        // Immediately commit Chromium in-memory cookies to SQLite disk storage
+        try {
+          const api = getElectronAPI();
+          if (api?.auth?.flushCookies) {
+            await api.auth.flushCookies();
+            log("[desktop-auth:view] Electron disk cookie flush completed.");
+          }
+        } catch (e) {
+          console.warn("[desktop-auth:view] Cookie flush error:", e);
+        }
+
         setWaitingForAuth(false);
         toast.success("Desktop session connected!");
         log("[desktop-auth:view] Calling window.location.href = '/projects'...");
@@ -261,7 +286,8 @@ export const SignInView = () => {
     log("[desktop-auth:view] Component mounted. inDesktop:", inElectronMode);
 
     const api = getElectronAPI();
-    if (api?.auth) {
+    const authApi = api?.auth;
+    if (authApi) {
       log("[desktop-auth:view] Registering api.auth.onAuthCallback listener...");
 
       /**
@@ -270,8 +296,8 @@ export const SignInView = () => {
        */
       const checkPendingAuth = async () => {
         try {
-          if (api.auth?.getPendingAuthCallback) {
-            const pending = await api.auth.getPendingAuthCallback();
+          if (authApi.getPendingAuthCallback) {
+            const pending = await authApi.getPendingAuthCallback();
             if (pending?.ticket || pending?.token) {
               const ticketToUse = (pending.ticket || pending.token)?.trim();
               if (ticketToUse && !exchangingRef.current) {
@@ -279,8 +305,8 @@ export const SignInView = () => {
                   preview: `${ticketToUse.substring(0, 15)}...`,
                 });
                 // Clear the cache in main process so we don't re-exchange on subsequent focus events
-                if (api.auth.clearPendingAuthCallback) {
-                  await api.auth.clearPendingAuthCallback();
+                if (authApi.clearPendingAuthCallback) {
+                  await authApi.clearPendingAuthCallback();
                 }
                 await exchangeTicket(ticketToUse);
               }
@@ -302,7 +328,7 @@ export const SignInView = () => {
       window.addEventListener("focus", onFocus);
 
       // 3. Listen for push IPC callback from the main process
-      const cleanup = api.auth.onAuthCallback(async (data) => {
+      const cleanup = authApi.onAuthCallback(async (data) => {
         log("[desktop-auth:view] onAuthCallback received data:", {
           hasToken: !!data.token,
           hasTicket: !!data.ticket,
@@ -310,8 +336,8 @@ export const SignInView = () => {
         });
         const ticketToUse = (data.ticket || data.token)?.trim();
         if (ticketToUse) {
-          if (api.auth.clearPendingAuthCallback) {
-            await api.auth.clearPendingAuthCallback().catch(() => {});
+          if (authApi.clearPendingAuthCallback) {
+            await authApi.clearPendingAuthCallback().catch(() => {});
           }
           log("[desktop-auth:view] Exchanging ticket from deep link callback...");
           await exchangeTicket(ticketToUse);

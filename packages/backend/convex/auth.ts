@@ -101,7 +101,12 @@ export const createAuthOptions = (
   ].filter(Boolean) as string[];
 
   const finalTrustedOrigins = Array.from(new Set(trustedOrigins));
-  log("[convex:auth] createAuth invoked. baseURL:", baseURL, "trustedOrigins:", finalTrustedOrigins);
+  const isProd =
+    process.env.NODE_ENV === "production" ||
+    Boolean(baseURL?.includes("dezign2app.com"));
+  const cookieDomain = isProd ? ".dezign2app.com" : undefined;
+
+  log("[convex:auth] createAuth invoked. baseURL:", baseURL, "isProd:", isProd, "trustedOrigins:", finalTrustedOrigins);
 
   return {
     appName: "Dezign2App",
@@ -109,9 +114,25 @@ export const createAuthOptions = (
     secret: process.env.BETTER_AUTH_SECRET,
     trustedOrigins: finalTrustedOrigins,
     database: betterAuthComponentClient.adapter(ctx),
+    session: {
+      expiresIn: 30 * 24 * 60 * 60, // 30 days persistent session
+      updateAge: 24 * 60 * 60, // refresh session age daily
+      cookieCache: {
+        enabled: true,
+        maxAge: 5 * 60,
+      },
+    },
     advanced: {
       database: {
         generateId: false,
+      },
+      crossSubDomainCookies: {
+        enabled: isProd,
+        domain: cookieDomain,
+      },
+      defaultCookieAttributes: {
+        sameSite: "lax",
+        secure: isProd,
       },
     },
     databaseHooks: {

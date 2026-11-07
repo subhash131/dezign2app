@@ -152,11 +152,12 @@ export const EntityNode = React.memo(({ id, data, selected }: NodeProps<BackendN
 
     if (
       !isAuth &&
+      data.columns &&
       data.columns.length === 1 &&
       data.columns[0]?.name?.toLowerCase() === "id"
     ) {
       hasInitializedColumnsRef.current = true;
-      const firstCol = data.columns[0];
+      const firstCol = data.columns[0]!;
       const idType = (!firstCol.type || firstCol.type === "TEXT") ? "UUID" : firstCol.type;
       updateNode(id, {
         data: {
@@ -175,6 +176,7 @@ export const EntityNode = React.memo(({ id, data, selected }: NodeProps<BackendN
       !isAuth &&
       !data.tableName &&
       !data.label &&
+      data.columns &&
       data.columns.length === 3 &&
       data.columns[0]?.name === "id" &&
       data.columns[0]?.type === "TEXT" &&
@@ -186,9 +188,9 @@ export const EntityNode = React.memo(({ id, data, selected }: NodeProps<BackendN
         data: {
           ...data,
           columns: [
-            { ...data.columns[0], type: "UUID" },
-            data.columns[1],
-            data.columns[2],
+            { ...data.columns[0]!, type: "UUID" },
+            data.columns[1]!,
+            data.columns[2]!,
           ],
         },
       });
