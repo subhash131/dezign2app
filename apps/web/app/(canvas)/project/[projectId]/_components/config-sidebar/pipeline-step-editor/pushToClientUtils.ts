@@ -98,6 +98,8 @@ export function upsertDerivedConnection(
     langGraphStreamingFields: isLangGraph ? step.langGraphStreamingFields : undefined,
     langGraphStreamIncludeReasoning: isLangGraph ? step.langGraphStreamIncludeReasoning : undefined,
     langGraphTargetNodeId: isLangGraph ? step.langGraphTargetNodeId : undefined,
+    pathParamBindings: step.clientDeliveryPathParamBindings,
+    queryParamBindings: step.clientDeliveryQueryParamBindings,
   };
 
   const without = existing.filter(
@@ -148,7 +150,9 @@ function isRealtimeConnectionEqual(a?: RealtimeConnection, b?: RealtimeConnectio
     JSON.stringify(a.langGraphStreamModes) === JSON.stringify(b.langGraphStreamModes) &&
     JSON.stringify(a.langGraphStreamingFields) === JSON.stringify(b.langGraphStreamingFields) &&
     a.langGraphStreamIncludeReasoning === b.langGraphStreamIncludeReasoning &&
-    a.langGraphTargetNodeId === b.langGraphTargetNodeId
+    a.langGraphTargetNodeId === b.langGraphTargetNodeId &&
+    JSON.stringify(a.pathParamBindings) === JSON.stringify(b.pathParamBindings) &&
+    JSON.stringify(a.queryParamBindings) === JSON.stringify(b.queryParamBindings)
   );
 }
 

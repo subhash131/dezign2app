@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useMemo } from "react";
-import { Compass, Plus } from "lucide-react";
+import React, { useMemo, useState, useCallback } from "react";
+import { Compass, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
 import {
   BackendNode,
   BackendEdge,
@@ -13,6 +13,7 @@ import {
   StepSchemaField,
   StepBinding,
 } from "@workspace/canvas/types";
+import { parseRouteWithQueryParams } from "@workspace/canvas";
 import {
   CLIENT_DELIVERY_PROTOCOL_OPTIONS,
   PROTOCOL_OPTIONS,
@@ -28,9 +29,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
+import { Button } from "@workspace/ui/components/button";
+import { Label } from "@workspace/ui/components/label";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { PipelineStepDraft, AvailableSource, ExpectedArg } from "./types";
 import { ensurePageRefConnection } from "./utils";
+import { BindingSourceEditor } from "./BindingSourceEditor";
+import {
+  stepSourceToAccessor,
+  accessorToStepSource,
+  getArgBinding,
+} from "./langgraph-invoke/utils";
 import { LocalInput } from "../../backend-nodes/graph-nodes/common/LocalInput";
 import { parseSchemaJson } from "@/lib/compiler/utils";
 import {
@@ -80,9 +89,11 @@ export const PushToClientStepSection: React.FC<PushToClientStepSectionProps> = (
   serviceNodeId,
   endpoint,
   consumedEvent,
+  availableSources = [],
   onChange,
   children,
 }) => {
+  const [newQueryKey, setNewQueryKey] = useState("");
   const fallbackNodes = useBackendCanvasStore((s) => (allNodes.length ? null : s.nodes));
   const fallbackEdges = useBackendCanvasStore((s) => (allEdges.length ? null : s.edges));
   const nodes = allNodes.length ? allNodes : (fallbackNodes || []);
@@ -138,7 +149,9 @@ export const PushToClientStepSection: React.FC<PushToClientStepSectionProps> = (
       patch.clientDeliveryMediaMode !== undefined ||
       patch.clientDeliveryEventName !== undefined ||
       patch.clientDeliveryRoom !== undefined ||
-      patch.clientDeliveryIceServer !== undefined;
+      patch.clientDeliveryIceServer !== undefined ||
+      patch.clientDeliveryPathParamBindings !== undefined ||
+      patch.clientDeliveryQueryParamBindings !== undefined;
 
     const tgtId = patch.clientDeliveryTargetPageId ?? step.clientDeliveryTargetPageId;
     if (tgtId && (targetPageChanged || protocolChanged || capabilitiesChanged)) {
@@ -295,6 +308,253 @@ export const PushToClientStepSection: React.FC<PushToClientStepSectionProps> = (
     update({ inputBindings: bindings });
   };
 
+  const selectedTargetPage = useMemo(() => {
+    return allWebPageNodes.find((p) => p.id === targetPageId);
+  }, [allWebPageNodes, targetPageId]);
+
+  const targetRouteInfo = useMemo(() => {
+    if (!selectedTargetPage) {
+      return null;
+    }
+
+    const rawRoute = selectedTargetPage.data?.label || selectedTargetPage.data?.path || "/";
+    const parsed = parseRouteWithQueryParams(rawRoute);
+    const seenPath = new Set<string>();
+    const pathParams: Array<{ name: string; type?: string }> = [];
+
+    // 1. From node's declared pathParams
+    if (Array.isArray(selectedTargetPage.data?.pathParams)) {
+      selectedTargetPage.data.pathParams.forEach((p: { name?: string; type?: string }) => {
+        if (p.name && !seenPath.has(p.name)) {
+          seenPath.add(p.name);
+          pathParams.push({ name: p.name, type: p.type || "string" });
+        }
+      });
+    }
+
+    // 2. From route string (e.g. /chat/[id])
+    parsed.extractedPathParams.forEach((ep) => {
+      if (ep.name && !seenPath.has(ep.name)) {
+        seenPath.add(ep.name);
+        pathParams.push({ name: ep.name, type: ep.type || "string" });
+      }
+    });
+
+    const seenQuery = new Set<string>();
+    const queryParams: Array<{ name: string; type?: string; defaultValue?: string }> = [];
+
+    // 1. From node's declared queryParams
+    if (Array.isArray(selectedTargetPage.data?.queryParams)) {
+      selectedTargetPage.data.queryParams.forEach((q: { name?: string; type?: string; defaultValue?: string }) => {
+        if (q.name && !seenQuery.has(q.name)) {
+          seenQuery.add(q.name);
+          queryParams.push({ name: q.name, type: q.type || "string", defaultValue: q.defaultValue });
+        }
+      });
+    }
+
+    // 2. From query in route string
+    parsed.extractedQueryParams.forEach((eq) => {
+      if (eq.name && !seenQuery.has(eq.name)) {
+        seenQuery.add(eq.name);
+        queryParams.push({ name: eq.name, type: eq.type || "string", defaultValue: eq.defaultValue });
+      }
+    });
+
+    // 3. Include any query params already mapped in step.clientDeliveryQueryParamBindings
+    if (step.clientDeliveryQueryParamBindings) {
+      Object.keys(step.clientDeliveryQueryParamBindings).forEach((k) => {
+        if (!seenQuery.has(k)) {
+          seenQuery.add(k);
+          queryParams.push({ name: k, type: "string" });
+        }
+      });
+    }
+
+    return {
+      isDynamic: pathParams.length > 0,
+      pathParams,
+      queryParams,
+      displayRoute: parsed.route || rawRoute,
+    };
+  }, [selectedTargetPage, step.clientDeliveryQueryParamBindings]);
+
+  const getFallbackPathParamAccessor = useCallback(
+    (paramName: string): string => {
+      const epPathParams = endpoint?.pathParams || [];
+      const match = epPathParams.find((p) => p.name?.toLowerCase() === paramName.toLowerCase());
+      if (match) return `params.${match.name}`;
+
+      const paramsSrc = availableSources?.find((s) => s.kind === "req_params");
+      if (paramsSrc) {
+        const matchingPath = paramsSrc.paths.find((p) => p.path?.toLowerCase() === paramName.toLowerCase());
+        if (matchingPath) return `params.${matchingPath.path}`;
+        if (paramsSrc.paths.length > 0 && paramsSrc.paths[0]?.path) return `params.${paramsSrc.paths[0].path}`;
+      }
+
+      return `params.${paramName}`;
+    },
+    [endpoint?.pathParams, availableSources],
+  );
+
+  const getFallbackQueryParamAccessor = useCallback(
+    (key: string, defaultValue?: string): string => {
+      const epQueryParams = endpoint?.queryParams || [];
+      const match = epQueryParams.find((q) => q.name?.toLowerCase() === key.toLowerCase());
+      if (match) return `query.${match.name}`;
+
+      const querySrc = availableSources?.find((s) => s.kind === "req_query");
+      if (querySrc) {
+        const matchingPath = querySrc.paths.find((p) => p.path?.toLowerCase() === key.toLowerCase());
+        if (matchingPath) return `query.${matchingPath.path}`;
+      }
+
+      if (defaultValue !== undefined && defaultValue !== "") {
+        return defaultValue;
+      }
+
+      return `query.${key}`;
+    },
+    [endpoint?.queryParams, availableSources],
+  );
+
+  const getPathParamBinding = useCallback(
+    (paramName: string): StepBinding => {
+      const explicitAccessor = step.clientDeliveryPathParamBindings?.[paramName];
+      const fallback = getFallbackPathParamAccessor(paramName);
+      return getArgBinding(
+        step,
+        availableSources || [],
+        `pathParam:${paramName}`,
+        explicitAccessor,
+        fallback,
+      );
+    },
+    [step, availableSources, getFallbackPathParamAccessor],
+  );
+
+  const hasCustomPathParamBinding = useCallback(
+    (paramName: string): boolean => {
+      return Boolean(
+        step.clientDeliveryPathParamBindings?.[paramName] ||
+          (step.inputBindings || []).some(
+            (b) => b.argName === `pathParam:${paramName}` || b.argName === paramName,
+          ),
+      );
+    },
+    [step.clientDeliveryPathParamBindings, step.inputBindings],
+  );
+
+  const getQueryParamBinding = useCallback(
+    (key: string, defaultValue?: string): StepBinding => {
+      const explicitAccessor = step.clientDeliveryQueryParamBindings?.[key];
+      const fallback = getFallbackQueryParamAccessor(key, defaultValue);
+      return getArgBinding(
+        step,
+        availableSources || [],
+        `queryParam:${key}`,
+        explicitAccessor,
+        fallback,
+      );
+    },
+    [step, availableSources, getFallbackQueryParamAccessor],
+  );
+
+  const hasCustomQueryParamBinding = useCallback(
+    (key: string): boolean => {
+      return Boolean(
+        step.clientDeliveryQueryParamBindings?.[key] ||
+          (step.inputBindings || []).some(
+            (b) => b.argName === `queryParam:${key}` || b.argName === key,
+          ),
+      );
+    },
+    [step.clientDeliveryQueryParamBindings, step.inputBindings],
+  );
+
+  const handlePathParamBindingChange = useCallback(
+    (paramName: string, updated: StepBinding) => {
+      const currentBindings = step.inputBindings || [];
+      const argKey = `pathParam:${paramName}`;
+      const otherBindings = currentBindings.filter((b) => b.argName !== argKey && b.argName !== paramName);
+      const nextBindings: StepBinding[] = [...otherBindings, { argName: argKey, source: updated.source }];
+      const accessor = stepSourceToAccessor(updated.source, availableSources || []);
+      const nextMap = { ...(step.clientDeliveryPathParamBindings || {}), [paramName]: accessor };
+      update({
+        inputBindings: nextBindings,
+        clientDeliveryPathParamBindings: nextMap,
+      });
+    },
+    [step, availableSources, update],
+  );
+
+  const handleResetPathParamBinding = useCallback(
+    (paramName: string) => {
+      const currentBindings = step.inputBindings || [];
+      const argKey = `pathParam:${paramName}`;
+      const nextBindings = currentBindings.filter((b) => b.argName !== argKey && b.argName !== paramName);
+      const nextMap = { ...(step.clientDeliveryPathParamBindings || {}) };
+      delete nextMap[paramName];
+      update({
+        inputBindings: nextBindings,
+        clientDeliveryPathParamBindings: Object.keys(nextMap).length > 0 ? nextMap : undefined,
+      });
+    },
+    [step, update],
+  );
+
+  const handleQueryParamBindingChange = useCallback(
+    (key: string, updated: StepBinding) => {
+      const currentBindings = step.inputBindings || [];
+      const argKey = `queryParam:${key}`;
+      const otherBindings = currentBindings.filter((b) => b.argName !== argKey && b.argName !== key);
+      const nextBindings: StepBinding[] = [...otherBindings, { argName: argKey, source: updated.source }];
+      const accessor = stepSourceToAccessor(updated.source, availableSources || []);
+      const nextMap = { ...(step.clientDeliveryQueryParamBindings || {}), [key]: accessor };
+      update({
+        inputBindings: nextBindings,
+        clientDeliveryQueryParamBindings: nextMap,
+      });
+    },
+    [step, availableSources, update],
+  );
+
+  const handleResetQueryParamBinding = useCallback(
+    (key: string) => {
+      const currentBindings = step.inputBindings || [];
+      const argKey = `queryParam:${key}`;
+      const nextBindings = currentBindings.filter((b) => b.argName !== argKey && b.argName !== key);
+      const nextMap = { ...(step.clientDeliveryQueryParamBindings || {}) };
+      delete nextMap[key];
+      update({
+        inputBindings: nextBindings,
+        clientDeliveryQueryParamBindings: Object.keys(nextMap).length > 0 ? nextMap : undefined,
+      });
+    },
+    [step, update],
+  );
+
+  const handleAddCustomQueryParam = useCallback(
+    (key: string) => {
+      const trimmed = key.trim();
+      if (!trimmed) return;
+      const currentBindings = step.inputBindings || [];
+      const argKey = `queryParam:${trimmed}`;
+      const defaultAccessor = getFallbackQueryParamAccessor(trimmed);
+      const stepSrc = accessorToStepSource(defaultAccessor, availableSources || []);
+      const nextBindings: StepBinding[] = [
+        ...currentBindings.filter((b) => b.argName !== argKey && b.argName !== trimmed),
+        { argName: argKey, source: stepSrc },
+      ];
+      const nextMap = { ...(step.clientDeliveryQueryParamBindings || {}), [trimmed]: defaultAccessor };
+      update({
+        inputBindings: nextBindings,
+        clientDeliveryQueryParamBindings: nextMap,
+      });
+    },
+    [step, availableSources, getFallbackQueryParamAccessor, update],
+  );
+
   return (
     <div className="flex flex-col gap-3 pt-1">
       {/* Target WebApp Selector (Optional filter) */}
@@ -392,6 +652,150 @@ export const PushToClientStepSection: React.FC<PushToClientStepSectionProps> = (
             )}
           </SelectContent>
         </Select>
+
+        {/* Dynamic Route & Query Parameter Mapping */}
+        {Boolean(
+          targetRouteInfo &&
+            (targetRouteInfo.isDynamic ||
+              (targetRouteInfo.queryParams && targetRouteInfo.queryParams.length > 0)),
+        ) && (
+          <div className="flex flex-col gap-2 p-2.5 rounded-lg bg-background/50 border border-border/40 mt-1">
+            <div className="flex items-center justify-between">
+              <Label className="text-[10px] font-semibold text-muted-foreground flex items-center gap-1.5">
+                <SlidersHorizontal className="w-3 h-3 text-indigo-400" />
+                <span>Target Route &amp; Query Parameters</span>
+              </Label>
+              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
+                {targetRouteInfo!.displayRoute}
+              </span>
+            </div>
+
+            <p className="text-[9.5px] text-muted-foreground leading-tight">
+              Map dynamic route segments ({targetRouteInfo!.pathParams.map((p) => `:${p.name}`).join(", ") || "parameters"}) and query parameters for this client target from the endpoint request context.
+            </p>
+
+            <div className="grid grid-cols-[140px_auto_1fr_auto] gap-2 text-[9px] font-bold text-muted-foreground uppercase tracking-wider px-1">
+              <span>Target Key</span>
+              <span></span>
+              <span>Source &amp; Field</span>
+              <span className="w-6 text-right"></span>
+            </div>
+
+            {/* Path Parameters */}
+            {targetRouteInfo!.pathParams.map((p) => {
+              const binding = getPathParamBinding(p.name);
+              const hasCustom = hasCustomPathParamBinding(p.name);
+              return (
+                <div
+                  key={`path-param-${p.name}`}
+                  className="grid grid-cols-[140px_auto_1fr_auto] gap-2 items-center text-xs bg-background/60 p-1.5 rounded-lg border border-indigo-500/20"
+                >
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="font-mono font-bold text-indigo-400 text-[11px] truncate bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20">
+                      :{p.name}
+                    </span>
+                    <span className="text-[8.5px] text-purple-400 font-mono shrink-0">path</span>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground/50 px-0.5 select-none">←</span>
+                  <div className="min-w-0">
+                    <BindingSourceEditor
+                      binding={binding}
+                      availableSources={availableSources || []}
+                      serviceNodeId={serviceNodeId}
+                      onChange={(updated) => handlePathParamBindingChange(p.name, updated)}
+                    />
+                  </div>
+                  <div className="flex justify-end">
+                    {hasCustom ? (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleResetPathParamBinding(p.name)}
+                        className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                        title={`Reset :${p.name} to default`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    ) : (
+                      <div className="w-6" />
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Query Parameters */}
+            {targetRouteInfo!.queryParams.map((q) => {
+              const binding = getQueryParamBinding(q.name, q.defaultValue);
+              const hasCustom = hasCustomQueryParamBinding(q.name);
+              return (
+                <div
+                  key={`query-param-${q.name}`}
+                  className="grid grid-cols-[140px_auto_1fr_auto] gap-2 items-center text-xs bg-background/60 p-1.5 rounded-lg border border-sky-500/20"
+                >
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="font-mono font-bold text-sky-400 text-[11px] truncate bg-sky-500/10 px-1.5 py-0.5 rounded border border-sky-500/20">
+                      ?{q.name}
+                    </span>
+                    <span className="text-[8.5px] text-sky-400 font-mono shrink-0">query</span>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground/50 px-0.5 select-none">←</span>
+                  <div className="min-w-0">
+                    <BindingSourceEditor
+                      binding={binding}
+                      availableSources={availableSources || []}
+                      serviceNodeId={serviceNodeId}
+                      onChange={(updated) => handleQueryParamBindingChange(q.name, updated)}
+                    />
+                  </div>
+                  <div className="flex justify-end">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleResetQueryParamBinding(q.name)}
+                      className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                      title={`Reset ?${q.name} binding`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Add Custom Query Param */}
+            <div className="flex items-center gap-1.5 pt-1">
+              <LocalInput
+                value={newQueryKey}
+                onChange={(e) => setNewQueryKey(e.target.value)}
+                placeholder="Add query param (e.g. filter, tab)..."
+                className="h-6 text-[10px] bg-background/60 border-border/50"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && newQueryKey.trim()) {
+                    handleAddCustomQueryParam(newQueryKey);
+                    setNewQueryKey("");
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={!newQueryKey.trim()}
+                onClick={() => {
+                  if (newQueryKey.trim()) {
+                    handleAddCustomQueryParam(newQueryKey);
+                    setNewQueryKey("");
+                  }
+                }}
+                className="h-6 text-[10px] px-2 gap-1 text-muted-foreground hover:text-foreground shrink-0"
+              >
+                <Plus className="w-3 h-3" />
+                Add Param
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Protocol */}

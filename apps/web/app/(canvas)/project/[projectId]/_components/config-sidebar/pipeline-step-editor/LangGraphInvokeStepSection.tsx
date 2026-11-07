@@ -341,6 +341,17 @@ export const LangGraphInvokeStepSection: React.FC<
         onResetRedisKeyBinding={realtimeStreaming.handleResetRedisKeyBinding}
         trackTokenUsage={realtimeStreaming.trackTokenUsage}
         onToggleTrackTokenUsage={realtimeStreaming.handleToggleTrackTokenUsage}
+        targetRouteInfo={realtimeStreaming.targetRouteInfo}
+        getPathParamBinding={realtimeStreaming.getPathParamBinding}
+        hasCustomPathParamBinding={realtimeStreaming.hasCustomPathParamBinding}
+        onPathParamBindingChange={realtimeStreaming.handlePathParamBindingChange}
+        onResetPathParamBinding={realtimeStreaming.handleResetPathParamBinding}
+        getQueryParamBinding={realtimeStreaming.getQueryParamBinding}
+        hasCustomQueryParamBinding={realtimeStreaming.hasCustomQueryParamBinding}
+        onQueryParamBindingChange={realtimeStreaming.handleQueryParamBindingChange}
+        onResetQueryParamBinding={realtimeStreaming.handleResetQueryParamBinding}
+        onAddCustomQueryParam={realtimeStreaming.handleAddCustomQueryParam}
+        onRemoveQueryParam={realtimeStreaming.handleRemoveQueryParam}
       />
         </>
       )}

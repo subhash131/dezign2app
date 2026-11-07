@@ -856,23 +856,49 @@ export const WebPageNode = React.memo(({
   const cleanLabel = normalizedLabel.toLowerCase();
   const isLayout = Boolean(data.isLayout) || cleanLabel === "layout" || rawLabel.trim().toLowerCase() === "layout";
 
-  // Auto-heal legacy / mismatched data.path, data.pageSlug, and data.route to match data.label
+  // Auto-heal legacy / mismatched data.path, data.pageSlug, data.route, and dynamic path/query params to match data.label
   React.useEffect(() => {
     if (data.label && !isLayout && data.label.toLowerCase() !== "layout") {
       const canonicalPath = pageRouteToUrl(data.label);
       const canonicalSlug = pageRouteToFolderPath(data.label);
-      if (data.path && !arePageRoutesEqual(data.path, canonicalPath)) {
+      const pathNeedsUpdate = !data.path || !arePageRoutesEqual(data.path, canonicalPath);
+
+      // Auto-extract dynamic path params and query params from label if missing
+      const parsed = parseRouteWithQueryParams(data.label);
+      const existingPathParams = data.pathParams || [];
+      const mergedPathParams = [...existingPathParams];
+      let pathChanged = false;
+      parsed.extractedPathParams.forEach((ep) => {
+        if (!mergedPathParams.some((p) => p.name.toLowerCase() === ep.name.toLowerCase())) {
+          mergedPathParams.push(ep);
+          pathChanged = true;
+        }
+      });
+
+      const existingQueryParams = data.queryParams || [];
+      const mergedQueryParams = [...existingQueryParams];
+      let queryChanged = false;
+      parsed.extractedQueryParams.forEach((eq) => {
+        if (!mergedQueryParams.some((q) => q.name.toLowerCase() === eq.name.toLowerCase())) {
+          mergedQueryParams.push(eq);
+          queryChanged = true;
+        }
+      });
+
+      if (pathNeedsUpdate || pathChanged || queryChanged) {
         updateNode(id, {
           data: {
             ...data,
             path: canonicalPath,
             pageSlug: canonicalSlug,
             route: canonicalPath,
+            ...(pathChanged ? { pathParams: mergedPathParams } : {}),
+            ...(queryChanged ? { queryParams: mergedQueryParams } : {}),
           },
         });
       }
     }
-  }, [id, data.label, data.path, isLayout, updateNode]);
+  }, [id, data.label, data.path, data.pathParams, data.queryParams, isLayout, updateNode]);
   const isLandingPage =
     !isLayout && (data.isRoot === true || cleanLabel === "/");
 
@@ -1406,12 +1432,22 @@ export const WebPageNode = React.memo(({
 
           {/* Edit UI & Page settings button strip */}
           <div className="px-3 py-1.5 border-b bg-muted/30 flex items-center justify-between nodrag">
-            <span
-              className="text-[10px] text-muted-foreground font-mono truncate"
-              title={`Route: ${displayRoute}`}
-            >
-              {displayRoute}
-            </span>
+            <div className="flex items-center gap-1.5 min-w-0 flex-1 mr-2">
+              <span
+                className="text-[10px] text-muted-foreground font-mono truncate"
+                title={`Route: ${displayRoute}`}
+              >
+                {displayRoute}
+              </span>
+              {Boolean(data.pathParams?.length) && !isLayout && (
+                <span
+                  className="px-1 py-0.2 rounded text-[8px] font-mono font-bold bg-purple-500/15 text-purple-400 border border-purple-500/30 shrink-0"
+                  title={`Dynamic route parameters: ${data.pathParams!.map((p) => `:${p.name}`).join(", ")}`}
+                >
+                  DYNAMIC
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-1 shrink-0">
               {/* Page State Store shortcut */}
               <button
@@ -1481,13 +1517,39 @@ export const WebPageNode = React.memo(({
             Boolean(data.pathParams?.length) ||
             Boolean(data.requestBody?.rawJson || data.requestBody?.fields?.length)) && (
             <div className="px-3 py-1 bg-secondary/15 border-b flex flex-wrap items-center gap-1.5 nodrag text-[9px]">
+              {Boolean(data.pathParams?.length) && (
+                <span
+                  className="px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-600 dark:text-purple-400 font-mono font-medium border border-purple-500/20 cursor-pointer hover:bg-purple-500/20 transition-colors"
+                  title={`Path parameters: ${data.pathParams!.map((p) => `:${p.name}`).join(", ")}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveConfigItem({ type: "webPage", id, nodeId: id, initialTab: "parameters" });
+                  }}
+                >
+                  {data.pathParams!.length} {data.pathParams!.length === 1 ? "path param" : "path params"}
+                </span>
+              )}
               {Boolean(data.headers?.length) && (
-                <span className="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 font-mono font-medium border border-blue-500/20">
+                <span
+                  className="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 font-mono font-medium border border-blue-500/20 cursor-pointer hover:bg-blue-500/20 transition-colors"
+                  title={`Headers: ${data.headers!.map((h) => h.name).join(", ")}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveConfigItem({ type: "webPage", id, nodeId: id, initialTab: "parameters" });
+                  }}
+                >
                   {data.headers!.length} {data.headers!.length === 1 ? "header" : "headers"}
                 </span>
               )}
               {Boolean(data.queryParams?.length) && (
-                <span className="px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-mono font-medium border border-indigo-500/20">
+                <span
+                  className="px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-mono font-medium border border-indigo-500/20 cursor-pointer hover:bg-indigo-500/20 transition-colors"
+                  title={`Query parameters: ${data.queryParams!.map((q) => `?${q.name}`).join(", ")}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveConfigItem({ type: "webPage", id, nodeId: id, initialTab: "parameters" });
+                  }}
+                >
                   {data.queryParams!.length} {data.queryParams!.length === 1 ? "query param" : "query params"}
                 </span>
               )}

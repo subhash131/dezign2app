@@ -128,7 +128,7 @@ export const RealtimeSubscriptionMappingSection: React.FC<RealtimeSubscriptionMa
     return undefined;
   }, [derivedInfo?.sourceEndpointId, conn.sourceItemName, endpoints]);
 
-  // Collect potential path param names from route pattern, endpoint, or connection name
+  // Collect potential path param names from route pattern, endpoint, connection name, or page route
   const detectedPathParamNames = useMemo(() => {
     const set = new Set<string>();
     const routeCandidate =
@@ -144,8 +144,18 @@ export const RealtimeSubscriptionMappingSection: React.FC<RealtimeSubscriptionMa
         if (p.name) set.add(p.name);
       });
     }
+
+    // Include path parameters from the web page itself (e.g. /chat/[id])
+    if (Array.isArray(pageNode?.data?.pathParams)) {
+      pageNode.data.pathParams.forEach((p: { name?: string }) => {
+        if (p.name) set.add(p.name);
+      });
+    }
+    const pageRouteCandidate = pageNode?.data?.label || pageNode?.data?.path || "";
+    extractParamsFromRoute(pageRouteCandidate).forEach((p) => set.add(p));
+
     return Array.from(set);
-  }, [linkedEndpoint, conn.sourceItemName, conn.streamUrl, conn.eventName]);
+  }, [linkedEndpoint, conn.sourceItemName, conn.streamUrl, conn.eventName, pageNode]);
 
   // Collect route param suggestions from pageNode
   const routeParamSuggestions = useMemo((): ComboboxOption[] => {

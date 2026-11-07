@@ -180,6 +180,38 @@ describe("Convex canvasValidators exact schema", () => {
     }
   });
 
+  it("successfully parses push_to_client and langgraph_invoke steps with clientDeliveryPathParamBindings and clientDeliveryQueryParamBindings", async () => {
+    const { pipelineStepSchema } = await import("@workspace/canvas/schemas");
+
+    const pushStep = {
+      id: "push-step-1",
+      name: "pushToChat",
+      type: "push_to_client",
+      clientDeliveryProtocol: "SSE" as const,
+      clientDeliveryTargetPageId: "page-chat-1",
+      clientDeliveryPathParamBindings: {
+        id: "params.chatId",
+      },
+      clientDeliveryQueryParamBindings: {
+        tab: "query.tab",
+      },
+    };
+
+    const parsedSafe = safePipelineStepSchema.safeParse(pushStep);
+    expect(parsedSafe.success).toBe(true);
+    if (parsedSafe.success) {
+      expect((parsedSafe.data as any).clientDeliveryPathParamBindings).toEqual({ id: "params.chatId" });
+      expect((parsedSafe.data as any).clientDeliveryQueryParamBindings).toEqual({ tab: "query.tab" });
+    }
+
+    const parsedCanvas = pipelineStepSchema.safeParse(pushStep);
+    expect(parsedCanvas.success).toBe(true);
+    if (parsedCanvas.success) {
+      expect((parsedCanvas.data as any).clientDeliveryPathParamBindings).toEqual({ id: "params.chatId" });
+      expect((parsedCanvas.data as any).clientDeliveryQueryParamBindings).toEqual({ tab: "query.tab" });
+    }
+  });
+
   it("backendEndpointDataValidator, backendEventDataValidator, backendNodeDataValidator are valid Convex validators", () => {
     expect(backendEndpointDataValidator).toBeDefined();
     expect(backendEventDataValidator).toBeDefined();

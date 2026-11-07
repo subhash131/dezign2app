@@ -111,6 +111,10 @@ export interface RealtimeConnection {
   storeActionBindings?: StoreActionBinding[];
   /** Parameter and auth mappings to establish subscription */
   subscriptionBindings?: FrontendRequestFieldBinding[];
+  /** Dynamic route path parameter mappings (e.g. { id: "params.id" }) */
+  pathParamBindings?: Record<string, string>;
+  /** Dynamic route query parameter mappings (e.g. { tab: "query.tab" }) */
+  queryParamBindings?: Record<string, string>;
   /** Action flow steps to execute when realtime message arrives */
   actionSteps?: FrontendActionStepDraft[];
   /** Whether this connection is pushed by a LangGraph agent */

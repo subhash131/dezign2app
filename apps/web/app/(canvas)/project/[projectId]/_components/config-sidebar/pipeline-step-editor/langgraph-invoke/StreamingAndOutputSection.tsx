@@ -1,7 +1,7 @@
 "use client";
 
-import React from "react";
-import { Brain, Coins, Compass, Database, Flame, Key, Layers, Plus, Radio, Sparkles, Trash2 } from "lucide-react";
+import React, { useState } from "react";
+import { Brain, Coins, Compass, Database, Flame, Key, Layers, Plus, Radio, Sparkles, Trash2, SlidersHorizontal } from "lucide-react";
 import { BackendNode } from "@workspace/canvas/types";
 import { Button } from "@workspace/ui/components/button";
 import { Label } from "@workspace/ui/components/label";
@@ -80,6 +80,22 @@ export interface StreamingAndOutputSectionProps {
   onResetRedisKeyBinding: () => void;
   trackTokenUsage?: boolean;
   onToggleTrackTokenUsage?: (enabled: boolean) => void;
+  targetRouteInfo?: {
+    isDynamic: boolean;
+    pathParams: Array<{ name: string; type?: string }>;
+    queryParams: Array<{ name: string; type?: string; defaultValue?: string }>;
+    displayRoute: string;
+  };
+  getPathParamBinding?: (paramName: string) => StepBinding;
+  hasCustomPathParamBinding?: (paramName: string) => boolean;
+  onPathParamBindingChange?: (paramName: string, updated: StepBinding) => void;
+  onResetPathParamBinding?: (paramName: string) => void;
+  getQueryParamBinding?: (key: string, defaultValue?: string) => StepBinding;
+  hasCustomQueryParamBinding?: (key: string) => boolean;
+  onQueryParamBindingChange?: (key: string, updated: StepBinding) => void;
+  onResetQueryParamBinding?: (key: string) => void;
+  onAddCustomQueryParam?: (key: string) => void;
+  onRemoveQueryParam?: (key: string) => void;
 }
 
 export const StreamingAndOutputSection: React.FC<StreamingAndOutputSectionProps> = ({
@@ -136,7 +152,19 @@ export const StreamingAndOutputSection: React.FC<StreamingAndOutputSectionProps>
   onResetRedisKeyBinding,
   trackTokenUsage = false,
   onToggleTrackTokenUsage,
+  targetRouteInfo,
+  getPathParamBinding,
+  hasCustomPathParamBinding,
+  onPathParamBindingChange,
+  onResetPathParamBinding,
+  getQueryParamBinding,
+  hasCustomQueryParamBinding,
+  onQueryParamBindingChange,
+  onResetQueryParamBinding,
+  onAddCustomQueryParam,
+  onRemoveQueryParam,
 }) => {
+  const [newQueryKey, setNewQueryKey] = useState("");
   const effectiveStreamModes = streamModes && streamModes.length > 0 ? streamModes : ["messages"];
 
   return (
@@ -761,6 +789,156 @@ export const StreamingAndOutputSection: React.FC<StreamingAndOutputSectionProps>
                   <span className="text-muted-foreground ml-auto shrink-0 font-mono text-[9px]">
                     endpoint-out → page-ref-in
                   </span>
+                </div>
+              )}
+
+              {/* Dynamic Route & Query Parameter Mapping */}
+              {Boolean(
+                targetRouteInfo &&
+                  (targetRouteInfo.isDynamic ||
+                    (targetRouteInfo.queryParams && targetRouteInfo.queryParams.length > 0)),
+              ) && (
+                <div className="flex flex-col gap-2 pt-2 border-t border-border/30 mt-1">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-[10px] font-semibold text-muted-foreground flex items-center gap-1.5">
+                      <SlidersHorizontal className="w-3 h-3 text-indigo-400" />
+                      <span>Target Route &amp; Query Parameters</span>
+                    </Label>
+                    <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
+                      {targetRouteInfo!.displayRoute}
+                    </span>
+                  </div>
+
+                  <p className="text-[9.5px] text-muted-foreground leading-tight">
+                    Map dynamic route segments ({targetRouteInfo!.pathParams.map((p) => `:${p.name}`).join(", ") || "parameters"}) and query parameters for this client target from the endpoint request context.
+                  </p>
+
+                  <div className="grid grid-cols-[140px_auto_1fr_auto] gap-2 text-[9px] font-bold text-muted-foreground uppercase tracking-wider px-1">
+                    <span>Target Key</span>
+                    <span></span>
+                    <span>Source &amp; Field</span>
+                    <span className="w-6 text-right"></span>
+                  </div>
+
+                  {/* Path Parameters */}
+                  {targetRouteInfo!.pathParams.map((p) => {
+                    const binding = getPathParamBinding?.(p.name) || {
+                      argName: p.name,
+                      source: { kind: "req_params", field: p.name },
+                    };
+                    const hasCustom = hasCustomPathParamBinding?.(p.name);
+                    return (
+                      <div
+                        key={`path-param-${p.name}`}
+                        className="grid grid-cols-[140px_auto_1fr_auto] gap-2 items-center text-xs bg-background/60 p-1.5 rounded-lg border border-indigo-500/20"
+                      >
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="font-mono font-bold text-indigo-400 text-[11px] truncate bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20">
+                            :{p.name}
+                          </span>
+                          <span className="text-[8.5px] text-purple-400 font-mono shrink-0">path</span>
+                        </div>
+                        <span className="text-[10px] text-muted-foreground/50 px-0.5 select-none">←</span>
+                        <div className="min-w-0">
+                          <BindingSourceEditor
+                            binding={binding}
+                            availableSources={availableSources}
+                            serviceNodeId={serviceNodeId}
+                            onChange={(updated) => onPathParamBindingChange?.(p.name, updated)}
+                          />
+                        </div>
+                        <div className="flex justify-end">
+                          {hasCustom ? (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => onResetPathParamBinding?.(p.name)}
+                              className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                              title={`Reset :${p.name} to default`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          ) : (
+                            <div className="w-6" />
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* Query Parameters */}
+                  {targetRouteInfo!.queryParams.map((q) => {
+                    const binding = getQueryParamBinding?.(q.name, q.defaultValue) || {
+                      argName: q.name,
+                      source: { kind: "req_query", field: q.name },
+                    };
+                    const hasCustom = hasCustomQueryParamBinding?.(q.name);
+                    return (
+                      <div
+                        key={`query-param-${q.name}`}
+                        className="grid grid-cols-[140px_auto_1fr_auto] gap-2 items-center text-xs bg-background/60 p-1.5 rounded-lg border border-sky-500/20"
+                      >
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="font-mono font-bold text-sky-400 text-[11px] truncate bg-sky-500/10 px-1.5 py-0.5 rounded border border-sky-500/20">
+                            ?{q.name}
+                          </span>
+                          <span className="text-[8.5px] text-sky-400 font-mono shrink-0">query</span>
+                        </div>
+                        <span className="text-[10px] text-muted-foreground/50 px-0.5 select-none">←</span>
+                        <div className="min-w-0">
+                          <BindingSourceEditor
+                            binding={binding}
+                            availableSources={availableSources}
+                            serviceNodeId={serviceNodeId}
+                            onChange={(updated) => onQueryParamBindingChange?.(q.name, updated)}
+                          />
+                        </div>
+                        <div className="flex justify-end">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => onResetQueryParamBinding?.(q.name)}
+                            className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                            title={`Reset ?${q.name} binding`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* Add Custom Query Param */}
+                  <div className="flex items-center gap-1.5 pt-1">
+                    <LocalInput
+                      value={newQueryKey}
+                      onChange={(e) => setNewQueryKey(e.target.value)}
+                      placeholder="Add query param (e.g. filter, tab)..."
+                      className="h-6 text-[10px] bg-background/60 border-border/50"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && newQueryKey.trim()) {
+                          onAddCustomQueryParam?.(newQueryKey);
+                          setNewQueryKey("");
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={!newQueryKey.trim()}
+                      onClick={() => {
+                        if (newQueryKey.trim()) {
+                          onAddCustomQueryParam?.(newQueryKey);
+                          setNewQueryKey("");
+                        }
+                      }}
+                      className="h-6 text-[10px] px-2 shrink-0 border-border/60"
+                    >
+                      <Plus className="w-3 h-3 mr-1" />
+                      Add Param
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>
