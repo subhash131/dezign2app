@@ -122,13 +122,10 @@ export function ProjectCanvasLayout({
         return;
       }
 
-      // Only prompt when switching to an unconfigured project (and not in LangGraph Studio)
-      if (isSwitch && !isLangGraph) {
-        hasCheckedSwitchRef.current = projectId;
+      // If there is NO folder path at all anywhere, show the popup (unless in LangGraph Studio)
+      hasCheckedSwitchRef.current = projectId;
+      if (!isLangGraph) {
         setProjectFolderModalOpen(true);
-      } else if (!isSwitch) {
-        // Cold start or same-project reload: do not force open a blocking modal
-        hasCheckedSwitchRef.current = projectId;
       }
     } catch (e) {
       console.warn("[ProjectCanvasLayout] Switch detection error:", e);
