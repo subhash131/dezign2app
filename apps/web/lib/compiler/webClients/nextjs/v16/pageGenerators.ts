@@ -96,6 +96,9 @@ export function generatePageCode(
   if (mediaCaps.hasMediaStream) {
     hooksList.push("useRef");
   }
+  if (!hooksList.includes("Suspense")) {
+    hooksList.push("Suspense");
+  }
 
   const reactImport = hooksList.length > 0
     ? `import React, { ${hooksList.join(", ")} } from "react";`
@@ -224,7 +227,7 @@ ${routeParamsHookJsx}${pageLoadStateJsx}${mediaStateJsx}${triggerLogsStateJsx}${
 ${sidebarJsx}
       <main className="flex-1 min-w-0 p-6 md:p-10 space-y-8">
         <div className="max-w-5xl space-y-8">
-${pageLoadSectionJsx}${mediaSectionJsx}${contentSectionsJsx ? `          {/* Page Content Sections */}\n${contentSectionsJsx}\n` : ""}${triggerLogsSectionJsx}        </div>
+${pageLoadSectionJsx}${mediaSectionJsx}${contentSectionsJsx ? `          {/* Page Content Sections */}\n          <Suspense fallback={null}>\n${contentSectionsJsx}\n          </Suspense>\n` : ""}${triggerLogsSectionJsx}        </div>
       </main>
     </div>
   );
@@ -240,7 +243,7 @@ ${dynamicNavigationImport}${uiImports.join("\n")}${uiImports.length > 0 ? "\n" :
 ${routeParamsHookJsx}${pageLoadStateJsx}${mediaStateJsx}${triggerLogsStateJsx}${pageLoadEffectJsx}${sseEffectsJsx}${wsEffectsJsx}${webrtcEffectsJsx}${triggerHandlerJsx}  return (
     <main className="min-h-screen bg-background text-foreground p-6 md:p-10 font-sans">
       <div className="max-w-5xl mx-auto space-y-8">
-${pageLoadSectionJsx}${mediaSectionJsx}${sectionsJsx ? `        {/* Page Sections */}\n${sectionsJsx}\n` : ""}${triggerLogsSectionJsx}      </div>
+${pageLoadSectionJsx}${mediaSectionJsx}${sectionsJsx ? `        {/* Page Sections */}\n        <Suspense fallback={null}>\n${sectionsJsx}\n        </Suspense>\n` : ""}${triggerLogsSectionJsx}      </div>
     </main>
   );
 }
