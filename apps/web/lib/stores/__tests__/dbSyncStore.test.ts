@@ -303,5 +303,149 @@ describe("dbSyncStore", () => {
       // Only ent-1 attached to db-1 should have been checked
       expect(databaseService.checkDbTableSync).toHaveBeenCalledTimes(1);
     });
+
+    it("should cancel remaining requests when the first request fails", async () => {
+      const dbNode: BackendNode = {
+        id: "db-1",
+        fractionalIndex: "a0",
+        type: "database",
+        position: { x: 0, y: 0 },
+        data: {
+          label: "Dev SQLite",
+          dbEngine: "sqlite",
+          dbFilePath: "dev.db",
+        },
+      };
+      const entity1: BackendNode = {
+        id: "ent-1",
+        fractionalIndex: "a0",
+        type: "entity",
+        position: { x: 0, y: 0 },
+        data: {
+          label: "User",
+          databaseId: "db-1",
+          columns: [{ name: "id", type: "TEXT" }],
+        },
+      };
+      const entity2: BackendNode = {
+        id: "ent-2",
+        fractionalIndex: "a1",
+        type: "entity",
+        position: { x: 0, y: 0 },
+        data: {
+          label: "Order",
+          databaseId: "db-1",
+          columns: [{ name: "id", type: "TEXT" }],
+        },
+      };
+      const entity3: BackendNode = {
+        id: "ent-3",
+        fractionalIndex: "a2",
+        type: "entity",
+        position: { x: 0, y: 0 },
+        data: {
+          label: "Product",
+          databaseId: "db-1",
+          columns: [{ name: "id", type: "TEXT" }],
+        },
+      };
+
+      useBackendCanvasStore.setState({ nodes: [dbNode, entity1, entity2, entity3] });
+
+      // First table fails (e.g. server unreachable or error)
+      vi.mocked(databaseService.checkDbTableSync).mockResolvedValueOnce({
+        success: false,
+        serverReachable: false,
+        tableExists: false,
+        inSync: false,
+        missingColumns: [],
+        extraColumns: [],
+        existingColumns: [],
+        missingIndexes: [],
+        extraIndexes: [],
+        existingIndexes: [],
+        missingForeignKeys: [],
+        extraForeignKeys: [],
+        error: "Connection refused",
+      });
+
+      const summary = await useDbSyncStore.getState().validateDatabase("db-1");
+
+      // Only the first table should have been checked; ent-2 and ent-3 must be cancelled / never called
+      expect(databaseService.checkDbTableSync).toHaveBeenCalledTimes(1);
+      expect(summary.total).toBe(3);
+      expect(summary.errors).toBe(1);
+      expect(summary.inSync).toBe(0);
+      expect(summary.cancelled).toBe(true);
+
+      // Remaining entities should not be in checking state
+      const state = useDbSyncStore.getState();
+      expect(state.entitySyncStatus["ent-2"]?.isChecking).toBeFalsy();
+      expect(state.entitySyncStatus["ent-3"]?.isChecking).toBeFalsy();
+      expect(state.validatingDatabases["db-1"]).toBeUndefined();
+    });
+
+    it("should allow manual cancellation via cancelDatabaseValidation", async () => {
+      const dbNode: BackendNode = {
+        id: "db-1",
+        fractionalIndex: "a0",
+        type: "database",
+        position: { x: 0, y: 0 },
+        data: {
+          label: "Dev SQLite",
+          dbEngine: "sqlite",
+          dbFilePath: "dev.db",
+        },
+      };
+      const entity1: BackendNode = {
+        id: "ent-1",
+        fractionalIndex: "a0",
+        type: "entity",
+        position: { x: 0, y: 0 },
+        data: {
+          label: "User",
+          databaseId: "db-1",
+          columns: [{ name: "id", type: "TEXT" }],
+        },
+      };
+      const entity2: BackendNode = {
+        id: "ent-2",
+        fractionalIndex: "a1",
+        type: "entity",
+        position: { x: 0, y: 0 },
+        data: {
+          label: "Order",
+          databaseId: "db-1",
+          columns: [{ name: "id", type: "TEXT" }],
+        },
+      };
+
+      useBackendCanvasStore.setState({ nodes: [dbNode, entity1, entity2] });
+
+      vi.mocked(databaseService.checkDbTableSync).mockImplementation(async () => {
+        // Cancel while first request is in-flight
+        useDbSyncStore.getState().cancelDatabaseValidation("db-1");
+        return {
+          success: true,
+          serverReachable: true,
+          tableExists: true,
+          inSync: true,
+          missingColumns: [],
+          extraColumns: [],
+          existingColumns: [],
+          missingIndexes: [],
+          extraIndexes: [],
+          existingIndexes: [],
+          missingForeignKeys: [],
+          extraForeignKeys: [],
+        };
+      });
+
+      const summary = await useDbSyncStore.getState().validateDatabase("db-1");
+      expect(summary.cancelled).toBe(true);
+      // The second table should not have been called
+      expect(databaseService.checkDbTableSync).toHaveBeenCalledTimes(1);
+      expect(useDbSyncStore.getState().validatingDatabases["db-1"]).toBeUndefined();
+    });
   });
 });

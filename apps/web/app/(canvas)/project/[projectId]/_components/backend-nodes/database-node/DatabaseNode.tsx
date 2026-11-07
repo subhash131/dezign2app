@@ -40,6 +40,7 @@ export const DatabaseNode = React.memo(({ id, data, selected }: NodeProps<Backen
   );
   const allNodes = useBackendCanvasStore((s) => s.nodes);
   const validateDatabase = useDbSyncStore((s) => s.validateDatabase);
+  const cancelDatabaseValidation = useDbSyncStore((s) => s.cancelDatabaseValidation);
   const isValidatingThisDb = useDbSyncStore(
     (s) => Boolean(s.validatingDatabases[id] || s.isValidatingAll),
   );
@@ -247,25 +248,36 @@ export const DatabaseNode = React.memo(({ id, data, selected }: NodeProps<Backen
           <Button
             variant="ghost"
             size="sm"
-            disabled={isValidatingThisDb || attachedTables.length === 0}
+            disabled={attachedTables.length === 0}
             onClick={(e) => {
               e.stopPropagation();
-              validateDatabase(id);
+              if (isValidatingThisDb) {
+                cancelDatabaseValidation(id);
+              } else {
+                validateDatabase(id);
+              }
             }}
-            className="h-7 px-2.5 text-xs text-foreground hover:bg-secondary/80 border border-border/50 hover:border-emerald-500/40 rounded-lg gap-1.5 shadow-xs transition-colors"
+            className={cn(
+              "h-7 px-2.5 text-xs text-foreground hover:bg-secondary/80 border border-border/50 hover:border-emerald-500/40 rounded-lg gap-1.5 shadow-xs transition-colors",
+              isValidatingThisDb && "border-amber-500/40 text-amber-500 hover:text-destructive hover:border-destructive/40",
+            )}
             title={
               attachedTables.length === 0
                 ? "No tables connected to this database"
-                : "Validate schema of all tables attached to this database against live DB"
+                : isValidatingThisDb
+                  ? "Validating database... Click to cancel"
+                  : "Validate schema of all tables attached to this database against live DB"
             }
           >
             <RefreshCw
               className={cn(
-                "w-3.5 h-3.5 text-emerald-500",
-                isValidatingThisDb && "animate-spin",
+                "w-3.5 h-3.5",
+                isValidatingThisDb
+                  ? "animate-spin text-amber-500"
+                  : "text-emerald-500",
               )}
             />
-            <span>{isValidatingThisDb ? "Validating DB..." : "Validate DB"}</span>
+            <span>{isValidatingThisDb ? "Cancel" : "Validate DB"}</span>
           </Button>
         </div>
       </div>

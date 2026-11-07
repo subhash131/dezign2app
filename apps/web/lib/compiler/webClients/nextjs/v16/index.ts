@@ -7,7 +7,12 @@ import {
 } from "@workspace/canvas/types";
 import { generateWebClientE2ETests } from "../../../generators/testGenerator";
 
-import { LinkedEndpointInfo, LinkedPageRefInfo } from "./types";
+import {
+  LinkedEndpointInfo,
+  LinkedPageRefInfo,
+  LinkedRealtimeConnectionInfo,
+  PageInfo,
+} from "./types";
 import { getServicePort, resolveLinkedEndpoint, resolvePageRefLink } from "./endpointResolver";
 import { generateProjectConfigFiles } from "./configTemplates";
 import { generateEnvFilesForNode } from "@/lib/compiler/generators/generateEnvFile";
@@ -34,7 +39,12 @@ import { generateNextjsRoutes } from "../../../services/nextjs/v16/routeGenerato
 import { GlobalStoreDefinition, NodeDependencyItem } from "@workspace/canvas/types";
 import { resolveStoreActionBindings } from "./storeActionResolver";
 
-export type { LinkedEndpointInfo, LinkedPageRefInfo };
+export type {
+  LinkedEndpointInfo,
+  LinkedPageRefInfo,
+  LinkedRealtimeConnectionInfo,
+  PageInfo,
+};
 export {
   getServicePort,
   resolveLinkedEndpoint,
