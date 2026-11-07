@@ -398,4 +398,263 @@ describe("backendCanvasStore - Transformer state cleanup & synchronization", () 
     expect(action?.actionSteps?.[0]?.transformerNodeId).toBe("trans-chat-id");
     expect(action?.actionSteps?.[0]?.transformerRefNodeId).toBe(refNode.id);
   });
+
+  it("removes transform step from WebPage action and deletes connected edges when transformer_ref node is deleted", () => {
+    const store = useBackendCanvasStore.getState();
+
+    const webPageNode: BackendNode = {
+      id: "page-chat",
+      type: "webPage",
+      position: { x: 800, y: 100 },
+      data: {
+        label: "/chat/[id]",
+        sections: [
+          {
+            id: "sec-main",
+            name: "Main",
+            renderMode: "client",
+            actions: [
+              {
+                id: "act-send",
+                name: "sendMessage",
+                event: "click",
+                actionSteps: [
+                  {
+                    id: "step-trans-1",
+                    order: 1,
+                    type: "transform",
+                    transformerNodeId: "trans-master-1",
+                    transformerRefNodeId: "trans-ref-1",
+                    name: "formatMessage",
+                  },
+                ],
+              },
+            ],
+            stateObjects: [],
+          },
+        ],
+      },
+      fractionalIndex: "a0",
+    };
+
+    const transRefNode: BackendNode = {
+      id: "trans-ref-1",
+      type: "transformer_ref",
+      position: { x: 500, y: 100 },
+      data: {
+        label: "formatMessage (Ref)",
+        transformerRef: "trans-master-1",
+        targetWebPageId: "page-chat",
+        targetActionIds: ["act-send"],
+      },
+      fractionalIndex: "a1",
+    };
+
+    const refEdge: BackendEdge = {
+      id: "edge-ref-link",
+      source: "trans-master-1",
+      target: "trans-ref-1",
+      sourceHandle: "transformer-out",
+      targetHandle: "transformer-in",
+      type: "transformer-reference",
+      fractionalIndex: "e0",
+    };
+
+    const connEdge: BackendEdge = {
+      id: "edge-conn-1",
+      source: "trans-ref-1",
+      target: "page-chat",
+      sourceHandle: "transformer-out",
+      targetHandle: "event-in-act-send",
+      type: "connection",
+      fractionalIndex: "e1",
+    };
+
+    store.setNodesAndEdges([webPageNode, transRefNode], [refEdge, connEdge], [], [], [], "proj-1");
+
+    // Delete the transformer_ref node
+    store.deleteNode("trans-ref-1");
+
+    const state = useBackendCanvasStore.getState();
+
+    // 1. transformer_ref node is deleted
+    expect(state.nodes.find((n) => n.id === "trans-ref-1")).toBeUndefined();
+
+    // 2. Edges are removed and added to pendingEdgeRemovals
+    expect(state.edges).toHaveLength(0);
+    expect(state.pendingEdgeRemovals).toContain("edge-ref-link");
+    expect(state.pendingEdgeRemovals).toContain("edge-conn-1");
+
+    // 3. transform step is removed from WebPage action
+    const updatedPage = state.nodes.find((n) => n.id === "page-chat");
+    const action = updatedPage?.data?.sections?.[0]?.actions?.[0];
+    expect(action?.actionSteps).toEqual([]);
+  });
+
+  it("removes transform step and cleans up orphaned transformer_ref node when connection edge is deleted", () => {
+    const store = useBackendCanvasStore.getState();
+
+    const webPageNode: BackendNode = {
+      id: "page-chat",
+      type: "webPage",
+      position: { x: 800, y: 100 },
+      data: {
+        label: "/chat/[id]",
+        sections: [
+          {
+            id: "sec-main",
+            name: "Main",
+            renderMode: "client",
+            actions: [
+              {
+                id: "act-send",
+                name: "sendMessage",
+                event: "click",
+                actionSteps: [
+                  {
+                    id: "step-trans-1",
+                    order: 1,
+                    type: "transform",
+                    transformerNodeId: "trans-master-1",
+                    transformerRefNodeId: "trans-ref-1",
+                    edgeId: "edge-conn-1",
+                    name: "formatMessage",
+                  },
+                ],
+              },
+            ],
+            stateObjects: [],
+          },
+        ],
+      },
+      fractionalIndex: "a0",
+    };
+
+    const transRefNode: BackendNode = {
+      id: "trans-ref-1",
+      type: "transformer_ref",
+      position: { x: 500, y: 100 },
+      data: {
+        label: "formatMessage (Ref)",
+        transformerRef: "trans-master-1",
+        targetWebPageId: "page-chat",
+        targetActionIds: ["act-send"],
+      },
+      fractionalIndex: "a1",
+    };
+
+    const refEdge: BackendEdge = {
+      id: "edge-ref-link",
+      source: "trans-master-1",
+      target: "trans-ref-1",
+      sourceHandle: "transformer-out",
+      targetHandle: "transformer-in",
+      type: "transformer-reference",
+      fractionalIndex: "e0",
+    };
+
+    const connEdge: BackendEdge = {
+      id: "edge-conn-1",
+      source: "trans-ref-1",
+      target: "page-chat",
+      sourceHandle: "transformer-out",
+      targetHandle: "event-in-act-send",
+      type: "connection",
+      fractionalIndex: "e1",
+    };
+
+    store.setNodesAndEdges([webPageNode, transRefNode], [refEdge, connEdge], [], [], [], "proj-1");
+
+    // Delete the connection edge
+    store.deleteEdge("edge-conn-1");
+
+    const state = useBackendCanvasStore.getState();
+
+    // 1. The connection edge is deleted
+    expect(state.edges.find((e) => e.id === "edge-conn-1")).toBeUndefined();
+    expect(state.pendingEdgeRemovals).toContain("edge-conn-1");
+
+    // 2. The orphaned transformer_ref node is also removed
+    expect(state.nodes.find((n) => n.id === "trans-ref-1")).toBeUndefined();
+    expect(state.pendingNodeRemovals).toContain("trans-ref-1");
+
+    // 3. The reference edge to the orphaned transformer_ref is also removed
+    expect(state.edges.find((e) => e.id === "edge-ref-link")).toBeUndefined();
+    expect(state.pendingEdgeRemovals).toContain("edge-ref-link");
+
+    // 4. transform step is removed from WebPage action
+    const updatedPage = state.nodes.find((n) => n.id === "page-chat");
+    const action = updatedPage?.data?.sections?.[0]?.actions?.[0];
+    expect(action?.actionSteps).toEqual([]);
+  });
+
+  it("removes transform step from endpoint pipelineSteps when transformer_ref node is deleted", () => {
+    const store = useBackendCanvasStore.getState();
+
+    const serviceNode: BackendNode = {
+      id: "service-1",
+      type: "service",
+      position: { x: 0, y: 0 },
+      data: { label: "Order Service" },
+      fractionalIndex: "a0",
+    };
+
+    const transRefNode: BackendNode = {
+      id: "trans-ref-2",
+      type: "transformer_ref",
+      position: { x: 300, y: 0 },
+      data: {
+        label: "validateOrder (Ref)",
+        transformerRef: "trans-master-2",
+        targetServiceId: "service-1",
+        targetEndpointIds: ["ep-2"],
+      },
+      fractionalIndex: "a1",
+    };
+
+    const endpoint: EndpointWithNode = {
+      id: "ep-2",
+      nodeId: "service-1",
+      name: "createOrder",
+      type: "POST",
+      pipelineSteps: [
+        {
+          id: "step-1",
+          name: "validatedOrder",
+          type: "transform",
+          enabled: true,
+          transformerNodeId: "trans-master-2",
+          transformerRefNodeId: "trans-ref-2",
+          functionRef: {
+            name: "validateOrder",
+            importPath: "@workspace/transformers",
+          },
+          inputBindings: [],
+          outputVariable: "validatedOrder",
+        },
+      ],
+    };
+
+    const edge: BackendEdge = {
+      id: "edge-trans-ep2",
+      source: "trans-ref-2",
+      target: "service-1",
+      sourceHandle: "transformer-out",
+      targetHandle: "endpoint-in-ep-2",
+      type: "connection",
+      fractionalIndex: "e0",
+    };
+
+    store.setNodesAndEdges([serviceNode, transRefNode], [edge], [endpoint], [], [], "proj-1");
+
+    // Delete the transformer_ref node
+    store.deleteNode("trans-ref-2");
+
+    const state = useBackendCanvasStore.getState();
+    expect(state.nodes.find((n) => n.id === "trans-ref-2")).toBeUndefined();
+    expect(state.edges).toHaveLength(0);
+
+    const updatedEp = state.endpoints.find((e) => e.id === "ep-2");
+    expect(updatedEp?.pipelineSteps).toEqual([]);
+  });
 });

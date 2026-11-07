@@ -56,9 +56,22 @@ export function filterPipelineStepsOnNodeDeletion(
         return false;
       }
       if (
+        step.transformerRefNodeId &&
+        meta.allIdsSet.has(step.transformerRefNodeId)
+      ) {
+        return false;
+      }
+      if (
         step.functionRef?.name &&
         (meta.allIdsSet.has(step.functionRef.name) ||
           meta.deletedTransformerNames.has(step.functionRef.name))
+      ) {
+        return false;
+      }
+      if (
+        step.transformerName &&
+        (meta.allIdsSet.has(step.transformerName) ||
+          meta.deletedTransformerNames.has(step.transformerName))
       ) {
         return false;
       }
