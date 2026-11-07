@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useEffect, useRef, useCallback } from "react";
+import { parseRouteWithQueryParams } from "@workspace/canvas";
 import { BackendNode, BackendEdge, Endpoint, KafkaTopic, RedisStream } from "@workspace/canvas/types";
 import { PipelineStepDraft, StepBinding, AvailableSource, LangGraphStreamMode } from "../../types";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
@@ -9,6 +10,7 @@ import { upsertDerivedConnection, removeDerivedConnection } from "../../pushToCl
 import { ensureWsPackageInService } from "@/lib/stores/backendCanvas/packageTypesSync";
 import {
   stepSourceToAccessor,
+  accessorToStepSource,
   getArgBinding,
   resolveInvokingPage,
   resolveConnectedPageRefNode,
@@ -73,6 +75,87 @@ export function useRealtimeStreaming({
 
   const selectedTargetPageId =
     step.clientDeliveryTargetPageId || defaultTargetPage?.id || "";
+
+  // Selected target web page node
+  const selectedTargetPage = useMemo(() => {
+    return (
+      allWebPages.find((p) => p.id === selectedTargetPageId) ||
+      defaultTargetPage
+    );
+  }, [allWebPages, selectedTargetPageId, defaultTargetPage]);
+
+  // Dynamic route & query parameter detection for the target web page
+  const targetRouteInfo = useMemo(() => {
+    if (!selectedTargetPage) {
+      return {
+        isDynamic: false,
+        pathParams: [] as Array<{ name: string; type?: string }>,
+        queryParams: [] as Array<{ name: string; type?: string; defaultValue?: string }>,
+        displayRoute: "/",
+      };
+    }
+
+    const rawRoute = selectedTargetPage.data?.label || selectedTargetPage.data?.path || "/";
+    const parsed = parseRouteWithQueryParams(rawRoute);
+    const seenPath = new Set<string>();
+    const pathParams: Array<{ name: string; type?: string }> = [];
+
+    // 1. From node's declared pathParams
+    if (Array.isArray(selectedTargetPage.data?.pathParams)) {
+      selectedTargetPage.data.pathParams.forEach((p: { name?: string; type?: string }) => {
+        if (p.name && !seenPath.has(p.name)) {
+          seenPath.add(p.name);
+          pathParams.push({ name: p.name, type: p.type || "string" });
+        }
+      });
+    }
+
+    // 2. From route string (e.g. /chat/[id])
+    parsed.extractedPathParams.forEach((ep) => {
+      if (ep.name && !seenPath.has(ep.name)) {
+        seenPath.add(ep.name);
+        pathParams.push({ name: ep.name, type: ep.type || "string" });
+      }
+    });
+
+    const seenQuery = new Set<string>();
+    const queryParams: Array<{ name: string; type?: string; defaultValue?: string }> = [];
+
+    // 1. From node's declared queryParams
+    if (Array.isArray(selectedTargetPage.data?.queryParams)) {
+      selectedTargetPage.data.queryParams.forEach((q: { name?: string; type?: string; defaultValue?: string }) => {
+        if (q.name && !seenQuery.has(q.name)) {
+          seenQuery.add(q.name);
+          queryParams.push({ name: q.name, type: q.type || "string", defaultValue: q.defaultValue });
+        }
+      });
+    }
+
+    // 2. From query in route string
+    parsed.extractedQueryParams.forEach((eq) => {
+      if (eq.name && !seenQuery.has(eq.name)) {
+        seenQuery.add(eq.name);
+        queryParams.push({ name: eq.name, type: eq.type || "string", defaultValue: eq.defaultValue });
+      }
+    });
+
+    // 3. Include any query params already mapped in step.clientDeliveryQueryParamBindings
+    if (step.clientDeliveryQueryParamBindings) {
+      Object.keys(step.clientDeliveryQueryParamBindings).forEach((k) => {
+        if (!seenQuery.has(k)) {
+          seenQuery.add(k);
+          queryParams.push({ name: k, type: "string" });
+        }
+      });
+    }
+
+    return {
+      isDynamic: pathParams.length > 0,
+      pathParams,
+      queryParams,
+      displayRoute: parsed.route || rawRoute,
+    };
+  }, [selectedTargetPage, step.clientDeliveryQueryParamBindings]);
 
   // Connected push to client (page_ref) node on canvas
   const connectedPageRefNode = useMemo(() => {
@@ -619,6 +702,282 @@ export function useRealtimeStreaming({
     );
   }, [step.langGraphStreamingRoom, step.inputBindings]);
 
+  // Dynamic route parameter mapping for target web page
+  const getFallbackPathParamAccessor = useCallback(
+    (paramName: string): string => {
+      // 1. If endpoint has matching path param, e.g. /send-message/:id -> params.id
+      const epPathParams = endpoint?.pathParams || [];
+      const match = epPathParams.find((p) => p.name?.toLowerCase() === paramName.toLowerCase());
+      if (match) return `params.${match.name}`;
+
+      // 2. If endpoint has params in availableSources
+      const paramsSrc = availableSources.find((s) => s.kind === "req_params");
+      if (paramsSrc) {
+        const matchingPath = paramsSrc.paths.find((p) => p.path?.toLowerCase() === paramName.toLowerCase());
+        if (matchingPath) return `params.${matchingPath.path}`;
+        if (paramsSrc.paths.length > 0 && paramsSrc.paths[0]?.path) return `params.${paramsSrc.paths[0].path}`;
+      }
+
+      // 3. Fallback to threadIdSource if relevant (e.g. for id or thread_id)
+      if (
+        (paramName.toLowerCase().includes("id") || paramName.toLowerCase().includes("thread")) &&
+        step.langGraphThreadIdSource
+      ) {
+        return step.langGraphThreadIdSource;
+      }
+
+      // 4. Default to params.[paramName]
+      return `params.${paramName}`;
+    },
+    [endpoint?.pathParams, availableSources, step.langGraphThreadIdSource],
+  );
+
+  const getFallbackQueryParamAccessor = useCallback(
+    (key: string, defaultValue?: string): string => {
+      // 1. If endpoint has matching query param
+      const epQueryParams = endpoint?.queryParams || [];
+      const match = epQueryParams.find((q) => q.name?.toLowerCase() === key.toLowerCase());
+      if (match) return `query.${match.name}`;
+
+      const querySrc = availableSources.find((s) => s.kind === "req_query");
+      if (querySrc) {
+        const matchingPath = querySrc.paths.find((p) => p.path?.toLowerCase() === key.toLowerCase());
+        if (matchingPath) return `query.${matchingPath.path}`;
+      }
+
+      if (defaultValue !== undefined && defaultValue !== "") {
+        return defaultValue;
+      }
+
+      return `query.${key}`;
+    },
+    [endpoint?.queryParams, availableSources],
+  );
+
+  const getPathParamBinding = useCallback(
+    (paramName: string): StepBinding => {
+      const explicitAccessor = step.clientDeliveryPathParamBindings?.[paramName];
+      const fallback = getFallbackPathParamAccessor(paramName);
+      return getArgBinding(
+        step,
+        availableSources,
+        `pathParam:${paramName}`,
+        explicitAccessor,
+        fallback,
+      );
+    },
+    [step, availableSources, getFallbackPathParamAccessor],
+  );
+
+  const hasCustomPathParamBinding = useCallback(
+    (paramName: string): boolean => {
+      return Boolean(
+        step.clientDeliveryPathParamBindings?.[paramName] ||
+          (step.inputBindings || []).some(
+            (b) => b.argName === `pathParam:${paramName}` || b.argName === paramName,
+          ),
+      );
+    },
+    [step.clientDeliveryPathParamBindings, step.inputBindings],
+  );
+
+  const getQueryParamBinding = useCallback(
+    (key: string, defaultValue?: string): StepBinding => {
+      const explicitAccessor = step.clientDeliveryQueryParamBindings?.[key];
+      const fallback = getFallbackQueryParamAccessor(key, defaultValue);
+      return getArgBinding(
+        step,
+        availableSources,
+        `queryParam:${key}`,
+        explicitAccessor,
+        fallback,
+      );
+    },
+    [step, availableSources, getFallbackQueryParamAccessor],
+  );
+
+  const hasCustomQueryParamBinding = useCallback(
+    (key: string): boolean => {
+      return Boolean(
+        step.clientDeliveryQueryParamBindings?.[key] ||
+          (step.inputBindings || []).some(
+            (b) => b.argName === `queryParam:${key}` || b.argName === key,
+          ),
+      );
+    },
+    [step.clientDeliveryQueryParamBindings, step.inputBindings],
+  );
+
+  const handlePathParamBindingChange = useCallback(
+    (paramName: string, updated: StepBinding) => {
+      const currentBindings = step.inputBindings || [];
+      const argKey = `pathParam:${paramName}`;
+      const otherBindings = currentBindings.filter((b) => b.argName !== argKey && b.argName !== paramName);
+      const nextBindings: StepBinding[] = [...otherBindings, { argName: argKey, source: updated.source }];
+      const accessor = stepSourceToAccessor(updated.source, availableSources);
+      const nextMap = { ...(step.clientDeliveryPathParamBindings || {}), [paramName]: accessor };
+      const nextStep: PipelineStepDraft = {
+        ...step,
+        inputBindings: nextBindings,
+        clientDeliveryPathParamBindings: nextMap,
+      };
+      onChange(nextStep);
+      syncAgentInputChannels(nextBindings, mapping);
+
+      const targetPageId = nextStep.clientDeliveryTargetPageId || defaultTargetPage?.id;
+      if (targetPageId) {
+        const store = useBackendCanvasStore.getState();
+        const sourceItemName = endpoint ? endpoint.name || "Endpoint" : undefined;
+        const sourceItemId = endpoint ? endpoint.id : undefined;
+        upsertDerivedConnection(
+          store,
+          targetPageId,
+          nextStep,
+          serviceNodeId,
+          sourceItemName,
+          sourceItemId,
+          "endpoint",
+        );
+      }
+    },
+    [step, availableSources, onChange, syncAgentInputChannels, mapping, defaultTargetPage?.id, endpoint, serviceNodeId],
+  );
+
+  const handleResetPathParamBinding = useCallback(
+    (paramName: string) => {
+      const currentBindings = step.inputBindings || [];
+      const argKey = `pathParam:${paramName}`;
+      const nextBindings = currentBindings.filter((b) => b.argName !== argKey && b.argName !== paramName);
+      const nextMap = { ...(step.clientDeliveryPathParamBindings || {}) };
+      delete nextMap[paramName];
+      const nextStep: PipelineStepDraft = {
+        ...step,
+        inputBindings: nextBindings,
+        clientDeliveryPathParamBindings: Object.keys(nextMap).length > 0 ? nextMap : undefined,
+      };
+      onChange(nextStep);
+      syncAgentInputChannels(nextBindings, mapping);
+
+      const targetPageId = nextStep.clientDeliveryTargetPageId || defaultTargetPage?.id;
+      if (targetPageId) {
+        const store = useBackendCanvasStore.getState();
+        const sourceItemName = endpoint ? endpoint.name || "Endpoint" : undefined;
+        const sourceItemId = endpoint ? endpoint.id : undefined;
+        upsertDerivedConnection(
+          store,
+          targetPageId,
+          nextStep,
+          serviceNodeId,
+          sourceItemName,
+          sourceItemId,
+          "endpoint",
+        );
+      }
+    },
+    [step, onChange, syncAgentInputChannels, mapping, defaultTargetPage?.id, endpoint, serviceNodeId],
+  );
+
+  const handleQueryParamBindingChange = useCallback(
+    (key: string, updated: StepBinding) => {
+      const currentBindings = step.inputBindings || [];
+      const argKey = `queryParam:${key}`;
+      const otherBindings = currentBindings.filter((b) => b.argName !== argKey && b.argName !== key);
+      const nextBindings: StepBinding[] = [...otherBindings, { argName: argKey, source: updated.source }];
+      const accessor = stepSourceToAccessor(updated.source, availableSources);
+      const nextMap = { ...(step.clientDeliveryQueryParamBindings || {}), [key]: accessor };
+      const nextStep: PipelineStepDraft = {
+        ...step,
+        inputBindings: nextBindings,
+        clientDeliveryQueryParamBindings: nextMap,
+      };
+      onChange(nextStep);
+      syncAgentInputChannels(nextBindings, mapping);
+
+      const targetPageId = nextStep.clientDeliveryTargetPageId || defaultTargetPage?.id;
+      if (targetPageId) {
+        const store = useBackendCanvasStore.getState();
+        const sourceItemName = endpoint ? endpoint.name || "Endpoint" : undefined;
+        const sourceItemId = endpoint ? endpoint.id : undefined;
+        upsertDerivedConnection(
+          store,
+          targetPageId,
+          nextStep,
+          serviceNodeId,
+          sourceItemName,
+          sourceItemId,
+          "endpoint",
+        );
+      }
+    },
+    [step, availableSources, onChange, syncAgentInputChannels, mapping, defaultTargetPage?.id, endpoint, serviceNodeId],
+  );
+
+  const handleResetQueryParamBinding = useCallback(
+    (key: string) => {
+      const currentBindings = step.inputBindings || [];
+      const argKey = `queryParam:${key}`;
+      const nextBindings = currentBindings.filter((b) => b.argName !== argKey && b.argName !== key);
+      const nextMap = { ...(step.clientDeliveryQueryParamBindings || {}) };
+      delete nextMap[key];
+      const nextStep: PipelineStepDraft = {
+        ...step,
+        inputBindings: nextBindings,
+        clientDeliveryQueryParamBindings: Object.keys(nextMap).length > 0 ? nextMap : undefined,
+      };
+      onChange(nextStep);
+      syncAgentInputChannels(nextBindings, mapping);
+
+      const targetPageId = nextStep.clientDeliveryTargetPageId || defaultTargetPage?.id;
+      if (targetPageId) {
+        const store = useBackendCanvasStore.getState();
+        const sourceItemName = endpoint ? endpoint.name || "Endpoint" : undefined;
+        const sourceItemId = endpoint ? endpoint.id : undefined;
+        upsertDerivedConnection(
+          store,
+          targetPageId,
+          nextStep,
+          serviceNodeId,
+          sourceItemName,
+          sourceItemId,
+          "endpoint",
+        );
+      }
+    },
+    [step, onChange, syncAgentInputChannels, mapping, defaultTargetPage?.id, endpoint, serviceNodeId],
+  );
+
+  const handleAddCustomQueryParam = useCallback(
+    (key: string) => {
+      const clean = key.trim().replace(/^[?&]+/, "");
+      if (!clean) return;
+      const currentMap = step.clientDeliveryQueryParamBindings || {};
+      if (currentMap[clean]) return;
+      const fallback = `query.${clean}`;
+      const nextMap = { ...currentMap, [clean]: fallback };
+      const currentBindings = step.inputBindings || [];
+      const argKey = `queryParam:${clean}`;
+      const nextBindings: StepBinding[] = [
+        ...currentBindings.filter((b) => b.argName !== argKey),
+        { argName: argKey, source: accessorToStepSource(fallback, availableSources) },
+      ];
+      const nextStep: PipelineStepDraft = {
+        ...step,
+        inputBindings: nextBindings,
+        clientDeliveryQueryParamBindings: nextMap,
+      };
+      onChange(nextStep);
+      syncAgentInputChannels(nextBindings, mapping);
+    },
+    [step, availableSources, onChange, syncAgentInputChannels, mapping],
+  );
+
+  const handleRemoveQueryParam = useCallback(
+    (key: string) => {
+      handleResetQueryParamBinding(key);
+    },
+    [handleResetQueryParamBinding],
+  );
+
   return {
     kafkaBrokerNodes,
     selectedKafkaBrokerNode,
@@ -670,6 +1029,18 @@ export function useRealtimeStreaming({
     hasCustomRoom,
     trackTokenUsage,
     handleToggleTrackTokenUsage,
+    targetRouteInfo,
+    selectedTargetPage,
+    getPathParamBinding,
+    hasCustomPathParamBinding,
+    handlePathParamBindingChange,
+    handleResetPathParamBinding,
+    getQueryParamBinding,
+    hasCustomQueryParamBinding,
+    handleQueryParamBindingChange,
+    handleResetQueryParamBinding,
+    handleAddCustomQueryParam,
+    handleRemoveQueryParam,
   };
 }
 
