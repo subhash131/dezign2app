@@ -7,9 +7,16 @@ export function generateProjectConfigFiles(
   hasDb: boolean = false,
   dbPackageName: string = "@workspace/db",
   dbNode?: BackendNode,
+  hasTransformers: boolean = false,
 ): CompiledFile[] {
+  const hasTrans =
+    hasTransformers ||
+    (Array.isArray(customDependencies) &&
+      customDependencies.some((d) => d?.name === "@workspace/transformers"));
+
   const dependencies: Record<string, string> = {
     ...(hasDb ? { [dbPackageName]: "workspace:*" } : {}),
+    ...(hasTrans ? { "@workspace/transformers": "workspace:*" } : {}),
     "@workspace/logger": "workspace:*",
     "@workspace/types": "workspace:*",
     "@workspace/ui": "workspace:*",
@@ -78,6 +85,16 @@ export function generateProjectConfigFiles(
         paths: {
           "@/*": ["./*"],
           "@workspace/ui/*": ["../../packages/ui/src/*"],
+          ...(hasTrans
+            ? {
+                "@workspace/transformers": [
+                  "../../packages/transformers/src/index.ts",
+                ],
+                "@workspace/transformers/*": [
+                  "../../packages/transformers/src/*",
+                ],
+              }
+            : {}),
           ...(hasDb
             ? {
                 "@workspace/db/*": ["../../packages/db/*"],
@@ -105,6 +122,7 @@ export function generateProjectConfigFiles(
     "@workspace/ui",
     "@workspace/logger",
     ...(hasDb ? [dbPackageName] : []),
+    ...(hasTrans ? ["@workspace/transformers"] : []),
     "@workspace/types",
   ];
 

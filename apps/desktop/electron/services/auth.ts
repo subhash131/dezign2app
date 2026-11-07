@@ -1,5 +1,6 @@
-import { app, shell } from "electron";
+import { app, shell, session } from "electron";
 import path from "path";
+import fs from "fs";
 import { PROTOCOL_SCHEME, IS_DEV } from "../constants";
 import { getMainWindow, getCurrentAppUrl } from "../window";
 import { log } from "../logger";
@@ -11,6 +12,187 @@ export interface PendingAuthPayload {
   token?: string;
   ticket?: string;
   rawUrl?: string;
+}
+
+/**
+ * Persisted auth session data stored locally in userData (auth-session.json).
+ * This ensures the desktop application remembers authentication state
+ * across restarts without requiring external browser ticket handshakes.
+ */
+export interface StoredAuthSession {
+  token: string;
+  savedAt: number;
+}
+
+function getAuthSessionConfigPath(): string {
+  return path.join(app.getPath("userData"), "auth-session.json");
+}
+
+/**
+ * Retrieves the persisted session token from native desktop storage.
+ */
+export function getStoredSessionToken(): string | null {
+  try {
+    const configPath = getAuthSessionConfigPath();
+    if (!fs.existsSync(configPath)) return null;
+    const raw = fs.readFileSync(configPath, "utf-8");
+    const parsed: StoredAuthSession = JSON.parse(raw);
+    if (parsed && typeof parsed.token === "string" && parsed.token.trim()) {
+      return parsed.token.trim();
+    }
+    return null;
+  } catch (err) {
+    console.warn("[auth-service] Failed to read auth-session.json:", err);
+    return null;
+  }
+}
+
+/**
+ * Persists the authenticated session token to disk in userData/auth-session.json.
+ */
+export function saveStoredSessionToken(token: string): { success: boolean } {
+  try {
+    if (!token || typeof token !== "string") return { success: false };
+    const configPath = getAuthSessionConfigPath();
+    const data: StoredAuthSession = {
+      token: token.trim(),
+      savedAt: Date.now(),
+    };
+    fs.writeFileSync(configPath, JSON.stringify(data, null, 2), "utf-8");
+    log("[auth-service] Persisted session token to auth-session.json");
+    return { success: true };
+  } catch (err) {
+    console.warn("[auth-service] Failed to write auth-session.json:", err);
+    return { success: false };
+  }
+}
+
+/**
+ * Removes the persisted session token file upon user logout.
+ */
+export function clearStoredSessionToken(): { success: boolean } {
+  try {
+    const configPath = getAuthSessionConfigPath();
+    if (fs.existsSync(configPath)) {
+      fs.unlinkSync(configPath);
+      log("[auth-service] Removed auth-session.json");
+    }
+    return { success: true };
+  } catch (err) {
+    console.warn("[auth-service] Failed to delete auth-session.json:", err);
+    return { success: false };
+  }
+}
+
+/**
+ * Injects stored session token into Chromium session cookies across local dev
+ * and production URLs, committing to SQLite disk store.
+ */
+export async function restoreSessionCookies(targetUrl?: string): Promise<boolean> {
+  const token = getStoredSessionToken();
+  if (!token) return false;
+
+  try {
+    const urlsToSet: string[] = [];
+    if (targetUrl) urlsToSet.push(targetUrl);
+    try {
+      const currentApp = getCurrentAppUrl();
+      if (currentApp) urlsToSet.push(currentApp);
+    } catch {}
+    urlsToSet.push(
+      "http://127.0.0.1:46500",
+      "http://localhost:46500",
+      "https://dezign2app.com",
+      "https://www.dezign2app.com"
+    );
+
+    const uniqueUrls = Array.from(new Set(urlsToSet));
+
+    for (const u of uniqueUrls) {
+      try {
+        const isHttps = u.startsWith("https://");
+        const isProdDomain = u.includes("dezign2app.com");
+        const cookieDomain = isProdDomain ? ".dezign2app.com" : undefined;
+        const expiry = Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60;
+
+        await session.defaultSession.cookies.set({
+          url: u,
+          name: "better-auth.session_token",
+          value: token,
+          path: "/",
+          expirationDate: expiry,
+          sameSite: "lax",
+          secure: isHttps,
+          httpOnly: false,
+          ...(cookieDomain ? { domain: cookieDomain } : {}),
+        });
+
+        if (isHttps) {
+          await session.defaultSession.cookies.set({
+            url: u,
+            name: "__Secure-better-auth.session_token",
+            value: token,
+            path: "/",
+            expirationDate: expiry,
+            sameSite: "lax",
+            secure: true,
+            httpOnly: false,
+            ...(cookieDomain ? { domain: cookieDomain } : {}),
+          });
+        }
+
+        await session.defaultSession.cookies.set({
+          url: u,
+          name: "is_electron",
+          value: "1",
+          path: "/",
+          expirationDate: expiry,
+          sameSite: "lax",
+          secure: isHttps,
+          httpOnly: false,
+          ...(cookieDomain ? { domain: cookieDomain } : {}),
+        });
+      } catch (e) {
+        // Continue setting other URLs
+      }
+    }
+
+    await session.defaultSession.cookies.flushStore();
+    log("[auth-service] Restored session cookies from auth-session.json");
+    return true;
+  } catch (err) {
+    console.warn("[auth-service] Failed to restore session cookies:", err);
+    return false;
+  }
+}
+
+/**
+ * Clears stored session token from disk and removes all auth cookies from defaultSession.
+ */
+export async function clearSessionCookies(): Promise<void> {
+  clearStoredSessionToken();
+  try {
+    const cookies = await session.defaultSession.cookies.get({});
+    for (const c of cookies) {
+      if (
+        c.name.includes("better-auth") ||
+        c.name === "is_electron" ||
+        c.name.includes("convex")
+      ) {
+        const domainStr = c.domain
+          ? c.domain.startsWith(".")
+            ? c.domain.slice(1)
+            : c.domain
+          : "localhost";
+        const url = `${c.secure ? "https://" : "http://"}${domainStr}${c.path || "/"}`;
+        await session.defaultSession.cookies.remove(url, c.name).catch(() => {});
+      }
+    }
+    await session.defaultSession.cookies.flushStore();
+    log("[auth-service] Cleared session cookies and disk store.");
+  } catch (e) {
+    console.warn("[auth-service] Failed to clear session cookies:", e);
+  }
 }
 
 /**

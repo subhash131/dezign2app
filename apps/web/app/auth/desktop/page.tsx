@@ -66,12 +66,21 @@ export default function DesktopAuthSuccessPage() {
     }
 
     if (isLoaded) {
+      if (!session?.user) {
+        log("[DesktopAuthSuccessPage] No active session in browser. Redirecting to sign in...");
+        setLoading(false);
+        const signInUrl = `/sign-in?desktop=true&redirect_url=${encodeURIComponent("/auth/desktop")}`;
+        try {
+          window.location.href = signInUrl;
+        } catch {}
+        return;
+      }
       log("[DesktopAuthSuccessPage] Session loaded, calling generateTicket()");
       generateTicket();
     } else {
       log("[DesktopAuthSuccessPage] Waiting for session to finish loading...");
     }
-  }, [isLoaded]);
+  }, [isLoaded, session?.user]);
 
   const handleCopy = () => {
     if (!ticket) return;
@@ -79,6 +88,43 @@ export default function DesktopAuthSuccessPage() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  if (isLoaded && !isSignedIn) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background p-4 text-foreground">
+        <Card className="w-full max-w-md border-border bg-card text-card-foreground shadow-lg">
+          <CardHeader className="text-center pb-2">
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary border border-primary/20">
+              <Laptop className="h-6 w-6 text-primary" />
+            </div>
+            <div className="flex justify-center mb-1">
+              <Badge variant="secondary" className="gap-1.5 py-0.5">
+                <Laptop className="h-3 w-3" /> D2A Desktop
+              </Badge>
+            </div>
+            <CardTitle className="text-xl font-semibold">
+              Sign In Required
+            </CardTitle>
+            <CardDescription className="text-muted-foreground text-sm">
+              Please sign in to authorize your Dezign2App desktop session.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 pt-2 text-center text-xs text-muted-foreground">
+            <p>
+              Your browser is not currently signed in. Click below to sign in and automatically link D2A Desktop.
+            </p>
+          </CardContent>
+          <CardFooter className="flex flex-col gap-2 pt-0">
+            <Button asChild className="w-full">
+              <a href={`/sign-in?desktop=true&redirect_url=${encodeURIComponent("/auth/desktop")}`}>
+                Sign In to Dezign2App
+              </a>
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4 text-foreground">

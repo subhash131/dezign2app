@@ -10,6 +10,7 @@ import {
   generateAuthFormComponent,
   EventComponentMeta,
   SectionMeta,
+  hasTransformerActionSteps,
 } from "./componentTemplates";
 import { resolveBaseUrlInfo, type StorageUploadConfig } from "./event-generators";
 import { isAuthPage, isAuthLoginPage, isAuthRegisterPage } from "../../../compileAuth";
@@ -24,11 +25,91 @@ export interface GeneratePageAndComponentFilesParams {
   allNodes?: BackendNode[];
   allEdges?: BackendEdge[];
   authNode?: BackendNode;
+  files?: CompiledFile[];
 }
 
 export interface PageAndComponentFilesResult {
   pageFiles: CompiledFile[];
   hasExplicitRoot: boolean;
+  hasTransformers?: boolean;
+}
+
+/**
+ * Ensures @workspace/transformers dependency, tsconfig path mapping,
+ * and next.config transpilePackages are configured when transformers are used.
+ */
+export function ensureTransformerDependencies(
+  files: CompiledFile[],
+  hasTransformers: boolean = true,
+): void {
+  if (!hasTransformers) return;
+
+  // 1. package.json dependencies
+  const pkgFileIdx = files.findIndex((f) => f.filename === "package.json");
+  if (pkgFileIdx !== -1) {
+    try {
+      const pkgObj = JSON.parse(files[pkgFileIdx]!.content);
+      pkgObj.dependencies = pkgObj.dependencies || {};
+      if (!pkgObj.dependencies["@workspace/transformers"]) {
+        pkgObj.dependencies["@workspace/transformers"] = "workspace:*";
+        files[pkgFileIdx]!.content = JSON.stringify(pkgObj, null, 2);
+      }
+    } catch {
+      // preserve
+    }
+  }
+
+  // 2. tsconfig.json compilerOptions.paths
+  const tsconfigFileIdx = files.findIndex((f) => f.filename === "tsconfig.json");
+  if (tsconfigFileIdx !== -1) {
+    try {
+      const tsconfigObj = JSON.parse(files[tsconfigFileIdx]!.content);
+      tsconfigObj.compilerOptions = tsconfigObj.compilerOptions || {};
+      tsconfigObj.compilerOptions.paths = tsconfigObj.compilerOptions.paths || {};
+      let changed = false;
+      if (!tsconfigObj.compilerOptions.paths["@workspace/transformers"]) {
+        tsconfigObj.compilerOptions.paths["@workspace/transformers"] = [
+          "../../packages/transformers/src/index.ts",
+        ];
+        changed = true;
+      }
+      if (!tsconfigObj.compilerOptions.paths["@workspace/transformers/*"]) {
+        tsconfigObj.compilerOptions.paths["@workspace/transformers/*"] = [
+          "../../packages/transformers/src/*",
+        ];
+        changed = true;
+      }
+      if (changed) {
+        files[tsconfigFileIdx]!.content = JSON.stringify(tsconfigObj, null, 2);
+      }
+    } catch {
+      // preserve
+    }
+  }
+
+  // 3. next.config.(mjs|ts|js) transpilePackages
+  const nextConfigFileIdx = files.findIndex(
+    (f) =>
+      f.filename === "next.config.mjs" ||
+      f.filename === "next.config.ts" ||
+      f.filename === "next.config.js",
+  );
+  if (nextConfigFileIdx !== -1) {
+    let content = files[nextConfigFileIdx]!.content;
+    if (!content.includes('"@workspace/transformers"')) {
+      content = content.replace(
+        /transpilePackages:\s*\[([\s\S]*?)\]/,
+        (match, group) => {
+          const trimmed = group.trim();
+          if (trimmed.length > 0) {
+            return `transpilePackages: [${trimmed}, "@workspace/transformers"]`;
+          }
+          return `transpilePackages: ["@workspace/transformers"]`;
+        },
+      );
+      files[nextConfigFileIdx]!.content = content;
+    }
+  }
 }
 
 /**
@@ -41,9 +122,11 @@ export function generatePageAndComponentFiles({
   allNodes = [],
   allEdges = [],
   authNode,
+  files: parentFiles,
 }: GeneratePageAndComponentFilesParams): PageAndComponentFilesResult {
   const pageFiles: CompiledFile[] = [];
   let hasExplicitRoot = false;
+  let hasTransformers = false;
 
   const hasStepAuthAnywhere = webClientNodes.some((node) => {
     const rawSections = Array.isArray(node.data?.sections) ? node.data.sections : [];
@@ -888,28 +971,36 @@ export function generatePageAndComponentFiles({
         };
         secActionMetas.push(actionMeta);
 
+        if (hasTransformerActionSteps(evt)) {
+          hasTransformers = true;
+        }
+
         // Action component file INSIDE section folder under _components
         const componentFilePath = `${sectionDir}/${compName}.tsx`;
+        const actionComponentCode = generateEventComponent(
+          evtName,
+          evtType,
+          url,
+          method,
+          compName,
+          targetRoute,
+          targetPageLabel,
+          requireAuth,
+          Object.keys(nodeHeaders).length > 0 ? nodeHeaders : undefined,
+          Object.keys(nodeQueryParams).length > 0 ? nodeQueryParams : undefined,
+          nodeRequestBody,
+          evt,
+          link?.endpoint,
+          link?.serviceName || link?.targetNodeName,
+          storageConfig,
+        );
+        if (actionComponentCode.includes("@workspace/transformers")) {
+          hasTransformers = true;
+        }
         pageFiles.push({
           filename: componentFilePath,
           language: "typescript",
-          content: generateEventComponent(
-            evtName,
-            evtType,
-            url,
-            method,
-            compName,
-            targetRoute,
-            targetPageLabel,
-            requireAuth,
-            Object.keys(nodeHeaders).length > 0 ? nodeHeaders : undefined,
-            Object.keys(nodeQueryParams).length > 0 ? nodeQueryParams : undefined,
-            nodeRequestBody,
-            evt,
-            link?.endpoint,
-            link?.serviceName || link?.targetNodeName,
-            storageConfig,
-          ),
+          content: actionComponentCode,
         });
       });
 
@@ -1074,5 +1165,26 @@ export function generatePageAndComponentFiles({
     }
   }
 
-  return { pageFiles, hasExplicitRoot };
+  if (
+    !hasTransformers &&
+    allNodes.some(
+      (n) =>
+        (n.type === "transformer" || n.type === "transformer_ref") &&
+        (webClientNodes.some((w) => w.id === n.data?.targetWebPageId) ||
+          allEdges.some(
+            (e) =>
+              webClientNodes.some((w) => w.id === e.source || w.id === e.target) &&
+              (e.source === n.id || e.target === n.id),
+          ) ||
+          allNodes.some((w) => w.type === "webApp")),
+    )
+  ) {
+    hasTransformers = true;
+  }
+
+  if (parentFiles && hasTransformers) {
+    ensureTransformerDependencies(parentFiles, true);
+  }
+
+  return { pageFiles, hasExplicitRoot, hasTransformers };
 }
