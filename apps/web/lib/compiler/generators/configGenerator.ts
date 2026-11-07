@@ -99,6 +99,7 @@ const logger = createLogger("Realtime:SSE");
 type SseClient = {
   id: string;
   res: Response;
+  channel?: string;
 };
 
 const sseClients = new Set<SseClient>();
@@ -122,9 +123,10 @@ export function handleSseConnection(req: Request, res: Response): void {
   }
 
   const clientId = \`\${Date.now()}-\${Math.random().toString(36).substring(2, 9)}\`;
-  const client: SseClient = { id: clientId, res };
+  const channel = (req.query?.id || req.query?.channel || req.query?.room || req.query?.threadId || req.headers?.["x-channel-id"]) as string | undefined;
+  const client: SseClient = { id: clientId, res, channel: channel ? String(channel) : undefined };
   sseClients.add(client);
-  logger.info(\`Client connected to SSE stream: \${clientId} (active: \${sseClients.size})\`);
+  logger.info(\`Client connected to SSE stream: \${clientId}\${channel ? \` (channel: \${channel})\` : ""} (active: \${sseClients.size})\`);
 
   res.write(": connected\\n\\n");
 
@@ -144,14 +146,23 @@ export function handleSseConnection(req: Request, res: Response): void {
 }
 
 /**
- * Broadcasts an event and data payload to all connected SSE clients.
+ * Broadcasts an event and data payload to all connected SSE clients (or filtered by channel).
  */
-export function sseBroadcast(eventName: string, data: Record<string, JsonValue | undefined>): void {
-  logger.info(\`Broadcasting SSE event: "\${eventName}" to \${sseClients.size} client(s)\`);
+export function sseBroadcast(eventName: string, data: unknown, channel?: string): void {
+  logger.info(\`Broadcasting SSE event: "\${eventName}" to \${sseClients.size} client(s)\${channel ? \` (channel: \${channel})\` : ""}\`);
   const payloadStr = typeof data === "string" ? data : JSON.stringify(data);
   for (const client of sseClients) {
+    if (channel && client.channel && client.channel !== channel) {
+      continue;
+    }
     try {
-      client.res.write(\`event: \${eventName}\\ndata: \${payloadStr}\\n\\n\`);
+      if (data === "[DONE]") {
+        client.res.write("data: [DONE]\\n\\n");
+      } else if (!eventName || eventName === "message") {
+        client.res.write(\`data: \${payloadStr}\\n\\n\`);
+      } else {
+        client.res.write(\`event: \${eventName}\\ndata: \${payloadStr}\\n\\n\`);
+      }
     } catch (err) {
       logger.error(\`Failed to deliver SSE event to client \${client.id}:\`, err);
       sseClients.delete(client);
