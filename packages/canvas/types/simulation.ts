@@ -488,6 +488,16 @@ export type FrontendTransformBinding = {
   source: FrontendFieldSource;
 };
 
+export type NavigationPathParamBinding = {
+  paramName: string;
+  source: FrontendFieldSource;
+};
+
+export type NavigationQueryParamBinding = {
+  key: string;
+  source: FrontendFieldSource;
+};
+
 export type FrontendActionStepDraft = {
   id: string;
   order: number;
@@ -532,6 +542,8 @@ export type FrontendActionStepDraft = {
   targetRoute?: string;
   targetPageId?: string;
   navCondition?: "direct" | "on_success" | "on_error";
+  pathParamBindings?: NavigationPathParamBinding[];
+  queryParamBindings?: NavigationQueryParamBinding[];
 
   // --- For type === "custom_code" ---
   code?: string;
@@ -621,6 +633,8 @@ export type UIEventItem = {
   };
   // Sequential multi-step flow configuration
   actionSteps?: FrontendActionStepDraft[];
+  pathParamBindings?: NavigationPathParamBinding[];
+  queryParamBindings?: NavigationQueryParamBinding[];
   // SSE config (when event === "sse")
   sseConfig?: {
     reconnectStrategy?: "none" | "exponential" | "linear";

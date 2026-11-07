@@ -167,6 +167,16 @@ export const FrontendStepRow: React.FC<FrontendStepRowProps> = ({
                 <NavigationStep
                   draft={step}
                   allNodes={allNodes}
+                  allSteps={allSteps}
+                  stepIndex={index}
+                  endpoints={endpoints}
+                  webPageNodeId={webPageNodeId}
+                  actionId={actionId}
+                  actionItem={actionItem}
+                  incomingPaths={incomingPaths}
+                  isItemScoped={isItemScoped}
+                  itemKeyField={itemKeyField}
+                  itemPropSuggestions={itemPropSuggestions}
                   onChange={onChange}
                 />
               )}

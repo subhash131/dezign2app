@@ -60,6 +60,53 @@ export function formatStepCodePreview(
 
     case "navigation": {
       const route = step.targetRoute || "/";
+      const bindings = step.pathParamBindings || [];
+      if (bindings.length > 0) {
+        let hasDynamicExpr = false;
+        let templateRoute = route;
+        bindings.forEach((b) => {
+          const src = b.source;
+          let placeholder = b.paramName;
+          if (src) {
+            if (src.kind === "literal") {
+              placeholder = src.value || b.paramName;
+            } else if (src.kind === "prev_response") {
+              hasDynamicExpr = true;
+              placeholder = src.fieldPath ? `step.${src.fieldPath}` : "step.id";
+            } else if (src.kind === "state_var") {
+              hasDynamicExpr = true;
+              placeholder =
+                src.fieldPath ||
+                (src.storeName
+                  ? `${src.storeName}.${src.stateKey}`
+                  : `state.${src.stateKey}`);
+            } else if (src.kind === "route_param") {
+              hasDynamicExpr = true;
+              placeholder = `params.${src.paramName}`;
+            } else if (src.kind === "query_param") {
+              hasDynamicExpr = true;
+              placeholder = `query.${src.paramName}`;
+            } else if (src.kind === "item_prop") {
+              hasDynamicExpr = true;
+              placeholder = `item.${src.propPath || src.fieldPath || "id"}`;
+            }
+          }
+          if (hasDynamicExpr) {
+            templateRoute = templateRoute.replace(
+              new RegExp(`\\[${b.paramName}\\]`, "g"),
+              `\${${placeholder}}`,
+            );
+          } else {
+            templateRoute = templateRoute.replace(
+              new RegExp(`\\[${b.paramName}\\]`, "g"),
+              placeholder,
+            );
+          }
+        });
+        return hasDynamicExpr
+          ? `router.push(\`${templateRoute}\`)`
+          : `router.push("${templateRoute}")`;
+      }
       return `router.push("${route}")`;
     }
 
