@@ -1,5 +1,5 @@
-import { UIEventItem } from "@/types/canvas";
-import { Endpoint } from "@workspace/canvas";
+import { UIEventItem, Schema, Parameter } from "@/types/canvas";
+import { Endpoint, JSONValue } from "@workspace/canvas";
 import {
   EventComponentMeta,
   METHOD_BADGE_CLASSES,
@@ -32,7 +32,10 @@ export function generateEventComponent(
   requireAuth: boolean = true,
   customHeaders?: Record<string, string>,
   customQueryParams?: Record<string, string>,
-  customRequestBody?: unknown,
+  customRequestBody?:
+    | JSONValue
+    | Schema
+    | { fields?: Parameter[]; rawJson?: string; mode?: string },
   eventItem?: UIEventItem,
   endpoint?: Endpoint,
   serviceName?: string,

@@ -1,5 +1,5 @@
 import { UIEventItem, Parameter, Schema } from "@/types/canvas";
-import { Endpoint } from "@workspace/canvas";
+import { Endpoint, JSONValue } from "@workspace/canvas";
 
 export interface EventComponentMeta {
   componentName: string;
@@ -12,7 +12,10 @@ export interface EventComponentMeta {
   requireAuth?: boolean;
   customHeaders?: Record<string, string>;
   queryParams?: Record<string, string>;
-  requestBody?: unknown;
+  requestBody?:
+    | JSONValue
+    | Schema
+    | { fields?: Parameter[]; rawJson?: string; mode?: string };
   eventItem?: UIEventItem;
   endpoint?: Endpoint;
   serviceName?: string;

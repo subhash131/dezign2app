@@ -21,7 +21,7 @@ function resolveActionLibImports(libraries?: string[]): string {
   return lines.length > 0 ? `${lines.join("\n")}\n` : "";
 }
 
-function escapeJsxAttr(val: unknown): string {
+function escapeJsxAttr(val: string | number | boolean | null | undefined): string {
   if (val === null || val === undefined) return "";
   return String(val).replace(/"/g, "&quot;");
 }
@@ -248,10 +248,11 @@ export function generateInteractiveFormEventTemplate({
         }
 
         postTrigger += `      if (${resSourceExpr}) {
+        const rawRes = ${resSourceExpr};
         const resData =
-          ${resSourceExpr} && typeof ${resSourceExpr} === "object" && "data" in ${resSourceExpr} && (${resSourceExpr} as Record<string, unknown>).data !== undefined
-            ? (${resSourceExpr} as Record<string, unknown>).data
-            : ${resSourceExpr};
+          rawRes && typeof rawRes === "object" && "data" in rawRes && rawRes.data !== undefined
+            ? rawRes.data
+            : rawRes;
         const extracted = ${extractionExpr};
         ${storeHookName}.getState().${storeActionName}(${passedExpr});
       }\n`;
@@ -268,14 +269,15 @@ export function generateInteractiveFormEventTemplate({
           .filter(([_, path]) => path && path.trim())
           .map(([fieldName, path]) => {
             const chain = path.trim().split(".").map((p, i) => (i === 0 ? p : `?.${p}`)).join("");
-            return `${fieldName}: (resData as Record<string, unknown> | undefined)?.${chain}`;
+            return `${fieldName}: resData?.${chain}`;
           });
         if (mappedEntries.length > 0) {
           postTrigger += `      if (${resSourceExpr}) {
+        const rawRes = ${resSourceExpr};
         const resData =
-          ${resSourceExpr} && typeof ${resSourceExpr} === "object" && "data" in ${resSourceExpr} && (${resSourceExpr} as Record<string, unknown>).data !== undefined
-            ? (${resSourceExpr} as Record<string, unknown>).data
-            : ${resSourceExpr};
+          rawRes && typeof rawRes === "object" && "data" in rawRes && rawRes.data !== undefined
+            ? rawRes.data
+            : rawRes;
         ${storeHookName}.getState().populate({ ${mappedEntries.join(", ")} });
       }\n`;
           return;
@@ -290,13 +292,14 @@ export function generateInteractiveFormEventTemplate({
         const paramArgs = Object.values(b.parameterMappings).map((path) => {
           if (!path || !path.trim()) return "undefined";
           const chain = path.trim().split(".").map((p, i) => (i === 0 ? p : `?.${p}`)).join("");
-          return `(resData as Record<string, unknown> | undefined)?.${chain}`;
+          return `resData?.${chain}`;
         });
         postTrigger += `      if (${resSourceExpr}) {
+        const rawRes = ${resSourceExpr};
         const resData =
-          ${resSourceExpr} && typeof ${resSourceExpr} === "object" && "data" in ${resSourceExpr} && (${resSourceExpr} as Record<string, unknown>).data !== undefined
-            ? (${resSourceExpr} as Record<string, unknown>).data
-            : ${resSourceExpr};
+          rawRes && typeof rawRes === "object" && "data" in rawRes && rawRes.data !== undefined
+            ? rawRes.data
+            : rawRes;
         ${storeHookName}.getState().${storeActionName}(${paramArgs.join(", ")});
       }\n`;
         return;
@@ -329,10 +332,11 @@ export function generateInteractiveFormEventTemplate({
       }
 
       postTrigger += `      if (${resSourceExpr}) {
+        const rawRes = ${resSourceExpr};
         const resData =
-          ${resSourceExpr} && typeof ${resSourceExpr} === "object" && "data" in ${resSourceExpr} && (${resSourceExpr} as Record<string, unknown>).data !== undefined
-            ? (${resSourceExpr} as Record<string, unknown>).data
-            : ${resSourceExpr};
+          rawRes && typeof rawRes === "object" && "data" in rawRes && rawRes.data !== undefined
+            ? rawRes.data
+            : rawRes;
         ${storeHookName}.getState().${storeActionName}(${passedExpr});
       }\n`;
     });
