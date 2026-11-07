@@ -663,7 +663,7 @@ describe("Entity to TypesNode Derivation & Out-of-Sync Banner Sync", () => {
     const extNode1 = state1.nodes.find((n) => n.data?.extendedFromNodeId === baseNodeId)!;
     expect(extNode1).toBeDefined();
     expect(extNode1.data.types).toHaveLength(1);
-    expect(extNode1.data.types![0].name).toBe("CustomAccount");
+    expect(extNode1.data.types![0]?.name).toBe("CustomAccount");
 
     // 2. Second extension of the same base type: CustomAccount2
     createExtendedTypeNode(baseNodeId, "type-base-account");
@@ -671,9 +671,9 @@ describe("Entity to TypesNode Derivation & Out-of-Sync Banner Sync", () => {
     const state2 = useBackendCanvasStore.getState();
     const extNode2 = state2.nodes.find((n) => n.data?.extendedFromNodeId === baseNodeId)!;
     expect(extNode2.data.types).toHaveLength(2);
-    expect(extNode2.data.types![1].name).toBe("CustomAccount2");
-    expect(extNode2.data.types![1].extendedFrom).toBe("Account");
-    expect(extNode2.data.types![1].extendedFromTypeId).toBe("type-base-account");
+    expect(extNode2.data.types![1]?.name).toBe("CustomAccount2");
+    expect(extNode2.data.types![1]?.extendedFrom).toBe("Account");
+    expect(extNode2.data.types![1]?.extendedFromTypeId).toBe("type-base-account");
 
     // 3. Third extension: CustomAccount3
     createExtendedTypeNode(baseNodeId, "type-base-account");
@@ -681,7 +681,7 @@ describe("Entity to TypesNode Derivation & Out-of-Sync Banner Sync", () => {
     const state3 = useBackendCanvasStore.getState();
     const extNode3 = state3.nodes.find((n) => n.data?.extendedFromNodeId === baseNodeId)!;
     expect(extNode3.data.types).toHaveLength(3);
-    expect(extNode3.data.types![2].name).toBe("CustomAccount3");
+    expect(extNode3.data.types![2]?.name).toBe("CustomAccount3");
 
     // Verify 3 distinct extension edges exist
     const extEdges = state3.edges.filter(

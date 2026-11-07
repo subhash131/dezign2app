@@ -63,6 +63,11 @@ export function ProjectFolderModal({
       setIsConfirmOpen(false);
       setPendingFolder(null);
       setConflict(null);
+      if (typeof window !== "undefined") {
+        try {
+          sessionStorage.removeItem(`dismissed_folder_modal_${projectId}`);
+        } catch {}
+      }
       onOpenChange(false);
     } else {
       setErrorMessage("Failed to set directory for this project.");

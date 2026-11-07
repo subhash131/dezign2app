@@ -98,6 +98,14 @@ export async function POST(req: NextRequest) {
 
     log("[Desktop Auth Exchange:route] Exchange successful! Returning token for userId:", ticketData.userId);
 
+    const host = req.headers.get("host") || "";
+    const isHttps =
+      req.nextUrl.protocol === "https:" ||
+      req.headers.get("x-forwarded-proto") === "https" ||
+      process.env.NODE_ENV === "production";
+    const isProdDomain = host.includes("dezign2app.com");
+    const cookieDomain = isProdDomain ? ".dezign2app.com" : undefined;
+
     const response = NextResponse.json(
       {
         token: ticketData.token,
@@ -107,18 +115,24 @@ export async function POST(req: NextRequest) {
       { headers: corsHeaders },
     );
 
-    response.cookies.set("better-auth.session_token", ticketData.token, {
+    const baseCookieOptions: Parameters<typeof response.cookies.set>[2] = {
       path: "/",
-      maxAge: 30 * 24 * 60 * 60,
+      maxAge: 30 * 24 * 60 * 60, // 30 days
       sameSite: "lax",
       httpOnly: false,
-    });
-    response.cookies.set("is_electron", "1", {
-      path: "/",
-      maxAge: 30 * 24 * 60 * 60,
-      sameSite: "lax",
-      httpOnly: false,
-    });
+      secure: isHttps,
+      ...(cookieDomain ? { domain: cookieDomain } : {}),
+    };
+
+    response.cookies.set("better-auth.session_token", ticketData.token, baseCookieOptions);
+    if (isHttps) {
+      response.cookies.set(
+        "__Secure-better-auth.session_token",
+        ticketData.token,
+        baseCookieOptions,
+      );
+    }
+    response.cookies.set("is_electron", "1", baseCookieOptions);
 
     return response;
   } catch (error) {

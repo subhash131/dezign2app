@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { compileAuth } from "../compileAuth";
 import { compileAuthNode } from "../services/fastapi/v0/generators/authGenerator";
 import { generateAuthConfig as generateFastApiAuthConfig } from "../services/fastapi/v0/generators/auth/generateAuthConfig";
 import { generateAuthConfig as generateMonorepoAuthConfig } from "../auth/better-auth/v1.6/generators/generateAuthConfig";
@@ -90,5 +91,36 @@ describe("Better Auth Engine-Aware UUID ID Generation", () => {
     ]);
 
     expect(ddl.join("\n")).toContain('"id" UUID PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL');
+  });
+
+  it("should configure advanced.database.validateSchema = false by default in compileAuth to avoid SCHEMA_MISMATCH crashes", () => {
+    const authNode: BackendNode = {
+      id: "auth-1",
+      type: "auth",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "Better Auth",
+        framework: "better_auth",
+      },
+    };
+
+    const result = compileAuth(authNode);
+    const authFile = result.files.find((f) => f.filename === "auth.ts");
+
+    expect(authFile).toBeDefined();
+    expect(authFile?.content).toContain("advanced: {");
+    expect(authFile?.content).toContain("validateSchema: false");
+  });
+
+  it("should allow explicit validateSchema = true override when requested", () => {
+    const code = generateMonorepoAuthConfig({
+      framework: "better_auth",
+      dbEngine: "postgres",
+      validateSchema: true,
+    });
+
+    expect(code).toContain("advanced: {");
+    expect(code).not.toContain("validateSchema: false");
   });
 });

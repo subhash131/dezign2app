@@ -6,7 +6,11 @@ import { api } from "@workspace/backend/_generated/api";
 import { Id } from "@workspace/backend/_generated/dataModel";
 import { usePathname } from "next/navigation";
 import { toast } from "sonner";
-import { useTerminalWorkspace } from "./terminal/hooks/useTerminalWorkspace";
+import {
+  useTerminalWorkspace,
+  useProjectWorkspaceStore,
+} from "./terminal/hooks/useTerminalWorkspace";
+import { getProjectWorkspaceDir } from "./terminal/hooks/projectWorkspaceUtils";
 import { ProjectFolderModal } from "./ProjectFolderModal";
 import {
   useSidebarStore,
@@ -37,6 +41,7 @@ export function ProjectCanvasLayout({
 
   const { outputDir, saveWorkspaceDir, handlePickDirectory } =
     useTerminalWorkspace(projectId, project?.name);
+  const syncFromStorage = useProjectWorkspaceStore((s) => s.syncFromStorage);
 
   // Sidebar state
   const paletteOpen = useSidebarStore((s) => s.paletteOpen);
@@ -71,34 +76,72 @@ export function ProjectCanvasLayout({
 
   const hasCheckedSwitchRef = useRef<string | null>(null);
 
-  // Detect project switch and automatically prompt for a folder if not configured
+  // Detect project switch and automatically prompt for a folder ONLY if genuinely not configured
   useEffect(() => {
     if (!projectId || typeof window === "undefined") return;
     if (hasCheckedSwitchRef.current === projectId) return;
-    hasCheckedSwitchRef.current = projectId;
+
+    // Check storage synchronously first so we never falsely treat a configured project as empty
+    const currentDir = outputDir || getProjectWorkspaceDir(projectId);
+
+    // If currentDir is in storage but not yet populated in the Zustand store, sync it immediately
+    if (currentDir && !outputDir) {
+      syncFromStorage(projectId);
+    }
 
     try {
       const lastProjectId = localStorage.getItem("dezign2app_last_project_id");
       const isSwitch = Boolean(lastProjectId && lastProjectId !== projectId);
       localStorage.setItem("dezign2app_last_project_id", projectId);
 
-      // If switching to a project that has NO folder selected, prompt the user (unless in LangGraph Studio)
-      if (!outputDir && !isLangGraph) {
+      // If a workspace folder is already configured, mark checked and DO NOT open modal
+      if (currentDir) {
+        hasCheckedSwitchRef.current = projectId;
+        if (isSwitch && project?.name) {
+          const folderName =
+            currentDir.replace(/[\\/]+$/, "").split(/[\\/]/).pop() || currentDir;
+          toast.info(`Switched to "${project.name}" (Folder: ${folderName})`, {
+            action: {
+              label: "Change Folder",
+              onClick: () => setProjectFolderModalOpen(true),
+            },
+          });
+        }
+        return;
+      }
+
+      // If Convex is still loading project data, wait before checking dismissal so we have full context
+      if (project === undefined) {
+        return;
+      }
+
+      // Check if user already dismissed the prompt for this project in this session
+      const dismissed = sessionStorage.getItem(`dismissed_folder_modal_${projectId}`);
+      if (dismissed) {
+        hasCheckedSwitchRef.current = projectId;
+        return;
+      }
+
+      // Only prompt when switching to an unconfigured project (and not in LangGraph Studio)
+      if (isSwitch && !isLangGraph) {
+        hasCheckedSwitchRef.current = projectId;
         setProjectFolderModalOpen(true);
-      } else if (isSwitch && project?.name) {
-        const folderName =
-          outputDir.replace(/[\/]+$/, "").split(/[\/]/).pop() || outputDir;
-        toast.info(`Switched to "${project.name}" (Folder: ${folderName})`, {
-          action: {
-            label: "Change Folder",
-            onClick: () => setProjectFolderModalOpen(true),
-          },
-        });
+      } else if (!isSwitch) {
+        // Cold start or same-project reload: do not force open a blocking modal
+        hasCheckedSwitchRef.current = projectId;
       }
     } catch (e) {
       console.warn("[ProjectCanvasLayout] Switch detection error:", e);
+      hasCheckedSwitchRef.current = projectId;
     }
-  }, [projectId, outputDir, project?.name, isLangGraph, setProjectFolderModalOpen]);
+  }, [
+    projectId,
+    outputDir,
+    project,
+    isLangGraph,
+    setProjectFolderModalOpen,
+    syncFromStorage,
+  ]);
 
   // When in LangGraph Studio, ensure palette drawer is closed
   useEffect(() => {
@@ -175,10 +218,22 @@ export function ProjectCanvasLayout({
         {/* Unique Project Folder Selection Modal */}
         <ProjectFolderModal
           open={projectFolderModalOpen}
-          onOpenChange={setProjectFolderModalOpen}
+          onOpenChange={(open) => {
+            setProjectFolderModalOpen(open);
+            if (!open && typeof window !== "undefined") {
+              try {
+                sessionStorage.setItem(`dismissed_folder_modal_${projectId}`, "1");
+              } catch {}
+            }
+          }}
           projectId={projectId}
           projectName={project?.name || "Dezign2App Project"}
-          currentOutputDir={outputDir}
+          currentOutputDir={
+            outputDir ||
+            (typeof window !== "undefined"
+              ? getProjectWorkspaceDir(projectId)
+              : "")
+          }
           onPickDirectory={handlePickDirectory}
           onSaveDirectory={saveWorkspaceDir}
         />

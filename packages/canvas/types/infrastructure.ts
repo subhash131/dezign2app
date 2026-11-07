@@ -87,6 +87,7 @@ export interface CanvasAuthNodeData {
   dbAdapter?: BetterAuthDbAdapter;
   dbEngine?: DatabaseEngine | string;
   generateId?: "uuid" | "nanoid" | "serial" | string;
+  validateSchema?: boolean;
   databaseId?: string;
   connectionString?: string;
   connectionStringPooled?: string;

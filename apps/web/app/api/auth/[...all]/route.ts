@@ -131,25 +131,27 @@ async function handleProxy(req: NextRequest) {
   // Clone response headers so we can duplicate un-prefixed cookies for non-HTTPS desktop clients
   const responseHeaders = new Headers(res.headers);
 
-  const setCookieHeaders = res.headers.getSetCookie?.() || [];
-  if (setCookieHeaders.length > 0) {
-    responseHeaders.delete("set-cookie");
-    for (const cookieStr of setCookieHeaders) {
-      responseHeaders.append("set-cookie", cookieStr);
-      if (cookieStr.includes("__Secure-better-auth.session_token=")) {
-        const plainCookie = cookieStr
-          .replace("__Secure-better-auth.session_token=", "better-auth.session_token=")
-          .replace(/;\s*Secure/i, "");
-        responseHeaders.append("set-cookie", plainCookie);
-      }
-    }
-  }
-
-  return new NextResponse(res.body, {
+  const response = new NextResponse(res.body, {
     status: res.status,
     statusText: res.statusText,
     headers: responseHeaders,
   });
+
+  const setCookieHeaders = res.headers.getSetCookie?.() || [];
+  if (setCookieHeaders.length > 0) {
+    response.headers.delete("set-cookie");
+    for (const cookieStr of setCookieHeaders) {
+      response.headers.append("set-cookie", cookieStr);
+      if (cookieStr.includes("__Secure-better-auth.session_token=")) {
+        const plainCookie = cookieStr
+          .replace("__Secure-better-auth.session_token=", "better-auth.session_token=")
+          .replace(/;\s*Secure/i, "");
+        response.headers.append("set-cookie", plainCookie);
+      }
+    }
+  }
+
+  return response;
 }
 
 export async function GET(req: NextRequest) {

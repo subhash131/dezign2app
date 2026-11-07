@@ -30,6 +30,22 @@ export const useProjectWorkspaceStore = create<ProjectWorkspaceState>((set, get)
     const existing = get().projectDirs[projectId];
     if (existing !== undefined) return existing;
     const fromStorage = getProjectWorkspaceDir(projectId);
+    if (!fromStorage && typeof window !== "undefined") {
+      const api = getElectronAPI();
+      if (api?.fs?.getProjectWorkspaceDir) {
+        api.fs
+          .getProjectWorkspaceDir(projectId)
+          .then((fromElectron) => {
+            if (fromElectron) {
+              setProjectWorkspaceDir(projectId, fromElectron);
+              set((state) => ({
+                projectDirs: { ...state.projectDirs, [projectId]: fromElectron },
+              }));
+            }
+          })
+          .catch(() => {});
+      }
+    }
     set((state) => ({
       projectDirs: { ...state.projectDirs, [projectId]: fromStorage },
     }));
@@ -38,36 +54,60 @@ export const useProjectWorkspaceStore = create<ProjectWorkspaceState>((set, get)
   setProjectDir: (projectId: string, dir: string, projectName?: string) => {
     if (!projectId) return;
     setProjectWorkspaceDir(projectId, dir, projectName);
-    set((state) => ({
-      projectDirs: { ...state.projectDirs, [projectId]: dir },
-    }));
     if (typeof window !== "undefined") {
+      const api = getElectronAPI();
+      if (api?.fs?.setProjectWorkspaceDir) {
+        api.fs.setProjectWorkspaceDir(projectId, dir).catch(() => {});
+      }
       window.dispatchEvent(
         new CustomEvent("project-workspace-dir-changed", {
           detail: { projectId, dir, projectName },
         })
       );
     }
+    set((state) => ({
+      projectDirs: { ...state.projectDirs, [projectId]: dir },
+    }));
   },
   deleteProjectDir: (projectId: string) => {
     if (!projectId) return;
     deleteProjectWorkspaceDir(projectId);
-    set((state) => {
-      const next = { ...state.projectDirs };
-      delete next[projectId];
-      return { projectDirs: next };
-    });
     if (typeof window !== "undefined") {
+      const api = getElectronAPI();
+      if (api?.fs?.deleteProjectWorkspaceDir) {
+        api.fs.deleteProjectWorkspaceDir(projectId).catch(() => {});
+      }
       window.dispatchEvent(
         new CustomEvent("project-workspace-dir-changed", {
           detail: { projectId, dir: "" },
         })
       );
     }
+    set((state) => {
+      const next = { ...state.projectDirs };
+      delete next[projectId];
+      return { projectDirs: next };
+    });
   },
   syncFromStorage: (projectId: string) => {
     if (!projectId) return "";
     const fromStorage = getProjectWorkspaceDir(projectId);
+    if (!fromStorage && typeof window !== "undefined") {
+      const api = getElectronAPI();
+      if (api?.fs?.getProjectWorkspaceDir) {
+        api.fs
+          .getProjectWorkspaceDir(projectId)
+          .then((fromElectron) => {
+            if (fromElectron) {
+              setProjectWorkspaceDir(projectId, fromElectron);
+              set((state) => ({
+                projectDirs: { ...state.projectDirs, [projectId]: fromElectron },
+              }));
+            }
+          })
+          .catch(() => {});
+      }
+    }
     set((state) => ({
       projectDirs: { ...state.projectDirs, [projectId]: fromStorage },
     }));
