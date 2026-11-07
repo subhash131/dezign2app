@@ -95,6 +95,12 @@ export interface ElectronAPI {
     clearPendingAuthCallback(): Promise<{ success: boolean }>;
     /** Flushes all in-memory Chromium session cookies to SQLite disk storage */
     flushCookies(): Promise<{ success: boolean }>;
+    /** Persists session token to local desktop storage */
+    saveSession(token: string): Promise<{ success: boolean }>;
+    /** Retrieves stored session token */
+    getSession(): Promise<string | null>;
+    /** Clears stored session and auth cookies */
+    clearSession(): Promise<{ success: boolean }>;
   };
 
   /** PTY terminal sessions */
@@ -174,6 +180,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.invoke("auth:clear-pending-callback"),
     flushCookies: () =>
       ipcRenderer.invoke("auth:flush-cookies"),
+    saveSession: (token: string) =>
+      ipcRenderer.invoke("auth:save-session", token),
+    getSession: () =>
+      ipcRenderer.invoke("auth:get-session"),
+    clearSession: () =>
+      ipcRenderer.invoke("auth:clear-session"),
   },
 
   fs: {

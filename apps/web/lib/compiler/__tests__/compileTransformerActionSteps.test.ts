@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { generateEventComponent } from "../webClients/nextjs/v16/eventGenerators";
+import { generateEventComponent, hasTransformerActionSteps } from "../webClients/nextjs/v16/eventGenerators";
+import { compileWebPageNode } from "../compileWebPageNode";
+import { compileTransformerHelpers } from "../compileTransformerHelpers";
 import type { UIEventItem } from "@workspace/canvas";
+import type { BackendNode, CompiledFile } from "@workspace/canvas/types";
 
 describe("WebPageNode Action Transformer Step Compilation", () => {
   it("compiles a standalone transformer step to an executable button handler with @workspace/transformers import", () => {
@@ -261,6 +264,158 @@ describe("WebPageNode Action Transformer Step Compilation", () => {
     expect(code).toContain('import { cleanSearchQuery } from "@workspace/transformers";');
     expect(code).toContain('rawQuery: bodyFields?.["query"]');
     expect(code).toContain("const cleanedSearchResult = await cleanSearchQuery({");
+  });
+
+  it("detects transformer action steps via hasTransformerActionSteps", () => {
+    const withTransform: UIEventItem = {
+      id: "act-1",
+      name: "Transform",
+      event: "click",
+      actionSteps: [
+        {
+          id: "step-1",
+          order: 1,
+          type: "transform",
+          transformerName: "generateChatId",
+        },
+      ],
+    };
+    const withoutTransform: UIEventItem = {
+      id: "act-2",
+      name: "Nav",
+      event: "click",
+      actionSteps: [
+        {
+          id: "step-1",
+          order: 1,
+          type: "navigation",
+          targetRoute: "/dashboard",
+        },
+      ],
+    };
+
+    expect(hasTransformerActionSteps(withTransform)).toBe(true);
+    expect(hasTransformerActionSteps(withoutTransform)).toBe(false);
+    expect(hasTransformerActionSteps(undefined)).toBe(false);
+  });
+
+  it("automatically adds @workspace/transformers to package.json, tsconfig.json, and next.config.ts when web page has transformer action steps", () => {
+    const pageNode: BackendNode = {
+      id: "node-page-new",
+      type: "webPage",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "/new",
+        appSlug: "web",
+        sections: [
+          {
+            id: "sec-main",
+            name: "Main Section",
+            actions: [
+              {
+                id: "act-send-message",
+                name: "Send Message",
+                event: "click",
+                actionSteps: [
+                  {
+                    id: "step-trans-1",
+                    order: 1,
+                    type: "transform",
+                    transformerName: "generateChatId",
+                    functionRef: {
+                      name: "generateChatId",
+                      importPath: "@workspace/transformers",
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = compileWebPageNode(pageNode);
+
+    // 1. SendMessageAction.tsx must import generateChatId
+    const actionFile = result.files.find((f: CompiledFile) =>
+      f.filename.toLowerCase().endsWith("sendmessageaction.tsx"),
+    );
+    expect(actionFile).toBeDefined();
+    expect(actionFile?.content).toContain('import { generateChatId } from "@workspace/transformers";');
+
+    // 2. package.json must include "@workspace/transformers": "workspace:*"
+    const pkgFile = result.files.find((f: CompiledFile) => f.filename === "package.json");
+    expect(pkgFile).toBeDefined();
+    const pkgJson = JSON.parse(pkgFile!.content);
+    expect(pkgJson.dependencies["@workspace/transformers"]).toBe("workspace:*");
+
+    // 3. tsconfig.json must map @workspace/transformers
+    const tsconfigFile = result.files.find((f: CompiledFile) => f.filename === "tsconfig.json");
+    expect(tsconfigFile).toBeDefined();
+    const tsconfigJson = JSON.parse(tsconfigFile!.content);
+    expect(tsconfigJson.compilerOptions.paths["@workspace/transformers"]).toEqual([
+      "../../packages/transformers/src/index.ts",
+    ]);
+    expect(tsconfigJson.compilerOptions.paths["@workspace/transformers/*"]).toEqual([
+      "../../packages/transformers/src/*",
+    ]);
+
+    // 4. next.config must transpile @workspace/transformers
+    const nextConfigFile = result.files.find((f: CompiledFile) => f.filename.startsWith("next.config"));
+    expect(nextConfigFile).toBeDefined();
+    expect(nextConfigFile?.content).toContain('"@workspace/transformers"');
+  });
+
+  it("compileTransformerHelpers collects transformer action steps from WebPage nodes when no standalone transformer node exists", () => {
+    const pageNode: BackendNode = {
+      id: "node-page-new",
+      type: "webPage",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "/new",
+        appSlug: "web",
+        sections: [
+          {
+            id: "sec-main",
+            name: "Main Section",
+            actions: [
+              {
+                id: "act-send-message",
+                name: "SendMessage",
+                event: "click",
+                actionSteps: [
+                  {
+                    id: "step-trans-1",
+                    order: 1,
+                    type: "transform",
+                    transformerName: "generateChatId",
+                    functionRef: {
+                      name: "generateChatId",
+                      importPath: "@workspace/transformers",
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = compileTransformerHelpers([pageNode]);
+    expect(result.files.length).toBeGreaterThan(0);
+
+    const helperFile = result.files.find((f) => f.filename.includes("generateChatId.ts"));
+    expect(helperFile).toBeDefined();
+
+    const barrelFile = result.files.find((f) => f.filename.endsWith("src/index.ts"));
+    expect(barrelFile?.content).toContain('export * from "./generateChatId";');
+
+    const pkgFile = result.files.find((f) => f.filename.endsWith("packages/transformers/package.json"));
+    expect(pkgFile).toBeDefined();
   });
 });
 

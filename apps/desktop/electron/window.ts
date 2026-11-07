@@ -9,6 +9,7 @@ import {
   getAppIcon,
 } from "./constants";
 import { log } from "./logger";
+import { getStoredSessionToken, restoreSessionCookies } from "./services/auth";
 
 let mainWindow: BrowserWindow | null = null;
 let currentServerPort: number = DEFAULT_PORT;
@@ -92,10 +93,23 @@ export async function createMainWindow(): Promise<BrowserWindow> {
     ...(iconPath ? { icon: iconPath } : {}),
   });
 
-  // Inject x-electron-app header on all requests
+  // Inject x-electron-app header and ensure stored session cookies are attached on all requests
   mainWindow.webContents.session.webRequest.onBeforeSendHeaders(
     (details, callback) => {
       details.requestHeaders["x-electron-app"] = "1";
+      const token = getStoredSessionToken();
+      if (token) {
+        const existingCookie =
+          details.requestHeaders["Cookie"] ||
+          details.requestHeaders["cookie"] ||
+          "";
+        if (!existingCookie.includes("better-auth.session_token=")) {
+          const cookieAddition = `better-auth.session_token=${token}; is_electron=1`;
+          details.requestHeaders["Cookie"] = existingCookie
+            ? `${existingCookie}; ${cookieAddition}`
+            : cookieAddition;
+        }
+      }
       callback({ cancel: false, requestHeaders: details.requestHeaders });
     }
   );
@@ -324,6 +338,7 @@ export async function createMainWindow(): Promise<BrowserWindow> {
         if (portMatch?.[1]) currentServerPort = parseInt(portMatch[1], 10);
 
         try {
+          await restoreSessionCookies(discoveredUrl);
           log(`[window] Connecting to dev server at ${discoveredUrl}/projects...`);
           updateStatus(`Connecting to ${discoveredUrl}...`);
           await mainWindow.loadURL(`${discoveredUrl}/projects`);
@@ -412,6 +427,7 @@ export async function createMainWindow(): Promise<BrowserWindow> {
     showSplashScreen("Connecting to Dezign2App...");
     currentAppUrl = PROD_SERVER_URL;
     const targetUrl = `${PROD_SERVER_URL}/projects`;
+    await restoreSessionCookies(PROD_SERVER_URL);
     log(`[window] Production mode: connecting directly to ${targetUrl}`);
     await loadWithRetry(targetUrl, 20, 1500);
   }

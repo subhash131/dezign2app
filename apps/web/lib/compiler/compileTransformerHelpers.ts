@@ -141,6 +141,82 @@ export function compileTransformerHelpers(
     }
   });
 
+  // ── Collect transformer action steps from WebPage nodes ─────────────────
+  const webPageNodes = allNodes.filter((n) => n.type === "webPage");
+  webPageNodes.forEach((wp) => {
+    const rawSections = Array.isArray(wp.data?.sections) ? wp.data.sections : [];
+    const rawEvents = Array.isArray(wp.data?.events) ? wp.data.events : [];
+    const allActions = [
+      ...rawSections.flatMap((s: any) => s.actions || []),
+      ...rawEvents,
+    ];
+    allActions.forEach((act: any) => {
+      const steps = Array.isArray(act.actionSteps) ? act.actionSteps : [];
+      steps.forEach((step: any) => {
+        if (step.type !== "transform") return;
+        const rawName = step.functionRef?.name || step.transformerName || step.name;
+        if (!rawName) return;
+        const fnName = toVarName(rawName);
+
+        // Check if already covered by an existing helper
+        if (
+          globalHelpers.some((h) => h.name === fnName) ||
+          Array.from(localHelpersByService.values()).some((list) =>
+            list.some((h) => h.name === fnName),
+          )
+        ) {
+          return;
+        }
+
+        // Check if there is an existing transformer node with code or schema
+        const matchedTrNode = allNodes.find(
+          (n) =>
+            (n.type === "transformer" || n.type === "transformer_ref") &&
+            (n.id === step.transformerNodeId ||
+              n.id === step.transformerRefNodeId ||
+              n.data?.functionName === rawName ||
+              n.data?.label === rawName),
+        );
+        const resolvedCode =
+          step.code ||
+          matchedTrNode?.data?.code ||
+          `return { id: Math.random().toString(36).substring(2, 9) };`;
+
+        const returnSchema = reconcileReturnSchema(
+          (step.functionRef?.returnSchema ||
+            matchedTrNode?.data?.returnSchema || [
+              { name: "id", type: "string" },
+            ]) as SchemaFieldLike[],
+          resolvedCode,
+          step.functionRef?.inputSchema || matchedTrNode?.data?.inputSchema,
+        );
+
+        const helperData: TransformerHelperNodeData = {
+          id: step.transformerNodeId || step.id || `trans-${fnName}`,
+          name: fnName,
+          description: step.description || `Transformer helper for ${fnName}`,
+          scope: "global",
+          inputSchema: step.functionRef?.inputSchema || matchedTrNode?.data?.inputSchema || [],
+          logicMode: "code",
+          prompt: step.prompt || matchedTrNode?.data?.prompt,
+          code: resolvedCode,
+          returnSchema: returnSchema.map((f) => ({
+            name: f.name,
+            type: f.type ?? "string",
+            required: f.required,
+            description: f.description,
+          })),
+          isAsync: Boolean(step.isAsync || matchedTrNode?.data?.isAsync),
+          importedTransformerIds: step.importedTransformerIds || matchedTrNode?.data?.importedTransformerIds || [],
+          packageImports: step.packageImports || matchedTrNode?.data?.packageImports || [],
+          customDependencies: step.customDependencies || matchedTrNode?.data?.customDependencies || [],
+        };
+
+        globalHelpers.push(helperData);
+      });
+    });
+  });
+
   // Map of all helpers by ID and name for cross-transformer dependency resolution
   const allHelpersById = new Map<string, TransformerHelperNodeData>();
   [...globalHelpers, ...Array.from(localHelpersByService.values()).flat()].forEach((h) => {
