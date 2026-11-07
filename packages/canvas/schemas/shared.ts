@@ -423,6 +423,10 @@ export interface PipelineStep {
   clientDeliveryFilterExpr?: string;
   /** Optional payload mapping — reshape the data object before pushing */
   clientDeliveryPayloadMapping?: string;
+  /** Parameter mappings for dynamic target page routes (e.g. { id: "params.id" }) */
+  clientDeliveryPathParamBindings?: Record<string, string>;
+  /** Query parameter mappings for target page routes (e.g. { tab: "query.tab" }) */
+  clientDeliveryQueryParamBindings?: Record<string, string>;
 
   // ─── langgraph_invoke step ───
   /** ID of the LangGraph canvas node to invoke */
@@ -620,6 +624,8 @@ export const pipelineStepSchema: z.ZodType<PipelineStep> = z.lazy(() =>
     clientDeliveryWebhookMethod: z.enum(["POST", "PUT", "PATCH"]).optional(),
     clientDeliveryFilterExpr: z.string().optional(),
     clientDeliveryPayloadMapping: z.string().optional(),
+    clientDeliveryPathParamBindings: z.record(z.string()).optional(),
+    clientDeliveryQueryParamBindings: z.record(z.string()).optional(),
 
     // langgraph_invoke fields
     langGraphTargetNodeId: z.string().optional(),

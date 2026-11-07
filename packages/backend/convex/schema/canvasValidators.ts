@@ -227,6 +227,8 @@ export const safePipelineStepSchema = z.object({
   clientDeliveryWebhookMethod: z.enum(["POST", "PUT", "PATCH"]).optional(),
   clientDeliveryFilterExpr: z.string().optional(),
   clientDeliveryPayloadMapping: z.string().optional(),
+  clientDeliveryPathParamBindings: z.record(z.string()).optional(),
+  clientDeliveryQueryParamBindings: z.record(z.string()).optional(),
 
   // langgraph_invoke fields
   langGraphTargetNodeId: z.string().optional(),
