@@ -4,6 +4,8 @@ import type {
   FrontendFieldSource,
   FrontendRequestFieldBinding,
   FrontendTransformBinding,
+  NavigationPathParamBinding,
+  NavigationQueryParamBinding,
   FrontendActionStepDraft,
   QueryParamUpdateItem,
   BackendNode,
@@ -20,6 +22,8 @@ export type {
   FrontendFieldSource,
   FrontendRequestFieldBinding,
   FrontendTransformBinding,
+  NavigationPathParamBinding,
+  NavigationQueryParamBinding,
   FrontendActionStepDraft,
   QueryParamUpdateItem,
   BackendNode,
@@ -123,6 +127,7 @@ export interface ResponseFieldPickerProps {
   disabled?: boolean;
   isStorage?: boolean;
   customSuggestions?: ComboboxOption[];
+  className?: string;
 }
 
 export interface QueryParamsStepProps {

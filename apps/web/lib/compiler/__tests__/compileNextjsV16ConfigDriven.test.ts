@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { compileNextjsV16WebClient } from "../webClients/nextjs/v16";
+import { compileWebPageNode } from "../compileWebPageNode";
 import { compileMonorepo } from "../compileMonorepo";
 import { BackendNode, BackendEdge } from "@/types/canvas";
 import { Endpoint, CompiledFile } from "@workspace/canvas/types";
@@ -374,6 +375,53 @@ describe("compileNextjsV16WebClient - Configuration-Driven Output", () => {
     const pageFile = result.files.find((f: CompiledFile) => f.filename.endsWith("page.tsx"));
     expect(pageFile?.content).not.toContain("triggerLogs");
     expect(pageFile?.content).not.toContain("Output Log");
+  });
+
+  it("compiles navigation action with dynamic route parameters and pathParamBindings via compileWebPageNode", () => {
+    const pageNode: BackendNode = {
+      id: "node-page-dynamic-nav",
+      type: "webPage",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "Chat Overview",
+        appSlug: "chat-app",
+        sections: [
+          {
+            id: "sec-chat-nav",
+            name: "Chat Navigation Section",
+            renderMode: "server",
+            loadStrategy: "eager",
+            actions: [
+              {
+                id: "act-open-chat",
+                name: "Open Chat",
+                event: "navigateToPage",
+                targetRoute: "/chat/[id]",
+                pathParamBindings: [
+                  {
+                    paramName: "id",
+                    source: {
+                      kind: "route_param",
+                      paramName: "id",
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = compileWebPageNode(pageNode);
+    const actionFile = result.files.find((f: CompiledFile) =>
+      f.filename.endsWith("OpenChatAction.tsx"),
+    );
+    expect(actionFile).toBeDefined();
+    expect(actionFile?.content).toContain("useParams");
+    expect(actionFile?.content).toContain("targetHref");
+    expect(actionFile?.content).toContain("/chat/");
   });
 
   it("should NOT generate any frontend app in compileMonorepo if no WebApp node exists", () => {

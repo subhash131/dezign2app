@@ -16,6 +16,7 @@ export const ResponseFieldPicker: React.FC<ResponseFieldPickerProps> = ({
   placeholder = "e.g. data.id or token",
   disabled = false,
   isStorage = false,
+  className,
 }) => {
   const suggestions = useMemo(() => {
     const stepOptions = step
@@ -69,6 +70,7 @@ export const ResponseFieldPicker: React.FC<ResponseFieldPickerProps> = ({
       placeholder={placeholder}
       headerLabel="Suggested Response Fields"
       disabled={disabled}
+      className={className}
       rootOptionLabel="(whole response)"
     />
   );

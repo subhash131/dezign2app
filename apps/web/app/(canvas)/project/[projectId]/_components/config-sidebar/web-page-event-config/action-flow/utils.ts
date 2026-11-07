@@ -863,6 +863,37 @@ export function deriveStepsFromEdges(
 /**
  * Formats a clean runtime summary string for display in the sidebar.
  */
+export function formatFieldSource(src?: FrontendFieldSource): string {
+  if (!src) return "value";
+  if (src.kind === "literal") return `"${src.value || ""}"`;
+  if (src.kind === "state_var")
+    return (
+      src.fieldPath ||
+      (src.storeName
+        ? `${src.storeName}.${src.stateKey}`
+        : `state.${src.stateKey}`)
+    );
+  if (src.kind === "user_input") return `input.${src.fieldName}`;
+  if (src.kind === "prev_response") return `step.${src.fieldPath}`;
+  if (src.kind === "route_param") return `params.${src.paramName}`;
+  if (src.kind === "query_param") return `query.${src.paramName}`;
+  if (src.kind === "session_storage") return `sessionStorage.${src.key}`;
+  if (src.kind === "local_storage") return `localStorage.${src.key}`;
+  if (src.kind === "cookie") return `cookie.${src.cookieName}`;
+  if (src.kind === "item_prop")
+    return `item.${src.propPath || src.fieldPath || "id"}`;
+  if (src.kind === "realtime_payload")
+    return `stream.${src.fieldPath || "payload"}`;
+  if (src.kind === "auth_token") {
+    return src.tokenType === "cookie"
+      ? "cookie.session_token"
+      : src.tokenType === "local_storage"
+      ? "localStorage.auth_token"
+      : "auth.sessionToken";
+  }
+  return "value";
+}
+
 function formatDraftStep(
   draft: FrontendActionStepDraft,
   stepNum: number,
@@ -873,30 +904,6 @@ function formatDraftStep(
       const nav = draft.queryParamNavMode || "replace";
       const scroll = draft.queryParamScroll ? "scroll: true" : "scroll: false";
 
-      const formatSource = (src?: FrontendFieldSource): string => {
-        if (!src) return "value";
-        if (src.kind === "literal") return `"${src.value || ""}"`;
-        if (src.kind === "state_var")
-          return src.fieldPath || (src.storeName ? `${src.storeName}.${src.stateKey}` : `state.${src.stateKey}`);
-        if (src.kind === "user_input") return `input.${src.fieldName}`;
-        if (src.kind === "prev_response") return `step.${src.fieldPath}`;
-        if (src.kind === "route_param") return `params.${src.paramName}`;
-        if (src.kind === "query_param") return `query.${src.paramName}`;
-        if (src.kind === "session_storage") return `sessionStorage.${src.key}`;
-        if (src.kind === "local_storage") return `localStorage.${src.key}`;
-        if (src.kind === "cookie") return `cookie.${src.cookieName}`;
-        if (src.kind === "item_prop") return `item.${src.propPath || src.fieldPath || "id"}`;
-        if (src.kind === "realtime_payload") return `stream.${src.fieldPath || "payload"}`;
-        if (src.kind === "auth_token") {
-          return src.tokenType === "cookie"
-            ? "cookie.session_token"
-            : src.tokenType === "local_storage"
-            ? "localStorage.auth_token"
-            : "auth.sessionToken";
-        }
-        return "value";
-      };
-
       const updates = draft.queryParamsUpdates;
       if (updates && updates.length > 1) {
         const ops = updates
@@ -905,7 +912,7 @@ function formatDraftStep(
             const m = (u.mode || "set").toUpperCase();
             if (m === "REMOVE") return `REMOVE "${k}"`;
             if (m === "TOGGLE") return `TOGGLE "${k}"`;
-            return `SET "${k}" = ${formatSource(u.valueSource)}`;
+            return `SET "${k}" = ${formatFieldSource(u.valueSource)}`;
           })
           .join(", ");
         lines.push(
@@ -916,16 +923,34 @@ function formatDraftStep(
 
       const key = draft.queryParamKey || "param";
       const mode = (draft.queryParamMode || "set").toUpperCase();
-      const val = formatSource(draft.queryParamValueSource);
+      const val = formatFieldSource(draft.queryParamValueSource);
       lines.push(
         `// Step ${stepNum}: [UPDATE QUERY PARAMS] ${mode} "${key}"${mode !== "REMOVE" && mode !== "TOGGLE" ? ` = ${val}` : ""} (${nav}, ${scroll})`,
       );
       break;
     }
     case "navigation": {
-      lines.push(
-        `// Step ${stepNum}: [NAVIGATE] -> ${draft.targetRoute || "/"} (${draft.navCondition || "direct"})`,
-      );
+      const route = draft.targetRoute || "/";
+      const bindings = draft.pathParamBindings || [];
+      if (bindings.length > 0) {
+        let templateRoute = route;
+        bindings.forEach((b) => {
+          templateRoute = templateRoute.replace(
+            new RegExp(`\\[${b.paramName}\\]`, "g"),
+            `\${${formatFieldSource(b.source)}}`,
+          );
+        });
+        lines.push(
+          `// Step ${stepNum}: [NAVIGATE] -> router.push(\`${templateRoute}\`) (${draft.navCondition || "direct"})`,
+        );
+        bindings.forEach((b) => {
+          lines.push(`//         [${b.paramName}] <- ${formatFieldSource(b.source)}`);
+        });
+      } else {
+        lines.push(
+          `// Step ${stepNum}: [NAVIGATE] -> router.push("${route}") (${draft.navCondition || "direct"})`,
+        );
+      }
       break;
     }
     case "state_mutation": {

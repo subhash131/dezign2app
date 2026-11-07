@@ -535,14 +535,20 @@ export function generatePageAndComponentFiles({
         let requireAuth = Boolean(effectiveAuthNode);
         let link: ReturnType<typeof resolveLinkedEndpoint> = null;
 
-        if (evtType === "navigateToPage") {
+        const navStep = Array.isArray(evt.actionSteps)
+          ? evt.actionSteps.find((s) => s.type === "navigation")
+          : undefined;
+
+        if (evtType === "navigateToPage" || navStep) {
+          const rawTargetRoute = navStep?.targetRoute || evt.targetRoute;
+          const rawTargetPageId = navStep?.targetPageId || evt.targetPageId;
           const pageRefLink = resolvePageRefLink(
             node.id,
             evt.id,
             allNodes,
             allEdges,
-            evt.targetPageId,
-            evt.targetRoute,
+            rawTargetPageId,
+            rawTargetRoute,
           );
           targetRoute = pageRefLink.targetRoute;
           targetPageLabel = pageRefLink.targetNodeName;
