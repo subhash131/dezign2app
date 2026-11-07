@@ -434,6 +434,24 @@ export function renderLangGraphInvokeStep(
       rawLines.push(
         `const canFlush = typeof (res as unknown as { flush?: unknown }).flush === "function";`,
       );
+      let sseChannelExpr: string | undefined;
+      if (!isRaw) {
+        if (step.clientDeliveryPathParamBindings) {
+          const firstBinding = Object.values(step.clientDeliveryPathParamBindings)[0];
+          if (firstBinding) {
+            sseChannelExpr = resolvePathAccessor(firstBinding, ctx);
+          }
+        }
+        if (!sseChannelExpr && step.clientDeliveryRoom) {
+          sseChannelExpr = resolvePathAccessor(step.clientDeliveryRoom, ctx);
+        }
+        if (!sseChannelExpr && threadIdExpr) {
+          sseChannelExpr = threadIdExpr;
+        }
+      }
+      const sseEventName = step.clientDeliveryEventName || "message";
+      const sseChannelArg = sseChannelExpr ? `, String(${sseChannelExpr})` : "";
+
       if (isRaw) {
         rawLines.push(
           `const sendEvent = (data: unknown) => {`,
@@ -445,9 +463,11 @@ export function renderLangGraphInvokeStep(
       } else {
         rawLines.push(
           `const sendEvent = (data: unknown) => {`,
-          `  if (res.writableEnded || res.destroyed) return;`,
-          `  res.write(\`${sseEvt}data: \${JSON.stringify(data)}\\n\\n\`);`,
-          `  if (canFlush) (res as unknown as { flush: () => void }).flush();`,
+          `  if (!res.writableEnded && !res.destroyed) {`,
+          `    res.write(\`${sseEvt}data: \${JSON.stringify(data)}\\n\\n\`);`,
+          `    if (canFlush) (res as unknown as { flush: () => void }).flush();`,
+          `  }`,
+          `  sseBroadcast(${JSON.stringify(sseEventName)}, data${sseChannelArg});`,
           `};`,
         );
       }
@@ -549,6 +569,7 @@ export function renderLangGraphInvokeStep(
         }
         rawLines.push(`  sendEvent({ type: "stream_end", done: true, content: ${outputVariable}Content, usage: ${stepPrefix}TokenUsage, threadId: ${threadIdExpr || "undefined"} });`);
         rawLines.push(`  res.write("${sseEvt}data: [DONE]\\n\\n");`);
+        rawLines.push(`  sseBroadcast(${JSON.stringify(sseEventName)}, "[DONE]"${sseChannelArg});`);
       }
       rawLines.push(
         `  res.end();`,

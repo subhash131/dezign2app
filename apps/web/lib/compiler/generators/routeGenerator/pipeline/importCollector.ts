@@ -94,7 +94,15 @@ export function collectPipelineImports(
 
       if (s.langGraphStreamingEnabled) {
         const streamProtocol = s.langGraphStreamingProtocol || "sse";
-        if (streamProtocol === "websocket") {
+        if (streamProtocol === "sse") {
+          const ssePath = "../lib";
+          const sseExisting = imports.get(ssePath);
+          if (sseExisting) {
+            sseExisting.add("sseBroadcast");
+          } else {
+            imports.set(ssePath, new Set(["sseBroadcast"]));
+          }
+        } else if (streamProtocol === "websocket") {
           const wsPath = "../lib";
           const wsExisting = imports.get(wsPath);
           if (wsExisting) {

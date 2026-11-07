@@ -32,10 +32,36 @@ describe("LangGraph Invoke Pipeline Step Compiler", () => {
       expect(code).toContain('res.setHeader("Connection", "keep-alive")');
       expect(code).toContain('await agent1Graph.stream(agentState, { streamMode: "messages", signal: abort.signal })');
       expect(code).toContain('sendEvent({ token, node: nodeName })');
+      expect(code).toContain('sseBroadcast("message", data);');
+      expect(code).toContain('sseBroadcast("message", "[DONE]");');
       expect(code).toContain('res.write("data: [DONE]\\n\\n")');
       expect(code).toContain("res.end()");
       expect(code).toContain('"messages": body.message');
       expect(code).toContain('"userId": req.headers["x-user-id"]');
+    });
+
+    it("renders decoupled SSE broadcast with dynamic path parameter channel", () => {
+      const step: PipelineStep = {
+        id: "step-agent-decoupled-sse",
+        name: "ChatAgent",
+        type: "langgraph_invoke",
+        outputVariable: "agentResult",
+        langGraphTargetNodeId: "chatAgent",
+        langGraphStreamingEnabled: true,
+        langGraphStreamingProtocol: "sse",
+        clientDeliveryPathParamBindings: {
+          id: "params.id",
+        },
+      };
+
+      const lines = renderPipelineStep(step, {
+        priorOutputs: new Map(),
+        bodyVar: "body",
+      });
+      const code = lines.join("\n");
+
+      expect(code).toContain('sseBroadcast("message", data, String(req.params.id));');
+      expect(code).toContain('sseBroadcast("message", "[DONE]", String(req.params.id));');
     });
 
     it("filters streamed tokens by state channel when langGraphStreamingFields is provided", () => {
