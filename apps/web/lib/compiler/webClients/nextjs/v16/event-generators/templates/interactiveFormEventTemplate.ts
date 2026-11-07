@@ -354,8 +354,8 @@ export function generateInteractiveFormEventTemplate({
 
   const navImports = new Set<string>();
   if (navResult.needsUseRouter) navImports.add("useRouter");
-  if (hasPathParams || hasQueryParams || transImports.needsUseParams || navResult.needsUseParams) navImports.add("useParams");
-  if (hasPathParams || hasQueryParams || transImports.needsUseSearchParams || navResult.needsUseSearchParams) navImports.add("useSearchParams");
+  if (hasPathParams || transImports.needsUseParams || navResult.needsUseParams) navImports.add("useParams");
+  if (hasQueryParams || transImports.needsUseSearchParams || navResult.needsUseSearchParams) navImports.add("useSearchParams");
 
   const navImportLines =
     navImports.size > 0
@@ -379,7 +379,7 @@ ${libImports}${typeDefs.join("\n\n")}
 
 export function ${componentName}({ onTrigger }: ${componentName}Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-${navResult.needsUseRouter ? `  const router = useRouter();\n` : ""}${hasPathParams || hasQueryParams || transImports.needsUseParams || navResult.needsUseParams ? `  const routeParams = useParams();\n  const routeSearchParams = useSearchParams();\n` : ""}${hasPathParams ? `  const [pathParams, setPathParams] = useState<Record<string, string>>(${pathParamsDefault});\n` : ""}${hasQueryParams ? `  const [queryParams, setQueryParams] = useState<Record<string, string>>(${queryParamsDefault});\n` : ""}${hasHeaders ? `  const [customHeaders, setCustomHeaders] = useState<Record<string, string>>(${headersDefault});\n` : ""}${hasBodyFields ? `  const [bodyFields, setBodyFields] = useState<Record<string, string | number | boolean | null | undefined>>(${bodyFieldsDefault});\n` : ""}${hasRawJson ? `  const [rawJsonBody, setRawJsonBody] = useState<string>(${defaultRawJsonString});\n  const [jsonError, setJsonError] = useState<string | null>(null);\n` : ""}
+${navResult.needsUseRouter ? `  const router = useRouter();\n` : ""}${hasPathParams || transImports.needsUseParams || navResult.needsUseParams ? `  const routeParams = useParams();\n` : ""}${hasQueryParams || transImports.needsUseSearchParams || navResult.needsUseSearchParams ? `  const routeSearchParams = useSearchParams();\n` : ""}${hasPathParams ? `  const [pathParams, setPathParams] = useState<Record<string, string>>(${pathParamsDefault});\n` : ""}${hasQueryParams ? `  const [queryParams, setQueryParams] = useState<Record<string, string>>(${queryParamsDefault});\n` : ""}${hasHeaders ? `  const [customHeaders, setCustomHeaders] = useState<Record<string, string>>(${headersDefault});\n` : ""}${hasBodyFields ? `  const [bodyFields, setBodyFields] = useState<Record<string, string | number | boolean | null | undefined>>(${bodyFieldsDefault});\n` : ""}${hasRawJson ? `  const [rawJsonBody, setRawJsonBody] = useState<string>(${defaultRawJsonString});\n  const [jsonError, setJsonError] = useState<string | null>(null);\n` : ""}
 ${hasPathParams ? `  useEffect(() => {
     if (routeParams) {
       setPathParams((prev) => {
