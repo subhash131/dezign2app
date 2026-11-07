@@ -105,9 +105,15 @@ export function generateInteractiveFormEventTemplate({
       : undefined;
   const lastTransformerOutputVar = lastStep ? stepOutputMap.get(lastStep.id) : undefined;
 
+  const apiStep = Array.isArray(actionSteps)
+    ? actionSteps.find((s) => s.type === "api_call")
+    : undefined;
+
   const navResult = renderActionStepNavigation(navStep, targetRoute, stepOutputMap, {
     hasTriggerResult: hasApiUrl,
-    resDataVar: "resData",
+    resDataVar: lastTransformerOutputVar || "resData",
+    lastTransformerOutputVar,
+    apiStepId: apiStep?.id,
   });
 
   const bindings: StoreActionBinding[] =
@@ -451,6 +457,10 @@ ${hasBodyFields || hasRawJson ? `      let payloadBody: Record<string, string | 
         ${hasQueryParams ? "Object.keys(queryParams).length > 0 ? queryParams : undefined" : "undefined"},
         ${hasBodyFields || hasRawJson ? "payloadBody" : "undefined"},
       );
+      const resData =
+        triggerResult && typeof triggerResult === "object" && "data" in triggerResult && triggerResult.data !== undefined
+          ? triggerResult.data
+          : triggerResult;
 ${postStepsCode}${storeSnippet.postTrigger}${navResult.navigationCode ? `${navResult.navigationCode}\n` : ""}    } finally {
       setIsSubmitting(false);
     }
