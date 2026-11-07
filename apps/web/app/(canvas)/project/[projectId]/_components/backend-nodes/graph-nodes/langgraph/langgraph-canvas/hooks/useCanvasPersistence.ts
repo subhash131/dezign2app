@@ -10,6 +10,11 @@ import {
   type LangGraphCanvasEdge,
   ensureLangGraphDataReachability,
 } from "@workspace/canvas";
+import {
+  DEFAULT_LANGGRAPH_INPUT_CHANNELS,
+  DEFAULT_LANGGRAPH_STATE_CHANNELS,
+  DEFAULT_LANGGRAPH_MEMORY_CONFIG,
+} from "@workspace/canvas/constants";
 import { buildGraphData as buildGraphDataUtil } from "./utils/serializer";
 
 interface UseCanvasPersistenceProps {
@@ -60,21 +65,18 @@ export function useCanvasPersistence({
         ...data,
         graphSteps: data.graphSteps || [],
         graphEdges: data.graphEdges || [],
-        inputChannels: data.inputChannels || [],
-        stateChannels: data.stateChannels || [
-          {
-            key: "messages",
-            type: "messages",
-            reducer: "add_messages",
-            defaultValue: [],
-          },
-        ],
+        inputChannels:
+          data.inputChannels && data.inputChannels.length > 0
+            ? data.inputChannels
+            : [...DEFAULT_LANGGRAPH_INPUT_CHANNELS],
+        stateChannels:
+          data.stateChannels && data.stateChannels.length > 0
+            ? data.stateChannels
+            : [...DEFAULT_LANGGRAPH_STATE_CHANNELS],
         customReducers: data.customReducers || [],
-        memoryConfig: data.memoryConfig || {
-          checkpointer: "memory",
-          threadScope: "session",
-          autoSummarize: true,
-          maxWindowMessages: 10,
+        memoryConfig: {
+          ...DEFAULT_LANGGRAPH_MEMORY_CONFIG,
+          ...(data.memoryConfig || {}),
         },
         customLlmNodes: data.customLlmNodes || [],
         customLlmRefNodes: data.customLlmRefNodes || [],

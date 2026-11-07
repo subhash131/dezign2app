@@ -4,7 +4,12 @@ import type {
   BackendNode,
   PageSection,
 } from "@workspace/canvas/types";
-import { parsePageRoute, DEFAULT_ZONES, getDefaultNodeEnvVars } from "@workspace/canvas";
+import {
+  parsePageRoute,
+  DEFAULT_ZONES,
+  getDefaultNodeEnvVars,
+  createDefaultLangGraphNodeData,
+} from "@workspace/canvas";
 import { toVarName } from "@/lib/compiler/utils";
 
 export function createGraphNodeData(
@@ -290,17 +295,7 @@ function getRawGraphNodeData(
   if (type === "langgraph") {
     return {
       ...baseData,
-      inputChannels: [],
-      stateChannels: [
-        {
-          key: "messages",
-          type: "messages",
-          reducer: "add_messages",
-          defaultValue: [],
-        },
-      ],
-      graphSteps: [],
-      graphEdges: [],
+      ...createDefaultLangGraphNodeData(label || "LangGraph Agent"),
     };
   }
 

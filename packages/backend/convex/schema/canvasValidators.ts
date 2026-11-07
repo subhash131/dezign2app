@@ -1026,6 +1026,7 @@ export const langgraphConvexDataValidator = v.object({
     v.object({ x: v.number(), y: v.number() }),
   ),
   endNodePosition: v.optional(v.object({ x: v.number(), y: v.number() })),
+  agentNodePosition: v.optional(v.object({ x: v.number(), y: v.number() })),
   endNodes: v.optional(v.array(v.any())),
   stackOrder: v.optional(v.number()),
 });

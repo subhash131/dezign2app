@@ -222,6 +222,7 @@ export const langgraphDataSchema = baseNodeDataSchema
       .object({ x: z.number(), y: z.number() })
       .optional(),
     endNodePosition: z.object({ x: z.number(), y: z.number() }).optional(),
+    agentNodePosition: z.object({ x: z.number(), y: z.number() }).optional(),
     endNodes: z
       .array(
         z.object({
