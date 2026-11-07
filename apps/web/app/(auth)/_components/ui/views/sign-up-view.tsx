@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { isElectron } from "@/lib/electron";
+import { isElectron, getElectronAPI } from "@/lib/electron";
 import { useSession, signUp, signIn, organization as orgActions } from "@/lib/auth-client";
 import { useMutation } from "convex/react";
 import { api } from "@workspace/backend/_generated/api";
@@ -86,12 +86,6 @@ export const SignUpView = () => {
     }
   }, [session, navigateTo, redirectUrl, ensureUser, isSignedOut]);
 
-  // In desktop app, authentication is strictly handled via external browser auth in SignInView.
-  // Direct in-app signup/login is disabled in desktop.
-  if (mounted && inDesktop) {
-    return <SignInView />;
-  }
-
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !email || !password) return;
@@ -129,6 +123,23 @@ export const SignUpView = () => {
       }
 
       toast.success("Account created successfully!");
+      try {
+        const api = getElectronAPI();
+        if (api?.auth) {
+          const tokenMatch = typeof document !== "undefined"
+            ? document.cookie.match(/(?:^|;\s*)(?:__Secure-)?better-auth\.session_token=([^;]+)/)
+            : null;
+          const rawToken = (res as any)?.data?.token || tokenMatch?.[1];
+          if (rawToken && api.auth.saveSession) {
+            await api.auth.saveSession(rawToken);
+          }
+          if (api.auth.flushCookies) {
+            await api.auth.flushCookies();
+          }
+        }
+      } catch (postSignupErr) {
+        console.warn("[desktop-auth:signup] Post-signup session persistence error:", postSignupErr);
+      }
       navigateTo(redirectUrl);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Sign up failed";

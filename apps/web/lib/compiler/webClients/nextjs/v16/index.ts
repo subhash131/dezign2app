@@ -24,6 +24,7 @@ import {
 } from "./paymentsFileGenerator";
 import {
   generatePageAndComponentFiles,
+  ensureTransformerDependencies,
 } from "./pageFileGenerator";
 import { generateZustandStores, toPascalCase } from "./storeGenerators";
 import { generateBrowserStorageHelper } from "./browserStorageGenerator";
@@ -310,6 +311,39 @@ export function compileNextjsV16WebClient(
     ? "@workspace/db"
     : `@workspace/db-${(dbNodes[0]?.data?.label || "db").toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
 
+  const hasTransformers =
+    enrichedWebClientNodes.some((p) => {
+      const rawSections = Array.isArray(p.data?.sections) ? p.data.sections : [];
+      const rawEvents = Array.isArray(p.data?.events) ? p.data.events : [];
+      const allActs = [
+        ...rawSections.flatMap((s: any) => s.actions || []),
+        ...rawEvents,
+      ];
+      return allActs.some((a: any) =>
+        (a.actionSteps || []).some(
+          (s: any) =>
+            s.type === "transform" ||
+            Boolean(s.transformerName) ||
+            Boolean(s.transformerNodeId) ||
+            Boolean(s.transformerRefNodeId) ||
+            s.functionRef?.importPath === "@workspace/transformers" ||
+            s.functionRef?.importPath?.startsWith("@workspace/transformers"),
+        ),
+      );
+    }) ||
+    allNodes.some(
+      (n) =>
+        (n.type === "transformer" || n.type === "transformer_ref") &&
+        (enrichedWebClientNodes.some((w) => w.id === n.data?.targetWebPageId) ||
+          allEdges.some(
+            (e) =>
+              enrichedWebClientNodes.some((w) => w.id === e.source || w.id === e.target) &&
+              (e.source === n.id || e.target === n.id),
+          ) ||
+          allNodes.some((w) => w.type === "webApp")),
+    ) ||
+    deduplicatedCustomDeps.some((d) => d.name === "@workspace/transformers");
+
   files.push(
     ...generateProjectConfigFiles(
       effectiveAppSlug,
@@ -317,6 +351,7 @@ export function compileNextjsV16WebClient(
       hasDb,
       dbPackageName,
       dbNodes[0],
+      hasTransformers,
     ),
   );
 
@@ -424,15 +459,24 @@ export function compileNextjsV16WebClient(
   });
 
   // 7. Pages, Action Event Components, Page Headers & Auth Components
-  const { pageFiles } = generatePageAndComponentFiles({
+  const { pageFiles, hasTransformers: pageHasTransformers } = generatePageAndComponentFiles({
     webClientNodes: enrichedWebClientNodes,
     pagesInfo,
     endpoints,
     allNodes,
     allEdges,
     authNode,
+    files,
   });
   files.push(...pageFiles);
+
+  if (
+    hasTransformers ||
+    pageHasTransformers ||
+    pageFiles.some((f) => f.content.includes("@workspace/transformers"))
+  ) {
+    ensureTransformerDependencies(files, true);
+  }
 
   // 8. Colocated Next.js Service Route Handlers
   associatedNextjsServiceNodes.forEach((svcNode) => {

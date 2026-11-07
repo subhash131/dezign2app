@@ -1,5 +1,5 @@
 export type { EventComponentMeta } from "./eventGenerators";
-export { generateEventComponent } from "./eventGenerators";
+export { generateEventComponent, hasTransformerActionSteps } from "./eventGenerators";
 export type { SectionMeta } from "./sectionGenerators";
 export { generateSectionComponent } from "./sectionGenerators";
 export {

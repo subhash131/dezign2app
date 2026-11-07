@@ -97,6 +97,12 @@ export interface ElectronAPI {
     clearPendingAuthCallback?(): Promise<{ success: boolean }>;
     /** Flushes all in-memory Chromium session cookies to SQLite disk storage */
     flushCookies?(): Promise<{ success: boolean }>;
+    /** Persists session token to local desktop storage */
+    saveSession?(token: string): Promise<{ success: boolean }>;
+    /** Retrieves stored session token */
+    getSession?(): Promise<string | null>;
+    /** Clears stored session and auth cookies */
+    clearSession?(): Promise<{ success: boolean }>;
   };
 
   docker?: {

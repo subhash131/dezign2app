@@ -1,6 +1,14 @@
 import { ipcMain, shell, session } from "electron";
 import { getMainWindow } from "../window";
-import { openBrowserLogin, getPendingAuthData, clearPendingAuthData } from "../services/auth";
+import {
+  openBrowserLogin,
+  getPendingAuthData,
+  clearPendingAuthData,
+  saveStoredSessionToken,
+  getStoredSessionToken,
+  clearSessionCookies,
+  restoreSessionCookies,
+} from "../services/auth";
 import {
   pickDirectory,
   writeProject,
@@ -94,6 +102,26 @@ export function registerIpcHandlers(): void {
       console.warn("[ipc] Failed to flush cookies:", err);
       return { success: false };
     }
+  });
+
+  // Saves authenticated session token to persistent userData storage and syncs to session cookies
+  ipcMain.handle("auth:save-session", async (_event, token: string) => {
+    const res = saveStoredSessionToken(token);
+    if (res.success) {
+      await restoreSessionCookies();
+    }
+    return res;
+  });
+
+  // Retrieves stored session token from persistent storage
+  ipcMain.handle("auth:get-session", async () => {
+    return getStoredSessionToken();
+  });
+
+  // Clears stored session token and deletes session cookies
+  ipcMain.handle("auth:clear-session", async () => {
+    await clearSessionCookies();
+    return { success: true };
   });
 
   // ── File System ────────────────────────────

@@ -16,6 +16,22 @@ export type { EventComponentMeta };
 export { METHOD_BADGE_CLASSES };
 
 /**
+ * Detects whether an event item has transformer action steps or transformer references.
+ */
+export function hasTransformerActionSteps(eventItem?: UIEventItem): boolean {
+  if (!eventItem?.actionSteps || !Array.isArray(eventItem.actionSteps)) return false;
+  return eventItem.actionSteps.some(
+    (s) =>
+      s.type === "transform" ||
+      Boolean(s.transformerName) ||
+      Boolean(s.transformerNodeId) ||
+      Boolean(s.transformerRefNodeId) ||
+      s.functionRef?.importPath === "@workspace/transformers" ||
+      s.functionRef?.importPath?.startsWith("@workspace/transformers"),
+  );
+}
+
+/**
  * Generates an event component for Next.js web clients.
  * Produces navigation links for page navigation, storage upload components for
  * file-upload actions, simple buttons for parameterless triggers, or interactive

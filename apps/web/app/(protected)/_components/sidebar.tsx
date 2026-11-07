@@ -37,6 +37,7 @@ import { useTheme } from "next-themes";
 import { OrgSwitcher } from "@/components/auth/org-switcher";
 import { signOut, useSession, useActiveOrganization } from "@/lib/auth-client";
 import { logoutUser } from "@/app/(auth)/_components/actions";
+import { getElectronAPI } from "@/lib/electron";
 import { useQuery } from "convex/react";
 import { api } from "@workspace/backend/_generated/api";
 import {
@@ -185,6 +186,13 @@ const ProtectedSidebar = () => {
 
       // 5. Clear localStorage / sessionStorage auth items
       if (typeof window !== "undefined") {
+        try {
+          const api = getElectronAPI();
+          if (api?.auth?.clearSession) {
+            await api.auth.clearSession();
+          }
+        } catch {}
+
         try {
           const keys = Object.keys(localStorage);
           keys.forEach((k) => {

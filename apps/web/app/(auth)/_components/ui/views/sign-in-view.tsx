@@ -243,15 +243,19 @@ export const SignInView = () => {
         document.cookie = `is_electron=1; path=/; max-age=2592000; SameSite=Lax${secureFlag}${domainFlag}`;
         log("[desktop-auth:view] Cookies after setting:", document.cookie);
 
-        // Immediately commit Chromium in-memory cookies to SQLite disk storage
+        // Immediately commit session token and Chromium in-memory cookies to native storage
         try {
           const api = getElectronAPI();
+          if (api?.auth?.saveSession && data.token) {
+            await api.auth.saveSession(data.token);
+            log("[desktop-auth:view] Electron disk session token saved.");
+          }
           if (api?.auth?.flushCookies) {
             await api.auth.flushCookies();
             log("[desktop-auth:view] Electron disk cookie flush completed.");
           }
         } catch (e) {
-          console.warn("[desktop-auth:view] Cookie flush error:", e);
+          console.warn("[desktop-auth:view] Cookie/session save error:", e);
         }
 
         setWaitingForAuth(false);
@@ -402,6 +406,23 @@ export const SignInView = () => {
         setError(res.error.message || "Invalid credentials");
       } else {
         toast.success("Signed in successfully!");
+        try {
+          const api = getElectronAPI();
+          if (api?.auth) {
+            const tokenMatch = typeof document !== "undefined"
+              ? document.cookie.match(/(?:^|;\s*)(?:__Secure-)?better-auth\.session_token=([^;]+)/)
+              : null;
+            const rawToken = (res as any)?.data?.token || tokenMatch?.[1];
+            if (rawToken && api.auth.saveSession) {
+              await api.auth.saveSession(rawToken);
+            }
+            if (api.auth.flushCookies) {
+              await api.auth.flushCookies();
+            }
+          }
+        } catch (postLoginErr) {
+          console.warn("[desktop-auth:view] Post-login session persistence error:", postLoginErr);
+        }
         navigateTo(redirectUrl);
       }
     } catch (err) {
@@ -437,10 +458,8 @@ export const SignInView = () => {
   };
 
   // Desktop Application View:
-  // In desktop mode, authentication is strictly handled via external system browser authentication
-  // (OAuth / web session -> deep link ticket exchange) to ensure security, cookie isolation,
-  // and full OAuth provider compatibility. Direct in-app login options (Email, GitHub, Google auth)
-  // are deliberately excluded in the desktop app.
+  // In desktop mode, users can sign in directly using email & password, or use
+  // browser-based authentication (OAuth / web session -> deep link ticket exchange).
   if (mounted && inDesktop) {
     return (
       <div className="flex w-full items-center justify-center p-4 min-h-[400px]">
@@ -464,7 +483,7 @@ export const SignInView = () => {
             </CardDescription>
           </CardHeader>
 
-          <CardContent className="space-y-4 pt-0 pb-6">
+          <CardContent className="space-y-4 pt-0 pb-4">
             {/* Primary Browser Sign-In */}
             <Button
               onClick={handleBrowserLogin}
@@ -489,12 +508,6 @@ export const SignInView = () => {
                 </>
               )}
             </Button>
-
-            {error && (
-              <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2.5 text-xs text-destructive text-center">
-                {error}
-              </div>
-            )}
 
             {waitingForAuth && !isExchanging && (
               <form
@@ -522,7 +535,89 @@ export const SignInView = () => {
                 </div>
               </form>
             )}
+
+            <div className="relative my-3">
+              <div className="absolute inset-0 flex items-center">
+                <Separator />
+              </div>
+              <div className="relative flex justify-center text-[10px] uppercase">
+                <span className="bg-card px-2 text-muted-foreground font-medium">
+                  Or sign in directly
+                </span>
+              </div>
+            </div>
+
+            {/* Direct In-App Email & Password Sign In */}
+            <form onSubmit={handleEmailSignIn} className="space-y-3 text-left">
+              <div className="space-y-1.5">
+                <Label htmlFor="email" className="text-xs font-medium">
+                  Email
+                </Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="name@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  disabled={loading || isExchanging}
+                  className="h-9 text-xs"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="password" className="text-xs font-medium">
+                    Password
+                  </Label>
+                </div>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  disabled={loading || isExchanging}
+                  className="h-9 text-xs"
+                />
+              </div>
+
+              <Button
+                type="submit"
+                size="sm"
+                disabled={loading || isExchanging}
+                className="w-full gap-2 text-xs font-medium"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Signing In...
+                  </>
+                ) : (
+                  "Sign In with Password"
+                )}
+              </Button>
+            </form>
+
+            {error && (
+              <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2.5 text-xs text-destructive text-center">
+                {error}
+              </div>
+            )}
           </CardContent>
+
+          <CardFooter className="flex flex-col gap-2 pt-0 pb-6 text-center text-xs text-muted-foreground">
+            <div>
+              Don&apos;t have an account?{" "}
+              <Link
+                href="/sign-up"
+                className="font-medium text-primary hover:underline"
+              >
+                Sign up
+              </Link>
+            </div>
+          </CardFooter>
         </Card>
       </div>
     );
