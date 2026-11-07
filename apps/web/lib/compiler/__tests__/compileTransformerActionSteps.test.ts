@@ -122,7 +122,7 @@ describe("WebPageNode Action Transformer Step Compilation", () => {
     expect(code).toContain('import { generateChatId } from "@workspace/transformers";');
     expect(code).toContain("const router = useRouter();");
     expect(code).toContain("const generateChatIdResult = await generateChatId();");
-    expect(code).toContain("router.push(`/chat/${String(generateChatIdResult?.id ?? \"\")}`);");
+    expect(code).toContain('router.push(`/chat/${String((typeof generateChatIdResult === "object" && generateChatIdResult !== null ? (generateChatIdResult as Record<string, unknown>)?.["id"] : generateChatIdResult) ?? "")}`);');
   });
 
   it("compiles pre-trigger and post-trigger transformer steps around an API endpoint call", () => {
@@ -472,7 +472,7 @@ describe("WebPageNode Action Transformer Step Compilation", () => {
     );
 
     expect(code).toContain("const generateChatIdResult = await generateChatId();");
-    expect(code).toContain("router.push(`/chat/${String(generateChatIdResult?.id ?? \"\")}`);");
+    expect(code).toContain('router.push(`/chat/${String((typeof generateChatIdResult === "object" && generateChatIdResult !== null ? (generateChatIdResult as Record<string, unknown>)?.["id"] : generateChatIdResult) ?? "")}`);');
     expect(code).not.toContain("router.push(`/chat/${String(resData?.id ?? \"\")}`);");
     expect(code).toContain("const resData =");
   });
