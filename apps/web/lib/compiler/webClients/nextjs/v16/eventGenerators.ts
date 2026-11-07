@@ -38,12 +38,37 @@ export function generateEventComponent(
   serviceName?: string,
   storageConfig?: StorageUploadConfig,
 ): string {
-  // 1. Navigation Event (e.g. navigateToPage or action step with navigation)
+  // 1. Navigation Event (pure navigation without transformers or other active steps)
   const navStep = Array.isArray(eventItem?.actionSteps)
     ? eventItem?.actionSteps.find((s) => s.type === "navigation")
     : undefined;
 
-  if (eventType === "navigateToPage" || (navStep && !endpoint && !url)) {
+  const hasExecutionSteps =
+    Array.isArray(eventItem?.actionSteps) &&
+    eventItem.actionSteps.some(
+      (s) =>
+        s.type === "transform" ||
+        s.type === "api_call" ||
+        s.type === "storage_put" ||
+        s.type === "state_mutation" ||
+        s.type === "browser_storage",
+    );
+
+  const hasStoreBindings =
+    Boolean(eventItem?.storeActionBinding) ||
+    Boolean(eventItem?.storeActionBindings?.length) ||
+    (Array.isArray(eventItem?.actionSteps) &&
+      eventItem.actionSteps.some((s) => s.type === "state_mutation"));
+
+  const isPureNavigation =
+    (eventType === "navigateToPage" ||
+      (navStep && !endpoint && (!url || url === "#"))) &&
+    !hasExecutionSteps &&
+    !hasStoreBindings &&
+    navStep?.navCondition !== "on_success" &&
+    navStep?.navCondition !== "on_error";
+
+  if (isPureNavigation) {
     const effectiveRoute =
       navStep?.targetRoute || targetRoute || eventItem?.targetRoute;
     const pathParamBindings =
@@ -77,29 +102,15 @@ export function generateEventComponent(
   const typeDefs = generateTypeDefinitions(componentName, params, endpointLink);
 
   // 4A. Storage Upload Component — rendered when a StorageRef node is connected
-  const evtAny = eventItem as {
-    storageNodeId?: string;
-    uploadBucketId?: string;
-    storageOperationBinding?: { bucketId?: string };
-    uploadMaxFileSizeMb?: number;
-    uploadAcceptedMimeTypes?: string;
-  } | undefined;
-  const epAny = endpoint as {
-    connectedStorageNodeId?: string;
-    uploadMaxFileSizeMb?: number;
-    uploadAcceptedMimeTypes?: string;
-  } | undefined;
-
   const isExplicitUpload =
     eventType === "fileUpload" ||
-    Boolean(evtAny?.storageNodeId) ||
-    Boolean(evtAny?.uploadBucketId) ||
-    Boolean(evtAny?.storageOperationBinding) ||
+    Boolean(eventItem?.storageNodeId) ||
+    Boolean(eventItem?.uploadBucketId) ||
+    Boolean(eventItem?.storageOperationBinding) ||
     Boolean(
       (endpoint?.pipelineSteps || []).some(
-        (s: { type?: string; functionRef?: { name?: string; importPath?: string } }) =>
+        (s) =>
           s.type === "storage_operation" ||
-          s.type === "storage" ||
           s.functionRef?.importPath?.includes("/storage") ||
           s.functionRef?.name?.toLowerCase().includes("upload"),
       ),
@@ -109,10 +120,13 @@ export function generateEventComponent(
 
   if (hasStorageConnection) {
     const resolvedStorageConfig: StorageUploadConfig = storageConfig ?? {
-      maxSizeMb: evtAny?.uploadMaxFileSizeMb ?? epAny?.uploadMaxFileSizeMb ?? 10,
+      maxSizeMb:
+        eventItem?.uploadMaxFileSizeMb ??
+        endpoint?.uploadMaxFileSizeMb ??
+        10,
       acceptedMimeTypes:
-        evtAny?.uploadAcceptedMimeTypes ??
-        epAny?.uploadAcceptedMimeTypes ??
+        eventItem?.uploadAcceptedMimeTypes ??
+        endpoint?.uploadAcceptedMimeTypes ??
         "image/jpeg,image/png,image/webp,image/gif",
       showPreview: true,
     };
@@ -144,7 +158,9 @@ export function generateEventComponent(
       libraries: eventItem?.libraries || [],
       storeActionBinding: eventItem?.storeActionBinding,
       storeActionBindings: eventItem?.storeActionBindings,
-    serviceName,
+      serviceName,
+      actionSteps: eventItem?.actionSteps,
+      targetRoute: navStep?.targetRoute || targetRoute || eventItem?.targetRoute,
     });
   }
 
@@ -162,6 +178,8 @@ export function generateEventComponent(
     storeActionBinding: eventItem?.storeActionBinding,
     storeActionBindings: eventItem?.storeActionBindings,
     serviceName,
+    actionSteps: eventItem?.actionSteps,
+    targetRoute: navStep?.targetRoute || targetRoute || eventItem?.targetRoute,
   });
 }
 

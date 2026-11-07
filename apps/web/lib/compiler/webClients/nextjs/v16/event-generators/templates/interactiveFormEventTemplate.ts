@@ -1,7 +1,13 @@
-import { StoreActionBinding } from "@workspace/canvas/types";
+import { StoreActionBinding, FrontendActionStepDraft } from "@workspace/canvas/types";
 import { ResolvedEventParameters } from "../types";
 import { resolveStoreActionMethodName } from "../../storeActionResolver";
 import { resolveBaseUrlInfo } from "../paramUtils";
+import {
+  partitionTransformerSteps,
+  resolveTransformerImports,
+  renderTransformerInvocationList,
+  renderActionStepNavigation,
+} from "../transformerStepResolver";
 
 function resolveActionLibImports(libraries?: string[]): string {
   if (!libraries || libraries.length === 0) return "";
@@ -33,6 +39,8 @@ export function generateInteractiveFormEventTemplate({
   storeActionBinding,
   storeActionBindings,
   serviceName,
+  actionSteps,
+  targetRoute,
 }: {
   componentName: string;
   eventName: string;
@@ -46,6 +54,8 @@ export function generateInteractiveFormEventTemplate({
   storeActionBinding?: StoreActionBinding;
   storeActionBindings?: StoreActionBinding[];
   serviceName?: string;
+  actionSteps?: FrontendActionStepDraft[];
+  targetRoute?: string;
 }): string {
   const {
     mergedPathParams,
@@ -67,6 +77,39 @@ export function generateInteractiveFormEventTemplate({
   const libImports = resolveActionLibImports(libraries);
   const urlInfo = resolveBaseUrlInfo(url, serviceName);
 
+  const hasApiUrl = Boolean(url && url.trim() && url !== "#");
+  const navStep = Array.isArray(actionSteps)
+    ? actionSteps.find((s) => s.type === "navigation")
+    : undefined;
+
+  const { preSteps, postSteps } = partitionTransformerSteps(actionSteps, hasApiUrl);
+  const allTransformerSteps = [...preSteps, ...postSteps];
+  const transImports = resolveTransformerImports(allTransformerSteps);
+
+  const stepOutputMap = new Map<string, string>();
+  const preStepsCode = renderTransformerInvocationList(preSteps, stepOutputMap, {
+    hasTriggerResult: false,
+    payloadVar: "bodyFields",
+  });
+  const postStepsCode = renderTransformerInvocationList(postSteps, stepOutputMap, {
+    hasTriggerResult: true,
+    resDataVar: "resData",
+    payloadVar: "bodyFields",
+  });
+
+  const lastStep =
+    postSteps.length > 0
+      ? postSteps[postSteps.length - 1]
+      : preSteps.length > 0
+      ? preSteps[preSteps.length - 1]
+      : undefined;
+  const lastTransformerOutputVar = lastStep ? stepOutputMap.get(lastStep.id) : undefined;
+
+  const navResult = renderActionStepNavigation(navStep, targetRoute, stepOutputMap, {
+    hasTriggerResult: hasApiUrl,
+    resDataVar: "resData",
+  });
+
   const bindings: StoreActionBinding[] =
     Array.isArray(storeActionBindings) && storeActionBindings.length > 0
       ? storeActionBindings
@@ -75,11 +118,13 @@ export function generateInteractiveFormEventTemplate({
       : [];
 
   const uniqueStoreNames = Array.from(
-    new Set(
-      bindings
+    new Set([
+      ...bindings
         .map((b) => b.storeName?.replace(/Store$/i, ""))
         .filter((n): n is string => Boolean(n)),
-    ),
+      ...transImports.uniqueStoreNames,
+      ...navResult.storeNames,
+    ]),
   );
 
   const storeImports =
@@ -103,14 +148,17 @@ export function generateInteractiveFormEventTemplate({
       const storeHookName = `use${rawStoreName.charAt(0).toUpperCase() + rawStoreName.slice(1)}Store`;
       const storeActionName = resolveStoreActionMethodName(b);
 
-      const hasApiUrl = Boolean(url && url.trim() && url !== "#");
-      const src = !hasApiUrl
+      const src = !hasApiUrl && !lastTransformerOutputVar
         ? hasBodyFields || hasRawJson
           ? "payload"
           : "direct"
         : b.updateSource || "response";
       const vPath = b.valuePath?.trim();
       const cVal = b.customValue?.trim();
+
+      const resSourceExpr = lastTransformerOutputVar
+        ? `(typeof triggerResult !== "undefined" ? triggerResult : ${lastTransformerOutputVar})`
+        : `triggerResult`;
 
       if (src === "payload") {
         if (
@@ -199,11 +247,11 @@ export function generateInteractiveFormEventTemplate({
           passedExpr = `Array.isArray(extracted) ? extracted : (extracted !== null && extracted !== undefined ? [extracted] : [])`;
         }
 
-        postTrigger += `      if (triggerResult) {
+        postTrigger += `      if (${resSourceExpr}) {
         const resData =
-          triggerResult && typeof triggerResult === "object" && "data" in triggerResult && triggerResult.data !== undefined
-            ? triggerResult.data
-            : triggerResult;
+          ${resSourceExpr} && typeof ${resSourceExpr} === "object" && "data" in ${resSourceExpr} && (${resSourceExpr} as Record<string, unknown>).data !== undefined
+            ? (${resSourceExpr} as Record<string, unknown>).data
+            : ${resSourceExpr};
         const extracted = ${extractionExpr};
         ${storeHookName}.getState().${storeActionName}(${passedExpr});
       }\n`;
@@ -220,14 +268,14 @@ export function generateInteractiveFormEventTemplate({
           .filter(([_, path]) => path && path.trim())
           .map(([fieldName, path]) => {
             const chain = path.trim().split(".").map((p, i) => (i === 0 ? p : `?.${p}`)).join("");
-            return `${fieldName}: resData?.${chain}`;
+            return `${fieldName}: (resData as Record<string, unknown> | undefined)?.${chain}`;
           });
         if (mappedEntries.length > 0) {
-          postTrigger += `      if (triggerResult) {
+          postTrigger += `      if (${resSourceExpr}) {
         const resData =
-          triggerResult && typeof triggerResult === "object" && "data" in triggerResult && triggerResult.data !== undefined
-            ? triggerResult.data
-            : triggerResult;
+          ${resSourceExpr} && typeof ${resSourceExpr} === "object" && "data" in ${resSourceExpr} && (${resSourceExpr} as Record<string, unknown>).data !== undefined
+            ? (${resSourceExpr} as Record<string, unknown>).data
+            : ${resSourceExpr};
         ${storeHookName}.getState().populate({ ${mappedEntries.join(", ")} });
       }\n`;
           return;
@@ -242,13 +290,13 @@ export function generateInteractiveFormEventTemplate({
         const paramArgs = Object.values(b.parameterMappings).map((path) => {
           if (!path || !path.trim()) return "undefined";
           const chain = path.trim().split(".").map((p, i) => (i === 0 ? p : `?.${p}`)).join("");
-          return `resData?.${chain}`;
+          return `(resData as Record<string, unknown> | undefined)?.${chain}`;
         });
-        postTrigger += `      if (triggerResult) {
+        postTrigger += `      if (${resSourceExpr}) {
         const resData =
-          triggerResult && typeof triggerResult === "object" && "data" in triggerResult && triggerResult.data !== undefined
-            ? triggerResult.data
-            : triggerResult;
+          ${resSourceExpr} && typeof ${resSourceExpr} === "object" && "data" in ${resSourceExpr} && (${resSourceExpr} as Record<string, unknown>).data !== undefined
+            ? (${resSourceExpr} as Record<string, unknown>).data
+            : ${resSourceExpr};
         ${storeHookName}.getState().${storeActionName}(${paramArgs.join(", ")});
       }\n`;
         return;
@@ -280,11 +328,11 @@ export function generateInteractiveFormEventTemplate({
         passedExpr = `Array.isArray(resData) ? resData : (resData !== null && resData !== undefined ? [resData] : [])`;
       }
 
-      postTrigger += `      if (triggerResult) {
+      postTrigger += `      if (${resSourceExpr}) {
         const resData =
-          triggerResult && typeof triggerResult === "object" && "data" in triggerResult && triggerResult.data !== undefined
-            ? triggerResult.data
-            : triggerResult;
+          ${resSourceExpr} && typeof ${resSourceExpr} === "object" && "data" in ${resSourceExpr} && (${resSourceExpr} as Record<string, unknown>).data !== undefined
+            ? (${resSourceExpr} as Record<string, unknown>).data
+            : ${resSourceExpr};
         ${storeHookName}.getState().${storeActionName}(${passedExpr});
       }\n`;
     });
@@ -294,10 +342,25 @@ export function generateInteractiveFormEventTemplate({
 
   const storeSnippet = generateStoreUpdates(hasBodyFields || hasRawJson ? "payloadBody" : "undefined");
 
+  const navImports = new Set<string>();
+  if (navResult.needsUseRouter) navImports.add("useRouter");
+  if (hasPathParams || hasQueryParams || transImports.needsUseParams || navResult.needsUseParams) navImports.add("useParams");
+  if (hasPathParams || hasQueryParams || transImports.needsUseSearchParams || navResult.needsUseSearchParams) navImports.add("useSearchParams");
+
+  const navImportLines =
+    navImports.size > 0
+      ? `import { ${Array.from(navImports).join(", ")} } from "next/navigation";\n`
+      : "";
+
+  const transformerImportLines =
+    transImports.importStatements.length > 0
+      ? `${transImports.importStatements.join("\n")}\n`
+      : "";
+
   return `"use client";
 
 import React, { useState, useEffect } from "react";
-${hasPathParams || hasQueryParams ? `import { useParams, useSearchParams } from "next/navigation";\n` : ""}${storeImports}import { Button } from "@workspace/ui/components/button";
+${navImportLines}${storeImports}${transformerImportLines}import { Button } from "@workspace/ui/components/button";
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@workspace/ui/components/card";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
@@ -306,7 +369,7 @@ ${libImports}${typeDefs.join("\n\n")}
 
 export function ${componentName}({ onTrigger }: ${componentName}Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-${hasPathParams || hasQueryParams ? `  const routeParams = useParams();\n  const routeSearchParams = useSearchParams();\n` : ""}${hasPathParams ? `  const [pathParams, setPathParams] = useState<Record<string, string>>(${pathParamsDefault});\n` : ""}${hasQueryParams ? `  const [queryParams, setQueryParams] = useState<Record<string, string>>(${queryParamsDefault});\n` : ""}${hasHeaders ? `  const [customHeaders, setCustomHeaders] = useState<Record<string, string>>(${headersDefault});\n` : ""}${hasBodyFields ? `  const [bodyFields, setBodyFields] = useState<Record<string, string | number | boolean | null | undefined>>(${bodyFieldsDefault});\n` : ""}${hasRawJson ? `  const [rawJsonBody, setRawJsonBody] = useState<string>(${defaultRawJsonString});\n  const [jsonError, setJsonError] = useState<string | null>(null);\n` : ""}
+${navResult.needsUseRouter ? `  const router = useRouter();\n` : ""}${hasPathParams || hasQueryParams || transImports.needsUseParams || navResult.needsUseParams ? `  const routeParams = useParams();\n  const routeSearchParams = useSearchParams();\n` : ""}${hasPathParams ? `  const [pathParams, setPathParams] = useState<Record<string, string>>(${pathParamsDefault});\n` : ""}${hasQueryParams ? `  const [queryParams, setQueryParams] = useState<Record<string, string>>(${queryParamsDefault});\n` : ""}${hasHeaders ? `  const [customHeaders, setCustomHeaders] = useState<Record<string, string>>(${headersDefault});\n` : ""}${hasBodyFields ? `  const [bodyFields, setBodyFields] = useState<Record<string, string | number | boolean | null | undefined>>(${bodyFieldsDefault});\n` : ""}${hasRawJson ? `  const [rawJsonBody, setRawJsonBody] = useState<string>(${defaultRawJsonString});\n  const [jsonError, setJsonError] = useState<string | null>(null);\n` : ""}
 ${hasPathParams ? `  useEffect(() => {
     if (routeParams) {
       setPathParams((prev) => {
@@ -374,7 +437,7 @@ ${hasBodyFields || hasRawJson ? `      let payloadBody: Record<string, string | 
           return;
         }
       }
-` : ""}${storeSnippet.preTrigger}      const triggerResult = await onTrigger?.(
+` : ""}${preStepsCode}${storeSnippet.preTrigger}      const triggerResult = await onTrigger?.(
         "${eventName}",
         "${eventType}",
         finalUrl,
@@ -384,7 +447,7 @@ ${hasBodyFields || hasRawJson ? `      let payloadBody: Record<string, string | 
         ${hasQueryParams ? "Object.keys(queryParams).length > 0 ? queryParams : undefined" : "undefined"},
         ${hasBodyFields || hasRawJson ? "payloadBody" : "undefined"},
       );
-${storeSnippet.postTrigger}    } finally {
+${postStepsCode}${storeSnippet.postTrigger}${navResult.navigationCode ? `${navResult.navigationCode}\n` : ""}    } finally {
       setIsSubmitting(false);
     }
   };
