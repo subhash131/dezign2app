@@ -474,13 +474,19 @@ function getWorkspaceConfigPath(): string {
 }
 
 export function getStoredProjectWorkspaceDir(projectId: string): string | null {
-  if (!projectId) return null;
   try {
     const configPath = getWorkspaceConfigPath();
     if (!fs.existsSync(configPath)) return null;
     const raw = fs.readFileSync(configPath, "utf-8");
     const parsed = JSON.parse(raw);
-    return typeof parsed[projectId] === "string" ? parsed[projectId] : null;
+    if (projectId && typeof parsed[projectId] === "string" && parsed[projectId]) {
+      return parsed[projectId];
+    }
+    // Fall back to previously selected folder path across projects
+    if (typeof parsed["__last_workspace_dir__"] === "string" && parsed["__last_workspace_dir__"]) {
+      return parsed["__last_workspace_dir__"];
+    }
+    return null;
   } catch (err) {
     console.warn("[fileWriter] Failed to read project-workspaces.json:", err);
     return null;
@@ -491,7 +497,6 @@ export function setStoredProjectWorkspaceDir(
   projectId: string,
   dir: string
 ): { success: boolean } {
-  if (!projectId) return { success: false };
   try {
     const configPath = getWorkspaceConfigPath();
     let currentMap: Record<string, string> = {};
@@ -502,9 +507,15 @@ export function setStoredProjectWorkspaceDir(
       } catch {}
     }
     if (dir) {
-      currentMap[projectId] = dir;
+      if (projectId) {
+        currentMap[projectId] = dir;
+      }
+      // Remember previously selected folder path locally
+      currentMap["__last_workspace_dir__"] = dir;
     } else {
-      delete currentMap[projectId];
+      if (projectId) {
+        delete currentMap[projectId];
+      }
     }
     fs.writeFileSync(configPath, JSON.stringify(currentMap, null, 2), "utf-8");
     return { success: true };

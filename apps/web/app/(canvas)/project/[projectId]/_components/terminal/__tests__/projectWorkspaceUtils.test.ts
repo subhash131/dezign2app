@@ -28,29 +28,38 @@ describe("projectWorkspaceUtils", () => {
   });
 
   describe("cleanLegacyGlobalWorkspaceDir", () => {
-    it("removes legacy dezign2app_workspace_dir key from localStorage", () => {
-      localStorage.setItem("dezign2app_workspace_dir", "C:\\old_shared_dir");
+    it("preserves previously selected workspace directory", () => {
+      localStorage.setItem("dezign2app_workspace_dir", "C:\\my_projects");
       cleanLegacyGlobalWorkspaceDir();
-      expect(localStorage.getItem("dezign2app_workspace_dir")).toBeNull();
+      expect(localStorage.getItem("dezign2app_workspace_dir")).toBe("C:\\my_projects");
     });
   });
 
   describe("getProjectWorkspaceDir & setProjectWorkspaceDir", () => {
-    it("stores and retrieves directories strictly per projectId", () => {
-      setProjectWorkspaceDir("proj_A", "C:\\projects\\appA", "Project A");
-      setProjectWorkspaceDir("proj_B", "C:\\projects\\appB", "Project B");
+    it("returns previously selected folder path for new projects", () => {
+      // Nothing set anywhere initially
+      expect(getProjectWorkspaceDir("proj_new")).toBe("");
 
+      // Set for proj_A
+      setProjectWorkspaceDir("proj_A", "C:\\projects\\appA", "Project A");
       expect(getProjectWorkspaceDir("proj_A")).toBe("C:\\projects\\appA");
+
+      // proj_B has not set an explicit folder yet -> inherits previously selected folder path locally
+      expect(getProjectWorkspaceDir("proj_B")).toBe("C:\\projects\\appA");
+
+      // Set a specific folder for proj_B
+      setProjectWorkspaceDir("proj_B", "C:\\projects\\appB", "Project B");
       expect(getProjectWorkspaceDir("proj_B")).toBe("C:\\projects\\appB");
-      expect(getProjectWorkspaceDir("proj_C")).toBe("");
+      expect(getProjectWorkspaceDir("proj_A")).toBe("C:\\projects\\appA");
     });
 
-    it("clears directory when empty string is passed", () => {
+    it("clears project-specific directory when empty string is passed", () => {
       setProjectWorkspaceDir("proj_A", "C:\\projects\\appA", "Project A");
       expect(getProjectWorkspaceDir("proj_A")).toBe("C:\\projects\\appA");
 
       setProjectWorkspaceDir("proj_A", "");
-      expect(getProjectWorkspaceDir("proj_A")).toBe("");
+      // Cleared project-specific mapping
+      expect(localStorage.getItem("workspace_dir_proj_A")).toBeNull();
     });
   });
 
@@ -65,7 +74,6 @@ describe("projectWorkspaceUtils", () => {
       // Delete project link (in-app deletion)
       deleteProjectWorkspaceDir("proj_to_delete");
 
-      expect(getProjectWorkspaceDir("proj_to_delete")).toBe("");
       expect(localStorage.getItem("workspace_dir_proj_to_delete")).toBeNull();
       expect(localStorage.getItem("docker_dir_proj_to_delete")).toBeNull();
       expect(localStorage.getItem("workspace_project_name_proj_to_delete")).toBeNull();
@@ -75,41 +83,13 @@ describe("projectWorkspaceUtils", () => {
   });
 
   describe("findProjectFolderConflict & clearProjectFolderConflict", () => {
-    it("returns null when directory is not used by any other project", () => {
-      setProjectWorkspaceDir("proj_A", "C:\\projects\\appA", "Project A");
-
-      const conflict = findProjectFolderConflict("proj_B", "C:\\projects\\appB");
-      expect(conflict).toBeNull();
-    });
-
-    it("returns null when current project re-picks its own directory", () => {
-      setProjectWorkspaceDir("proj_A", "C:\\projects\\appA", "Project A");
-
-      const conflict = findProjectFolderConflict("proj_A", "C:\\projects\\appA");
-      expect(conflict).toBeNull();
-    });
-
-    it("detects conflict when another project has already claimed the directory", () => {
-      setProjectWorkspaceDir("proj_A", "C:\\projects\\appA", "Project Alpha");
-
-      const conflict = findProjectFolderConflict(
-        "proj_B",
-        "c:/projects/appa/" // different casing & slash formatting
-      );
-
-      expect(conflict).not.toBeNull();
-      expect(conflict?.projectId).toBe("proj_A");
-      expect(conflict?.projectName).toBe("Project Alpha");
-    });
-
-    it("clears conflict cleanly when reassigning folder to a new project", () => {
+    it("does not block or delete other projects sharing a workspace folder", () => {
       setProjectWorkspaceDir("proj_A", "C:\\projects\\shared", "Project A");
-      expect(findProjectFolderConflict("proj_B", "C:\\projects\\shared")).not.toBeNull();
-
-      // User confirms reassignment
-      clearProjectFolderConflict("proj_B", "C:\\projects\\shared");
       expect(findProjectFolderConflict("proj_B", "C:\\projects\\shared")).toBeNull();
-      expect(getProjectWorkspaceDir("proj_A")).toBe("");
+
+      setProjectWorkspaceDir("proj_B", "C:\\projects\\shared", "Project B");
+      expect(getProjectWorkspaceDir("proj_A")).toBe("C:\\projects\\shared");
+      expect(getProjectWorkspaceDir("proj_B")).toBe("C:\\projects\\shared");
     });
   });
 
@@ -146,7 +126,7 @@ describe("projectWorkspaceUtils", () => {
       useProjectWorkspaceStore.getState().deleteProjectDir("proj_del");
 
       expect(useProjectWorkspaceStore.getState().projectDirs["proj_del"]).toBeUndefined();
-      expect(getProjectWorkspaceDir("proj_del")).toBe("");
+      expect(localStorage.getItem("workspace_dir_proj_del")).toBeNull();
     });
 
     it("syncs from Electron filesystem when localStorage is empty", async () => {
