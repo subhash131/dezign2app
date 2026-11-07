@@ -1249,6 +1249,92 @@ describe("Convex canvasValidators exact schema", () => {
     expect(langgraphConvexDataValidator.fields.customNodeRefNodes).toBeDefined();
   });
 
+  it("validates langgraph node with agentNodePosition from user error payload in Convex & Zod schemas", async () => {
+    const { langgraphDataSchema } = await import("@workspace/canvas/schemas");
+    const { langgraphConvexDataValidator } = await import(
+      "../../../../../packages/backend/convex/schema/canvasValidators"
+    );
+
+    // Exact payload reported in user's Convex upsertBackendNode error:
+    const userPayload = {
+      agentDefinitions: [
+        {
+          agentId: "agentNode",
+          id: "agentNode",
+          llmConfig: { enabled: false },
+          memory: [],
+          middleware: [],
+          middlewareConfig: { enabled: false },
+          name: "agentNode",
+          position: { x: 880.0, y: 240.0 },
+          stateUpdatesConfig: { enabled: false },
+          tools: [],
+          transformers: [],
+        },
+      ],
+      agentNodePosition: { x: 880.0, y: 240.0 },
+      checkpointerNodePosition: { x: 80.0, y: 360.0 },
+      endNodePosition: { x: 1300.0, y: 290.0 },
+      envVars: [
+        {
+          description: "API key for Groq LLM provider",
+          id: "lg-groq-key",
+          name: "GROQ_API_KEY",
+        },
+      ],
+      graphEdges: [
+        {
+          id: "edge_START_agentNode",
+          source: "START",
+          sourceHandle: "out",
+          targetHandle: "in",
+          targets: [{ id: "agentNode", kind: "step", targetHandle: "in" }],
+        },
+        {
+          id: "edge_agentNode_END",
+          source: "agentNode",
+          sourceHandle: "out",
+          targetHandle: "in",
+          targets: [{ id: "END", kind: "end", targetHandle: "in" }],
+        },
+      ],
+      graphSteps: [],
+      inputChannels: [
+        {
+          id: "input_message",
+          key: "message",
+          required: true,
+          source: "request",
+          stateChannelKey: "messages",
+          type: "string",
+        },
+      ],
+      label: "LangGraph Agent",
+      memoryConfig: {
+        autoSummarize: true,
+        checkpointer: "postgres",
+        enabled: false,
+        maxWindowMessages: 10.0,
+        threadScope: "session",
+      },
+      position: { x: 2972.6153846153848, y: 729.5504807692308 },
+      startNodePosition: { x: 460.0, y: 180.0 },
+      stateChannels: [
+        {
+          defaultValue: [],
+          key: "messages",
+          reducer: "add_messages",
+          type: "messages",
+        },
+      ],
+      stateNodePosition: { x: 80.0, y: 120.0 },
+    };
+
+    const parsed = langgraphDataSchema.safeParse(userPayload);
+    expect(parsed.success).toBe(true);
+    expect(langgraphConvexDataValidator.fields.agentNodePosition).toBeDefined();
+  });
+
   it("validates web page node with section componentBindings from user error payload in Convex & Zod schemas", async () => {
     const { webPageDataSchema } = await import("@workspace/canvas/schemas");
     const { pageSectionConvexValidator, webPageConvexDataValidator } = await import(

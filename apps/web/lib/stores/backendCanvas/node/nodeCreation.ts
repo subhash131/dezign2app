@@ -5,6 +5,7 @@ import {
   DEFAULT_LLM_TEMPERATURE,
   DEFAULT_ZONES,
   getDefaultNodeEnvVars,
+  createDefaultLangGraphNodeData,
 } from "@workspace/canvas/constants";
 import { getUniqueNodeLabel } from "@workspace/canvas";
 import type { PageSection } from "@workspace/canvas/types";
@@ -144,6 +145,53 @@ export function prepareNodeForAddition(
         ],
         ...existingData,
         label: existingData?.label || "Creem Payments",
+      },
+    };
+  }
+
+  // 3.55 LangGraph node default graph configuration (start -> agentNode -> end)
+  if (nodeWithoutIndex.type === "langgraph") {
+    const existingData = nodeWithoutIndex.data || {};
+    const defaultData = createDefaultLangGraphNodeData(
+      existingData.label || "LangGraph Agent",
+    );
+    const existingMemoryConfig =
+      typeof existingData.memoryConfig === "object" &&
+      existingData.memoryConfig !== null
+        ? existingData.memoryConfig
+        : {};
+
+    finalNode = {
+      ...finalNode,
+      data: {
+        ...defaultData,
+        ...existingData,
+        inputChannels:
+          Array.isArray(existingData.inputChannels) &&
+          existingData.inputChannels.length > 0
+            ? existingData.inputChannels
+            : defaultData.inputChannels,
+        stateChannels:
+          Array.isArray(existingData.stateChannels) &&
+          existingData.stateChannels.length > 0
+            ? existingData.stateChannels
+            : defaultData.stateChannels,
+        agentDefinitions:
+          (Array.isArray(existingData.agentDefinitions) &&
+            existingData.agentDefinitions.length > 0) ||
+          (Array.isArray(existingData.graphSteps) &&
+            existingData.graphSteps.length > 0)
+            ? existingData.agentDefinitions || []
+            : defaultData.agentDefinitions,
+        graphEdges:
+          Array.isArray(existingData.graphEdges) &&
+          existingData.graphEdges.length > 0
+            ? existingData.graphEdges
+            : defaultData.graphEdges,
+        memoryConfig: {
+          ...defaultData.memoryConfig,
+          ...existingMemoryConfig,
+        },
       },
     };
   }

@@ -278,6 +278,7 @@ export interface CanvasLangGraphNodeData {
   stateNodePosition?: { x: number; y: number };
   checkpointerNodePosition?: { x: number; y: number };
   endNodePosition?: { x: number; y: number };
+  agentNodePosition?: { x: number; y: number };
   endNodes?: {
     id: string;
     label?: string;
