@@ -6,4 +6,5 @@ export * from "./templates/navigationEventTemplate";
 export * from "./templates/simpleButtonEventTemplate";
 export * from "./templates/interactiveFormEventTemplate";
 export * from "./templates/storageUploadEventTemplate";
+export * from "./transformerStepResolver";
 

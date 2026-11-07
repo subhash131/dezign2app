@@ -631,6 +631,12 @@ export type UIEventItem = {
     endpointId?: string;
     serviceNodeId?: string;
   };
+  storageNodeId?: string;
+  uploadBucketId?: string;
+  uploadMaxFileSizeMb?: number;
+  uploadAcceptedMimeTypes?: string;
+  actionType?: string;
+  eventType?: string;
   // Sequential multi-step flow configuration
   actionSteps?: FrontendActionStepDraft[];
   pathParamBindings?: NavigationPathParamBinding[];
