@@ -31,6 +31,9 @@ export function cleanWebPageEdge(
     const isSrc = isSourceAction;
     const webPageNodeId = isSrc ? edge.source : edge.target;
     const otherNodeId = isSrc ? edge.target : edge.source;
+    const otherNode =
+      ctx.currentState.nodes.find((n) => n.id === otherNodeId) ||
+      ctx.nextNodes.find((n) => n.id === otherNodeId);
     const webHandle = isSrc ? edge.sourceHandle! : edge.targetHandle!;
     const otherHandle = isSrc
       ? (edge.targetHandle ?? "")
@@ -75,12 +78,46 @@ export function cleanWebPageEdge(
           }
 
           // 4. Transformer match
-          if (
-            s.type === "transform" &&
-            (s.transformerRefNodeId === otherNodeId ||
-              s.transformerNodeId === otherNodeId)
-          ) {
-            return false;
+          if (s.type === "transform") {
+            if (s.edgeId && s.edgeId === edge.id) return false;
+            if (
+              s.transformerRefNodeId === otherNodeId ||
+              s.transformerNodeId === otherNodeId
+            ) {
+              return false;
+            }
+            if (
+              otherNode &&
+              (otherNode.type === "transformer_ref" ||
+                otherNode.type === "transformer")
+            ) {
+              const masterRef =
+                otherNode.data?.transformerRef || otherNode.id;
+              const fnName =
+                otherNode.data?.functionName ||
+                otherNode.data?.label?.replace(/\s*\(Ref\)$/, "");
+              if (
+                s.transformerNodeId &&
+                (s.transformerNodeId === masterRef ||
+                  s.transformerNodeId === fnName)
+              ) {
+                return false;
+              }
+              if (
+                s.transformerName &&
+                (s.transformerName === fnName ||
+                  s.transformerName === otherNode.data?.label)
+              ) {
+                return false;
+              }
+              if (
+                s.functionRef?.name &&
+                (s.functionRef.name === fnName ||
+                  s.functionRef.name === masterRef)
+              ) {
+                return false;
+              }
+            }
           }
 
           // 5. Browser storage match
@@ -175,6 +212,35 @@ export function cleanWebPageEdge(
           n.id === wpNode.id ? updatedWp : n,
         );
         ctx.pendingNodeUpserts.push(updatedWp);
+      }
+    }
+
+    // If the edge was connected to a transformer_ref, check if that transformer_ref is now orphaned
+    if (otherNode && otherNode.type === "transformer_ref") {
+      const remainingEdges = ctx.nextEdges.filter(
+        (e) =>
+          !ctx.removedSet.has(e.id) &&
+          e.id !== edge.id &&
+          (e.target === otherNode.id || e.source === otherNode.id),
+      );
+      const onlyRefEdges = remainingEdges.every(
+        (e) => e.type === "transformer-reference" || e.type === "reference",
+      );
+      if (onlyRefEdges) {
+        remainingEdges.forEach((re) => {
+          ctx.removedSet.add(re.id);
+          ctx.additionalRemovedEdgeIds = [
+            ...(ctx.additionalRemovedEdgeIds || []),
+            re.id,
+          ];
+        });
+        ctx.nextEdges = ctx.nextEdges.filter((e) => !ctx.removedSet.has(e.id));
+        ctx.deletedNodeIds = [...(ctx.deletedNodeIds || []), otherNode.id];
+        ctx.nextNodes = ctx.nextNodes.filter((n) => n.id !== otherNode.id);
+        ctx.pendingNodeUpserts = ctx.pendingNodeUpserts.filter(
+          (n) => n.id !== otherNode.id,
+        );
+        ctx.nodesChanged = true;
       }
     }
 

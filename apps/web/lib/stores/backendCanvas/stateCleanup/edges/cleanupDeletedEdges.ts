@@ -89,9 +89,18 @@ export function cleanupDeletedEdgesState(
     ],
   };
 
-  if (ctx.nodesChanged) {
-    updates.nodes = ctx.nextNodes;
-    updates.pendingNodeUpserts = ctx.pendingNodeUpserts;
+  if (ctx.nodesChanged || (ctx.deletedNodeIds && ctx.deletedNodeIds.length > 0)) {
+    const deletedNodeSet = new Set(ctx.deletedNodeIds || []);
+    updates.nodes = ctx.nextNodes.filter((n) => !deletedNodeSet.has(n.id));
+    updates.pendingNodeUpserts = ctx.pendingNodeUpserts.filter(
+      (n) => !deletedNodeSet.has(n.id),
+    );
+    if (ctx.deletedNodeIds && ctx.deletedNodeIds.length > 0) {
+      updates.pendingNodeRemovals = [
+        ...(currentState.pendingNodeRemovals || []),
+        ...ctx.deletedNodeIds,
+      ];
+    }
   }
 
   if (ctx.endpointsChanged) {
