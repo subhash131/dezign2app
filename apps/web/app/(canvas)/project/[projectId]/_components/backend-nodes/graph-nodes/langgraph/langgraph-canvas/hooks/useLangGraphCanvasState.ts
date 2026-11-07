@@ -10,7 +10,13 @@ import {
   type LangGraphCanvasEdge,
   type Endpoint,
 } from "@workspace/canvas";
-import { isReservedNodeId, NODE_ID_STATE_GLOBAL } from "../constants";
+import {
+  isReservedNodeId,
+  NODE_ID_STATE_GLOBAL,
+  DEFAULT_LANGGRAPH_INPUT_CHANNELS,
+  DEFAULT_LANGGRAPH_STATE_CHANNELS,
+  DEFAULT_LANGGRAPH_MEMORY_CONFIG,
+} from "../constants";
 import { getSuggestedReducerCodeForChannelType } from "../components/inspector/state-inspector/constants";
 
 import { buildInitialNodes, buildInitialEdges } from "./utils/initializers";
@@ -201,39 +207,35 @@ export function useLangGraphCanvasState({
   const data = node.data;
 
   const [inputChannels, setInputChannels] = useState<LangGraphInputChannel[]>(
-    () =>
-      (data.inputChannels || []).map((ch, idx) => ({
-        ...ch,
-        id:
-          ch.id ||
-          `input_${idx}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-      })),
+    () => {
+      const existing = data.inputChannels;
+      if (existing && existing.length > 0) {
+        return existing.map((ch, idx) => ({
+          ...ch,
+          id:
+            ch.id ||
+            `input_${idx}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        }));
+      }
+      return [...DEFAULT_LANGGRAPH_INPUT_CHANNELS];
+    },
   );
   const [stateChannels, setStateChannels] = useState<LangGraphStateChannel[]>(
     () => {
       if (data.stateChannels && data.stateChannels.length > 0) {
         return data.stateChannels;
       }
-      return [
-        {
-          key: "messages",
-          type: "messages",
-          reducer: "add_messages",
-          defaultValue: [],
-        },
-      ];
+      return [...DEFAULT_LANGGRAPH_STATE_CHANNELS];
     },
   );
   const [customReducers, setCustomReducers] = useState<LangGraphCustomReducer[]>(
     data.customReducers || [],
   );
   const [memoryConfig, setMemoryConfig] = useState<LangGraphMemoryConfig>(
-    data.memoryConfig || {
-      checkpointer: "memory",
-      threadScope: "session",
-      autoSummarize: true,
-      maxWindowMessages: 10,
-    },
+    () => ({
+      ...DEFAULT_LANGGRAPH_MEMORY_CONFIG,
+      ...(data.memoryConfig || {}),
+    }),
   );
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [activeSideTab, setActiveSideTab] = useState<

@@ -3,6 +3,10 @@ import type {
   LangGraphEdgeConfig,
   LangGraphTableDefinition,
   LangGraphRedisSchemaDefinition,
+  LangGraphStateChannel,
+  LangGraphInputChannel,
+  LangGraphAgentDefinition,
+  LangGraphMemoryConfig,
 } from "../types";
 
 // ─── LangGraph Step Execution Types ───────────────────────────────────────────
@@ -104,6 +108,128 @@ export function ensureLangGraphDataReachability<T extends LangGraphDataInput>(
   data: T,
 ): T {
   return data;
+}
+
+// ─── Default LangGraph Architecture ──────────────────────────────────────────
+export const DEFAULT_LANGGRAPH_AGENT_NODE_ID = "agentNode" as const;
+
+export const DEFAULT_LANGGRAPH_STATE_CHANNELS: LangGraphStateChannel[] = [
+  {
+    key: "messages",
+    type: "messages",
+    reducer: "add_messages",
+    defaultValue: [],
+  },
+];
+
+export const DEFAULT_LANGGRAPH_INPUT_CHANNELS: LangGraphInputChannel[] = [
+  {
+    id: "input_message",
+    key: "message",
+    type: "string",
+    required: true,
+    source: "request",
+    stateChannelKey: "messages",
+  },
+];
+
+export const DEFAULT_LANGGRAPH_AGENT_DEFINITION: LangGraphAgentDefinition = {
+  id: "agentNode",
+  agentId: "agentNode",
+  name: "agentNode",
+  llmConfig: {
+    enabled: false,
+  },
+  middlewareConfig: {
+    enabled: false,
+  },
+  stateUpdatesConfig: {
+    enabled: false,
+  },
+  tools: [],
+  middleware: [],
+  transformers: [],
+  memory: [],
+  position: { x: 880, y: 240 },
+};
+
+export const DEFAULT_LANGGRAPH_GRAPH_EDGES: LangGraphEdgeConfig[] = [
+  {
+    id: "edge_START_agentNode",
+    source: "START",
+    sourceHandle: "out",
+    targetHandle: "in",
+    targets: [
+      {
+        id: "agentNode",
+        kind: "step",
+        targetHandle: "in",
+      },
+    ],
+  },
+  {
+    id: "edge_agentNode_END",
+    source: "agentNode",
+    sourceHandle: "out",
+    targetHandle: "in",
+    targets: [
+      {
+        id: "END",
+        kind: "end",
+        targetHandle: "in",
+      },
+    ],
+  },
+];
+
+export const DEFAULT_LANGGRAPH_MEMORY_CONFIG: LangGraphMemoryConfig = {
+  enabled: false,
+  checkpointer: "postgres",
+  threadScope: "session",
+  autoSummarize: true,
+  maxWindowMessages: 10,
+};
+
+export const DEFAULT_LANGGRAPH_NODE_POSITIONS = {
+  stateNodePosition: { x: 80, y: 120 },
+  checkpointerNodePosition: { x: 80, y: 360 },
+  startNodePosition: { x: 460, y: 180 },
+  endNodePosition: { x: 1300, y: 290 },
+} as const;
+
+export const DEFAULT_LANGGRAPH_AGENT_NODE_POSITION = {
+  x: 880,
+  y: 240,
+} as const;
+
+export interface DefaultLangGraphNodeData {
+  label: string;
+  inputChannels: LangGraphInputChannel[];
+  stateChannels: LangGraphStateChannel[];
+  agentDefinitions: LangGraphAgentDefinition[];
+  graphSteps: LangGraphStepConfig[];
+  graphEdges: LangGraphEdgeConfig[];
+  memoryConfig: LangGraphMemoryConfig;
+  stateNodePosition: { x: number; y: number };
+  checkpointerNodePosition: { x: number; y: number };
+  startNodePosition: { x: number; y: number };
+  endNodePosition: { x: number; y: number };
+  agentNodePosition?: { x: number; y: number };
+}
+
+export function createDefaultLangGraphNodeData(
+  label = "LangGraph Agent",
+): DefaultLangGraphNodeData {
+  return {
+    label,
+    inputChannels: [...DEFAULT_LANGGRAPH_INPUT_CHANNELS],
+    stateChannels: [...DEFAULT_LANGGRAPH_STATE_CHANNELS],
+    agentDefinitions: [{ ...DEFAULT_LANGGRAPH_AGENT_DEFINITION }],
+    graphSteps: [],
+    graphEdges: [...DEFAULT_LANGGRAPH_GRAPH_EDGES],
+    memoryConfig: { ...DEFAULT_LANGGRAPH_MEMORY_CONFIG },
+    ...DEFAULT_LANGGRAPH_NODE_POSITIONS,
+  };
 }
 
 // ─── LangGraph Checkpointer Table Definitions ──────────────────────────────────

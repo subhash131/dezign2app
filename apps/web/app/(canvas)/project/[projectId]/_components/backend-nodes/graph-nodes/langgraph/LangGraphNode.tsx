@@ -386,7 +386,7 @@ export const LangGraphNode = React.memo(({
       <div className="px-3 py-1 bg-muted/20 border-b flex items-center gap-1.5 text-[10px] text-muted-foreground">
         <ShieldCheck className="w-3 h-3 text-primary shrink-0" />
         <span className="truncate">
-          {inputChannels.length} inputs · {graphSteps.length} steps ·{" "}
+          {inputChannels.length} inputs · {(graphSteps.length || 0) + ((data.agentDefinitions as unknown[])?.length || 0)} steps ·{" "}
           {stateChannels.length} state fields
           {connectedRoutesCount > 0 && (
             <> · <span className="text-primary font-semibold">{connectedRoutesCount} routes</span></>
@@ -495,7 +495,14 @@ export const LangGraphNode = React.memo(({
 
         {/* Steps mini-list */}
         <div className="flex flex-wrap gap-1.5">
-          {graphSteps.slice(0, 4).map((step: LangGraphStepConfig, idx: number) => {
+          {[
+            ...graphSteps,
+            ...((data.agentDefinitions as Array<{ id?: string; agentId?: string; name?: string; stateUpdates?: unknown[] }>) || []).map((ag) => ({
+              id: ag.id || ag.agentId || "agentNode",
+              name: ag.name || "agentNode",
+              stateUpdates: ag.stateUpdates || [],
+            })),
+          ].slice(0, 4).map((step: { id?: string; name?: string; stateUpdates?: unknown[] }, idx: number) => {
             const hasUpdates = Boolean(
               step.stateUpdates && step.stateUpdates.length > 0,
             );
@@ -517,9 +524,9 @@ export const LangGraphNode = React.memo(({
               </span>
             );
           })}
-          {graphSteps.length > 4 && (
+          {(graphSteps.length + ((data.agentDefinitions as unknown[])?.length || 0)) > 4 && (
             <span className="text-[10px] px-2 py-0.5 rounded-md bg-secondary/40 text-muted-foreground border border-border/50 font-mono">
-              +{graphSteps.length - 4} more
+              +{(graphSteps.length + ((data.agentDefinitions as unknown[])?.length || 0)) - 4} more
             </span>
           )}
         </div>

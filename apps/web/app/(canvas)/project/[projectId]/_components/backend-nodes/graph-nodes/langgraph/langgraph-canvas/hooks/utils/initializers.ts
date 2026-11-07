@@ -64,6 +64,14 @@ import {
   makePortNodeId,
   TARGET_KIND_PORT,
   TARGET_KIND_END,
+  DEFAULT_LANGGRAPH_AGENT_NODE_ID,
+  DEFAULT_LANGGRAPH_STATE_CHANNELS,
+  DEFAULT_LANGGRAPH_INPUT_CHANNELS,
+  DEFAULT_LANGGRAPH_AGENT_DEFINITION,
+  DEFAULT_LANGGRAPH_GRAPH_EDGES,
+  DEFAULT_LANGGRAPH_MEMORY_CONFIG,
+  DEFAULT_LANGGRAPH_NODE_POSITIONS,
+  DEFAULT_LANGGRAPH_AGENT_NODE_POSITION,
 } from "../../constants";
 
 export function buildInitialNodes(
@@ -71,13 +79,14 @@ export function buildInitialNodes(
 ): LangGraphCanvasNode[] {
   const steps: LangGraphStepConfig[] = data.graphSteps || [];
 
-  const statePos = data.stateNodePosition || { x: 100, y: 60 };
+  const statePos =
+    data.stateNodePosition || DEFAULT_LANGGRAPH_NODE_POSITIONS.stateNodePosition;
   const checkpointerPos =
     data.memoryDefinitions?.[0]?.position ||
-    data.checkpointerNodePosition || {
-      x: statePos.x,
-      y: statePos.y + 240,
-    };
+    data.checkpointerNodePosition ||
+    DEFAULT_LANGGRAPH_NODE_POSITIONS.checkpointerNodePosition;
+  const startPos =
+    data.startNodePosition || DEFAULT_LANGGRAPH_NODE_POSITIONS.startNodePosition;
 
   const result: LangGraphCanvasNode[] = [
     {
@@ -89,14 +98,7 @@ export function buildInitialNodes(
         stateChannels:
           data.stateChannels && data.stateChannels.length > 0
             ? data.stateChannels
-            : [
-                {
-                  key: "messages",
-                  type: "messages",
-                  reducer: "add_messages",
-                  defaultValue: [],
-                },
-              ],
+            : [...DEFAULT_LANGGRAPH_STATE_CHANNELS],
         customReducers: data.customReducers || [],
       },
       deletable: false,
@@ -106,9 +108,9 @@ export function buildInitialNodes(
       type: LANGGRAPH_CANVAS_NODE_MEMORY,
       position: checkpointerPos,
       data: {
-        label: "Graph Checkpointer",
-        name: "Graph Checkpointer",
-        enabled: data.memoryConfig?.enabled !== false,
+        label: "Checkpointer",
+        name: "Checkpointer",
+        enabled: data.memoryConfig?.enabled ?? false,
         checkpointer: data.memoryConfig?.checkpointer || "postgres",
         checkpointerConnectionId: data.memoryConfig?.checkpointerNodeId,
         threadIdKey: "thread_id",
@@ -120,21 +122,17 @@ export function buildInitialNodes(
     {
       id: NODE_ID_START,
       type: LANGGRAPH_CANVAS_NODE_START,
-      position: data.startNodePosition || { x: 100, y: 560 },
+      position: startPos,
       data: {
         label: "INPUT State",
-        inputChannels: data.inputChannels || [],
+        inputChannels:
+          data.inputChannels && data.inputChannels.length > 0
+            ? data.inputChannels
+            : [...DEFAULT_LANGGRAPH_INPUT_CHANNELS],
         stateChannels:
           data.stateChannels && data.stateChannels.length > 0
             ? data.stateChannels
-            : [
-                {
-                  key: "messages",
-                  type: "messages",
-                  reducer: "add_messages",
-                  defaultValue: [],
-                },
-              ],
+            : [...DEFAULT_LANGGRAPH_STATE_CHANNELS],
       },
       deletable: false,
     },
@@ -281,15 +279,27 @@ export function buildInitialNodes(
     result.push(mwNode);
   });
 
-  const savedAgents = data.agentDefinitions || [];
+  const savedAgents =
+    data.agentDefinitions && data.agentDefinitions.length > 0
+      ? data.agentDefinitions
+      : steps.length === 0
+        ? [DEFAULT_LANGGRAPH_AGENT_DEFINITION]
+        : [];
   savedAgents.forEach((agDef) => {
+    const agId = agDef.id || agDef.agentId || `node_${Date.now()}`;
     const agNode: AgentNode = {
-      id: agDef.id || agDef.agentId || `node_${Date.now()}`,
+      id: agId,
       type: LANGGRAPH_CANVAS_NODE_NODE,
-      position: agDef.position || { x: 420, y: 160 },
+      position:
+        agDef.position ||
+        data.agentNodePosition ||
+        DEFAULT_LANGGRAPH_AGENT_NODE_POSITION || {
+          x: 880,
+          y: 240,
+        },
       data: {
         label: agDef.name,
-        agentId: agDef.id || agDef.agentId || `node_${Date.now()}`,
+        agentId: agId,
         name: agDef.name,
         systemPrompt: agDef.systemPrompt,
         modelConfig: agDef.modelConfig,
@@ -302,14 +312,10 @@ export function buildInitialNodes(
         pipelineSteps: agDef.pipelineSteps,
         nodeSteps: agDef.nodeSteps,
         customCode: agDef.customCode,
-        availableStateChannels: data.stateChannels || [
-          {
-            key: "messages",
-            type: "messages",
-            reducer: "add_messages",
-            defaultValue: [],
-          },
-        ],
+        availableStateChannels:
+          data.stateChannels && data.stateChannels.length > 0
+            ? data.stateChannels
+            : [...DEFAULT_LANGGRAPH_STATE_CHANNELS],
         tools: agDef.tools || [],
         middleware: agDef.middleware || [],
         transformers: agDef.transformers || [],
@@ -519,8 +525,10 @@ export function buildInitialNodes(
       result.push({
         id: endNode.id,
         type: LANGGRAPH_CANVAS_NODE_END,
-        position: endNode.position ||
-          data.endNodePosition || { x: 750, y: 320 },
+        position:
+          endNode.position ||
+          data.endNodePosition ||
+          DEFAULT_LANGGRAPH_NODE_POSITIONS.endNodePosition,
         data: { label: endNode.label || "END State" },
       });
     }
@@ -530,7 +538,8 @@ export function buildInitialNodes(
     result.push({
       id: NODE_ID_END,
       type: LANGGRAPH_CANVAS_NODE_END,
-      position: data.endNodePosition || { x: 750, y: 320 },
+      position:
+        data.endNodePosition || DEFAULT_LANGGRAPH_NODE_POSITIONS.endNodePosition,
       data: { label: "END State" },
       deletable: false,
     });
@@ -580,9 +589,20 @@ export function buildInitialEdges(
   data: BackendNode["data"],
   initialNodes: LangGraphCanvasNode[],
 ): LangGraphCanvasEdge[] {
-  const graphEdges: LangGraphEdgeConfig[] = data.graphEdges || [];
   const steps: LangGraphStepConfig[] = data.graphSteps || [];
-  const agentDefs: LangGraphAgentDefinition[] = data.agentDefinitions || [];
+  const agentDefs: LangGraphAgentDefinition[] =
+    data.agentDefinitions && data.agentDefinitions.length > 0
+      ? data.agentDefinitions
+      : steps.length === 0
+        ? [DEFAULT_LANGGRAPH_AGENT_DEFINITION]
+        : [];
+  const graphEdges: LangGraphEdgeConfig[] =
+    data.graphEdges && data.graphEdges.length > 0
+      ? data.graphEdges
+      : steps.length === 0 &&
+          (!data.agentDefinitions || data.agentDefinitions.length === 0)
+        ? [...DEFAULT_LANGGRAPH_GRAPH_EDGES]
+        : [];
 
   const mainEdges = graphEdges
     .filter((e) => !e.id.startsWith("auto_edge_"))
