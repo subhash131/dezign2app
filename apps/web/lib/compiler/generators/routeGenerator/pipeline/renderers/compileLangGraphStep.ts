@@ -391,6 +391,7 @@ export function renderLangGraphInvokeStep(
   if (langGraphStreamSubgraphs) {
     streamConfigProps.push(`subgraphs: true`);
   }
+  streamConfigProps.push(`signal: abort.signal`);
   const streamConfigOptions = `{ ${streamConfigProps.join(", ")} }`;
 
   const invokeConfigOptions = threadIdExpr
@@ -431,237 +432,128 @@ export function renderLangGraphInvokeStep(
       rawLines.push(`  res.flushHeaders();`);
       rawLines.push(`}`);
       rawLines.push(
-        `const ${stepPrefix}TokenUsage = { input_tokens: 0, output_tokens: 0, total_tokens: 0, reasoning_tokens: 0 };`,
-        `let ${outputVariable}Content = "";`,
+        `const canFlush = typeof (res as unknown as { flush?: unknown }).flush === "function";`,
+      );
+      if (isRaw) {
+        rawLines.push(
+          `const sendEvent = (data: unknown) => {`,
+          `  if (res.writableEnded || res.destroyed) return;`,
+          `  res.write(typeof data === "string" ? data : JSON.stringify(data));`,
+          `  if (canFlush) (res as unknown as { flush: () => void }).flush();`,
+          `};`,
+        );
+      } else {
+        rawLines.push(
+          `const sendEvent = (data: unknown) => {`,
+          `  if (res.writableEnded || res.destroyed) return;`,
+          `  res.write(\`${sseEvt}data: \${JSON.stringify(data)}\\n\\n\`);`,
+          `  if (canFlush) (res as unknown as { flush: () => void }).flush();`,
+          `};`,
+        );
+      }
+      rawLines.push(
+        `const ${stepPrefix}TokenUsage: Usage = { input_tokens: 0, output_tokens: 0, total_tokens: 0, reasoning_tokens: 0 };`,
+        `const ${outputVariable}ContentParts: string[] = [];`,
       );
       if (!isRaw) {
         rawLines.push(
-          `res.write(\`${sseEvt}data: \${JSON.stringify({ type: "stream_start", threadId: ${threadIdExpr || "undefined"} })}\\n\\n\`);`,
+          `sendEvent({ type: "stream_start", threadId: ${threadIdExpr || "undefined"} });`,
         );
       }
       rawLines.push(
         `const stream = await ${graphVar}.stream(agentState, ${streamConfigOptions});`,
       );
       rawLines.push(`for await (const chunk of stream) {`);
-      rawLines.push(`  if (res.writableEnded || res.destroyed) {`);
-      rawLines.push(`    break;`);
-      rawLines.push(`  }`);
-      rawLines.push(`  let mode: string = "messages";`);
-      rawLines.push(`  let payload = chunk;`);
-      rawLines.push(`  const _c = Array.isArray(chunk) ? chunk : undefined;`);
-      rawLines.push(`  if (Array.isArray(_c) && _c.length === 3 && Array.isArray(_c[0]) && typeof _c[1] === "string" && ["messages", "updates", "custom", "values", "debug"].includes(_c[1])) {`);
-      rawLines.push(`    // subgraphs:true + multi-mode: [namespace[], mode, data]`);
-      rawLines.push(`    mode = _c[1];`);
-      rawLines.push(`    payload = _c[2];`);
-      rawLines.push(`  } else if (Array.isArray(_c) && _c.length === 2 && Array.isArray(_c[0])) {`);
-      rawLines.push(`    // subgraphs:true + single-mode: [namespace[], data]`);
-      rawLines.push(`    payload = _c[1];`);
-      rawLines.push(`  } else if (Array.isArray(_c) && _c.length === 2 && typeof _c[0] === "string" && ["messages", "updates", "custom", "values", "debug"].includes(_c[0])) {`);
-      rawLines.push(`    // multi-mode without subgraphs: [mode, data]`);
-      rawLines.push(`    mode = _c[0];`);
-      rawLines.push(`    payload = _c[1];`);
-      rawLines.push(`  } else if (!Array.isArray(chunk) && typeof chunk === "object" && chunk !== null && !("content" in chunk) && !("text" in chunk)) {`);
-      rawLines.push(`    mode = "updates";`);
-      rawLines.push(`  }`);
+      rawLines.push(`  if (abort.signal.aborted || res.writableEnded || res.destroyed) break;`);
+      rawLines.push(`  const { mode, payload } = normalizeChunk(chunk);`);
       rawLines.push(`  if (mode === "messages") {`);
       rawLines.push(
         `    const [messageChunk, metadata] = Array.isArray(payload) ? payload : [payload, undefined];`,
       );
       rawLines.push(
-        `    const nodeName = typeof metadata === "object" && metadata !== null && "langgraph_node" in metadata ? metadata.langgraph_node : undefined;`,
+        `    const nodeName = isRec(metadata) && "langgraph_node" in metadata && typeof metadata.langgraph_node === "string" ? metadata.langgraph_node : undefined;`,
       );
-      rawLines.push(`    let reasoningToken: string | undefined = undefined;`);
-      rawLines.push(`    let textToken: string | undefined = undefined;`);
-      rawLines.push(`    if (messageChunk && typeof messageChunk === "object") {`);
-      rawLines.push(`      if (Array.isArray(messageChunk.contentBlocks)) {`);
-      rawLines.push(`        for (const block of messageChunk.contentBlocks) {`);
-      rawLines.push(`          if (block?.type === "reasoning" && (block.reasoning || block.text)) {`);
-      rawLines.push(`            reasoningToken = (reasoningToken || "") + (block.reasoning || block.text || "");`);
-      rawLines.push(`          } else if (block?.type === "text" && block.text) {`);
-      rawLines.push(`            textToken = (textToken || "") + block.text;`);
-      rawLines.push(`          }`);
-      rawLines.push(`        }`);
-      rawLines.push(`      }`);
-      rawLines.push(`      if (!reasoningToken && typeof messageChunk === "object" && messageChunk !== null && "additional_kwargs" in messageChunk && typeof messageChunk.additional_kwargs === "object" && messageChunk.additional_kwargs !== null) {`);
-      rawLines.push(`        const kw = messageChunk.additional_kwargs;`);
-      rawLines.push(`        if ("reasoning_content" in kw && typeof kw.reasoning_content === "string") reasoningToken = kw.reasoning_content;`);
-      rawLines.push(`        else if ("thinking" in kw && typeof kw.thinking === "string") reasoningToken = kw.thinking;`);
-      rawLines.push(`      }`);
-      rawLines.push(`      if (!textToken) {`);
-      rawLines.push(`        if (typeof messageChunk.content === "string") {`);
-      rawLines.push(`          textToken = messageChunk.content;`);
-      rawLines.push(`        } else if (typeof messageChunk.text === "string") {`);
-      rawLines.push(`          textToken = messageChunk.text;`);
-      rawLines.push(`        } else if (Array.isArray(messageChunk.content)) {`);
-      rawLines.push(`          for (const item of messageChunk.content) {`);
-      rawLines.push(`            if (typeof item === "string") textToken = (textToken || "") + item;`);
-      rawLines.push(`            else if (item && typeof item === "object") {`);
-      rawLines.push(`              if (item.type === "reasoning") reasoningToken = (reasoningToken || "") + (item.reasoning || item.text || "");`);
-      rawLines.push(`              else if (item.type === "text" && item.text) textToken = (textToken || "") + item.text;`);
-      rawLines.push(`            }`);
-      rawLines.push(`          }`);
-      rawLines.push(`        }`);
-      rawLines.push(`      }`);
-      rawLines.push(`    } else if (typeof messageChunk === "string") {`);
-      rawLines.push(`      textToken = messageChunk;`);
-      rawLines.push(`    }`);
-      rawLines.push(
-        `    const token = textToken ?? (typeof payload === "string" ? payload : (typeof payload === "object" && payload !== null && "content" in payload ? payload.content : undefined));`,
-      );
+      rawLines.push(`    const { text, reasoning } = extractTokens(messageChunk);`);
+      rawLines.push(`    const token = text || (typeof payload === "string" ? payload : "");`);
+      rawLines.push(`    const msg = isRec(messageChunk) ? messageChunk : undefined;`);
       if (langGraphTrackTokenUsage) {
         rawLines.push(
-          `    let _chunkUsage: object | undefined = undefined;`,
-          `    let _rm: object | undefined = undefined;`,
-          `    if (messageChunk && typeof messageChunk === "object") {`,
-          `      if ("response_metadata" in messageChunk && typeof messageChunk.response_metadata === "object" && messageChunk.response_metadata !== null) {`,
-          `        _rm = messageChunk.response_metadata;`,
-          `      } else if ("kwargs" in messageChunk && typeof messageChunk.kwargs === "object" && messageChunk.kwargs !== null && "response_metadata" in messageChunk.kwargs && typeof messageChunk.kwargs.response_metadata === "object" && messageChunk.kwargs.response_metadata !== null) {`,
-          `        _rm = messageChunk.kwargs.response_metadata;`,
-          `      }`,
-          `      if ("usage_metadata" in messageChunk && typeof messageChunk.usage_metadata === "object" && messageChunk.usage_metadata !== null) {`,
-          `        _chunkUsage = messageChunk.usage_metadata;`,
-          `      } else if ("kwargs" in messageChunk && typeof messageChunk.kwargs === "object" && messageChunk.kwargs !== null && "usage_metadata" in messageChunk.kwargs && typeof messageChunk.kwargs.usage_metadata === "object" && messageChunk.kwargs.usage_metadata !== null) {`,
-          `        _chunkUsage = messageChunk.kwargs.usage_metadata;`,
-          `      } else if (_rm) {`,
-          `        if ("token_usage" in _rm && typeof _rm.token_usage === "object" && _rm.token_usage !== null) {`,
-          `          _chunkUsage = _rm.token_usage;`,
-          `        } else if ("tokenUsage" in _rm && typeof _rm.tokenUsage === "object" && _rm.tokenUsage !== null) {`,
-          `          _chunkUsage = _rm.tokenUsage;`,
-          `        } else if ("usage" in _rm && typeof _rm.usage === "object" && _rm.usage !== null) {`,
-          `          _chunkUsage = _rm.usage;`,
-          `        }`,
-          `      }`,
-          `    }`,
-          `    if (_chunkUsage) {`,
-          `      const _in = ("input_tokens" in _chunkUsage && typeof _chunkUsage.input_tokens === "number" ? _chunkUsage.input_tokens : ("prompt_tokens" in _chunkUsage && typeof _chunkUsage.prompt_tokens === "number" ? _chunkUsage.prompt_tokens : ("promptTokens" in _chunkUsage && typeof _chunkUsage.promptTokens === "number" ? _chunkUsage.promptTokens : ("inputTokens" in _chunkUsage && typeof _chunkUsage.inputTokens === "number" ? _chunkUsage.inputTokens : 0))));`,
-          `      const _out = ("output_tokens" in _chunkUsage && typeof _chunkUsage.output_tokens === "number" ? _chunkUsage.output_tokens : ("completion_tokens" in _chunkUsage && typeof _chunkUsage.completion_tokens === "number" ? _chunkUsage.completion_tokens : ("completionTokens" in _chunkUsage && typeof _chunkUsage.completionTokens === "number" ? _chunkUsage.completionTokens : ("outputTokens" in _chunkUsage && typeof _chunkUsage.outputTokens === "number" ? _chunkUsage.outputTokens : 0))));`,
-          `      let _reas = 0;`,
-          `      if ("reasoning_tokens" in _chunkUsage && typeof _chunkUsage.reasoning_tokens === "number") {`,
-          `        _reas = _chunkUsage.reasoning_tokens;`,
-          `      } else if ("reasoningTokens" in _chunkUsage && typeof _chunkUsage.reasoningTokens === "number") {`,
-          `        _reas = _chunkUsage.reasoningTokens;`,
-          `      } else if ("completion_tokens_details" in _chunkUsage && typeof _chunkUsage.completion_tokens_details === "object" && _chunkUsage.completion_tokens_details !== null) {`,
-          `        const _ctd: object = _chunkUsage.completion_tokens_details;`,
-          `        if ("reasoning_tokens" in _ctd && typeof _ctd.reasoning_tokens === "number") _reas = _ctd.reasoning_tokens;`,
-          `        else if ("reasoning" in _ctd && typeof _ctd.reasoning === "number") _reas = _ctd.reasoning;`,
-          `      } else if ("output_token_details" in _chunkUsage && typeof _chunkUsage.output_token_details === "object" && _chunkUsage.output_token_details !== null) {`,
-          `        const _otd: object = _chunkUsage.output_token_details;`,
-          `        if ("reasoning" in _otd && typeof _otd.reasoning === "number") _reas = _otd.reasoning;`,
-          `        else if ("reasoning_tokens" in _otd && typeof _otd.reasoning_tokens === "number") _reas = _otd.reasoning_tokens;`,
-          `      }`,
-          `      if (_reas === 0 && _rm) {`,
-          `        if ("usage" in _rm && typeof _rm.usage === "object" && _rm.usage !== null) {`,
-          `          const _rmu: object = _rm.usage;`,
-          `          if ("completion_tokens_details" in _rmu && typeof _rmu.completion_tokens_details === "object" && _rmu.completion_tokens_details !== null) {`,
-          `            const _ctd: object = _rmu.completion_tokens_details;`,
-          `            if ("reasoning_tokens" in _ctd && typeof _ctd.reasoning_tokens === "number") _reas = _ctd.reasoning_tokens;`,
-          `            else if ("reasoning" in _ctd && typeof _ctd.reasoning === "number") _reas = _ctd.reasoning;`,
-          `          } else if ("reasoning_tokens" in _rmu && typeof _rmu.reasoning_tokens === "number") {`,
-          `            _reas = _rmu.reasoning_tokens;`,
-          `          }`,
-          `        } else if ("completion_tokens_details" in _rm && typeof _rm.completion_tokens_details === "object" && _rm.completion_tokens_details !== null) {`,
-          `          const _ctd: object = _rm.completion_tokens_details;`,
-          `          if ("reasoning_tokens" in _ctd && typeof _ctd.reasoning_tokens === "number") _reas = _ctd.reasoning_tokens;`,
-          `          else if ("reasoning" in _ctd && typeof _ctd.reasoning === "number") _reas = _ctd.reasoning;`,
-          `        }`,
-          `      }`,
-          `      if (_in > 0) ${stepPrefix}TokenUsage.input_tokens = _in;`,
-          `      if (_out > 0) ${stepPrefix}TokenUsage.output_tokens = _out;`,
-          `      if (_reas > 0) ${stepPrefix}TokenUsage.reasoning_tokens = _reas;`,
-          `      ${stepPrefix}TokenUsage.total_tokens = ${stepPrefix}TokenUsage.input_tokens + ${stepPrefix}TokenUsage.output_tokens;`,
-          `    } else if (token !== undefined && token !== "") {`,
+          `    const rm = msg ? getResponseMetadata(msg) : undefined;`,
+          `    const u = msg ? findUsage(msg, rm) : undefined;`,
+          `    if (u) {`,
+          `      const inT = pickNumber(u, ["input_tokens", "prompt_tokens", "promptTokens", "inputTokens"]);`,
+          `      const outT = pickNumber(u, ["output_tokens", "completion_tokens", "completionTokens", "outputTokens"]);`,
+          `      const reasT = findReasoningTokens(u, rm);`,
+          `      if (inT > 0) ${stepPrefix}TokenUsage.input_tokens = inT;`,
+          `      if (outT > 0) ${stepPrefix}TokenUsage.output_tokens = outT;`,
+          `      if (reasT > 0) ${stepPrefix}TokenUsage.reasoning_tokens = reasT;`,
+          `    } else if (token) {`,
           `      ${stepPrefix}TokenUsage.output_tokens += 1;`,
-          `      ${stepPrefix}TokenUsage.total_tokens = ${stepPrefix}TokenUsage.input_tokens + ${stepPrefix}TokenUsage.output_tokens;`,
           `    }`,
+          `    ${stepPrefix}TokenUsage.total_tokens = ${stepPrefix}TokenUsage.input_tokens + ${stepPrefix}TokenUsage.output_tokens;`,
         );
       }
       if (langGraphStreamingFields.length > 0) {
         const allowedFields = JSON.stringify(langGraphStreamingFields);
         rawLines.push(`    if (${allowedFields}.includes(nodeName || "")) {`);
         if (langGraphStreamIncludeReasoning !== false) {
-          rawLines.push(`      if (reasoningToken) {`);
-          if (isRaw) {
-            rawLines.push(`        res.write(reasoningToken);`);
-          } else {
-            rawLines.push(`        res.write(\`${sseEvt}data: \${JSON.stringify({ type: "reasoning", reasoning: reasoningToken, node: nodeName })}\\n\\n\`);`);
-          }
-          rawLines.push(`      }`);
+          rawLines.push(`      if (reasoning) sendEvent({ type: "reasoning", reasoning, node: nodeName });`);
         }
-        rawLines.push(`      if (token !== undefined && token !== "") {`);
-        rawLines.push(`        ${outputVariable}Content += typeof token === "string" ? token : JSON.stringify(token);`);
-        rawLines.push(`        ${isRaw ? 'res.write(typeof token === "string" ? token : JSON.stringify(token));' : `res.write(\`${sseEvt}data: \${JSON.stringify({ token, node: nodeName })}\\n\\n\`);`}`);
-        rawLines.push(`      }`);
-        rawLines.push(`    }`);
+        rawLines.push(
+          `      if (token) {`,
+          `        ${outputVariable}ContentParts.push(token);`,
+          `        sendEvent(${isRaw ? 'token' : '{ token, node: nodeName }'});`,
+          `      }`,
+          `    }`,
+        );
       } else {
         if (langGraphStreamIncludeReasoning !== false) {
-          rawLines.push(`    if (reasoningToken) {`);
-          if (isRaw) {
-            rawLines.push(`      res.write(reasoningToken);`);
-          } else {
-            rawLines.push(`      res.write(\`${sseEvt}data: \${JSON.stringify({ type: "reasoning", reasoning: reasoningToken, node: nodeName })}\\n\\n\`);`);
-          }
-          rawLines.push(`    }`);
+          rawLines.push(`    if (reasoning) sendEvent({ type: "reasoning", reasoning, node: nodeName });`);
         }
-        rawLines.push(`    if (token !== undefined && token !== "") {`);
-        rawLines.push(`      ${outputVariable}Content += typeof token === "string" ? token : JSON.stringify(token);`);
-        rawLines.push(`      ${isRaw ? 'res.write(typeof token === "string" ? token : JSON.stringify(token));' : `res.write(\`${sseEvt}data: \${JSON.stringify({ token, node: nodeName })}\\n\\n\`);`}`);
-        rawLines.push(`    }`);
+        rawLines.push(
+          `    if (token) {`,
+          `      ${outputVariable}ContentParts.push(token);`,
+          `      sendEvent(${isRaw ? 'token' : '{ token, node: nodeName }'});`,
+          `    }`,
+        );
       }
       rawLines.push(
-        `    const _toolCalls = (typeof messageChunk === "object" && messageChunk !== null)`,
-        `      ? ("tool_calls" in messageChunk && Array.isArray(messageChunk.tool_calls) ? messageChunk.tool_calls : ("tool_call_chunks" in messageChunk && Array.isArray(messageChunk.tool_call_chunks) ? messageChunk.tool_call_chunks : undefined))`,
+        `    const toolCalls = msg`,
+        `      ? (Array.isArray(msg.tool_calls) ? msg.tool_calls : Array.isArray(msg.tool_call_chunks) ? msg.tool_call_chunks : undefined)`,
         `      : undefined;`,
-        `    if (Array.isArray(_toolCalls) && _toolCalls.length > 0) {`,
-        isRaw
-          ? `      res.write(JSON.stringify({ type: "tool_call", tool_calls: _toolCalls }));`
-          : `      res.write(\`${sseEvt}data: \${JSON.stringify({ type: "tool_call", tool_calls: _toolCalls, node: nodeName })}\\n\\n\`);`,
+        `    if (toolCalls && toolCalls.length > 0) {`,
+        `      sendEvent(${isRaw ? 'JSON.stringify({ type: "tool_call", tool_calls: toolCalls })' : '{ type: "tool_call", tool_calls: toolCalls, node: nodeName }'});`,
         `    }`,
+        `  } else if (mode === "updates") {`,
+        `    const nodeName = isRec(payload) ? Object.keys(payload)[0] : undefined;`,
       );
-      rawLines.push(`  } else if (mode === "updates") {`);
-      rawLines.push(`    const nodeName = typeof payload === "object" && payload !== null ? Object.keys(payload)[0] : undefined;`);
       if (langGraphStreamingFields.length > 0) {
         const allowedFields = JSON.stringify(langGraphStreamingFields);
         rawLines.push(`    if (${allowedFields}.includes(nodeName || "")) {`);
-        if (isRaw) {
-          rawLines.push(`      res.write(JSON.stringify(payload));`);
-        } else {
-          rawLines.push(`      res.write(\`${sseEvt}data: \${JSON.stringify({ type: "update", mode: "updates", node: nodeName, data: payload })}\\n\\n\`);`);
-        }
+        rawLines.push(`      sendEvent(${isRaw ? 'JSON.stringify(payload)' : '{ type: "update", mode: "updates", node: nodeName, data: payload }'});`);
         rawLines.push(`    }`);
       } else {
-        if (isRaw) {
-          rawLines.push(`    res.write(JSON.stringify(payload));`);
-        } else {
-          rawLines.push(`    res.write(\`${sseEvt}data: \${JSON.stringify({ type: "update", mode: "updates", node: nodeName, data: payload })}\\n\\n\`);`);
-        }
+        rawLines.push(`    sendEvent(${isRaw ? 'JSON.stringify(payload)' : '{ type: "update", mode: "updates", node: nodeName, data: payload }'});`);
       }
-      rawLines.push(`  } else if (mode === "custom") {`);
-      if (isRaw) {
-        rawLines.push(`    res.write(typeof payload === "string" ? payload : JSON.stringify(payload));`);
-      } else {
-        rawLines.push(`    res.write(\`${sseEvt}data: \${JSON.stringify({ type: "custom", mode: "custom", data: payload })}\\n\\n\`);`);
-      }
-      rawLines.push(`  } else if (mode === "values") {`);
-      if (isRaw) {
-        rawLines.push(`    res.write(JSON.stringify(payload));`);
-      } else {
-        rawLines.push(`    res.write(\`${sseEvt}data: \${JSON.stringify({ type: "values", mode: "values", data: payload })}\\n\\n\`);`);
-      }
-      rawLines.push(`  }`);
-      rawLines.push(`  if ("flush" in res && typeof res.flush === "function") {`);
-      rawLines.push(`    res.flush();`);
-      rawLines.push(`  }`);
-      rawLines.push(`}`);
-      rawLines.push(`if (!res.writableEnded && !res.destroyed) {`);
+      rawLines.push(
+        `  } else if (mode === "custom" || mode === "values") {`,
+        `    sendEvent(${isRaw ? 'typeof payload === "string" ? payload : JSON.stringify(payload)' : '{ type: mode, mode, data: payload }'});`,
+        `  }`,
+        `}`,
+        `const ${outputVariable}Content = ${outputVariable}ContentParts.join("");`,
+        `if (!abort.signal.aborted && !res.writableEnded && !res.destroyed) {`,
+      );
       if (!isRaw) {
         if (langGraphTrackTokenUsage) {
-          rawLines.push(`  res.write(\`${sseEvt}data: \${JSON.stringify({ type: "usage", usage: ${stepPrefix}TokenUsage })}\\n\\n\`);`);
+          rawLines.push(`  sendEvent({ type: "usage", usage: ${stepPrefix}TokenUsage });`);
         }
-        rawLines.push(`  res.write(\`${sseEvt}data: \${JSON.stringify({ type: "stream_end", done: true, content: ${outputVariable}Content, usage: ${stepPrefix}TokenUsage, threadId: ${threadIdExpr || "undefined"} })}\\n\\n\`);`);
+        rawLines.push(`  sendEvent({ type: "stream_end", done: true, content: ${outputVariable}Content, usage: ${stepPrefix}TokenUsage, threadId: ${threadIdExpr || "undefined"} });`);
         rawLines.push(`  res.write("${sseEvt}data: [DONE]\\n\\n");`);
       }
-      rawLines.push(`  res.end();`);
-      rawLines.push(`}`);
+      rawLines.push(
+        `  res.end();`,
+        `}`,
+      );
       if (outputVariable) {
         rawLines.push(`const ${outputVariable} = {
   streamed: true,
@@ -1402,7 +1294,7 @@ export function renderLangGraphInvokeStep(
         `    }`,
         `  } catch {}`,
         `}`,
-        `let ${outputVariable}Structured: Record<string, any> | undefined = undefined;`,
+        `let ${outputVariable}Structured: object | undefined = undefined;`,
         `if (typeof ${outputVariable}Response === "string" && ${outputVariable}Response.trim().length > 0) {`,
         `  try {`,
         `    const _clean = ${outputVariable}Response.trim();`,
@@ -1417,14 +1309,14 @@ export function renderLangGraphInvokeStep(
         `    }`,
         `    const _p = JSON.parse(_jsonStr);`,
         `    if (typeof _p === "object" && _p !== null && !Array.isArray(_p)) {`,
-        `      ${outputVariable}Structured = _p as Record<string, any>;`,
+        `      ${outputVariable}Structured = _p;`,
         `    }`,
         `  } catch {}`,
         `}`,
-        `if (!${outputVariable}Structured && typeof ${outputVariable}Raw === "object" && ${outputVariable}Raw !== null && "structuredResponse" in (${outputVariable}Raw as object)) {`,
-        `  const _sr = (${outputVariable}Raw as Record<string, any>).structuredResponse;`,
+        `if (!${outputVariable}Structured && typeof ${outputVariable}Raw === "object" && ${outputVariable}Raw !== null && "structuredResponse" in ${outputVariable}Raw) {`,
+        `  const _sr = ${outputVariable}Raw.structuredResponse;`,
         `  if (typeof _sr === "object" && _sr !== null && !Array.isArray(_sr)) {`,
-        `    ${outputVariable}Structured = _sr as Record<string, any>;`,
+        `    ${outputVariable}Structured = _sr;`,
         `  }`,
         `}`,
         `const ${outputVariable} = {`,

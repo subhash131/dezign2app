@@ -216,5 +216,69 @@ describe("compileWebPageNodes Realtime SSE generation", () => {
     expect(code).toContain("es.close()");
     expect(code).toContain("Live Stream Active");
   });
+
+  it("generates dynamic route path and query parameter mappings for client delivery SSE", () => {
+    const webPageNode: BackendNode = {
+      id: "node-page-chat",
+      type: "webPage",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "/chat/[id]",
+        appSlug: "ai-chat",
+        pathParams: [{ id: "p1", name: "id", type: "string", required: true }],
+        realtimeConnections: [
+          {
+            id: "rtc-chat-stream",
+            protocol: "SSE",
+            eventName: "chat_stream",
+            sourceServiceNodeId: "node-service-chat",
+            sourceServiceLabel: "ChatService",
+            pathParamBindings: { id: "params.id" },
+            queryParamBindings: { userId: "query.userId" },
+          },
+        ],
+      },
+    };
+
+    const serviceNode: BackendNode = {
+      id: "node-service-chat",
+      type: "service",
+      position: { x: 400, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "ChatService",
+        port: "8082",
+      },
+    };
+
+    const result = compileWebPageNodes(
+      [webPageNode],
+      [],
+      [],
+      [webPageNode, serviceNode],
+      [],
+      "Chat App",
+    );
+
+    const pageFile = result.files.find((f) => f.filename.includes("page.tsx"));
+    expect(pageFile).toBeDefined();
+
+    const code = pageFile!.content;
+
+    // Verify dynamic route imports and hooks
+    expect(code).toContain('import { useParams, useSearchParams } from "next/navigation";');
+    expect(code).toContain("const routeParams = useParams();");
+    expect(code).toContain("const routeSearchParams = useSearchParams();");
+
+    // Verify dynamic URL interpolation with pathParamBindings and queryParamBindings
+    expect(code).toContain('let effectiveUrl = "http://localhost:8082/events";');
+    expect(code).toContain("const sseParams = new URLSearchParams();");
+    expect(code).toContain('routeSearchParams?.get("userId")');
+    expect(code).toContain("new EventSource(effectiveUrl, { withCredentials: true })");
+
+    // Verify useEffect re-subscribes when route params or search params change
+    expect(code).toContain("}, [routeParams, routeSearchParams]);");
+  });
 });
 

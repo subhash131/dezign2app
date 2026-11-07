@@ -134,6 +134,26 @@ export function generatePageCode(
   });
 
   // Assemble UI Imports
+  const hasDynamicRoute = Boolean(
+    pageMeta.isDynamic ||
+    (pageMeta.routePath && /(?:\/|^):[a-zA-Z0-9_-]+|\[[a-zA-Z0-9_.-]+\]/.test(pageMeta.routePath)) ||
+    (pageMeta.realtimeConnections || []).some(
+      (c) =>
+        (c.pathParamBindings && Object.keys(c.pathParamBindings).length > 0) ||
+        (c.queryParamBindings && Object.keys(c.queryParamBindings).length > 0) ||
+        (c.streamUrl && /(?:\/|^):[a-zA-Z0-9_-]+|\[[a-zA-Z0-9_.-]+\]/.test(c.streamUrl)) ||
+        (c.room && /\$\{/.test(c.room)),
+    ),
+  );
+
+  const dynamicNavigationImport = hasDynamicRoute
+    ? `import { useParams, useSearchParams } from "next/navigation";\n`
+    : "";
+
+  const routeParamsHookJsx = hasDynamicRoute
+    ? `  const routeParams = useParams();\n  const routeSearchParams = useSearchParams();\n\n`
+    : "";
+
   const cardComponentsNeeded = hasPageLoad || hasLogsSection || mediaCaps.hasMediaStream;
   const uiImports: string[] = [];
   if (hasLogsSection || mediaCaps.hasMediaStream) {
@@ -198,8 +218,8 @@ ${hasLogsSection ? `${triggerLogsSectionJsx}` : ""}      </div>
     return `"use client";
 
 ${reactImport}
-${uiImports.join("\n")}${uiImports.length > 0 ? "\n" : ""}${storeImports ? `${storeImports}\n` : ""}${allImports ? `${allImports}\n` : ""}${jsonValueTypeDecl}${namedTypeDecl}export default function ${pageMeta.componentName}() {
-${pageLoadStateJsx}${mediaStateJsx}${triggerLogsStateJsx}${pageLoadEffectJsx}${sseEffectsJsx}${wsEffectsJsx}${webrtcEffectsJsx}${triggerHandlerJsx}  return (
+${dynamicNavigationImport}${uiImports.join("\n")}${uiImports.length > 0 ? "\n" : ""}${storeImports ? `${storeImports}\n` : ""}${allImports ? `${allImports}\n` : ""}${jsonValueTypeDecl}${namedTypeDecl}export default function ${pageMeta.componentName}() {
+${routeParamsHookJsx}${pageLoadStateJsx}${mediaStateJsx}${triggerLogsStateJsx}${pageLoadEffectJsx}${sseEffectsJsx}${wsEffectsJsx}${webrtcEffectsJsx}${triggerHandlerJsx}  return (
     <div className="min-h-screen bg-background text-foreground flex w-full">
 ${sidebarJsx}
       <main className="flex-1 min-w-0 p-6 md:p-10 space-y-8">
@@ -216,8 +236,8 @@ ${pageLoadSectionJsx}${mediaSectionJsx}${contentSectionsJsx ? `          {/* Pag
   return `"use client";
 
 ${reactImport}
-${uiImports.join("\n")}${uiImports.length > 0 ? "\n" : ""}${storeImports ? `${storeImports}\n` : ""}${allImports ? `${allImports}\n` : ""}${jsonValueTypeDecl}${namedTypeDecl}export default function ${pageMeta.componentName}() {
-${pageLoadStateJsx}${mediaStateJsx}${triggerLogsStateJsx}${pageLoadEffectJsx}${sseEffectsJsx}${wsEffectsJsx}${webrtcEffectsJsx}${triggerHandlerJsx}  return (
+${dynamicNavigationImport}${uiImports.join("\n")}${uiImports.length > 0 ? "\n" : ""}${storeImports ? `${storeImports}\n` : ""}${allImports ? `${allImports}\n` : ""}${jsonValueTypeDecl}${namedTypeDecl}export default function ${pageMeta.componentName}() {
+${routeParamsHookJsx}${pageLoadStateJsx}${mediaStateJsx}${triggerLogsStateJsx}${pageLoadEffectJsx}${sseEffectsJsx}${wsEffectsJsx}${webrtcEffectsJsx}${triggerHandlerJsx}  return (
     <main className="min-h-screen bg-background text-foreground p-6 md:p-10 font-sans">
       <div className="max-w-5xl mx-auto space-y-8">
 ${pageLoadSectionJsx}${mediaSectionJsx}${sectionsJsx ? `        {/* Page Sections */}\n${sectionsJsx}\n` : ""}${triggerLogsSectionJsx}      </div>

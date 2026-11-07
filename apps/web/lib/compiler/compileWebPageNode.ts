@@ -8,6 +8,8 @@ import {
   resolveStoreActionBindings,
   LinkedEndpointInfo,
   LinkedPageRefInfo,
+  LinkedRealtimeConnectionInfo,
+  PageInfo,
 } from "./webClients/nextjs/v16";
 
 export {
@@ -16,7 +18,12 @@ export {
   getServicePort,
   resolveStoreActionBindings,
 };
-export type { LinkedEndpointInfo, LinkedPageRefInfo };
+export type {
+  LinkedEndpointInfo,
+  LinkedPageRefInfo,
+  LinkedRealtimeConnectionInfo,
+  PageInfo,
+};
 
 /**
  * Compiles a single WebPage node into a project based on techStack and techVersion

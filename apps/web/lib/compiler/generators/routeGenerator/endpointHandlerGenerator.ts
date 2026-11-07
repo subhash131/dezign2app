@@ -329,6 +329,12 @@ export function generateEndpointRouteHandler(
 
     routeHandlerCode += `  } catch (err) {\n`;
     routeHandlerCode += `    const message = err instanceof Error ? err.message : String(err);\n`;
+    if (hasStreaming) {
+      routeHandlerCode += `    if (abort.signal.aborted) {\n`;
+      routeHandlerCode += `      logger.info("Client disconnected; stream aborted");\n`;
+      routeHandlerCode += `      return;\n`;
+      routeHandlerCode += `    }\n`;
+    }
     routeHandlerCode += `    logger.error("Error in ${method.toUpperCase()} ${path}:", message);\n`;
     if (hasStreaming) {
       const isRawStream = pipelineSteps.some(
@@ -342,15 +348,19 @@ export function generateEndpointRouteHandler(
         routeHandlerCode += `      res.write(\`\\n[ERROR: \${message}]\\n\`);\n`;
       } else {
         routeHandlerCode += `      res.write(\`data: \${JSON.stringify({ error: message })}\\n\\n\`);\n`;
+        routeHandlerCode += `      res.write("data: [DONE]\\n\\n");\n`;
       }
       routeHandlerCode += `      res.end();\n`;
       routeHandlerCode += `    } else {\n`;
       routeHandlerCode += `      return res.status(500).json({ error: "Internal Server Error", details: message });\n`;
       routeHandlerCode += `    }\n`;
+      routeHandlerCode += `  } finally {\n`;
+      routeHandlerCode += `    res.off?.("close", onClose);\n`;
+      routeHandlerCode += `  }\n}\n`;
     } else {
       routeHandlerCode += `    return res.status(500).json({ error: "Internal Server Error", details: message });\n`;
+      routeHandlerCode += `  }\n}\n`;
     }
-    routeHandlerCode += `  }\n}\n`;
 
     return {
       file: {

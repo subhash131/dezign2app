@@ -30,8 +30,8 @@ describe("LangGraph Invoke Pipeline Step Compiler", () => {
       expect(code).toContain('res.setHeader("Content-Type", "text/event-stream")');
       expect(code).toContain('res.setHeader("Cache-Control", "no-cache")');
       expect(code).toContain('res.setHeader("Connection", "keep-alive")');
-      expect(code).toContain('await agent1Graph.stream(agentState, { streamMode: "messages" })');
-      expect(code).toContain('res.write(`data: ${JSON.stringify({ token, node: nodeName })}\\n\\n`)');
+      expect(code).toContain('await agent1Graph.stream(agentState, { streamMode: "messages", signal: abort.signal })');
+      expect(code).toContain('sendEvent({ token, node: nodeName })');
       expect(code).toContain('res.write("data: [DONE]\\n\\n")');
       expect(code).toContain("res.end()");
       expect(code).toContain('"messages": body.message');
@@ -291,7 +291,7 @@ describe("LangGraph Invoke Pipeline Step Compiler", () => {
       const code = lines.join("\n");
 
       expect(code).toContain(
-        'await agentMemStreamGraph.stream(agentState, { streamMode: "messages", configurable: { thread_id: req.headers["x-thread-id"] } })',
+        'await agentMemStreamGraph.stream(agentState, { streamMode: "messages", configurable: { thread_id: req.headers["x-thread-id"] }, signal: abort.signal })',
       );
       expect(code).toContain('res.setHeader("X-Thread-Id", String(req.headers["x-thread-id"]))');
     });
@@ -451,7 +451,8 @@ describe("LangGraph Invoke Pipeline Step Compiler", () => {
       expect(content).not.toContain('res.setHeader("Content-Type", "text/event-stream")');
 
       // Must stream raw tokens without SSE data: [DONE] framing
-      expect(content).toContain('res.write(typeof token === "string" ? token : JSON.stringify(token));');
+      expect(content).toContain('sendEvent(token);');
+      expect(content).toContain('res.write(typeof data === "string" ? data : JSON.stringify(data));');
       expect(content).not.toContain('res.write("data: [DONE]\\n\\n")');
       expect(content).toContain("res.end()");
 
@@ -703,8 +704,7 @@ describe("LangGraph Invoke Pipeline Step Compiler", () => {
       expect(code).toContain('streamMode: ["messages","updates"]');
       expect(code).toContain("configurable: { thread_id: body.threadId }");
       expect(code).toContain("subgraphs: true");
-      expect(code).toContain('mode = _c[1]');
-      expect(code).toContain('payload = _c[2]');
+      expect(code).toContain("const { mode, payload } = normalizeChunk(chunk);");
       expect(code).toContain('mode === "messages"');
       expect(code).toContain('mode === "updates"');
       expect(code).toContain('type: "reasoning"');
@@ -732,8 +732,7 @@ describe("LangGraph Invoke Pipeline Step Compiler", () => {
 
       expect(code).toContain('streamMode: "messages"');
       expect(code).toContain("subgraphs: true");
-      expect(code).toContain("Array.isArray(_c) && _c.length === 2 && Array.isArray(_c[0])");
-      expect(code).toContain("payload = _c[1]");
+      expect(code).toContain("const { mode, payload } = normalizeChunk(chunk);");
       expect(code).toContain('type: "reasoning"');
     });
 
@@ -875,9 +874,9 @@ describe("LangGraph Invoke Pipeline Step Compiler", () => {
       });
       const code = lines.join("\n");
 
-      expect(code).toContain("const streamUsageAgentTokenUsage = { input_tokens: 0, output_tokens: 0, total_tokens: 0, reasoning_tokens: 0 };");
-      expect(code).toContain("_chunkUsage");
-      expect(code).toContain('data: ${JSON.stringify({ type: "usage", usage: streamUsageAgentTokenUsage })}\\n\\n');
+      expect(code).toContain("const streamUsageAgentTokenUsage: Usage = { input_tokens: 0, output_tokens: 0, total_tokens: 0, reasoning_tokens: 0 };");
+      expect(code).toContain("findUsage(msg, rm)");
+      expect(code).toContain('sendEvent({ type: "usage", usage: streamUsageAgentTokenUsage });');
       expect(code).toContain('data: [DONE]\\n\\n');
     });
   });

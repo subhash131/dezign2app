@@ -200,6 +200,8 @@ export interface LinkedRealtimeConnectionInfo {
   langGraphStreamingFields?: string[];
   langGraphStreamIncludeReasoning?: boolean;
   langGraphTargetNodeId?: string;
+  pathParamBindings?: Record<string, string>;
+  queryParamBindings?: Record<string, string>;
 }
 
 export interface PageInfo {
@@ -223,6 +225,9 @@ export interface PageInfo {
   appSlug?: string;
   appName?: string;
   realtimeConnections?: LinkedRealtimeConnectionInfo[];
+  pathParams?: Array<{ name: string; type?: string }>;
+  queryParams?: Array<{ name: string; type?: string; defaultValue?: string }>;
+  isDynamic?: boolean;
 }
 
 export interface NodeConnectionDetail {

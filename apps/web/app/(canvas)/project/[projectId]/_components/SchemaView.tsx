@@ -20,6 +20,7 @@ import { useAutoLayoutShortcut } from "./hooks/useAutoLayoutShortcut";
 import { LayoutTemplate, AlertTriangle } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { useSidebarStore, getEffectiveConfigSidebarWidth } from "@/lib/stores/sidebarStore";
+import { useDbSyncStore } from "@/lib/stores/dbSyncStore";
 
 // canvasEdgeTypes is imported from CustomEdges
 
@@ -152,6 +153,13 @@ export function SchemaView({ projectId }: SchemaViewProps) {
       fitView({ padding: 0.35, maxZoom: 0.65, duration: 0 });
     }
   }, [schemaNodes.length, fitView, setViewport, projectId]);
+
+  // Cancel any active in-flight database validations when unmounting SchemaView
+  useEffect(() => {
+    return () => {
+      useDbSyncStore.getState().cancelAllValidations();
+    };
+  }, []);
 
 
   return (
