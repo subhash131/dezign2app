@@ -424,6 +424,107 @@ describe("compileNextjsV16WebClient - Configuration-Driven Output", () => {
     expect(actionFile?.content).toContain("/chat/");
   });
 
+  it("compiles multi-step pipeline action with prior steps and on_success dynamic navigation using useRouter", () => {
+    const pageNode: BackendNode = {
+      id: "node-page-chat-flow",
+      type: "webPage",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "Messages",
+        appSlug: "chat-app",
+        sections: [
+          {
+            id: "sec-chat-main",
+            name: "Main Section",
+            renderMode: "server",
+            loadStrategy: "eager",
+            actions: [
+              {
+                id: "act-send-message",
+                name: "Send Message",
+                event: "click",
+                actionSteps: [
+                  {
+                    id: "step-trans-1",
+                    order: 1,
+                    type: "transform",
+                    name: "generateChatId",
+                    functionRef: {
+                      name: "generateChatId",
+                      importPath: "@workspace/transformers",
+                    },
+                  },
+                  {
+                    id: "step-api-2",
+                    order: 2,
+                    type: "api_call",
+                    name: "postMessage",
+                    serviceNodeId: "service-chat",
+                    endpointId: "ep-send-message",
+                  },
+                  {
+                    id: "step-nav-3",
+                    order: 3,
+                    type: "navigation",
+                    name: "navigateToChat",
+                    navType: "route",
+                    targetRoute: "/chat/[id]",
+                    navCondition: "on_success",
+                    pathParamBindings: [
+                      {
+                        paramName: "id",
+                        source: {
+                          kind: "prev_response",
+                          stepId: "step-trans-1",
+                          fieldPath: "id",
+                        },
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const serviceNode: BackendNode = {
+      id: "service-chat",
+      type: "service",
+      position: { x: 200, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "ChatService",
+        port: 8080,
+        endpoints: [
+          {
+            id: "ep-send-message",
+            name: "send-message",
+            type: "POST",
+          },
+        ],
+      },
+    };
+
+    const result = compileWebPageNode(pageNode, [], [], [pageNode, serviceNode]);
+    const actionFile = result.files.find((f: CompiledFile) =>
+      f.filename.endsWith("SendMessageAction.tsx"),
+    );
+    expect(actionFile).toBeDefined();
+    // Must be a Button action, NOT a static <Link>
+    expect(actionFile?.content).toContain("<Button");
+    expect(actionFile?.content).not.toContain("<Link");
+    // Must use Next.js useRouter
+    expect(actionFile?.content).toContain("useRouter");
+    // Must execute onTrigger / transformer flow
+    expect(actionFile?.content).toContain("onTrigger");
+    // Must execute dynamic router.push to the resolved route
+    expect(actionFile?.content).toContain("router.push");
+    expect(actionFile?.content).toContain("/chat/");
+  });
+
   it("should NOT generate any frontend app in compileMonorepo if no WebApp node exists", () => {
 
     const lonelyWebPage: BackendNode = {

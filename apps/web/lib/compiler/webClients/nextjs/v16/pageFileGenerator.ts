@@ -1,7 +1,7 @@
 import { BackendNode, BackendEdge, Parameter } from "@/types/canvas";
 import { Endpoint, UIEventItem, PageSection, CompiledFile, JSONValue } from "@workspace/canvas/types";
 import { PageInfo } from "./types";
-import { resolveLinkedEndpoint, resolvePageRefLink } from "./endpointResolver";
+import { resolveLinkedEndpoint, resolvePageRefLink, getServicePort } from "./endpointResolver";
 import { labelToSlug, slugToComponentName } from "./slugUtils";
 import {
   generateEventComponent,
@@ -539,7 +539,7 @@ export function generatePageAndComponentFiles({
           ? evt.actionSteps.find((s) => s.type === "navigation")
           : undefined;
 
-        if (evtType === "navigateToPage" || navStep) {
+        if (evtType === "navigateToPage" || navStep || evt.targetRoute || evt.targetPageId) {
           const rawTargetRoute = navStep?.targetRoute || evt.targetRoute;
           const rawTargetPageId = navStep?.targetPageId || evt.targetPageId;
           const pageRefLink = resolvePageRefLink(
@@ -552,7 +552,25 @@ export function generatePageAndComponentFiles({
           );
           targetRoute = pageRefLink.targetRoute;
           targetPageLabel = pageRefLink.targetNodeName;
-        } else {
+        }
+
+        const hasExecutionSteps = (evt.actionSteps || []).some(
+          (s) =>
+            s.type === "api_call" ||
+            s.type === "transform" ||
+            s.type === "storage_put" ||
+            s.type === "state_mutation" ||
+            s.type === "browser_storage",
+        );
+
+        const isPureNavigation =
+          evtType === "navigateToPage" ||
+          (Boolean(navStep) &&
+            !hasExecutionSteps &&
+            navStep?.navCondition !== "on_success" &&
+            navStep?.navCondition !== "on_error");
+
+        if (!isPureNavigation) {
           link = resolveLinkedEndpoint(
             node.id,
             evt.id,
@@ -560,6 +578,57 @@ export function generatePageAndComponentFiles({
             allEdges,
             endpoints,
           );
+
+          if (!link && Array.isArray(evt.actionSteps)) {
+            const apiStep = evt.actionSteps.find(
+              (s) => s.type === "api_call" && s.serviceNodeId,
+            );
+            if (apiStep?.serviceNodeId) {
+              const sNode = allNodes.find((n) => n.id === apiStep.serviceNodeId);
+              if (sNode) {
+                const ep =
+                  endpoints.find(
+                    (e) =>
+                      e.nodeId === sNode.id &&
+                      (e.id === apiStep.endpointId || e.name === apiStep.endpointId),
+                  ) ||
+                  (sNode.data?.endpoints as Endpoint[] | undefined)?.find(
+                    (e) => e.id === apiStep.endpointId || e.name === apiStep.endpointId,
+                  );
+                if (ep) {
+                  const targetPort = getServicePort(sNode);
+                  const sName = sNode.data?.label || "Service";
+                  const epMethod = (ep.type || "POST").toUpperCase();
+                  const epRaw = ep.name || "action";
+                  const epPath = epRaw.startsWith("/") ? epRaw : `/${epRaw}`;
+                  const isColocated =
+                    sNode.data?.techStack === "nextjs" &&
+                    allNodes.some((n) => n.type === "webApp");
+                  const fullUrl = isColocated
+                    ? epPath
+                    : `http://localhost:${targetPort}${epPath}`;
+                  const baseUrl = isColocated ? "" : `http://localhost:${targetPort}`;
+                  link = {
+                    targetNodeId: sNode.id,
+                    targetNodeName: sName,
+                    serviceName: sName,
+                    targetNodePort: targetPort,
+                    endpointId: ep.id,
+                    endpointName: ep.name,
+                    method: epMethod,
+                    path: epPath,
+                    fullUrl,
+                    baseUrl,
+                    envVarName: `NEXT_PUBLIC_${sName.toUpperCase()}_SERVICE_URL`,
+                    publicEnvVarName: `NEXT_PUBLIC_${sName.toUpperCase()}_SERVICE_URL`,
+                    requireAuth: ep.requireAuth !== false,
+                    endpoint: ep,
+                  };
+                }
+              }
+            }
+          }
+
           url = link ? link.fullUrl : "";
           method = link ? link.method : "POST";
           const hasStepAuth = (evt.actionSteps || []).some(

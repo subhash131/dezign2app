@@ -1,5 +1,5 @@
 import { Parameter, Schema, UIEventItem } from "@/types/canvas";
-import { Endpoint } from "@workspace/canvas";
+import { Endpoint, JSONValue } from "@workspace/canvas";
 import { METHOD_BADGE_CLASSES, ResolvedEventParameters } from "./types";
 import { extractPathPlaceholders, inferTypesFromJson } from "./paramUtils";
 
@@ -18,7 +18,10 @@ export function resolveEventParameters({
   requireAuth?: boolean;
   customHeaders?: Record<string, string>;
   customQueryParams?: Record<string, string>;
-  customRequestBody?: unknown;
+  customRequestBody?:
+    | JSONValue
+    | Schema
+    | { fields?: Parameter[]; rawJson?: string; mode?: string };
   eventItem?: UIEventItem;
   endpoint?: Endpoint;
 }): ResolvedEventParameters {

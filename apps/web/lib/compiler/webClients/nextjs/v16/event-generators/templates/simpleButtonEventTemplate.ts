@@ -1,6 +1,12 @@
-import { StoreActionBinding } from "@workspace/canvas/types";
+import { StoreActionBinding, FrontendActionStepDraft } from "@workspace/canvas/types";
 import { resolveStoreActionMethodName } from "../../storeActionResolver";
 import { resolveBaseUrlInfo } from "../paramUtils";
+import {
+  partitionTransformerSteps,
+  resolveTransformerImports,
+  renderTransformerInvocationList,
+  renderActionStepNavigation,
+} from "../transformerStepResolver";
 
 function resolveActionLibImports(libraries?: string[]): string {
   if (!libraries || libraries.length === 0) return "";
@@ -26,6 +32,8 @@ export function generateSimpleButtonEventTemplate({
   storeActionBinding,
   storeActionBindings,
   serviceName,
+  actionSteps,
+  targetRoute,
 }: {
   componentName: string;
   eventName: string;
@@ -38,8 +46,11 @@ export function generateSimpleButtonEventTemplate({
   storeActionBinding?: StoreActionBinding;
   storeActionBindings?: StoreActionBinding[];
   serviceName?: string;
+  actionSteps?: FrontendActionStepDraft[];
+  targetRoute?: string;
 }): string {
   const libImports = resolveActionLibImports(libraries);
+  const hasApiUrl = Boolean(url && url.trim() && url !== "#");
 
   const bindings: StoreActionBinding[] =
     Array.isArray(storeActionBindings) && storeActionBindings.length > 0
@@ -48,12 +59,44 @@ export function generateSimpleButtonEventTemplate({
       ? [storeActionBinding]
       : [];
 
+  const navStep = Array.isArray(actionSteps)
+    ? actionSteps.find((s) => s.type === "navigation")
+    : undefined;
+
+  const { preSteps, postSteps } = partitionTransformerSteps(actionSteps, hasApiUrl);
+  const allTransformerSteps = [...preSteps, ...postSteps];
+  const transImports = resolveTransformerImports(allTransformerSteps);
+
+  const stepOutputMap = new Map<string, string>();
+  const preStepsCode = renderTransformerInvocationList(preSteps, stepOutputMap, {
+    hasTriggerResult: false,
+  });
+  const postStepsCode = renderTransformerInvocationList(postSteps, stepOutputMap, {
+    hasTriggerResult: true,
+    resDataVar: "resData",
+  });
+
+  const lastStep =
+    postSteps.length > 0
+      ? postSteps[postSteps.length - 1]
+      : preSteps.length > 0
+      ? preSteps[preSteps.length - 1]
+      : undefined;
+  const lastTransformerOutputVar = lastStep ? stepOutputMap.get(lastStep.id) : undefined;
+
+  const navResult = renderActionStepNavigation(navStep, targetRoute, stepOutputMap, {
+    hasTriggerResult: hasApiUrl,
+    resDataVar: "resData",
+  });
+
   const uniqueStoreNames = Array.from(
-    new Set(
-      bindings
+    new Set([
+      ...bindings
         .map((b) => b.storeName?.replace(/Store$/i, ""))
         .filter((n): n is string => Boolean(n)),
-    ),
+      ...transImports.uniqueStoreNames,
+      ...navResult.storeNames,
+    ]),
   );
 
   const storeImports =
@@ -64,6 +107,21 @@ export function generateSimpleButtonEventTemplate({
             return `import { ${hook} } from "@/lib/stores";`;
           })
           .join("\n") + "\n"
+      : "";
+
+  const navImports = new Set<string>();
+  if (navResult.needsUseRouter) navImports.add("useRouter");
+  if (transImports.needsUseParams || navResult.needsUseParams) navImports.add("useParams");
+  if (transImports.needsUseSearchParams || navResult.needsUseSearchParams) navImports.add("useSearchParams");
+
+  const navImportLines =
+    navImports.size > 0
+      ? `import { ${Array.from(navImports).join(", ")} } from "next/navigation";\n`
+      : "";
+
+  const transformerImportLines =
+    transImports.importStatements.length > 0
+      ? `${transImports.importStatements.join("\n")}\n`
       : "";
 
   // Helper to emit input mapping for store calls
@@ -77,8 +135,9 @@ export function generateSimpleButtonEventTemplate({
       const storeHookName = `use${rawStoreName.charAt(0).toUpperCase() + rawStoreName.slice(1)}Store`;
       const storeActionName = resolveStoreActionMethodName(b);
 
-      const hasApiUrl = Boolean(url && url.trim() && url !== "#");
-      const src = !hasApiUrl ? "direct" : (b.updateSource || "response");
+      const src = !hasApiUrl && !lastTransformerOutputVar
+        ? "direct"
+        : (b.updateSource || "response");
       const vPath = b.valuePath?.trim();
       const cVal = b.customValue?.trim();
 
@@ -100,6 +159,10 @@ export function generateSimpleButtonEventTemplate({
         preTrigger += `      ${storeHookName}.getState().${storeActionName}();\n`;
         return;
       }
+
+      const resSourceExpr = lastTransformerOutputVar
+        ? `(typeof triggerResult !== "undefined" ? triggerResult : ${lastTransformerOutputVar})`
+        : `triggerResult`;
 
       if (src === "response_property" && vPath) {
         const isFullPayload = vPath === "*" || vPath === "$" || vPath === "data" || vPath === "response";
@@ -132,11 +195,12 @@ export function generateSimpleButtonEventTemplate({
           passedExpr = `Array.isArray(extracted) ? extracted : (extracted !== null && extracted !== undefined ? [extracted] : [])`;
         }
 
-        postTrigger += `      if (triggerResult) {
+        postTrigger += `      if (${resSourceExpr}) {
+        const rawRes = ${resSourceExpr};
         const resData =
-          triggerResult && typeof triggerResult === "object" && "data" in triggerResult && triggerResult.data !== undefined
-            ? triggerResult.data
-            : triggerResult;
+          rawRes && typeof rawRes === "object" && "data" in rawRes && rawRes.data !== undefined
+            ? rawRes.data
+            : rawRes;
         const extracted = ${extractionExpr};
         ${storeHookName}.getState().${storeActionName}(${passedExpr});
       }\n`;
@@ -152,11 +216,12 @@ export function generateSimpleButtonEventTemplate({
             return `${fieldName}: resData?.${chain}`;
           });
         if (mappedEntries.length > 0) {
-          postTrigger += `      if (triggerResult) {
+          postTrigger += `      if (${resSourceExpr}) {
+        const rawRes = ${resSourceExpr};
         const resData =
-          triggerResult && typeof triggerResult === "object" && "data" in triggerResult && triggerResult.data !== undefined
-            ? triggerResult.data
-            : triggerResult;
+          rawRes && typeof rawRes === "object" && "data" in rawRes && rawRes.data !== undefined
+            ? rawRes.data
+            : rawRes;
         ${storeHookName}.getState().populate({ ${mappedEntries.join(", ")} });
       }\n`;
           return;
@@ -169,11 +234,12 @@ export function generateSimpleButtonEventTemplate({
           const chain = path.trim().split(".").map((p, i) => (i === 0 ? p : `?.${p}`)).join("");
           return `resData?.${chain}`;
         });
-        postTrigger += `      if (triggerResult) {
+        postTrigger += `      if (${resSourceExpr}) {
+        const rawRes = ${resSourceExpr};
         const resData =
-          triggerResult && typeof triggerResult === "object" && "data" in triggerResult && triggerResult.data !== undefined
-            ? triggerResult.data
-            : triggerResult;
+          rawRes && typeof rawRes === "object" && "data" in rawRes && rawRes.data !== undefined
+            ? rawRes.data
+            : rawRes;
         ${storeHookName}.getState().${storeActionName}(${paramArgs.join(", ")});
       }\n`;
         return;
@@ -205,11 +271,12 @@ export function generateSimpleButtonEventTemplate({
         passedExpr = `Array.isArray(resData) ? resData : (resData !== null && resData !== undefined ? [resData] : [])`;
       }
 
-      postTrigger += `      if (triggerResult) {
+      postTrigger += `      if (${resSourceExpr}) {
+        const rawRes = ${resSourceExpr};
         const resData =
-          triggerResult && typeof triggerResult === "object" && "data" in triggerResult && triggerResult.data !== undefined
-            ? triggerResult.data
-            : triggerResult;
+          rawRes && typeof rawRes === "object" && "data" in rawRes && rawRes.data !== undefined
+            ? rawRes.data
+            : rawRes;
         ${storeHookName}.getState().${storeActionName}(${passedExpr});
       }\n`;
     });
@@ -223,25 +290,24 @@ export function generateSimpleButtonEventTemplate({
   return `"use client";
 
 import React, { useState } from "react";
-import { Button } from "@workspace/ui/components/button";
-${storeImports}${libImports}
+${navImportLines}${storeImports}${transformerImportLines}${libImports}import { Button } from "@workspace/ui/components/button";
 ${typeDefs.join("\n\n")}
 
 export function ${componentName}({ onTrigger }: ${componentName}Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-
+${navResult.needsUseRouter ? `  const router = useRouter();\n` : ""}${transImports.needsUseParams || navResult.needsUseParams ? `  const routeParams = useParams();\n` : ""}${transImports.needsUseSearchParams || navResult.needsUseSearchParams ? `  const routeSearchParams = useSearchParams();\n` : ""}
   const handleClick = async (e: React.MouseEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-${urlInfo.baseUrlDeclaration ? `      ${urlInfo.baseUrlDeclaration}\n` : ""}${storeSnippet.preTrigger}      const triggerResult = await onTrigger?.(
+${urlInfo.baseUrlDeclaration ? `      ${urlInfo.baseUrlDeclaration}\n` : ""}${preStepsCode}${storeSnippet.preTrigger}      const triggerResult = await onTrigger?.(
         "${eventName}",
         "${eventType}",
         ${urlInfo.urlExpression},
         "${upperMethod}",
         ${Boolean(requireAuth)},
       );
-${storeSnippet.postTrigger}    } finally {
+${postStepsCode}${storeSnippet.postTrigger}${navResult.navigationCode ? `${navResult.navigationCode}\n` : ""}    } finally {
       setIsSubmitting(false);
     }
   };
