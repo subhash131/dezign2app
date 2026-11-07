@@ -1,7 +1,17 @@
-import { ipcMain, shell } from "electron";
+import { ipcMain, shell, session } from "electron";
 import { getMainWindow } from "../window";
 import { openBrowserLogin, getPendingAuthData, clearPendingAuthData } from "../services/auth";
-import { pickDirectory, writeProject, readProjectFile, CompiledFile, listProjectDirectory, deleteProjectFiles } from "../services/fileWriter";
+import {
+  pickDirectory,
+  writeProject,
+  readProjectFile,
+  CompiledFile,
+  listProjectDirectory,
+  deleteProjectFiles,
+  getStoredProjectWorkspaceDir,
+  setStoredProjectWorkspaceDir,
+  deleteStoredProjectWorkspaceDir,
+} from "../services/fileWriter";
 import {
   runDockerPreflight,
   startDocker,
@@ -75,10 +85,42 @@ export function registerIpcHandlers(): void {
     return { success: true };
   });
 
+  // Flushes Chromium session cookies to SQLite disk storage immediately
+  ipcMain.handle("auth:flush-cookies", async () => {
+    try {
+      await session.defaultSession.cookies.flushStore();
+      return { success: true };
+    } catch (err) {
+      console.warn("[ipc] Failed to flush cookies:", err);
+      return { success: false };
+    }
+  });
+
   // ── File System ────────────────────────────
   ipcMain.handle("fs:pick-directory", async () => {
     return pickDirectory(getMainWindow());
   });
+
+  ipcMain.handle(
+    "fs:get-project-workspace-dir",
+    async (_event, projectId: string) => {
+      return getStoredProjectWorkspaceDir(projectId);
+    }
+  );
+
+  ipcMain.handle(
+    "fs:set-project-workspace-dir",
+    async (_event, projectId: string, dir: string) => {
+      return setStoredProjectWorkspaceDir(projectId, dir);
+    }
+  );
+
+  ipcMain.handle(
+    "fs:delete-project-workspace-dir",
+    async (_event, projectId: string) => {
+      return deleteStoredProjectWorkspaceDir(projectId);
+    }
+  );
 
   ipcMain.handle(
     "fs:write-project",

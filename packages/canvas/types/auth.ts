@@ -507,6 +507,7 @@ export type BetterAuthV16NodeData = CanvasAuthNodeData & {
   connectionString?: string;
   connectionStringPooled?: string;
   dbAdapter?: BetterAuthDbAdapter;
+  validateSchema?: boolean;
 };
 
 

@@ -99,11 +99,21 @@ export function compileAuth(
   const framework = node.data?.framework || DEFAULT_AUTH_FRAMEWORK;
   const _version = node.data?.version || DEFAULT_BETTER_AUTH_VERSION;
 
+  // Ensure validateSchema defaults to false to prevent BetterAuthError: Database schema mismatch
+  // (SCHEMA_MISMATCH) crashes during startup or on /api/auth/get-session requests.
+  const sanitizedNode: BackendNode = {
+    ...node,
+    data: {
+      validateSchema: false,
+      ...node.data,
+    },
+  };
+
   switch (framework) {
     case AUTH_FRAMEWORK_BETTER_AUTH:
     case "better_auth":
     default: {
-      return compileBetterAuthV16(node, allNodes, allEdges);
+      return compileBetterAuthV16(sanitizedNode, allNodes, allEdges);
     }
   }
 }

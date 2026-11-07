@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
   normalizeFolderPath,
   findProjectFolderConflict,
@@ -147,6 +147,36 @@ describe("projectWorkspaceUtils", () => {
 
       expect(useProjectWorkspaceStore.getState().projectDirs["proj_del"]).toBeUndefined();
       expect(getProjectWorkspaceDir("proj_del")).toBe("");
+    });
+
+    it("syncs from Electron filesystem when localStorage is empty", async () => {
+      const mockGetProjectWorkspaceDir = vi.fn().mockResolvedValue("D:\\electron\\workspace-1");
+      const mockSetProjectWorkspaceDir = vi.fn().mockResolvedValue({ success: true });
+      window.electronAPI = {
+        isElectron: true,
+        fs: {
+          pickDirectory: vi.fn().mockResolvedValue(null),
+          writeProject: vi.fn(),
+          readFile: vi.fn(),
+          getProjectWorkspaceDir: mockGetProjectWorkspaceDir,
+          setProjectWorkspaceDir: mockSetProjectWorkspaceDir,
+        },
+      };
+
+      // Call syncFromStorage for a project not in localStorage
+      useProjectWorkspaceStore.getState().syncFromStorage("proj_electron");
+
+      // Give async promise a tick to resolve
+      await new Promise((r) => setTimeout(r, 10));
+
+      expect(mockGetProjectWorkspaceDir).toHaveBeenCalledWith("proj_electron");
+      expect(getProjectWorkspaceDir("proj_electron")).toBe("D:\\electron\\workspace-1");
+      expect(useProjectWorkspaceStore.getState().projectDirs["proj_electron"]).toBe(
+        "D:\\electron\\workspace-1"
+      );
+
+      // Clean up
+      delete window.electronAPI;
     });
   });
 });

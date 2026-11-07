@@ -317,11 +317,23 @@ export function generateAuthConfig(data: AuthNodeData): string {
     data.generateId ||
     (isPostgres ? "uuid" : undefined);
 
-  let advancedBlock = "";
+  const dbConfigLines: string[] = [];
   if (generateId === "uuid") {
-    advancedBlock = `\n  advanced: {\n    database: {\n      generateId: () => crypto.randomUUID(),\n    },\n  },`;
+    dbConfigLines.push("generateId: () => crypto.randomUUID(),");
   } else if (generateId) {
-    advancedBlock = `\n  advanced: {\n    database: {\n      generateId: ${JSON.stringify(generateId)},\n    },\n  },`;
+    dbConfigLines.push(`generateId: ${JSON.stringify(generateId)},`);
+  }
+
+  // Disable strict schema mismatch checks so pre-existing or auto-migrated tables
+  // do not crash on startup with BetterAuthError Database schema mismatch (SCHEMA_MISMATCH)
+  const validateSchema = data.validateSchema ?? false;
+  if (!validateSchema) {
+    dbConfigLines.push("validateSchema: false,");
+  }
+
+  let advancedBlock = "";
+  if (dbConfigLines.length > 0) {
+    advancedBlock = `\n  advanced: {\n    database: {\n      ${dbConfigLines.join("\n      ")}\n    },\n  },`;
   }
 
   return `import { betterAuth } from "better-auth";

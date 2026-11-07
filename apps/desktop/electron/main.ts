@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog } from "electron";
+import { app, BrowserWindow, dialog, session } from "electron";
 import path from "path";
 import { APP_NAME, APP_USER_MODEL_ID } from "./constants";
 import { createMainWindow, getMainWindow } from "./window";
@@ -141,11 +141,23 @@ if (!gotTheLock) {
     }
   });
 
-  app.on("before-quit", () => {
-    stopNextServer();
-    cleanupAllTerminals();
-    stopDockerProcess();
-    stopDevProcess();
+  let isQuitting = false;
+  app.on("before-quit", async (event) => {
+    if (!isQuitting) {
+      isQuitting = true;
+      event.preventDefault();
+      try {
+        await session.defaultSession.cookies.flushStore();
+        log("[main] Successfully flushed defaultSession cookies to disk.");
+      } catch (e) {
+        console.warn("[main] Failed to flush cookies on before-quit:", e);
+      }
+      stopNextServer();
+      cleanupAllTerminals();
+      stopDockerProcess();
+      stopDevProcess();
+      app.quit();
+    }
   });
 }
 

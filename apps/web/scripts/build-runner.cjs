@@ -84,7 +84,7 @@ resolvedEnv.CONVEX_SITE_URL = resolvedEnv.CONVEX_SITE_URL || resolvedEnv.NEXT_PU
 // Auto-derive desktop auth URL if not explicitly specified
 if (!resolvedEnv.NEXT_PUBLIC_DESKTOP_AUTH_URL) {
   resolvedEnv.NEXT_PUBLIC_DESKTOP_AUTH_URL =
-    resolvedEnv.NEXT_PUBLIC_APP_URL || resolvedEnv.BETTER_AUTH_URL || "https://www.dezign2app.com";
+    resolvedEnv.NEXT_PUBLIC_APP_URL || resolvedEnv.BETTER_AUTH_URL || "https://dezign2app.com";
 }
 
 // Fail fast if required Convex configuration is missing
