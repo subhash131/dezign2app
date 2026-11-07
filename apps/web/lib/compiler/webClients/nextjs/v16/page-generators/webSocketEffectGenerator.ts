@@ -76,12 +76,39 @@ export function generateWebSocketEffects(
       ),
     );
 
+    const hasPathBindings = conns.some(
+      (c) => c.pathParamBindings && Object.keys(c.pathParamBindings).length > 0,
+    );
+    const hasQueryBindings = conns.some(
+      (c) => c.queryParamBindings && Object.keys(c.queryParamBindings).length > 0,
+    );
+    const hasDynamicRoom = rooms.some((r) => /\$\{/.test(r));
+    const isDynamic = hasPathBindings || hasQueryBindings || hasDynamicRoom || /(?:\/|^):[a-zA-Z0-9_-]+|\[[a-zA-Z0-9_.-]+\]/.test(streamUrl);
+
     const joinStatements = rooms
-      .map((r) => `        ws?.send(JSON.stringify({ action: "join", room: "${r}" }));`)
+      .map((r) => {
+        if (/\$\{/.test(r)) {
+          const interpolated = r.replace(
+            /\$\{params\.([a-zA-Z0-9_-]+)\}|\$\{([a-zA-Z0-9_-]+)\}/g,
+            (_, p1, p2) => `\${routeParams?.["${p1 || p2}"] ?? ""}`,
+          );
+          return `        const effectiveRoom = \`${interpolated}\`;\n        ws?.send(JSON.stringify({ action: "join", room: effectiveRoom }));`;
+        }
+        return `        ws?.send(JSON.stringify({ action: "join", room: "${r}" }));`;
+      })
       .join("\n");
 
     const leaveStatements = rooms
-      .map((r) => `        if (ws.readyState === WebSocket.OPEN) { ws.send(JSON.stringify({ action: "leave", room: "${r}" })); }`)
+      .map((r) => {
+        if (/\$\{/.test(r)) {
+          const interpolated = r.replace(
+            /\$\{params\.([a-zA-Z0-9_-]+)\}|\$\{([a-zA-Z0-9_-]+)\}/g,
+            (_, p1, p2) => `\${routeParams?.["${p1 || p2}"] ?? ""}`,
+          );
+          return `        if (ws.readyState === WebSocket.OPEN) { const effectiveRoom = \`${interpolated}\`; ws.send(JSON.stringify({ action: "leave", room: effectiveRoom })); }`;
+        }
+        return `        if (ws.readyState === WebSocket.OPEN) { ws.send(JSON.stringify({ action: "leave", room: "${r}" })); }`;
+      })
       .join("\n");
 
     const storeDispatchStatements = conns
@@ -98,6 +125,52 @@ export function generateWebSocketEffects(
       })
       .join("\n");
 
+    let dynamicWsUrlBuilder = "";
+    if (isDynamic) {
+      const pathReplacements: string[] = [];
+      conns.forEach((c) => {
+        if (c.pathParamBindings) {
+          Object.entries(c.pathParamBindings).forEach(([paramKey, accessor]) => {
+            if (accessor.startsWith("params.")) {
+              const routeKey = accessor.slice(7);
+              pathReplacements.push(`        targetUrl = targetUrl.replace(new RegExp("[:\\\\[]${paramKey}\\\\]?", "g"), String(routeParams?.["${routeKey}"] ?? ""));`);
+            } else if (accessor.startsWith("query.")) {
+              const qKey = accessor.slice(6);
+              pathReplacements.push(`        targetUrl = targetUrl.replace(new RegExp("[:\\\\[]${paramKey}\\\\]?", "g"), String(routeSearchParams?.get("${qKey}") ?? ""));`);
+            } else {
+              pathReplacements.push(`        targetUrl = targetUrl.replace(new RegExp("[:\\\\[]${paramKey}\\\\]?", "g"), ${JSON.stringify(accessor)});`);
+            }
+          });
+        }
+      });
+
+      const queryAppends: string[] = [];
+      const seenQueryKeys = new Set<string>();
+      conns.forEach((c) => {
+        if (c.queryParamBindings) {
+          Object.entries(c.queryParamBindings).forEach(([qKey, accessor]) => {
+            if (seenQueryKeys.has(qKey)) return;
+            seenQueryKeys.add(qKey);
+            if (accessor.startsWith("params.")) {
+              const routeKey = accessor.slice(7);
+              queryAppends.push(`        if (routeParams?.["${routeKey}"]) wsParams.set("${qKey}", String(routeParams["${routeKey}"]));`);
+            } else if (accessor.startsWith("query.")) {
+              const queryKey = accessor.slice(6);
+              queryAppends.push(`        if (routeSearchParams?.get("${queryKey}")) wsParams.set("${qKey}", routeSearchParams.get("${queryKey}")!);`);
+            } else {
+              queryAppends.push(`        wsParams.set("${qKey}", ${JSON.stringify(accessor)});`);
+            }
+          });
+        }
+      });
+
+      dynamicWsUrlBuilder = `${pathReplacements.join("\n")}${pathReplacements.length > 0 ? "\n" : ""}        targetUrl = targetUrl.replace(/:([a-zA-Z0-9_-]+)/g, (_, k) => String(routeParams?.[k] ?? ""));\n        targetUrl = targetUrl.replace(/\\[([a-zA-Z0-9_-]+)\\]/g, (_, k) => String(routeParams?.[k] ?? ""));\n${queryAppends.length > 0 ? `        const wsParams = new URLSearchParams();\n${queryAppends.join("\n")}\n        const wsQueryString = wsParams.toString();\n        if (wsQueryString) {\n          targetUrl += (targetUrl.includes("?") ? "&" : "?") + wsQueryString;\n        }\n` : ""}`;
+    }
+
+    const depsLine = isDynamic
+      ? `  }, [routeParams, routeSearchParams]);`
+      : `  }, []);`;
+
     effectBlocks.push(`  // Real-time WebSocket listener for ${conns[0]?.sourceServiceName || "Service"}
   useEffect(() => {
     let ws: WebSocket | null = null;
@@ -109,8 +182,8 @@ export function generateWebSocketEffects(
       try {
         ${hasAuth ? `const rawToken = await getAuthBearerToken();
         const token = rawToken ? rawToken.replace(/^Bearer\\s+/i, "") : null;
-        const targetUrl = token ? \`${streamUrl}?token=\${encodeURIComponent(token)}\` : "${streamUrl}";` : `const targetUrl = "${streamUrl}";`}
-        ws = new WebSocket(targetUrl);
+        ${isDynamic ? "let" : "const"} targetUrl = token ? \`${streamUrl}?token=\${encodeURIComponent(token)}\` : "${streamUrl}";` : `${isDynamic ? "let" : "const"} targetUrl = "${streamUrl}";`}
+${dynamicWsUrlBuilder}        ws = new WebSocket(targetUrl);
 
         ws.onopen = () => {
           if (!isMounted) return;
@@ -184,7 +257,7 @@ ${leaveStatements ? `${leaveStatements}\n` : ""}          ws.close();
         } catch {}
       }
     };
-  }, []);`);
+${depsLine}`);
   });
 
   return effectBlocks.join("\n\n") + "\n\n";

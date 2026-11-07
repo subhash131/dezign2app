@@ -303,7 +303,7 @@ export function resolvePagesInfo(
               (isLangGraphStreaming
                 ? deliveryProto === "WEBSOCKET"
                   ? "agent_stream"
-                  : "message"
+                  : (sourceItemName || "message")
                 : sourceItemName || "message"),
             room: step.clientDeliveryRoom || step.langGraphStreamingRoom,
             mediaMode: isStepRtc
@@ -327,6 +327,8 @@ export function resolvePagesInfo(
             langGraphStreamingFields: isLangGraphStreaming ? step.langGraphStreamingFields : undefined,
             langGraphStreamIncludeReasoning: isLangGraphStreaming ? step.langGraphStreamIncludeReasoning : undefined,
             langGraphTargetNodeId: isLangGraphStreaming ? step.langGraphTargetNodeId : undefined,
+            pathParamBindings: step.clientDeliveryPathParamBindings,
+            queryParamBindings: step.clientDeliveryQueryParamBindings,
           });
         }
         if (step.thenSteps) checkPipelineSteps(step.thenSteps, srcNodeId, sourceItemName, sourceItemId, sourceItemType);
@@ -571,6 +573,8 @@ export function resolvePagesInfo(
         langGraphStreamingFields: conn.langGraphStreamingFields,
         langGraphStreamIncludeReasoning: conn.langGraphStreamIncludeReasoning,
         langGraphTargetNodeId: conn.langGraphTargetNodeId,
+        pathParamBindings: conn.pathParamBindings,
+        queryParamBindings: conn.queryParamBindings,
       };
     });
 
@@ -595,6 +599,17 @@ export function resolvePagesInfo(
       appSlug: node.data.appSlug || effectiveAppSlug,
       appName: node.data.appName,
       realtimeConnections: resolvedRealtime.length > 0 ? resolvedRealtime : undefined,
+      pathParams: node.data?.pathParams,
+      queryParams: node.data?.queryParams,
+      isDynamic: Boolean(
+        node.data?.pathParams?.length ||
+        (routePath && /(?:\/|^):[a-zA-Z0-9_-]+|\[[a-zA-Z0-9_.-]+\]/.test(routePath)) ||
+        resolvedRealtime.some(
+          (c) =>
+            (c.pathParamBindings && Object.keys(c.pathParamBindings).length > 0) ||
+            (c.queryParamBindings && Object.keys(c.queryParamBindings).length > 0),
+        ),
+      ),
     });
   });
 

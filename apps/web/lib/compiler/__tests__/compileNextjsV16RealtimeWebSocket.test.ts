@@ -356,4 +356,68 @@ describe("compileWebPageNodes Realtime WebSocket generation", () => {
     expect(code).not.toContain("RTCPeerConnection");
     expect(code).not.toContain("initWebRtc");
   });
+
+  it("generates dynamic route path and room interpolation for client delivery WebSocket", () => {
+    const webPageNode: BackendNode = {
+      id: "node-page-room",
+      type: "webPage",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "/room/[roomId]",
+        appSlug: "chat-app",
+        pathParams: [{ id: "p1", name: "roomId", type: "string", required: true }],
+        realtimeConnections: [
+          {
+            id: "rtc-room-stream",
+            protocol: "WEBSOCKET",
+            eventName: "chat_stream",
+            room: "room:${params.roomId}",
+            sourceServiceNodeId: "node-service-chat",
+            sourceServiceLabel: "ChatService",
+            pathParamBindings: { roomId: "params.roomId" },
+            queryParamBindings: { token: "query.token" },
+          },
+        ],
+      },
+    };
+
+    const serviceNode: BackendNode = {
+      id: "node-service-chat",
+      type: "service",
+      position: { x: 400, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "ChatService",
+        port: "8086",
+      },
+    };
+
+    const result = compileWebPageNodes(
+      [webPageNode],
+      [],
+      [],
+      [webPageNode, serviceNode],
+      [],
+      "Chat App",
+    );
+
+    const pageFile = result.files.find((f) => f.filename.includes("page.tsx"));
+    expect(pageFile).toBeDefined();
+
+    const code = pageFile!.content;
+
+    // Verify dynamic route imports and hooks
+    expect(code).toContain('import { useParams, useSearchParams } from "next/navigation";');
+    expect(code).toContain("const routeParams = useParams();");
+    expect(code).toContain("const routeSearchParams = useSearchParams();");
+
+    // Verify dynamic room interpolation and query parameter binding
+    expect(code).toContain('const effectiveRoom = `room:${routeParams?.["roomId"] ?? ""}`;');
+    expect(code).toContain('routeSearchParams?.get("token")');
+    expect(code).toContain("ws = new WebSocket(targetUrl);");
+
+    // Verify useEffect re-subscribes when route params or search params change
+    expect(code).toContain("}, [routeParams, routeSearchParams]);");
+  });
 });

@@ -65,6 +65,17 @@ export function generateSseEffects(sseConnections: LinkedRealtimeConnectionInfo[
 
   const effectBlocks: string[] = [];
   sseByUrl.forEach((conns, streamUrl) => {
+    const hasPathBindings = conns.some(
+      (c) => c.pathParamBindings && Object.keys(c.pathParamBindings).length > 0,
+    );
+    const hasQueryBindings = conns.some(
+      (c) => c.queryParamBindings && Object.keys(c.queryParamBindings).length > 0,
+    );
+    const hasDynamicUrlPattern = /(?:\/|^):[a-zA-Z0-9_-]+|\[[a-zA-Z0-9_.-]+\]/.test(streamUrl);
+    const isDynamic = hasPathBindings || hasQueryBindings || hasDynamicUrlPattern;
+
+    const urlVar = isDynamic ? "effectiveUrl" : `"${streamUrl}"`;
+
     const customEvents = Array.from(
       new Set(
         conns
@@ -96,7 +107,7 @@ ${storeStatements}        setTriggerLogs((prev) => [
             eventName: "${evtName}",
             eventType: "SSE",
             timestamp: new Date().toLocaleTimeString(),
-            url: "${streamUrl}",
+            url: ${urlVar},
             method: "SSE",
             data: parsed,
           },
@@ -114,15 +125,77 @@ ${storeStatements}        setTriggerLogs((prev) => [
       .map((b) => generateRealtimeStoreSnippet(b, "parsed"))
       .join("");
 
+    let dynamicUrlBuilder = "";
+    if (isDynamic) {
+      const pathReplacements: string[] = [];
+      conns.forEach((c) => {
+        if (c.pathParamBindings) {
+          Object.entries(c.pathParamBindings).forEach(([paramKey, accessor]) => {
+            if (accessor.startsWith("params.")) {
+              const routeKey = accessor.slice(7);
+              pathReplacements.push(`      effectiveUrl = effectiveUrl.replace(new RegExp("[:\\\\[]${paramKey}\\\\]?", "g"), String(routeParams?.["${routeKey}"] ?? ""));`);
+            } else if (accessor.startsWith("query.")) {
+              const qKey = accessor.slice(6);
+              pathReplacements.push(`      effectiveUrl = effectiveUrl.replace(new RegExp("[:\\\\[]${paramKey}\\\\]?", "g"), String(routeSearchParams?.get("${qKey}") ?? ""));`);
+            } else {
+              pathReplacements.push(`      effectiveUrl = effectiveUrl.replace(new RegExp("[:\\\\[]${paramKey}\\\\]?", "g"), ${JSON.stringify(accessor)});`);
+            }
+          });
+        }
+      });
+
+      const queryAppends: string[] = [];
+      const seenQueryKeys = new Set<string>();
+      conns.forEach((c) => {
+        if (c.queryParamBindings) {
+          Object.entries(c.queryParamBindings).forEach(([qKey, accessor]) => {
+            if (seenQueryKeys.has(qKey)) return;
+            seenQueryKeys.add(qKey);
+            if (accessor.startsWith("params.")) {
+              const routeKey = accessor.slice(7);
+              queryAppends.push(`      if (routeParams?.["${routeKey}"]) sseParams.set("${qKey}", String(routeParams["${routeKey}"]));`);
+            } else if (accessor.startsWith("query.")) {
+              const queryKey = accessor.slice(6);
+              queryAppends.push(`      if (routeSearchParams?.get("${queryKey}")) sseParams.set("${qKey}", routeSearchParams.get("${queryKey}")!);`);
+            } else {
+              queryAppends.push(`      sseParams.set("${qKey}", ${JSON.stringify(accessor)});`);
+            }
+          });
+        }
+      });
+
+      dynamicUrlBuilder = `      let effectiveUrl = "${streamUrl}";\n${pathReplacements.join("\n")}${pathReplacements.length > 0 ? "\n" : ""}      effectiveUrl = effectiveUrl.replace(/:([a-zA-Z0-9_-]+)/g, (_, k) => String(routeParams?.[k] ?? ""));\n      effectiveUrl = effectiveUrl.replace(/\\[([a-zA-Z0-9_-]+)\\]/g, (_, k) => String(routeParams?.[k] ?? ""));\n${queryAppends.length > 0 ? `      const sseParams = new URLSearchParams();\n${queryAppends.join("\n")}\n      const sseQueryString = sseParams.toString();\n      if (sseQueryString) {\n        effectiveUrl += (effectiveUrl.includes("?") ? "&" : "?") + sseQueryString;\n      }\n` : ""}`;
+    }
+
+    const initSseLine = isDynamic
+      ? `${dynamicUrlBuilder}      es = new EventSource(effectiveUrl, { withCredentials: true });`
+      : `      es = new EventSource("${streamUrl}", { withCredentials: true });`;
+
+    const openLogLine = isDynamic
+      ? `          console.log("[SSE] Connected to " + effectiveUrl);`
+      : `          console.log("[SSE] Connected to ${streamUrl}");`;
+
+    const errReconnLine = isDynamic
+      ? `        console.warn("[SSE] Reconnecting to stream (" + effectiveUrl + ")...");`
+      : `        console.warn("[SSE] Reconnecting to stream (${streamUrl})...");`;
+
+    const errInitLine = isDynamic
+      ? `      console.error("[SSE] Failed to initialize EventSource (" + effectiveUrl + "):", err);`
+      : `      console.error("[SSE] Failed to initialize EventSource (${streamUrl}):", err);`;
+
+    const depsLine = isDynamic
+      ? `  }, [routeParams, routeSearchParams]);`
+      : `  }, []);`;
+
     effectBlocks.push(`  // Real-time SSE listener for ${conns[0]?.sourceServiceName || "Service"}
   useEffect(() => {
     let es: EventSource | null = null;
     let isMounted = true;
     try {
-      es = new EventSource("${streamUrl}", { withCredentials: true });
+${initSseLine}
       es.onopen = () => {
         if (isMounted) {
-          console.log("[SSE] Connected to ${streamUrl}");
+${openLogLine}
         }
       };
 ${customListeners ? `${customListeners}\n` : ""}      es.onmessage = (event) => {
@@ -142,7 +215,7 @@ ${defaultStoreStatements}        setTriggerLogs((prev) => [
             eventName: "message",
             eventType: "SSE",
             timestamp: new Date().toLocaleTimeString(),
-            url: "${streamUrl}",
+            url: ${urlVar},
             method: "SSE",
             data: parsed,
           },
@@ -153,10 +226,10 @@ ${defaultStoreStatements}        setTriggerLogs((prev) => [
         if (!isMounted || es?.readyState === EventSource.CLOSED) {
           return;
         }
-        console.warn("[SSE] Reconnecting to stream (${streamUrl})...");
+${errReconnLine}
       };
     } catch (err) {
-      console.error("[SSE] Failed to initialize EventSource (${streamUrl}):", err);
+${errInitLine}
     }
     return () => {
       isMounted = false;
@@ -164,7 +237,7 @@ ${defaultStoreStatements}        setTriggerLogs((prev) => [
         es.close();
       }
     };
-  }, []);`);
+${depsLine}`);
   });
 
   return effectBlocks.join("\n\n") + "\n\n";
