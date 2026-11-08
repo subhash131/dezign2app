@@ -151,16 +151,16 @@ ${routeParamsHook}${sseEffectsJsx}${wsEffectsJsx}  // Listen for layout-level cu
       className="fixed bottom-3 right-4 z-50 pointer-events-auto"
     >
       {!isOpen ? (
-        <div className="flex items-center gap-2 bg-card/95 border border-purple-500/40 shadow-xl rounded-full px-3 py-1.5 text-xs backdrop-blur font-mono text-foreground">
-          <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse shrink-0" />
-          <span className="font-semibold text-purple-400">Layout Output Log</span>
+        <div className="flex items-center gap-2 bg-card/95 border border-border shadow-xl rounded-full px-3 py-1.5 text-xs backdrop-blur font-mono text-foreground">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+          <span className="font-semibold text-foreground">Layout Output Log</span>
           {hasActiveStream && (
-            <span className="text-[10px] bg-purple-500/15 text-purple-300 border border-purple-500/30 px-1.5 py-0.2 rounded-full font-mono">
+            <span className="text-[10px] bg-primary/10 text-primary border border-primary/20 px-1.5 py-0.2 rounded-full font-mono">
               LIVE
             </span>
           )}
           {triggerLogs.length > 0 && (
-            <span className="text-[10px] bg-muted px-1.5 py-0.2 rounded-full font-bold">
+            <span className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.2 rounded-full font-bold">
               {triggerLogs.length}
             </span>
           )}
@@ -168,24 +168,24 @@ ${routeParamsHook}${sseEffectsJsx}${wsEffectsJsx}  // Listen for layout-level cu
             variant="ghost"
             size="sm"
             onClick={() => setIsOpen(true)}
-            className="h-5 px-1.5 text-[10px] text-purple-300 hover:text-purple-200 hover:bg-purple-500/20 rounded cursor-pointer"
+            className="h-5 px-1.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted rounded cursor-pointer"
             title="Open Layout Output Log"
           >
             <ChevronUp className="w-3.5 h-3.5" />
           </Button>
         </div>
       ) : (
-        <div className="w-[520px] max-w-[calc(100vw-2rem)] shadow-2xl rounded-xl border border-purple-500/40 bg-card/95 backdrop-blur overflow-hidden flex flex-col max-h-[420px] animate-in fade-in-50 slide-in-from-bottom-2 duration-150">
-          <div className="flex items-center justify-between px-4 py-2.5 bg-purple-500/10 border-b border-border/80">
+        <div className="w-[520px] max-w-[calc(100vw-2rem)] shadow-2xl rounded-xl border border-border bg-card/95 backdrop-blur overflow-hidden flex flex-col max-h-[420px] animate-in fade-in-50 slide-in-from-bottom-2 duration-150">
+          <div className="flex items-center justify-between px-4 py-2.5 bg-muted/40 border-b border-border">
             <div className="flex items-center gap-2">
-              <Activity className="w-4 h-4 text-purple-400 shrink-0" />
+              <Activity className="w-4 h-4 text-primary shrink-0" />
               <span className="font-bold text-xs text-foreground">Layout Output Log</span>
               {hasActiveStream && (
                 <Badge
                   variant="outline"
-                  className="text-[9px] font-mono text-purple-300 border-purple-500/30 bg-purple-500/10 flex items-center gap-1"
+                  className="text-[9px] font-mono text-muted-foreground border-border bg-muted/30 flex items-center gap-1"
                 >
-                  <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                   Persistent Stream Active
                 </Badge>
               )}
@@ -229,7 +229,7 @@ ${routeParamsHook}${sseEffectsJsx}${wsEffectsJsx}  // Listen for layout-level cu
                   <div className="flex items-center justify-between text-[11px] text-muted-foreground border-b border-border/40 pb-1">
                     <div className="flex items-center gap-1.5">
                       <span className="font-semibold text-foreground">{log.eventName}</span>
-                      <span className="text-[9px] font-bold px-1.5 py-0.2 rounded font-mono uppercase bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded font-mono uppercase bg-primary/10 text-primary border border-primary/20">
                         {log.eventType || "EVENT"}
                       </span>
                       {log.status && (
