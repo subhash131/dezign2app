@@ -258,4 +258,108 @@ describe("NavigationStep component", () => {
     expect(screen.getByText("router.push(`/users/${step.data.id}`)")).toBeDefined();
     expect(screen.getByText("Prior Step Response")).toBeDefined();
   });
+
+  it("updates navMethod when user selects history_push", () => {
+    const draft: FrontendActionStepDraft = {
+      id: "step-1",
+      order: 1,
+      type: "navigation",
+      navType: "route",
+      targetRoute: "/chat/[conversationId]",
+      navMethod: "router_push",
+    };
+
+    const handleChange = vi.fn();
+
+    render(
+      <NavigationStep
+        draft={draft}
+        allNodes={dummyNodes}
+        onChange={handleChange}
+      />,
+    );
+
+    const historyPushItem = screen.getByTestId("select-item-history_push");
+    fireEvent.click(historyPushItem);
+
+    expect(handleChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        navMethod: "history_push",
+      }),
+    );
+  });
+
+  it("renders live preview for history_push with dynamic conversationId", () => {
+    const draft: FrontendActionStepDraft = {
+      id: "step-1",
+      order: 1,
+      type: "navigation",
+      navType: "route",
+      targetRoute: "/chat/[conversationId]",
+      navMethod: "history_push",
+      pathParamBindings: [
+        {
+          paramName: "conversationId",
+          source: {
+            kind: "prev_response",
+            stepId: "step-api",
+            fieldPath: "conversationId",
+          },
+        },
+      ],
+    };
+
+    render(
+      <NavigationStep
+        draft={draft}
+        allNodes={dummyNodes}
+        onChange={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByText("history.pushState({}, \"\", `/chat/${step.conversationId}`)")
+    ).toBeDefined();
+  });
+
+  it("renders live preview for history_replace and router_replace", () => {
+    const replaceDraft: FrontendActionStepDraft = {
+      id: "step-1",
+      order: 1,
+      type: "navigation",
+      navType: "route",
+      targetRoute: "/chat/[conversationId]",
+      navMethod: "history_replace",
+      pathParamBindings: [
+        {
+          paramName: "conversationId",
+          source: { kind: "literal", value: "abc-123" },
+        },
+      ],
+    };
+
+    const { rerender } = render(
+      <NavigationStep
+        draft={replaceDraft}
+        allNodes={dummyNodes}
+        onChange={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByText('history.replaceState({}, "", "/chat/abc-123")')
+    ).toBeDefined();
+
+    rerender(
+      <NavigationStep
+        draft={{ ...replaceDraft, navMethod: "router_replace" }}
+        allNodes={dummyNodes}
+        onChange={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByText('router.replace("/chat/abc-123")')
+    ).toBeDefined();
+  });
 });
