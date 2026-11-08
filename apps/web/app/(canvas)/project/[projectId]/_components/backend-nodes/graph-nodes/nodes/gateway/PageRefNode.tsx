@@ -92,12 +92,9 @@ export const PageRefNode = ({
     const isRoot = !isLayout && (page?.data?.isRoot === true || cleanLabel === "/");
     const displayLabel = details ? details.displayTitle : isRoot ? "/" : pageLabel;
 
-    // Clean data payload matching pageRefDataSchema in Convex
-    const { targetPageType: _omittedType, ...cleanData } = (data || {}) as unknown as Record<string, unknown>;
-
     updateNode(id, {
       data: {
-        ...(cleanData as any),
+        ...data,
         targetPageId: resolvedPageId,
         pageRefId: resolvedPageId,
         targetPageLabel: displayLabel,

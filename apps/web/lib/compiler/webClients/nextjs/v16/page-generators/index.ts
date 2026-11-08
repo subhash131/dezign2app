@@ -23,3 +23,5 @@ export {
   generateTriggerHandler,
   generateTriggerLogsSection,
 } from "./triggerLogsGenerator";
+
+export { generateLayoutEventsDrawer } from "./layoutEventsDrawerGenerator";
