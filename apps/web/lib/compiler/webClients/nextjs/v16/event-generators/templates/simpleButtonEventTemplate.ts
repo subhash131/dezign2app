@@ -1,4 +1,9 @@
-import { StoreActionBinding, FrontendActionStepDraft } from "@workspace/canvas/types";
+import {
+  StoreActionBinding,
+  FrontendActionStepDraft,
+  NavigationPathParamBinding,
+  NavigationQueryParamBinding,
+} from "@workspace/canvas/types";
 import { resolveStoreActionMethodName } from "../../storeActionResolver";
 import { resolveBaseUrlInfo } from "../paramUtils";
 import {
@@ -34,6 +39,8 @@ export function generateSimpleButtonEventTemplate({
   serviceName,
   actionSteps,
   targetRoute,
+  pathParamBindings,
+  queryParamBindings,
 }: {
   componentName: string;
   eventName: string;
@@ -48,6 +55,8 @@ export function generateSimpleButtonEventTemplate({
   serviceName?: string;
   actionSteps?: FrontendActionStepDraft[];
   targetRoute?: string;
+  pathParamBindings?: NavigationPathParamBinding[];
+  queryParamBindings?: NavigationQueryParamBinding[];
 }): string {
   const libImports = resolveActionLibImports(libraries);
   const hasApiUrl = Boolean(url && url.trim() && url !== "#");
@@ -88,11 +97,26 @@ export function generateSimpleButtonEventTemplate({
     ? actionSteps.find((s) => s.type === "api_call")
     : undefined;
 
+  if (apiStep?.id) {
+    stepOutputMap.set(apiStep.id, "resData");
+    if (apiStep.name) stepOutputMap.set(apiStep.name, "resData");
+  }
+  if (hasApiUrl) {
+    stepOutputMap.set("api_call", "resData");
+    stepOutputMap.set("trigger", "resData");
+    stepOutputMap.set("triggerResult", "resData");
+    stepOutputMap.set("endpoint", "resData");
+    stepOutputMap.set("api", "resData");
+    stepOutputMap.set("resData", "resData");
+  }
+
   const navResult = renderActionStepNavigation(navStep, targetRoute, stepOutputMap, {
     hasTriggerResult: hasApiUrl,
-    resDataVar: lastTransformerOutputVar || "resData",
+    resDataVar: "resData",
     lastTransformerOutputVar,
     apiStepId: apiStep?.id,
+    pathParamBindings: navStep?.pathParamBindings || pathParamBindings,
+    queryParamBindings: navStep?.queryParamBindings || queryParamBindings,
   });
 
   const uniqueStoreNames = Array.from(
