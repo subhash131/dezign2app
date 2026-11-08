@@ -90,7 +90,7 @@ export default function SupportPage() {
             </div>
             <h3 className="text-base font-bold text-gray-900">Contact Sales</h3>
             <p className="text-xs text-gray-600 leading-relaxed">
-              Looking for custom API limits, dedicated hosting, or enterprise
+              Looking for custom API limits, dedicated deployment options, or enterprise
               SSO integrations?
             </p>
             <Link

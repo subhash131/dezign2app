@@ -71,6 +71,122 @@ export function convertEndpointsToCustomTypes(
       routeFileName.toLowerCase().includes("health") ||
       (ep.name && ep.name.toLowerCase().includes("health"));
 
+    // Check if endpoint has an active streaming LangGraph step
+    const hasStreamingStep = Boolean(
+      ep.pipelineSteps?.some(
+        (s: any) =>
+          s.enabled !== false &&
+          (s.type === "langgraph_invoke" || Boolean(s.langGraphTargetNodeId)) &&
+          Boolean(
+            s.langGraphStreamingEnabled ||
+            s.langGraphStreamingProtocol === "sse" ||
+            s.langGraphStreamingProtocol === "raw" ||
+            (s.langGraphStreamingProtocol !== "websocket" &&
+              s.langGraphStreamingProtocol !== "kafka" &&
+              s.langGraphStreamingProtocol !== "redis_stream" &&
+              s.langGraphStreamingEnabled !== false),
+          ),
+      ),
+    );
+
+    // 0. Nested types for real-time streaming (created first so parent interfaces can reference them)
+    const usagePayloadTypeName = "UsagePayload";
+    const toolCallTypeName = "StreamToolCall";
+
+    if (hasStreamingStep) {
+      // 0a. UsagePayload interface
+      const usagePayloadTypeId = `type-endpoint-usage-${endpointId}`;
+      const existingUsage = existingTypes.find(
+        (t) => t.id === usagePayloadTypeId || t.name === usagePayloadTypeName,
+      );
+      if (!result.some((t) => t.name === usagePayloadTypeName)) {
+        result.push({
+          id: usagePayloadTypeId,
+          name: usagePayloadTypeName,
+          kind: "interface",
+          description: "Token usage metrics payload for real-time stream execution",
+          fields: [
+            {
+              id: existingUsage?.fields?.find((f) => f.name === "input_tokens")?.id || `f-usage-${endpointId}-input`,
+              name: "input_tokens",
+              type: "number",
+              required: false,
+              isArray: false,
+              description: "Input / prompt tokens consumed",
+            },
+            {
+              id: existingUsage?.fields?.find((f) => f.name === "output_tokens")?.id || `f-usage-${endpointId}-output`,
+              name: "output_tokens",
+              type: "number",
+              required: false,
+              isArray: false,
+              description: "Output / completion tokens consumed",
+            },
+            {
+              id: existingUsage?.fields?.find((f) => f.name === "total_tokens")?.id || `f-usage-${endpointId}-total`,
+              name: "total_tokens",
+              type: "number",
+              required: false,
+              isArray: false,
+              description: "Total tokens consumed",
+            },
+            {
+              id: existingUsage?.fields?.find((f) => f.name === "reasoning_tokens")?.id || `f-usage-${endpointId}-reasoning`,
+              name: "reasoning_tokens",
+              type: "number",
+              required: false,
+              isArray: false,
+              description: "Reasoning / thinking tokens consumed",
+            },
+          ],
+          isReadOnly: true,
+          isExtendable: true,
+        });
+      }
+
+      // 0b. StreamToolCall interface
+      const toolCallTypeId = `type-endpoint-tool-call-${endpointId}`;
+      const existingToolCall = existingTypes.find(
+        (t) => t.id === toolCallTypeId || t.name === toolCallTypeName,
+      );
+      if (!result.some((t) => t.name === toolCallTypeName)) {
+        result.push({
+          id: toolCallTypeId,
+          name: toolCallTypeName,
+          kind: "interface",
+          description: "Invoked tool call metadata emitted during execution",
+          fields: [
+            {
+              id: existingToolCall?.fields?.find((f) => f.name === "id")?.id || `f-tool-${endpointId}-id`,
+              name: "id",
+              type: "string",
+              required: false,
+              isArray: false,
+              description: "Tool call identifier",
+            },
+            {
+              id: existingToolCall?.fields?.find((f) => f.name === "name")?.id || `f-tool-${endpointId}-name`,
+              name: "name",
+              type: "string",
+              required: true,
+              isArray: false,
+              description: "Tool function name",
+            },
+            {
+              id: existingToolCall?.fields?.find((f) => f.name === "args")?.id || `f-tool-${endpointId}-args`,
+              name: "args",
+              type: "Record<string, unknown>",
+              required: false,
+              isArray: false,
+              description: "Arguments passed to the tool",
+            },
+          ],
+          isReadOnly: true,
+          isExtendable: true,
+        });
+      }
+    }
+
     // 1. Success Response Type (CRITICAL for frontend rendering and stores)
     const responseTypeName = `${pascalService}${pascalRoute}Response`;
     const responseTypeId = `type-endpoint-response-${endpointId}`;
@@ -81,7 +197,92 @@ export function convertEndpointsToCustomTypes(
     const extractedFields: ExtractedEndpointResponseField[] = extractEndpointResponseFields(ep);
     let responseFields: CustomTypeField[] = [];
 
-    if (extractedFields.length > 0) {
+    if (hasStreamingStep) {
+      // For streaming LangGraph endpoints, populate complete streaming response contract
+      responseFields = [
+        {
+          id: existingResponse?.fields?.find((ef) => ef.name === "content")?.id || `f-res-${endpointId}-content`,
+          name: "content",
+          type: "string",
+          isArray: false,
+          required: true,
+          description: "Accumulated AI response content / text stream",
+        },
+        {
+          id: existingResponse?.fields?.find((ef) => ef.name === "token")?.id || `f-res-${endpointId}-token`,
+          name: "token",
+          type: "string",
+          isArray: false,
+          required: false,
+          description: "Streamed LLM token chunk",
+        },
+        {
+          id: existingResponse?.fields?.find((ef) => ef.name === "node")?.id || `f-res-${endpointId}-node`,
+          name: "node",
+          type: "string",
+          isArray: false,
+          required: false,
+          description: "Graph node emitting the stream event",
+        },
+        {
+          id: existingResponse?.fields?.find((ef) => ef.name === "reasoning")?.id || `f-res-${endpointId}-reasoning`,
+          name: "reasoning",
+          type: "string",
+          isArray: false,
+          required: false,
+          description: "Model reasoning / thought trace tokens",
+        },
+        {
+          id: existingResponse?.fields?.find((ef) => ef.name === "threadId")?.id || `f-res-${endpointId}-threadId`,
+          name: "threadId",
+          type: "string",
+          isArray: false,
+          required: false,
+          description: "Active session / conversation thread ID",
+        },
+        {
+          id: existingResponse?.fields?.find((ef) => ef.name === "usage")?.id || `f-res-${endpointId}-usage`,
+          name: "usage",
+          type: usagePayloadTypeName,
+          isArray: false,
+          required: false,
+          description: "Token usage metrics payload",
+        },
+        {
+          id: existingResponse?.fields?.find((ef) => ef.name === "done")?.id || `f-res-${endpointId}-done`,
+          name: "done",
+          type: "boolean",
+          isArray: false,
+          required: true,
+          description: "Stream completion indicator",
+          defaultValue: "false",
+        },
+        {
+          id: existingResponse?.fields?.find((ef) => ef.name === "streamed")?.id || `f-res-${endpointId}-streamed`,
+          name: "streamed",
+          type: "boolean",
+          isArray: false,
+          required: true,
+          description: "Whether the response was streamed over SSE",
+          defaultValue: "true",
+        },
+      ];
+
+      // Add any additional channel fields extracted from step configuration
+      extractedFields.forEach((ef) => {
+        if (!responseFields.some((rf) => rf.name === ef.name)) {
+          const { type, isArray } = normalizeFieldType(ef.type);
+          responseFields.push({
+            id: existingResponse?.fields?.find((f) => f.name === ef.name)?.id || `f-res-${endpointId}-${ef.name}`,
+            name: ef.name,
+            type,
+            isArray,
+            required: false,
+            description: ef.description || `Streamed channel '${ef.name}'`,
+          });
+        }
+      });
+    } else if (extractedFields.length > 0) {
       responseFields = extractedFields.map((f, fIdx) => {
         const { type, isArray } = normalizeFieldType(f.type);
         const existingField = existingResponse?.fields?.find((ef) => ef.name === f.name);
@@ -175,11 +376,144 @@ export function convertEndpointsToCustomTypes(
       id: responseTypeId,
       name: responseTypeName,
       kind: "interface",
-      description: `Success response (200 OK) for ${method} ${ep.name || "/"} in ${serviceName}`,
+      description: hasStreamingStep
+        ? `Real-time streaming response (SSE) for ${method} ${ep.name || "/"} in ${serviceName}`
+        : `Success response (200 OK) for ${method} ${ep.name || "/"} in ${serviceName}`,
       fields: responseFields,
       isReadOnly: true,
       isExtendable: true,
     });
+
+    // 1b. Real-time Stream Chunk Type (when endpoint has an active streaming LangGraph step)
+    if (hasStreamingStep) {
+      const streamChunkTypeName = `${pascalService}${pascalRoute}StreamChunk`;
+      const streamChunkTypeId = `type-endpoint-stream-chunk-${endpointId}`;
+      const existingChunk = existingTypes.find(
+        (t) => t.id === streamChunkTypeId || t.name === streamChunkTypeName,
+      );
+      result.push({
+        id: streamChunkTypeId,
+        name: streamChunkTypeName,
+        kind: "interface",
+        description: `Real-time streaming event chunk for ${method} ${ep.name || "/"} in ${serviceName}`,
+        fields: [
+          {
+            id: existingChunk?.fields?.find((f) => f.name === "token")?.id || `f-chunk-${endpointId}-token`,
+            name: "token",
+            type: "string",
+            required: false,
+            isArray: false,
+            description: "Streamed LLM token chunk",
+          },
+          {
+            id: existingChunk?.fields?.find((f) => f.name === "node")?.id || `f-chunk-${endpointId}-node`,
+            name: "node",
+            type: "string",
+            required: false,
+            isArray: false,
+            description: "Graph node emitting the event",
+          },
+          {
+            id: existingChunk?.fields?.find((f) => f.name === "reasoning")?.id || `f-chunk-${endpointId}-reasoning`,
+            name: "reasoning",
+            type: "string",
+            required: false,
+            isArray: false,
+            description: "Model reasoning / thinking tokens",
+          },
+          {
+            id: existingChunk?.fields?.find((f) => f.name === "type")?.id || `f-chunk-${endpointId}-type`,
+            name: "type",
+            type: "string",
+            required: false,
+            isArray: false,
+            description: "Stream chunk event type",
+          },
+          {
+            id: existingChunk?.fields?.find((f) => f.name === "mode")?.id || `f-chunk-${endpointId}-mode`,
+            name: "mode",
+            type: "string",
+            required: false,
+            isArray: false,
+            description: "Stream mode ('messages' | 'updates' | 'values' | 'custom')",
+          },
+          {
+            id: existingChunk?.fields?.find((f) => f.name === "tool_call")?.id || `f-chunk-${endpointId}-tool-call`,
+            name: "tool_call",
+            type: toolCallTypeName,
+            required: false,
+            isArray: false,
+            description: "Invoked tool call metadata",
+          },
+          {
+            id: existingChunk?.fields?.find((f) => f.name === "tool_calls")?.id || `f-chunk-${endpointId}-tool-calls`,
+            name: "tool_calls",
+            type: toolCallTypeName,
+            required: false,
+            isArray: true,
+            description: "List of tool calls executed during streaming",
+          },
+          {
+            id: existingChunk?.fields?.find((f) => f.name === "usage")?.id || `f-chunk-${endpointId}-usage`,
+            name: "usage",
+            type: usagePayloadTypeName,
+            required: false,
+            isArray: false,
+            description: "Token usage metrics payload",
+          },
+          {
+            id: existingChunk?.fields?.find((f) => f.name === "done")?.id || `f-chunk-${endpointId}-done`,
+            name: "done",
+            type: "boolean",
+            required: false,
+            isArray: false,
+            description: "Stream completion flag",
+          },
+          {
+            id: existingChunk?.fields?.find((f) => f.name === "content")?.id || `f-chunk-${endpointId}-content`,
+            name: "content",
+            type: "string",
+            required: false,
+            isArray: false,
+            description: "Accumulated AI response content / text stream",
+          },
+          {
+            id: existingChunk?.fields?.find((f) => f.name === "response")?.id || `f-chunk-${endpointId}-response`,
+            name: "response",
+            type: "string",
+            required: false,
+            isArray: false,
+            description: "Accumulated AI text response",
+          },
+          {
+            id: existingChunk?.fields?.find((f) => f.name === "threadId")?.id || `f-chunk-${endpointId}-threadId`,
+            name: "threadId",
+            type: "string",
+            required: false,
+            isArray: false,
+            description: "Session thread ID",
+          },
+          {
+            id: existingChunk?.fields?.find((f) => f.name === "thread_id")?.id || `f-chunk-${endpointId}-thread-id`,
+            name: "thread_id",
+            type: "string",
+            required: false,
+            isArray: false,
+            description: "Session thread ID (alias)",
+          },
+          {
+            id: existingChunk?.fields?.find((f) => f.name === "raw")?.id || `f-chunk-${endpointId}-raw`,
+            name: "raw",
+            type: "string",
+            required: false,
+            isArray: false,
+            description: "Raw incoming stream event chunk",
+          },
+        ],
+        isReadOnly: true,
+        isExtendable: true,
+      });
+    }
 
     // 2. Request Body Type (for mutating endpoints)
     const isBodyMethod = ["POST", "PUT", "PATCH"].includes(method);

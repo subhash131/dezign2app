@@ -499,6 +499,25 @@ export function generateResponseInterface(
     );
     if (streamingStep) {
       const code = `/**
+ * Token usage metrics payload for real-time stream execution
+ */
+export interface UsagePayload {
+  input_tokens?: number;
+  output_tokens?: number;
+  total_tokens?: number;
+  reasoning_tokens?: number;
+}
+
+/**
+ * Invoked tool call metadata emitted during execution
+ */
+export interface StreamToolCall {
+  id?: string;
+  name: string;
+  args?: Record<string, unknown>;
+}
+
+/**
  * Real-time Streaming Stream Result for ${interfaceName}
  * Emitted when the LangGraph agent invocation streams tokens/updates over SSE or raw stream.
  */
@@ -511,6 +530,8 @@ export interface ${interfaceName} {
   custom?: unknown[];
   values?: Record<string, unknown>;
   threadId?: string;
+  usage?: UsagePayload;
+  done?: boolean;
   streamed: true;
   raw?: string;
 }
@@ -521,11 +542,19 @@ export interface ${interfaceName} {
 export interface ${interfaceName}StreamChunk {
   token?: string;
   node?: string;
-  type?: "reasoning" | "update" | "custom" | "values" | "session";
+  type?: "reasoning" | "update" | "custom" | "values" | "session" | string;
   mode?: string;
   data?: unknown;
   reasoning?: string;
+  tool_call?: StreamToolCall;
+  tool_calls?: StreamToolCall[];
+  usage?: UsagePayload;
+  done?: boolean;
+  content?: string;
+  response?: string;
+  threadId?: string;
   thread_id?: string;
+  raw?: string;
 }
 `;
       return { code, entityImports };
