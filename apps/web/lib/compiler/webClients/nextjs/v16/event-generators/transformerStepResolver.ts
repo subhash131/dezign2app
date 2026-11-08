@@ -455,18 +455,54 @@ export function renderActionStepNavigation(
     queryParts.push(`searchParams.set("${q.key}", ${valExpr});`);
   }
 
+  const navMethod = navStep?.navMethod || "router_push";
+  const isHistoryPush = navMethod === "history_push";
+  const isHistoryReplace = navMethod === "history_replace";
+  const isRouterReplace = navMethod === "router_replace";
+  const needsUseRouter = !isHistoryPush && !isHistoryReplace;
+
   let navCode = "";
   if (queryParts.length > 0) {
-    navCode = `${indent}const navUrl = new URL(\`${pathTemplate}\`, "http://localhost");
+    if (isHistoryPush) {
+      navCode = `${indent}const navUrl = new URL(\`${pathTemplate}\`, "http://localhost");
+${queryParts.map((qp) => `${indent}${qp}`).join("\n")}
+${indent}if (typeof window !== "undefined") {
+${indent}  window.history.pushState({}, "", navUrl.pathname + navUrl.search);
+${indent}}`;
+    } else if (isHistoryReplace) {
+      navCode = `${indent}const navUrl = new URL(\`${pathTemplate}\`, "http://localhost");
+${queryParts.map((qp) => `${indent}${qp}`).join("\n")}
+${indent}if (typeof window !== "undefined") {
+${indent}  window.history.replaceState({}, "", navUrl.pathname + navUrl.search);
+${indent}}`;
+    } else if (isRouterReplace) {
+      navCode = `${indent}const navUrl = new URL(\`${pathTemplate}\`, "http://localhost");
+${queryParts.map((qp) => `${indent}${qp}`).join("\n")}
+${indent}router.replace(navUrl.pathname + navUrl.search);`;
+    } else {
+      navCode = `${indent}const navUrl = new URL(\`${pathTemplate}\`, "http://localhost");
 ${queryParts.map((qp) => `${indent}${qp}`).join("\n")}
 ${indent}router.push(navUrl.pathname + navUrl.search);`;
+    }
   } else {
-    navCode = `${indent}router.push(\`${pathTemplate}\`);`;
+    if (isHistoryPush) {
+      navCode = `${indent}if (typeof window !== "undefined") {
+${indent}  window.history.pushState({}, "", \`${pathTemplate}\`);
+${indent}}`;
+    } else if (isHistoryReplace) {
+      navCode = `${indent}if (typeof window !== "undefined") {
+${indent}  window.history.replaceState({}, "", \`${pathTemplate}\`);
+${indent}}`;
+    } else if (isRouterReplace) {
+      navCode = `${indent}router.replace(\`${pathTemplate}\`);`;
+    } else {
+      navCode = `${indent}router.push(\`${pathTemplate}\`);`;
+    }
   }
 
   return {
     navigationCode: navCode,
-    needsUseRouter: true,
+    needsUseRouter,
     needsUseParams,
     needsUseSearchParams,
     storeNames: Array.from(storeNames),

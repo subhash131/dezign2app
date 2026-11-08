@@ -476,5 +476,120 @@ describe("WebPageNode Action Transformer Step Compilation", () => {
     expect(code).not.toContain("router.push(`/chat/${String(resData?.id ?? \"\")}`);");
     expect(code).toContain("const resData =");
   });
+
+  it("compiles navigation with navMethod 'history_push' for new chat in-place URL update", () => {
+    const eventItem: UIEventItem = {
+      id: "act-send-first-msg",
+      name: "send first message",
+      event: "click",
+      actionSteps: [
+        {
+          id: "step-nav-chat",
+          order: 1,
+          type: "navigation",
+          targetRoute: "/chat/:conversationId",
+          navMethod: "history_push",
+          navCondition: "on_success",
+          pathParamBindings: [
+            {
+              paramName: "conversationId",
+              source: {
+                kind: "prev_response",
+                stepId: "",
+                fieldPath: "conversationId",
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    const code = generateEventComponent(
+      "send first message",
+      "click",
+      "http://localhost:8080/api/chat",
+      "POST",
+      "SendFirstMessageAction",
+      "/chat/:conversationId",
+      undefined,
+      true,
+      undefined,
+      undefined,
+      undefined,
+      eventItem,
+    );
+
+    expect(code).toContain('window.history.pushState({}, "", `/chat/${String((typeof resData === "object" && resData !== null ? (resData as Record<string, unknown>)?.["conversationId"] : resData) ?? "")}`);');
+    expect(code).not.toContain('router.push');
+    expect(code).not.toContain('useRouter');
+  });
+
+  it("compiles navigation with navMethod 'history_replace' and 'router_replace'", () => {
+    const historyReplaceItem: UIEventItem = {
+      id: "act-replace-url",
+      name: "replace url",
+      event: "click",
+      actionSteps: [
+        {
+          id: "step-replace",
+          order: 1,
+          type: "navigation",
+          targetRoute: "/chat/:id",
+          navMethod: "history_replace",
+          pathParamBindings: [
+            {
+              paramName: "id",
+              source: { kind: "literal", value: "conv-123" },
+            },
+          ],
+        },
+      ],
+    };
+
+    const codeReplace = generateEventComponent(
+      "replace url",
+      "click",
+      "http://localhost:8080/api/update",
+      "POST",
+      "ReplaceUrlAction",
+      "/chat/:id",
+      undefined,
+      true,
+      undefined,
+      undefined,
+      undefined,
+      historyReplaceItem,
+    );
+
+    expect(codeReplace).toContain('window.history.replaceState({}, "", `/chat/${"conv-123"}`);');
+
+    const routerReplaceItem: UIEventItem = {
+      ...historyReplaceItem,
+      actionSteps: [
+        {
+          ...historyReplaceItem.actionSteps![0]!,
+          navMethod: "router_replace",
+        },
+      ],
+    };
+
+    const codeRouterReplace = generateEventComponent(
+      "router replace url",
+      "click",
+      "http://localhost:8080/api/update",
+      "POST",
+      "RouterReplaceAction",
+      "/chat/:id",
+      undefined,
+      true,
+      undefined,
+      undefined,
+      undefined,
+      routerReplaceItem,
+    );
+
+    expect(codeRouterReplace).toContain('router.replace(`/chat/${"conv-123"}`);');
+    expect(codeRouterReplace).toContain('const router = useRouter();');
+  });
 });
 

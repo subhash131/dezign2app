@@ -85,7 +85,8 @@ export function generateEventComponent(
     !hasExecutionSteps &&
     !hasStoreBindings &&
     navStep?.navCondition !== "on_success" &&
-    navStep?.navCondition !== "on_error";
+    navStep?.navCondition !== "on_error" &&
+    (!navStep?.navMethod || navStep.navMethod === "router_push");
 
   if (isPureNavigation) {
     const effectiveRoute =

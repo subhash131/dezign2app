@@ -82,6 +82,7 @@ interface SimulatedStepLog {
     navigation?: {
       targetRoute: string;
       resolvedRoute?: string;
+      method?: string;
     };
     storage?: {
       engine: string;
@@ -591,6 +592,7 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
             navigation: {
               targetRoute: step.targetRoute || "/",
               resolvedRoute,
+              method: step.navMethod || "router_push",
             },
           },
         });
@@ -1144,7 +1146,13 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
                         <div className="flex items-center gap-1.5 p-2 rounded bg-background border text-indigo-400">
                           <Navigation size={12} />
                           <span>
-                            Navigated to:{" "}
+                            {log.details.navigation.method === "history_push"
+                              ? "History pushState: "
+                              : log.details.navigation.method === "history_replace"
+                              ? "History replaceState: "
+                              : log.details.navigation.method === "router_replace"
+                              ? "Router replace: "
+                              : "Navigated to: "}
                             {log.details.navigation.resolvedRoute ||
                               log.details.navigation.targetRoute}
                           </span>
