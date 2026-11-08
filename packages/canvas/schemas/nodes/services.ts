@@ -118,6 +118,7 @@ export const pageRefDataSchema = simpleDataSchema.extend({
   targetPageId: z.string().optional(),
   targetPageLabel: z.string().optional(),
   targetPageSlug: z.string().optional(),
+  targetPageType: z.string().optional(),
 });
 export type PageRefNodeData = z.infer<typeof pageRefDataSchema>;
 

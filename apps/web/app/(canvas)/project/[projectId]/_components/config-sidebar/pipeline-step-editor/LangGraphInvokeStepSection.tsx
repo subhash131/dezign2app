@@ -316,6 +316,10 @@ export const LangGraphInvokeStepSection: React.FC<
         includeSubgraphs={Boolean(step.langGraphStreamSubgraphs)}
         ssePageRefNode={realtimeStreaming.ssePageRefNode}
         allWebPages={realtimeStreaming.allWebPages}
+        targetPages={realtimeStreaming.targetPages}
+        targetLayouts={realtimeStreaming.targetLayouts}
+        isTargetLayout={realtimeStreaming.isTargetLayout}
+        targetLayoutDetails={realtimeStreaming.targetLayoutDetails}
         invokingPage={realtimeStreaming.invokingPage}
         selectedTargetPageId={realtimeStreaming.selectedTargetPageId}
         connectedPageRefNode={realtimeStreaming.connectedPageRefNode}

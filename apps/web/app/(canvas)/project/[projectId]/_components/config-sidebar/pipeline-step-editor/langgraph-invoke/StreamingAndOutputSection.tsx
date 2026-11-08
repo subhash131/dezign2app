@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { Brain, Coins, Compass, Database, Flame, Key, Layers, Plus, Radio, Sparkles, Trash2, SlidersHorizontal } from "lucide-react";
+import { Brain, Coins, Compass, Database, Flame, Key, Layers, Plus, Radio, Sparkles, Trash2, SlidersHorizontal, Globe, LayoutTemplate } from "lucide-react";
+import { cn } from "@workspace/ui/lib/utils";
 import { BackendNode } from "@workspace/canvas/types";
 import { Button } from "@workspace/ui/components/button";
 import { Label } from "@workspace/ui/components/label";
@@ -9,7 +10,10 @@ import { Switch } from "@workspace/ui/components/switch";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
@@ -33,6 +37,30 @@ export interface StreamingAndOutputSectionProps {
   ssePageRefNode?: BackendNode;
   /** All available WebPage nodes on canvas */
   allWebPages?: BackendNode[];
+  /** Categorized page options for target selector */
+  targetPages?: Array<{ id: string; nodeId: string; label: string; routePath: string; isRoot: boolean }>;
+  /** Categorized layout options for target selector */
+  targetLayouts?: Array<{
+    id: string;
+    nodeId?: string;
+    label: string;
+    subLabel?: string;
+    routePath: string;
+    zoneName?: string;
+    zoneSlug?: string;
+    isRoot?: boolean;
+    isExistingNode: boolean;
+  }>;
+  /** Whether currently selected target is a Layout */
+  isTargetLayout?: boolean;
+  /** Resolved metadata for selected layout */
+  targetLayoutDetails?: {
+    displayTitle: string;
+    routePath: string;
+    zoneSlug: string;
+    zoneName: string;
+    isRoot: boolean;
+  } | null;
   /** The WebPage node that invoked/connected to this endpoint (default stream target) */
   invokingPage?: BackendNode;
   /** Currently selected target WebPage ID */
@@ -110,6 +138,10 @@ export const StreamingAndOutputSection: React.FC<StreamingAndOutputSectionProps>
   stateChannels,
   ssePageRefNode,
   allWebPages = [],
+  targetPages = [],
+  targetLayouts = [],
+  isTargetLayout = false,
+  targetLayoutDetails,
   invokingPage,
   selectedTargetPageId,
   connectedPageRefNode,
@@ -690,20 +722,41 @@ export const StreamingAndOutputSection: React.FC<StreamingAndOutputSectionProps>
             </div>
           </div>
 
-          {/* Stream Target Page (Page Ref / Push to Client) — only for client protocols (SSE & WebSocket) */}
+          {/* Stream Target Page or Layout (Page Ref / Push to Client) — only for client protocols (SSE & WebSocket) */}
           {(streamingProtocol === "sse" || streamingProtocol === "websocket") && (
             <div className="flex flex-col gap-2 p-2.5 rounded-lg bg-background/50 border border-border/40 mt-1">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
-                  <Compass className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                  {isTargetLayout ? (
+                    <LayoutTemplate className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                  ) : (
+                    <Compass className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                  )}
                   <span className="text-[11px] font-medium text-foreground">
-                    Stream Target Page (Page Ref)
+                    Stream Target {isTargetLayout ? "Layout" : "Page"} (Page Ref)
                   </span>
+                  {isTargetLayout && (
+                    <span className="text-[8.5px] text-purple-300 font-medium bg-purple-500/15 px-1.5 py-0.2 rounded border border-purple-500/30">
+                      Persistent
+                    </span>
+                  )}
                 </div>
                 {connectedPageRefNode ? (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono bg-indigo-500/15 border border-indigo-500/30 text-indigo-300">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    Connected Node
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono border",
+                      isTargetLayout
+                        ? "bg-purple-500/15 border-purple-500/30 text-purple-300"
+                        : "bg-indigo-500/15 border-indigo-500/30 text-indigo-300",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "w-1.5 h-1.5 rounded-full animate-pulse",
+                        isTargetLayout ? "bg-purple-400" : "bg-emerald-400",
+                      )}
+                    />
+                    {isTargetLayout ? "Connected Layout Node" : "Connected Node"}
                   </span>
                 ) : (
                   onConnectPushToClient && (
@@ -723,9 +776,11 @@ export const StreamingAndOutputSection: React.FC<StreamingAndOutputSectionProps>
               </div>
 
               <p className="text-[9.5px] text-muted-foreground leading-tight">
-                {invokingPage
-                  ? `Defaulting to the invoking page (${invokingPage.data?.label || invokingPage.id}) connected to this endpoint.`
-                  : "Select which web page receives this stream. A Push to Client (page_ref) node connects to this endpoint."}
+                {isTargetLayout
+                  ? "Persistent Layout Target: Stream listener lives in the layout wrapper, preserving connection across child page navigations."
+                  : invokingPage
+                    ? `Defaulting to the invoking page (${invokingPage.data?.label || invokingPage.id}) connected to this endpoint.`
+                    : "Select which web page or layout receives this stream. A Push to Client (page_ref) node connects to this endpoint."}
               </p>
 
               <div className="flex items-center gap-2">
@@ -739,28 +794,81 @@ export const StreamingAndOutputSection: React.FC<StreamingAndOutputSectionProps>
                     }}
                   >
                     <SelectTrigger className="h-7 text-xs bg-background/80 border-border/70">
-                      <SelectValue placeholder="Select target web page…" />
+                      <SelectValue placeholder="Select target web page or layout…" />
                     </SelectTrigger>
                     <SelectContent>
-                      {!allWebPages || allWebPages.length === 0 ? (
+                      {(!targetPages || targetPages.length === 0) &&
+                      (!targetLayouts || targetLayouts.length === 0) &&
+                      (!allWebPages || allWebPages.length === 0) ? (
                         <SelectItem value="__none__" disabled className="text-xs">
-                          No WebPage nodes on canvas
+                          No WebPage or Layout nodes on canvas
                         </SelectItem>
                       ) : (
-                        allWebPages.map((page) => {
-                          const isInvoking = invokingPage?.id === page.id;
-                          const label = page.data?.label || page.id;
-                          return (
-                            <SelectItem key={page.id} value={page.id} className="text-xs">
-                              <span className="font-mono">{label}</span>
-                              {isInvoking && (
-                                <span className="ml-1.5 text-[9px] text-indigo-400 font-sans">
-                                  (invoking page)
-                                </span>
-                              )}
-                            </SelectItem>
-                          );
-                        })
+                        <>
+                          {targetPages && targetPages.length > 0 ? (
+                            <SelectGroup>
+                              <SelectLabel className="text-[9px] uppercase tracking-wider font-bold text-muted-foreground flex items-center gap-1 px-2 py-1">
+                                <Globe className="w-3 h-3 text-indigo-400" />
+                                <span>Pages</span>
+                              </SelectLabel>
+                              {targetPages.map((page) => {
+                                const isInvoking = invokingPage?.id === page.id;
+                                return (
+                                  <SelectItem key={page.id} value={page.id} className="text-xs">
+                                    <div className="flex items-center justify-between w-full gap-2">
+                                      <span className="font-mono">{page.label}</span>
+                                      {isInvoking && (
+                                        <span className="ml-1.5 text-[9px] text-indigo-400 font-sans">
+                                          (invoking page)
+                                        </span>
+                                      )}
+                                      {page.isRoot && (
+                                        <span className="text-[9px] px-1 py-0.2 rounded bg-indigo-500/15 text-indigo-400 font-mono">
+                                          / (Root)
+                                        </span>
+                                      )}
+                                    </div>
+                                  </SelectItem>
+                                );
+                              })}
+                            </SelectGroup>
+                          ) : (
+                            allWebPages.map((page) => {
+                              const isInvoking = invokingPage?.id === page.id;
+                              const label = page.data?.label || page.id;
+                              return (
+                                <SelectItem key={page.id} value={page.id} className="text-xs">
+                                  <span className="font-mono">{label}</span>
+                                  {isInvoking && (
+                                    <span className="ml-1.5 text-[9px] text-indigo-400 font-sans">
+                                      (invoking page)
+                                    </span>
+                                  )}
+                                </SelectItem>
+                              );
+                            })
+                          )}
+
+                          {targetLayouts && targetLayouts.length > 0 && (
+                            <>
+                              {targetPages && targetPages.length > 0 && <SelectSeparator className="my-1" />}
+                              <SelectGroup>
+                                <SelectLabel className="text-[9px] uppercase tracking-wider font-bold text-purple-400 flex items-center gap-1 px-2 py-1">
+                                  <LayoutTemplate className="w-3 h-3" />
+                                  <span>Layouts (Persistent Stream)</span>
+                                </SelectLabel>
+                                {targetLayouts.map((layout) => (
+                                  <SelectItem key={layout.id} value={layout.id} className="text-xs">
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                      <LayoutTemplate className="w-3 h-3 text-purple-400 shrink-0" />
+                                      <span className="font-medium truncate">{layout.label}</span>
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                              </SelectGroup>
+                            </>
+                          )}
+                        </>
                       )}
                     </SelectContent>
                   </Select>
@@ -781,10 +889,19 @@ export const StreamingAndOutputSection: React.FC<StreamingAndOutputSectionProps>
               </div>
 
               {connectedPageRefNode && (
-                <div className="flex items-center gap-1.5 px-2 py-1 bg-indigo-500/10 border border-indigo-500/20 rounded text-[9.5px] text-indigo-300">
-                  <span className="font-semibold">Push to Client:</span>
+                <div
+                  className={cn(
+                    "flex items-center gap-1.5 px-2 py-1 rounded text-[9.5px]",
+                    isTargetLayout
+                      ? "bg-purple-500/10 border border-purple-500/20 text-purple-300"
+                      : "bg-indigo-500/10 border border-indigo-500/20 text-indigo-300",
+                  )}
+                >
+                  <span className="font-semibold">
+                    {isTargetLayout ? "Push to Layout:" : "Push to Client:"}
+                  </span>
                   <span className="font-mono font-bold truncate">
-                    {connectedPageRefNode.data?.label || connectedPageRefNode.id}
+                    {targetLayoutDetails?.displayTitle || connectedPageRefNode.data?.label || connectedPageRefNode.id}
                   </span>
                   <span className="text-muted-foreground ml-auto shrink-0 font-mono text-[9px]">
                     endpoint-out → page-ref-in
