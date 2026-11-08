@@ -85,7 +85,7 @@ const rightNodes = [
     id: "deploy",
     title: "K8s & Cloud",
     status: "LIVE",
-    note: "Zero-touch hosting on your cluster",
+    note: "Zero-touch deployment to your cluster",
     icon: Server,
     color: COLOR.emerald,
     y: NODE_Y[2],

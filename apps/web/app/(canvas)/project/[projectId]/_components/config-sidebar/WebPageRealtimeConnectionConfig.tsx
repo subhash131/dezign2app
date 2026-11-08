@@ -13,7 +13,7 @@ import {
 } from "@workspace/canvas/types";
 import { extractPathsFromObject } from "./pipeline-step-editor/sourcePaths";
 import { AvailablePath } from "./pipeline-step-editor/types";
-import { parseSchemaJson } from "@/lib/compiler/utils";
+import { parseSchemaJson, toPascalCase, deriveRouteFileName } from "@/lib/compiler/utils";
 import {
   WebPageRealtimeConnectionConfigProps,
   useDerivedRealtimeInfo,
@@ -367,6 +367,45 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
     });
   }, [conn, derivedInfo, endpoints, events, nodes, edges]);
 
+  const payloadTypeName = useMemo(() => {
+    const serviceNodeId = conn.sourceServiceNodeId || derivedInfo?.sourceNode?.id;
+    const epId = derivedInfo?.sourceEndpointId;
+    const ep = endpoints.find((e) => e.id === epId);
+    const serviceLabel = conn.sourceServiceLabel || derivedInfo?.sourceNode?.data?.label || "Conversation";
+
+    if (serviceNodeId) {
+      const typesNode = nodes.find(
+        (n) =>
+          n.type === "types" &&
+          (n.data?.sourceServiceId === serviceNodeId ||
+            n.id === `types-service-${serviceNodeId}` ||
+            n.data?.label?.toLowerCase().includes((serviceLabel || "").toLowerCase())),
+      );
+      if (typesNode && Array.isArray(typesNode.data?.types)) {
+        if (conn.isLangGraph || derivedInfo?.step?.type === "langgraph_invoke") {
+          const chunkType = typesNode.data.types.find(
+            (t: any) => t.name?.endsWith("StreamChunk") || t.name?.endsWith("StreamResponse"),
+          );
+          if (chunkType) return chunkType.name;
+        }
+        const matchingType = typesNode.data.types.find(
+          (t: any) =>
+            t.id === `type-endpoint-response-${epId}` ||
+            (ep && t.name?.toLowerCase().includes(toPascalCase(ep.name || "").toLowerCase())),
+        );
+        if (matchingType) return matchingType.name;
+      }
+    }
+
+    const pascalService = toPascalCase(serviceLabel || "Conversation");
+    const routeName = ep ? deriveRouteFileName(ep, 0, serviceLabel) : (conn.sourceItemName || "SendMessage");
+    const pascalRoute = toPascalCase(routeName);
+    if (conn.isLangGraph || derivedInfo?.step?.type === "langgraph_invoke") {
+      return `${pascalService}${pascalRoute}StreamChunk`;
+    }
+    return `${pascalService}${pascalRoute}Response`;
+  }, [conn, derivedInfo, endpoints, nodes]);
+
   const { isProtected } = useWebPageConnectedContext({
     nodeId,
     data: pageNode?.data,
@@ -603,6 +642,7 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
                 incomingPaths={suggestedPaths}
                 isLangGraph={conn.isLangGraph || Boolean(derivedInfo?.step?.type === "langgraph_invoke")}
                 langGraphStreamModes={conn.langGraphStreamModes || derivedInfo?.step?.langGraphStreamModes}
+                payloadTypeName={payloadTypeName}
                 onSave={(drafts: FrontendActionStepDraft[]) =>
                   handleUpdateManual({ actionSteps: drafts })
                 }

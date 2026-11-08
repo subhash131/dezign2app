@@ -49,6 +49,7 @@ export const ActionFlowEditor: React.FC<ActionFlowEditorProps> = ({
   itemPropSuggestions,
   isLangGraph,
   langGraphStreamModes,
+  payloadTypeName,
   onSave,
   onDeleteStep,
 }) => {
@@ -342,6 +343,7 @@ export const ActionFlowEditor: React.FC<ActionFlowEditorProps> = ({
           incomingPaths={incomingPaths}
           isLangGraph={isLangGraph}
           langGraphStreamModes={langGraphStreamModes}
+          payloadTypeName={payloadTypeName}
         />
       )}
 

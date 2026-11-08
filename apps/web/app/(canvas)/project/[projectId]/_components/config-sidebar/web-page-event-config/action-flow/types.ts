@@ -56,6 +56,7 @@ export interface ActionFlowEditorProps {
   itemPropSuggestions?: ComboboxOption[];
   isLangGraph?: boolean;
   langGraphStreamModes?: string[];
+  payloadTypeName?: string;
   onSave: (drafts: FrontendActionStepDraft[]) => void;
   onDeleteStep?: (edgeId: string) => void;
 }
