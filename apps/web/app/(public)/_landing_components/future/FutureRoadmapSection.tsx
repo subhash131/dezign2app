@@ -24,7 +24,7 @@ export const FutureRoadmapSection: React.FC = () => {
       badge: "SECURITY DEFENSE",
       icon: ShieldAlert,
       description:
-        "Autonomously probes your hosted services and APIs for OWASP Top 10 exploits, broken authentication, exposed secrets, and DDoS vectors. Patches vulnerabilities before malicious actors find them.",
+        "Autonomously probes your deployed services and APIs for OWASP Top 10 exploits, broken authentication, exposed secrets, and DDoS vectors. Patches vulnerabilities before malicious actors find them.",
       highlights: [
         "Continuous automated penetration tests",
         "Secrets & IAM privilege escalation audits",

@@ -148,113 +148,121 @@ ${routeParamsHook}${sseEffectsJsx}${wsEffectsJsx}  // Listen for layout-level cu
   return (
     <aside
       aria-label="Layout Output Log"
-      className="fixed bottom-3 right-4 z-50 pointer-events-auto"
+      className="fixed bottom-3 right-4 z-50 pointer-events-auto flex flex-col items-end"
     >
-      {!isOpen ? (
-        <div className="flex items-center gap-2 bg-card/95 border border-border shadow-xl rounded-full px-3 py-1.5 text-xs backdrop-blur font-mono text-foreground">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-          <span className="font-semibold text-foreground">Layout Output Log</span>
-          {hasActiveStream && (
-            <span className="text-[10px] bg-primary/10 text-primary border border-primary/20 px-1.5 py-0.2 rounded-full font-mono">
-              LIVE
-            </span>
-          )}
-          {triggerLogs.length > 0 && (
-            <span className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.2 rounded-full font-bold">
-              {triggerLogs.length}
-            </span>
-          )}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setIsOpen(true)}
-            className="h-5 px-1.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted rounded cursor-pointer"
-            title="Open Layout Output Log"
-          >
-            <ChevronUp className="w-3.5 h-3.5" />
-          </Button>
-        </div>
-      ) : (
-        <div className="w-[520px] max-w-[calc(100vw-2rem)] shadow-2xl rounded-xl border border-border bg-card/95 backdrop-blur overflow-hidden flex flex-col max-h-[420px] animate-in fade-in-50 slide-in-from-bottom-2 duration-150">
-          <div className="flex items-center justify-between px-4 py-2.5 bg-muted/40 border-b border-border">
-            <div className="flex items-center gap-2">
-              <Activity className="w-4 h-4 text-primary shrink-0" />
-              <span className="font-bold text-xs text-foreground">Layout Output Log</span>
-              {hasActiveStream && (
-                <Badge
-                  variant="outline"
-                  className="text-[9px] font-mono text-muted-foreground border-border bg-muted/30 flex items-center gap-1"
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  Persistent Stream Active
-                </Badge>
-              )}
-            </div>
-            <div className="flex items-center gap-1">
-              {triggerLogs.length > 0 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setTriggerLogs([])}
-                  className="h-6 px-2 text-[10px] text-muted-foreground hover:text-destructive cursor-pointer"
-                  title="Clear logs"
-                >
-                  <Trash2 className="w-3 h-3 mr-1" />
-                  Clear
-                </Button>
-              )}
+      {/* Drawer Panel */}
+      <div
+        className={
+          "w-[520px] max-w-[calc(100vw-2rem)] shadow-2xl rounded-xl border border-border bg-card/95 backdrop-blur overflow-hidden flex flex-col transition-all duration-150 ease-out origin-bottom-right mb-2 " +
+          (isOpen
+            ? "opacity-100 scale-100 translate-y-0 max-h-[420px] pointer-events-auto"
+            : "opacity-0 scale-95 translate-y-1 max-h-0 pointer-events-none border-transparent p-0 m-0")
+        }
+      >
+        <div className="flex items-center justify-between px-4 py-2.5 bg-muted/40 border-b border-border shrink-0">
+          <div className="flex items-center gap-2">
+            <Activity className="w-4 h-4 text-primary shrink-0" />
+            <span className="font-bold text-xs text-foreground">Layout Output Log</span>
+            {hasActiveStream && (
+              <Badge
+                variant="outline"
+                className="text-[9px] font-mono text-muted-foreground border-border bg-muted/30 flex items-center gap-1"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Persistent Stream Active
+              </Badge>
+            )}
+          </div>
+          <div className="flex items-center gap-1">
+            {triggerLogs.length > 0 && (
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setIsOpen(false)}
-                className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground cursor-pointer"
-                title="Collapse"
+                onClick={() => setTriggerLogs([])}
+                className="h-6 px-2 text-[10px] text-muted-foreground hover:text-destructive cursor-pointer"
+                title="Clear logs"
               >
-                <ChevronDown className="w-3.5 h-3.5" />
+                <Trash2 className="w-3 h-3 mr-1" />
+                Clear
               </Button>
-            </div>
-          </div>
-
-          <div className="p-3 overflow-y-auto max-h-[350px] space-y-2 font-mono text-xs">
-            {triggerLogs.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground text-xs italic border border-dashed border-border/60 rounded-lg">
-                ${hasRealtime ? "Listening for real-time layout events..." : "No activity logged yet."}
-              </div>
-            ) : (
-              triggerLogs.map((log) => (
-                <div
-                  key={log.id}
-                  className="bg-background/80 border border-border/60 rounded-lg p-2.5 space-y-1.5"
-                >
-                  <div className="flex items-center justify-between text-[11px] text-muted-foreground border-b border-border/40 pb-1">
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-semibold text-foreground">{log.eventName}</span>
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded font-mono uppercase bg-primary/10 text-primary border border-primary/20">
-                        {log.eventType || "EVENT"}
-                      </span>
-                      {log.status && (
-                        <span className="text-[10px] text-muted-foreground font-mono">
-                          {log.status}
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-[10px]">{log.timestamp}</span>
-                  </div>
-                  {log.error ? (
-                    <div className="text-destructive bg-destructive/10 p-2 rounded text-[11px]">
-                      Error: {log.error}
-                    </div>
-                  ) : (
-                    <pre className="text-foreground/90 bg-muted/40 p-2 rounded overflow-x-auto whitespace-pre-wrap text-[11px] max-h-40">
-                      {typeof log.data === "string" ? log.data : JSON.stringify(log.data, null, 2)}
-                    </pre>
-                  )}
-                </div>
-              ))
             )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsOpen(false)}
+              className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground cursor-pointer"
+              title="Collapse"
+            >
+              <ChevronDown className="w-3.5 h-3.5" />
+            </Button>
           </div>
         </div>
-      )}
+
+        <div className="p-3 overflow-y-auto max-h-[350px] space-y-2 font-mono text-xs">
+          {triggerLogs.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground text-xs italic border border-dashed border-border/60 rounded-lg">
+              ${hasRealtime ? "Listening for real-time layout events..." : "No activity logged yet."}
+            </div>
+          ) : (
+            triggerLogs.map((log) => (
+              <div
+                key={log.id}
+                className="bg-background/80 border border-border/60 rounded-lg p-2.5 space-y-1.5"
+              >
+                <div className="flex items-center justify-between text-[11px] text-muted-foreground border-b border-border/40 pb-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold text-foreground">{log.eventName}</span>
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded font-mono uppercase bg-primary/10 text-primary border border-primary/20">
+                      {log.eventType || "EVENT"}
+                    </span>
+                    {log.status && (
+                      <span className="text-[10px] text-muted-foreground font-mono">
+                        {log.status}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[10px]">{log.timestamp}</span>
+                </div>
+                {log.error ? (
+                  <div className="text-destructive bg-destructive/10 p-2 rounded text-[11px]">
+                    Error: {log.error}
+                  </div>
+                ) : (
+                  <pre className="text-foreground/90 bg-muted/40 p-2 rounded overflow-x-auto whitespace-pre-wrap text-[11px] max-h-40">
+                    {typeof log.data === "string" ? log.data : JSON.stringify(log.data, null, 2)}
+                  </pre>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Persistent Dock Toggle Pill */}
+      <button
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        className="flex items-center gap-2 bg-card/95 border border-border shadow-xl rounded-full px-3 py-1.5 text-xs backdrop-blur font-mono text-foreground hover:bg-muted/40 transition-colors cursor-pointer select-none"
+        title={isOpen ? "Collapse Layout Output Log" : "Open Layout Output Log"}
+      >
+        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+        <span className="font-semibold text-foreground">Layout Output Log</span>
+        {hasActiveStream && (
+          <span className="text-[10px] bg-primary/10 text-primary border border-primary/20 px-1.5 py-0.2 rounded-full font-mono">
+            LIVE
+          </span>
+        )}
+        {triggerLogs.length > 0 && (
+          <span className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.2 rounded-full font-bold">
+            {triggerLogs.length}
+          </span>
+        )}
+        {isOpen ? (
+          <ChevronDown className="w-3.5 h-3.5 text-muted-foreground ml-0.5" />
+        ) : (
+          <ChevronUp className="w-3.5 h-3.5 text-muted-foreground ml-0.5" />
+        )}
+      </button>
     </aside>
   );
 }

@@ -216,7 +216,136 @@ export function extractEndpointResponseFields(endpoint: Endpoint): ExtractedEndp
   const result: ExtractedEndpointResponseField[] = [];
   const seenNames = new Set<string>();
 
-  // 1. responseBody.fields
+  // 1. LangGraph Streaming Invocation check (highest precedence)
+  // When an endpoint has streaming enabled (SSE or raw), the route handler streams chunks
+  // and hijacks the response stream, bypassing any static JSON responseBody.
+  const streamingLgStep = endpoint.pipelineSteps?.find(
+    (s: any) =>
+      s.enabled !== false &&
+      (s.type === "langgraph_invoke" || Boolean(s.langGraphTargetNodeId)) &&
+      Boolean(
+        s.langGraphStreamingEnabled ||
+        s.langGraphStreamingProtocol === "sse" ||
+        s.langGraphStreamingProtocol === "raw" ||
+        (s.langGraphStreamingProtocol !== "websocket" &&
+          s.langGraphStreamingProtocol !== "kafka" &&
+          s.langGraphStreamingProtocol !== "redis_stream" &&
+          s.langGraphStreamingEnabled !== false),
+      ),
+  );
+
+  if (streamingLgStep) {
+    const streamModes: string[] =
+      Array.isArray(streamingLgStep.langGraphStreamModes) && streamingLgStep.langGraphStreamModes.length > 0
+        ? streamingLgStep.langGraphStreamModes
+        : ["messages"];
+    const selectedStreamingFields: string[] = Array.isArray(streamingLgStep.langGraphStreamingFields)
+      ? streamingLgStep.langGraphStreamingFields.filter(Boolean)
+      : [];
+    // Only include reasoning if explicitly enabled
+    const includeReasoning = streamingLgStep.langGraphStreamIncludeReasoning === true;
+
+    if (selectedStreamingFields.length > 0) {
+      // The user explicitly selected which channel fields to stream
+      selectedStreamingFields.forEach((fieldName: string) => {
+        const clean = fieldName.trim();
+        if (!clean) return;
+        const lower = clean.toLowerCase();
+        if (seenNames.has(lower)) return;
+        seenNames.add(lower);
+
+        let fieldType = "string";
+        let fieldDesc = `Streamed channel '${clean}'`;
+
+        if (clean === "content" || clean === "messages") {
+          fieldDesc = "Accumulated AI response content / text stream";
+        } else if (clean === "tokens") {
+          fieldType = "string[]";
+          fieldDesc = "Streamed LLM token chunks array";
+        } else if (clean === "reasoning") {
+          fieldDesc = "Model reasoning / thought trace tokens";
+        } else if (clean === "updates") {
+          fieldType = "array";
+          fieldDesc = "Graph node state updates emitted during execution";
+        } else if (clean === "values") {
+          fieldType = "object";
+          fieldDesc = "Full graph state snapshot";
+        }
+
+        result.push({
+          id: `res-lg-${clean}`,
+          name: clean,
+          type: fieldType,
+          description: fieldDesc,
+        });
+      });
+
+      if (includeReasoning && !seenNames.has("reasoning")) {
+        seenNames.add("reasoning");
+        result.push({
+          id: `res-lg-reasoning`,
+          name: "reasoning",
+          type: "string",
+          description: "Model reasoning / thought trace tokens",
+        });
+      }
+    } else {
+      // Default streaming: only include what is explicitly enabled by streamModes & toggles
+      if (streamModes.includes("messages")) {
+        seenNames.add("content");
+        result.push({
+          id: `res-lg-content`,
+          name: "content",
+          type: "string",
+          description: "Accumulated AI response content / text stream",
+        });
+      }
+
+      if (includeReasoning && !seenNames.has("reasoning")) {
+        seenNames.add("reasoning");
+        result.push({
+          id: `res-lg-reasoning`,
+          name: "reasoning",
+          type: "string",
+          description: "Model reasoning / thought trace tokens",
+        });
+      }
+
+      if (streamModes.includes("updates") && !seenNames.has("updates")) {
+        seenNames.add("updates");
+        result.push({
+          id: `res-lg-updates`,
+          name: "updates",
+          type: "array",
+          description: "Graph node state updates emitted during execution",
+        });
+      }
+
+      if (streamModes.includes("values") && !seenNames.has("values")) {
+        seenNames.add("values");
+        result.push({
+          id: `res-lg-values`,
+          name: "values",
+          type: "object",
+          description: "Full graph state snapshot",
+        });
+      }
+
+      if (streamModes.includes("custom") && !seenNames.has("custom")) {
+        seenNames.add("custom");
+        result.push({
+          id: `res-lg-custom`,
+          name: "custom",
+          type: "array",
+          description: "Arbitrary custom events emitted by graph nodes",
+        });
+      }
+    }
+
+    return result;
+  }
+
+  // 2. responseBody.fields
   const bodyFields = endpoint.responseBody?.fields || [];
   bodyFields.forEach((f: Parameter) => {
     const rawName = f.name || f.key || "";

@@ -426,6 +426,36 @@ describe("endpointFormGenerator", () => {
       expect(fields.map((f) => f.name)).toEqual(["response"]);
       expect(fields.find((f) => f.name === "response")?.type).toBe("string");
     });
+
+    it("prioritizes streaming fields over stale static responseBody.fields when langGraph streaming is enabled", () => {
+      const epWithStaleFields: Endpoint = {
+        id: "ep-send-msg-stale",
+        name: "send-message/:id",
+        type: "POST",
+        responseBody: {
+          id: "rb-1",
+          fields: [
+            { id: "f-1", name: "user_message", type: "string", required: false },
+            { id: "f-2", name: "chat_id", type: "string", required: false },
+          ],
+        },
+        pipelineSteps: [
+          {
+            id: "step-1",
+            name: "AgentInvocation",
+            type: "langgraph_invoke",
+            langGraphStreamingEnabled: true,
+            langGraphStreamingProtocol: "sse",
+            langGraphStreamIncludeReasoning: true,
+          },
+        ],
+      };
+
+      const fields = extractEndpointResponseFields(epWithStaleFields);
+      expect(fields.map((f) => f.name)).toEqual(["content", "reasoning"]);
+      expect(fields.find((f) => f.name === "user_message")).toBeUndefined();
+      expect(fields.find((f) => f.name === "chat_id")).toBeUndefined();
+    });
   });
 
   describe("parameterless GET / action button generation", () => {

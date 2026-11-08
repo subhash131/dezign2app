@@ -28,6 +28,7 @@ export interface IncomingRealtimePayloadCardProps {
   incomingPaths?: AvailablePath[];
   isLangGraph?: boolean;
   langGraphStreamModes?: string[];
+  payloadTypeName?: string;
 }
 
 interface JsonPayloadMap {
@@ -48,6 +49,7 @@ export const IncomingRealtimePayloadCard: React.FC<IncomingRealtimePayloadCardPr
   incomingPaths = [],
   isLangGraph = false,
   langGraphStreamModes,
+  payloadTypeName,
 }) => {
   const [showJsonPreview, setShowJsonPreview] = useState(false);
   const [copiedPath, setCopiedPath] = useState<string | null>(null);
@@ -55,6 +57,27 @@ export const IncomingRealtimePayloadCard: React.FC<IncomingRealtimePayloadCardPr
   const isLangGraphStream =
     isLangGraph ||
     incomingPaths.some((p) => p.path === "token" || p.path === "reasoning");
+
+  // Show individual field pills by default only for non-LangGraph small schemas
+  const [showFields, setShowFields] = useState(() => !isLangGraphStream && incomingPaths.length <= 6);
+
+  const resolvedTypeName = useMemo(() => {
+    if (payloadTypeName) return payloadTypeName;
+    const service = sourceServiceLabel ? toPascalCase(sourceServiceLabel) : "Conversation";
+    const route = sourceItemName
+      ? toPascalCase(
+          sourceItemName
+            .replace(/^\//, "")
+            .replace(/:[a-zA-Z0-9_]+/g, "")
+            .replace(/[-_/]+/g, " ")
+            .trim(),
+        )
+      : "SendMessage";
+    if (isLangGraphStream) {
+      return `${service}${route}StreamChunk`;
+    }
+    return `${service}${route}Response`;
+  }, [payloadTypeName, sourceServiceLabel, sourceItemName, isLangGraphStream]);
 
   // Synthesize realistic sample JSON from incomingPaths
   const sampleJson = useMemo(() => {
@@ -182,62 +205,108 @@ export const IncomingRealtimePayloadCard: React.FC<IncomingRealtimePayloadCardPr
         </div>
       </div>
 
-      {/* Available Payload Fields Pills */}
-      <div className="space-y-1.5 pt-0.5">
-        <div className="flex items-center justify-between">
-          <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-            <ArrowDownToLine size={10} className="text-violet-500" />
-            <span>Available Payload Fields ({incomingPaths.length > 0 ? incomingPaths.length : 4})</span>
-          </Label>
-          <span className="text-[9px] text-muted-foreground/70">
-            Click field to copy path
-          </span>
+      {/* Primary Payload Type Contract */}
+      <div className="p-2.5 rounded-lg bg-violet-500/10 border border-violet-500/25 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="p-1.5 rounded-md bg-violet-500/20 text-violet-400 border border-violet-500/30 shrink-0">
+            <Code2 size={13} />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider">
+                Payload Type
+              </span>
+              <Badge
+                variant="outline"
+                className="text-[9px] px-1 py-0 font-mono text-purple-400 border-purple-500/30 bg-purple-500/10"
+              >
+                Interface
+              </Badge>
+              {isLangGraphStream && (
+                <Badge
+                  variant="outline"
+                  className="text-[9px] px-1 py-0 font-mono text-emerald-400 border-emerald-500/30 bg-emerald-500/10"
+                >
+                  Stream Contract
+                </Badge>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="text-xs font-mono font-bold text-violet-300 truncate" title={resolvedTypeName}>
+                {resolvedTypeName}
+              </span>
+            </div>
+          </div>
         </div>
 
-        <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-1.5 rounded-lg bg-background/60 border border-border/50">
-          {incomingPaths.length === 0 ? (
-            <>
-              {["data", "message", "id", "timestamp"].map((field) => (
-                <button
-                  key={field}
-                  type="button"
-                  onClick={() => handleCopy(field)}
-                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono bg-violet-500/10 hover:bg-violet-500/20 text-violet-600 dark:text-violet-300 border border-violet-500/25 transition-colors cursor-pointer"
-                  title="Click to copy field path"
-                >
-                  <span className="font-semibold">{field}</span>
-                  <span className="text-[8px] text-muted-foreground">string</span>
-                  {copiedPath === field ? <Check size={8} className="text-emerald-500" /> : <Copy size={8} className="opacity-40" />}
-                </button>
-              ))}
-            </>
-          ) : (
-            incomingPaths.map((ip) => (
-              <button
-                key={ip.path}
-                type="button"
-                onClick={() => handleCopy(ip.path)}
-                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono bg-violet-500/10 hover:bg-violet-500/20 text-violet-600 dark:text-violet-300 border border-violet-500/25 transition-colors cursor-pointer"
-                title={ip.description || `Click to copy path: incomingData.${ip.path}`}
-              >
-                <span className="font-semibold">{ip.path}</span>
-                {ip.type && (
-                  <span className="text-[8px] text-muted-foreground/80 bg-background/50 px-0.5 rounded font-mono">
-                    {ip.type === "object"
-                      ? `${toPascalCase(ip.path.split(".").pop() || "item")}Payload`
-                      : ip.type}
-                  </span>
-                )}
-                {copiedPath === ip.path ? (
-                  <Check size={8} className="text-emerald-500" />
-                ) : (
-                  <Copy size={8} className="opacity-40" />
-                )}
-              </button>
-            ))
-          )}
-        </div>
+        <button
+          type="button"
+          onClick={() => setShowFields(!showFields)}
+          className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground bg-background/60 hover:bg-background/90 px-2 py-1 rounded-md border border-border/50 transition-colors shrink-0 cursor-pointer font-mono"
+        >
+          <span>{showFields ? "Hide Fields" : `Fields (${incomingPaths.length > 0 ? incomingPaths.length : 4})`}</span>
+          {showFields ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+        </button>
       </div>
+
+      {/* Available Payload Fields Pills (Collapsible) */}
+      {showFields && (
+        <div className="space-y-1.5 pt-0.5">
+          <div className="flex items-center justify-between">
+            <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+              <ArrowDownToLine size={10} className="text-violet-500" />
+              <span>Available Payload Fields ({incomingPaths.length > 0 ? incomingPaths.length : 4})</span>
+            </Label>
+            <span className="text-[9px] text-muted-foreground/70">
+              Click field to copy path
+            </span>
+          </div>
+
+          <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-1.5 rounded-lg bg-background/60 border border-border/50">
+            {incomingPaths.length === 0 ? (
+              <>
+                {["data", "message", "id", "timestamp"].map((field) => (
+                  <button
+                    key={field}
+                    type="button"
+                    onClick={() => handleCopy(field)}
+                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono bg-violet-500/10 hover:bg-violet-500/20 text-violet-600 dark:text-violet-300 border border-violet-500/25 transition-colors cursor-pointer"
+                    title="Click to copy field path"
+                  >
+                    <span className="font-semibold">{field}</span>
+                    <span className="text-[8px] text-muted-foreground">string</span>
+                    {copiedPath === field ? <Check size={8} className="text-emerald-500" /> : <Copy size={8} className="opacity-40" />}
+                  </button>
+                ))}
+              </>
+            ) : (
+              incomingPaths.map((ip) => (
+                <button
+                  key={ip.path}
+                  type="button"
+                  onClick={() => handleCopy(ip.path)}
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono bg-violet-500/10 hover:bg-violet-500/20 text-violet-600 dark:text-violet-300 border border-violet-500/25 transition-colors cursor-pointer"
+                  title={ip.description || `Click to copy path: incomingData.${ip.path}`}
+                >
+                  <span className="font-semibold">{ip.path}</span>
+                  {ip.type && (
+                    <span className="text-[8px] text-muted-foreground/80 bg-background/50 px-0.5 rounded font-mono">
+                      {ip.type === "object"
+                        ? `${toPascalCase(ip.path.split(".").pop() || "item")}Payload`
+                        : ip.type}
+                    </span>
+                  )}
+                  {copiedPath === ip.path ? (
+                    <Check size={8} className="text-emerald-500" />
+                  ) : (
+                    <Copy size={8} className="opacity-40" />
+                  )}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Pipeline Modification Hint */}
       <div className="p-2 rounded-lg bg-violet-500/5 border border-violet-500/20 text-[10px] text-muted-foreground flex items-start gap-1.5 leading-relaxed">
