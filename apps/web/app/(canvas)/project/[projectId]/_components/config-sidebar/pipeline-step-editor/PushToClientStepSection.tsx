@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useMemo, useState, useCallback } from "react";
-import { Compass, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
+import { Compass, Plus, SlidersHorizontal, Trash2, Globe, LayoutTemplate } from "lucide-react";
+import { cn } from "@workspace/ui/lib/utils";
 import {
   BackendNode,
   BackendEdge,
@@ -25,7 +26,10 @@ import {
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
@@ -52,6 +56,12 @@ import {
 import { WebRtcCapabilitiesEditor } from "./WebRtcCapabilitiesEditor";
 import { PushToClientPayloadMapping } from "./PushToClientPayloadMapping";
 import { ensureWsPackageInService } from "@/lib/stores/backendCanvas/packageTypesSync";
+import {
+  resolvePageRefTargets,
+  ensureLayoutNodeForTarget,
+  isLayoutNode,
+  getLayoutNodeDetails,
+} from "./reference-connections/pageRefLayoutUtils";
 
 // Re-export utilities and subcomponents for backward compatibility
 export * from "./pushToClientUtils";
@@ -311,6 +321,20 @@ export const PushToClientStepSection: React.FC<PushToClientStepSectionProps> = (
   const selectedTargetPage = useMemo(() => {
     return allWebPageNodes.find((p) => p.id === targetPageId);
   }, [allWebPageNodes, targetPageId]);
+
+  const { pages: targetPages, layouts: targetLayouts } = useMemo(() => {
+    return resolvePageRefTargets(nodes, edges);
+  }, [nodes, edges]);
+
+  const isTargetLayout = useMemo(() => {
+    return isLayoutNode(selectedTargetPage);
+  }, [selectedTargetPage]);
+
+  const targetLayoutDetails = useMemo(() => {
+    return isTargetLayout && selectedTargetPage
+      ? getLayoutNodeDetails(selectedTargetPage, nodes, edges)
+      : null;
+  }, [isTargetLayout, selectedTargetPage, nodes, edges]);
 
   const targetRouteInfo = useMemo(() => {
     if (!selectedTargetPage) {
@@ -596,15 +620,28 @@ export const PushToClientStepSection: React.FC<PushToClientStepSectionProps> = (
         </div>
       )}
 
-      {/* Target Page */}
+      {/* Target Page or Layout */}
       <div className="flex flex-col gap-1">
         <div className="flex items-center justify-between">
-          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-            Target Web Page
+          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+            {isTargetLayout ? (
+              <LayoutTemplate size={11} className="text-purple-400" />
+            ) : (
+              <Globe size={11} />
+            )}
+            Target {isTargetLayout ? "Layout" : "Web Page"}
           </span>
           {connectedPageRefNode ? (
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono bg-indigo-500/15 border border-indigo-500/30 text-indigo-600 dark:text-indigo-400">
-              <Compass size={10} /> Connected PageRef Node
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono border",
+                isTargetLayout
+                  ? "bg-purple-500/15 border-purple-500/30 text-purple-300"
+                  : "bg-indigo-500/15 border-indigo-500/30 text-indigo-600 dark:text-indigo-400",
+              )}
+            >
+              {isTargetLayout ? <LayoutTemplate size={10} /> : <Compass size={10} />}
+              {isTargetLayout ? "Connected Layout Node" : "Connected PageRef Node"}
             </span>
           ) : (
             <button
@@ -621,34 +658,61 @@ export const PushToClientStepSection: React.FC<PushToClientStepSectionProps> = (
           value={targetPageId || "__none__"}
           onValueChange={(val) => {
             if (val === "__none__") return;
-            update({ clientDeliveryTargetPageId: val });
+            const resolvedId = ensureLayoutNodeForTarget(val, nodes, edges);
+            update({ clientDeliveryTargetPageId: resolvedId });
           }}
         >
           <SelectTrigger className="h-7 text-xs bg-background nodrag">
-            <SelectValue placeholder="Select target web page…" />
+            <SelectValue placeholder="Select target web page or layout…" />
           </SelectTrigger>
           <SelectContent>
-            {filteredWebPageNodes.length === 0 ? (
+            {targetPages.length === 0 && targetLayouts.length === 0 ? (
               <SelectItem value="__none__" disabled className="text-xs">
-                {selectedWebAppId
-                  ? "No pages attached to this WebApp"
-                  : "No WebPage nodes on canvas"}
+                No pages or layouts on canvas
               </SelectItem>
             ) : (
-              filteredWebPageNodes
-                .filter((n) => Boolean(n && n.id && n.id.trim()))
-                .map((n) => {
-                  const route = n.data?.label
-                    ? n.data.label.startsWith("/")
-                      ? n.data.label
-                      : `/${n.data.label}`
-                    : n.id;
-                  return (
-                    <SelectItem key={n.id} value={n.id} className="text-xs">
-                      {route} {n.data?.appName ? `(${n.data.appName})` : ""}
-                    </SelectItem>
-                  );
-                })
+              <>
+                {targetPages.length > 0 && (
+                  <SelectGroup>
+                    <SelectLabel className="text-[9px] uppercase tracking-wider font-bold text-muted-foreground flex items-center gap-1 px-2 py-1">
+                      <Globe size={10} className="text-indigo-400" />
+                      <span>Pages</span>
+                    </SelectLabel>
+                    {targetPages.map((p) => (
+                      <SelectItem key={p.id} value={p.id} className="text-xs">
+                        <div className="flex items-center justify-between w-full gap-2">
+                          <span className="font-medium truncate">{p.label}</span>
+                          {p.isRoot && (
+                            <span className="text-[9px] px-1 py-0.2 rounded bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 font-mono">
+                              / (Root)
+                            </span>
+                          )}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                )}
+
+                {targetLayouts.length > 0 && (
+                  <>
+                    {targetPages.length > 0 && <SelectSeparator className="my-1" />}
+                    <SelectGroup>
+                      <SelectLabel className="text-[9px] uppercase tracking-wider font-bold text-purple-400 flex items-center gap-1 px-2 py-1">
+                        <LayoutTemplate size={10} />
+                        <span>Layouts (Persistent Stream)</span>
+                      </SelectLabel>
+                      {targetLayouts.map((l) => (
+                        <SelectItem key={l.id} value={l.id} className="text-xs">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <LayoutTemplate size={11} className="text-purple-400 shrink-0" />
+                            <span className="font-medium truncate">{l.label}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </>
+                )}
+              </>
             )}
           </SelectContent>
         </Select>

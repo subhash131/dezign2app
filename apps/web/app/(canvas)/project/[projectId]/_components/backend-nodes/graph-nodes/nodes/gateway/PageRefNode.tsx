@@ -1,6 +1,6 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Handle, Position, NodeProps } from "@xyflow/react";
-import { Compass, Globe, Trash, AlertTriangle } from "lucide-react";
+import { Compass, Globe, Trash, AlertTriangle, LayoutTemplate } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import {
@@ -11,7 +11,10 @@ import {
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
@@ -27,6 +30,12 @@ import {
   upsertDerivedConnection,
   removeDerivedConnection,
 } from "@/app/(canvas)/project/[projectId]/_components/config-sidebar/pipeline-step-editor/pushToClientUtils";
+import {
+  resolvePageRefTargets,
+  ensureLayoutNodeForTarget,
+  isLayoutNode,
+  getLayoutNodeDetails,
+} from "@/app/(canvas)/project/[projectId]/_components/config-sidebar/pipeline-step-editor/reference-connections/pageRefLayoutUtils";
 
 export const PageRefNode = ({
   id,
@@ -45,42 +54,59 @@ export const PageRefNode = ({
     Boolean(selected),
   );
 
-  // Available WebPage nodes on canvas
-  const pageNodes = useBackendCanvasStore(
-    useShallow((s) =>
-      s.nodes.filter((n) => n?.type === "webPage"),
-    ),
+  // Available Pages & Layouts
+  const { pages: pageTargets, layouts: layoutTargets } = useMemo(
+    () => resolvePageRefTargets(nodes, edges),
+    [nodes, edges],
   );
 
-  // Selected target page node
-  const selectedPage = pageNodes.find((p) => p.id === (data.targetPageId || data.pageRefId));
+  // Available WebPage nodes on canvas
+  const pageNodes = useMemo(
+    () => nodes.filter((n) => n?.type === "webPage"),
+    [nodes],
+  );
+
+  // Selected target page or layout node
+  const selectedTargetId = data.targetPageId || data.pageRefId || "";
+  const selectedPage = pageNodes.find((p) => p.id === selectedTargetId);
+  const isSelectedLayout = isLayoutNode(selectedPage);
+  const layoutDetails =
+    isSelectedLayout && selectedPage
+      ? getLayoutNodeDetails(selectedPage, nodes, edges)
+      : null;
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
     requestDeleteNode(id);
   };
 
-  const handlePageSelect = (pageId: string) => {
-    const page = pageNodes.find((p) => p.id === pageId);
+  const handlePageSelect = (selectedVal: string) => {
+    // Ensure actual layout node exists on canvas if a layout target was selected
+    const resolvedPageId = ensureLayoutNodeForTarget(selectedVal, nodes, edges);
+    const store = useBackendCanvasStore.getState();
+    const page = store.nodes.find((p) => p.id === resolvedPageId);
+    const isLayout = isLayoutNode(page);
+    const details = isLayout && page ? getLayoutNodeDetails(page, store.nodes, store.edges) : null;
     const pageLabel = page?.data?.label || "Page";
     const cleanLabel = pageLabel.trim().toLowerCase();
-    const isRoot =
-      page?.data?.isRoot === true ||
-      cleanLabel === "/";
+    const isRoot = !isLayout && (page?.data?.isRoot === true || cleanLabel === "/");
+    const displayLabel = details ? details.displayTitle : isRoot ? "/" : pageLabel;
+
+    // Clean data payload matching pageRefDataSchema in Convex
+    const { targetPageType: _omittedType, ...cleanData } = (data || {}) as unknown as Record<string, unknown>;
 
     updateNode(id, {
       data: {
-        ...data,
-        targetPageId: pageId,
-        pageRefId: pageId,
-        targetPageLabel: pageLabel,
-        label: `Ref: ${isRoot ? "/" : pageLabel}`,
+        ...(cleanData as any),
+        targetPageId: resolvedPageId,
+        pageRefId: resolvedPageId,
+        targetPageLabel: displayLabel,
+        label: `Ref: ${displayLabel}`,
       },
     });
 
     // Synchronize connected push_to_client steps on Service endpoints or consumers
     const incomingEdges = edges.filter((e) => e.target === id);
-    const store = useBackendCanvasStore.getState();
     incomingEdges.forEach((edge) => {
       if (edge.sourceHandle?.startsWith("endpoint-out-")) {
         const epId = edge.sourceHandle.replace("endpoint-out-", "");
@@ -96,17 +122,17 @@ export const PageRefNode = ({
                 (s.clientDeliveryPageRefNodeId === id || !s.clientDeliveryPageRefNodeId)
               ) {
                 const prevTargetPageId = s.clientDeliveryTargetPageId;
-                if (prevTargetPageId && prevTargetPageId !== pageId) {
+                if (prevTargetPageId && prevTargetPageId !== resolvedPageId) {
                   removeDerivedConnection(store, prevTargetPageId, s.id);
                 }
                 const updatedStep = {
                   ...s,
-                  clientDeliveryTargetPageId: pageId,
+                  clientDeliveryTargetPageId: resolvedPageId,
                   clientDeliveryPageRefNodeId: id,
                 };
                 upsertDerivedConnection(
                   store,
-                  pageId,
+                  resolvedPageId,
                   updatedStep,
                   edge.source,
                   ep.name || "Endpoint",
@@ -129,17 +155,17 @@ export const PageRefNode = ({
             const updatedSteps = ev.pipelineSteps.map((s) => {
               if (s.type === "push_to_client" && (s.clientDeliveryPageRefNodeId === id || !s.clientDeliveryPageRefNodeId)) {
                 const prevTargetPageId = s.clientDeliveryTargetPageId;
-                if (prevTargetPageId && prevTargetPageId !== pageId) {
+                if (prevTargetPageId && prevTargetPageId !== resolvedPageId) {
                   removeDerivedConnection(store, prevTargetPageId, s.id);
                 }
                 const updatedStep = {
                   ...s,
-                  clientDeliveryTargetPageId: pageId,
+                  clientDeliveryTargetPageId: resolvedPageId,
                   clientDeliveryPageRefNodeId: id,
                 };
                 upsertDerivedConnection(
                   store,
-                  pageId,
+                  resolvedPageId,
                   updatedStep,
                   edge.source,
                   ev.name || "Event",
@@ -159,14 +185,14 @@ export const PageRefNode = ({
 
   const selectedCleanLabel = (selectedPage?.data?.label || "").trim().toLowerCase();
   const isSelectedLanding =
-    selectedPage?.data?.isRoot === true ||
-    selectedCleanLabel === "/";
+    !isSelectedLayout &&
+    (selectedPage?.data?.isRoot === true || selectedCleanLabel === "/");
 
   return (
     <div
       className={cn(
         "shadow-md rounded-xl bg-card border-2 min-w-[210px] max-w-[320px] flex flex-col transition-all duration-300 relative",
-        selected ? "border-indigo-500" : "border-transparent",
+        selected ? (isSelectedLayout ? "border-purple-500" : "border-indigo-500") : "border-transparent",
         hasPipelineError &&
           "border-destructive/80 ring-1 ring-destructive/30 shadow-destructive/5",
         borderClass,
@@ -179,7 +205,8 @@ export const PageRefNode = ({
         className={cn(
           CANVAS_HANDLE_CLASS,
           CANVAS_HANDLE_LEFT_OFFSET_CLASS,
-          "!bg-indigo-500 rounded-full !border-2 !border-background hover:scale-125 transition-all",
+          isSelectedLayout ? "!bg-purple-500" : "!bg-indigo-500",
+          "rounded-full !border-2 !border-background hover:scale-125 transition-all",
         )}
         style={{ top: "18px" }}
       />
@@ -197,20 +224,36 @@ export const PageRefNode = ({
         className={cn(
           CANVAS_HANDLE_CLASS,
           CANVAS_HANDLE_RIGHT_OFFSET_CLASS,
-          "!bg-indigo-500 rounded-full !border-2 !border-background hover:scale-125 transition-all",
+          isSelectedLayout ? "!bg-purple-500" : "!bg-indigo-500",
+          "rounded-full !border-2 !border-background hover:scale-125 transition-all",
         )}
         style={{ top: "18px" }}
       />
 
-      <div className="p-3 bg-indigo-500/10 border-b flex items-center justify-between gap-2">
+      <div
+        className={cn(
+          "p-3 border-b flex items-center justify-between gap-2",
+          isSelectedLayout ? "bg-purple-500/10" : "bg-indigo-500/10",
+        )}
+      >
         <div className="flex items-center gap-2 min-w-0 flex-1">
-          <div className="p-1 rounded bg-indigo-500/20 text-indigo-400 shrink-0">
-            <Compass size={14} />
+          <div
+            className={cn(
+              "p-1 rounded shrink-0",
+              isSelectedLayout ? "bg-purple-500/20 text-purple-400" : "bg-indigo-500/20 text-indigo-400",
+            )}
+          >
+            {isSelectedLayout ? <LayoutTemplate size={14} /> : <Compass size={14} />}
           </div>
           <div className="flex flex-col min-w-0">
             <div className="flex items-center gap-1.5">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400">
-                Page Ref
+              <span
+                className={cn(
+                  "text-[10px] font-bold uppercase tracking-wider",
+                  isSelectedLayout ? "text-purple-400" : "text-indigo-400",
+                )}
+              >
+                {isSelectedLayout ? "Layout Ref" : "Page Ref"}
               </span>
               {hasPipelineError && (
                 <span className="text-[7px] font-medium px-1 py-0.2 rounded bg-destructive/15 text-destructive border border-destructive/30 flex items-center gap-0.5 shrink-0 animate-pulse">
@@ -220,16 +263,24 @@ export const PageRefNode = ({
               )}
             </div>
             <span className="text-xs font-semibold text-foreground truncate">
-              {selectedPage ? selectedPage.data?.label || "Untitled Page" : "Select Target"}
+              {layoutDetails
+                ? layoutDetails.displayTitle
+                : selectedPage
+                  ? selectedPage.data?.label || "Untitled Page"
+                  : "Select Target"}
             </span>
           </div>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
-          {isSelectedLanding && (
+          {isSelectedLayout ? (
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 font-mono shrink-0">
+              {layoutDetails?.zoneSlug ? `(${layoutDetails.zoneSlug})` : "Layout"}
+            </span>
+          ) : isSelectedLanding ? (
             <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-mono shrink-0">
               / (Root)
             </span>
-          )}
+          ) : null}
           <button
             type="button"
             className="p-1 rounded hover:bg-destructive/15 text-muted-foreground/60 hover:text-destructive transition-colors cursor-pointer"
@@ -251,40 +302,68 @@ export const PageRefNode = ({
       <div className="p-3 bg-secondary/5 flex flex-col gap-2 nodrag rounded-b-[10px]">
         <div className="space-y-1">
           <label className="text-[10px] font-medium text-muted-foreground flex items-center gap-1">
-            <Globe size={10} /> Target Page
+            {isSelectedLayout ? (
+              <LayoutTemplate size={10} className="text-purple-400" />
+            ) : (
+              <Globe size={10} />
+            )}
+            <span>Target {isSelectedLayout ? "Layout" : "Page"}</span>
           </label>
           <Select
             value={data.targetPageId || ""}
             onValueChange={handlePageSelect}
           >
             <SelectTrigger className="h-7 text-xs bg-background">
-              <SelectValue placeholder="Select a page to reference..." />
+              <SelectValue placeholder="Select a page or layout to reference..." />
             </SelectTrigger>
             <SelectContent>
-              {pageNodes.length === 0 ? (
+              {pageTargets.length === 0 && layoutTargets.length === 0 ? (
                 <div className="p-2 text-xs text-muted-foreground text-center">
-                  No pages defined on canvas
+                  No pages or layouts defined on canvas
                 </div>
               ) : (
-                pageNodes.map((p) => {
-                  const label = p.data?.label || "Untitled Page";
-                  const clean = label.trim().toLowerCase();
-                  const isHome =
-                    p.data?.isRoot === true ||
-                    clean === "/";
-                  return (
-                    <SelectItem key={p.id} value={p.id} className="text-xs">
-                      <div className="flex items-center justify-between w-full gap-2">
-                        <span className="font-medium truncate">{label}</span>
-                        {isHome && (
-                          <span className="text-[9px] px-1 py-0.2 rounded bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 font-mono">
-                            / (Root)
-                          </span>
-                        )}
-                      </div>
-                    </SelectItem>
-                  );
-                })
+                <>
+                  {pageTargets.length > 0 && (
+                    <SelectGroup>
+                      <SelectLabel className="text-[9px] uppercase tracking-wider font-bold text-muted-foreground flex items-center gap-1 px-2 py-1">
+                        <Globe size={10} className="text-indigo-400" />
+                        <span>Pages</span>
+                      </SelectLabel>
+                      {pageTargets.map((p) => (
+                        <SelectItem key={p.id} value={p.id} className="text-xs">
+                          <div className="flex items-center justify-between w-full gap-2">
+                            <span className="font-medium truncate">{p.label}</span>
+                            {p.isRoot && (
+                              <span className="text-[9px] px-1 py-0.2 rounded bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 font-mono">
+                                / (Root)
+                              </span>
+                            )}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  )}
+
+                  {layoutTargets.length > 0 && (
+                    <>
+                      {pageTargets.length > 0 && <SelectSeparator className="my-1" />}
+                      <SelectGroup>
+                        <SelectLabel className="text-[9px] uppercase tracking-wider font-bold text-purple-400 flex items-center gap-1 px-2 py-1">
+                          <LayoutTemplate size={10} />
+                          <span>Layouts (Persistent Stream)</span>
+                        </SelectLabel>
+                        {layoutTargets.map((l) => (
+                          <SelectItem key={l.id} value={l.id} className="text-xs">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <LayoutTemplate size={11} className="text-purple-400 shrink-0" />
+                              <span className="font-medium truncate">{l.label}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </>
+                  )}
+                </>
               )}
             </SelectContent>
           </Select>

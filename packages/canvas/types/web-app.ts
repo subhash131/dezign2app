@@ -281,6 +281,7 @@ export interface CanvasPageRefNodeData {
   targetPageId?: string;
   targetPageLabel?: string;
   targetPageSlug?: string;
+  targetPageType?: string;
 }
 
 /** Hook node fields for canvas graph view. */
