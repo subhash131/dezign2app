@@ -9,13 +9,50 @@ export function generateTriggerLogsState(hasLogsSection: boolean, hasStreamingAc
     eventName: string;
     eventType: string;
     timestamp: string;
-    url: string;
-    method: string;
+    url?: string;
+    method?: string;
     status?: number;
     payload?: unknown;
     data: unknown;
     error?: string;${streamingField}
   }>>([]);
+
+  // Bridge layout-level stream and action events into page Output Log
+  useEffect(() => {
+    const handleLayoutLog = (e: Event) => {
+      if (
+        e instanceof CustomEvent &&
+        typeof e.detail === "object" &&
+        e.detail !== null &&
+        "id" in e.detail &&
+        typeof e.detail.id === "string" &&
+        "eventName" in e.detail &&
+        typeof e.detail.eventName === "string"
+      ) {
+        const detailObj = e.detail;
+        const entry = {
+          id: detailObj.id,
+          eventName: detailObj.eventName,
+          eventType: typeof detailObj.eventType === "string" ? detailObj.eventType : "LAYOUT",
+          timestamp: typeof detailObj.timestamp === "string" ? detailObj.timestamp : new Date().toLocaleTimeString(),
+          url: typeof detailObj.url === "string" ? detailObj.url : undefined,
+          method: typeof detailObj.method === "string" ? detailObj.method : undefined,
+          status: typeof detailObj.status === "number" ? detailObj.status : undefined,
+          payload: "payload" in detailObj ? detailObj.payload : undefined,
+          data: "data" in detailObj ? detailObj.data : detailObj,
+          error: typeof detailObj.error === "string" ? detailObj.error : undefined,
+        };
+        queueMicrotask(() => {
+          setTriggerLogs((prev) => {
+            if (prev.some((item) => item.id === entry.id)) return prev;
+            return [entry, ...prev];
+          });
+        });
+      }
+    };
+    window.addEventListener("dezign:layout-log", handleLayoutLog);
+    return () => window.removeEventListener("dezign:layout-log", handleLayoutLog);
+  }, []);
 
 `;
 }

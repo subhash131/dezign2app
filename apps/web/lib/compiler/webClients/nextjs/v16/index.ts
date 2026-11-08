@@ -17,6 +17,7 @@ import { getServicePort, resolveLinkedEndpoint, resolvePageRefLink } from "./end
 import { generateProjectConfigFiles } from "./configTemplates";
 import { generateEnvFilesForNode } from "@/lib/compiler/generators/generateEnvFile";
 import { generateRootLayout, generateRouteGroupLayouts } from "./layoutGenerators";
+import { generateLayoutEventsDrawer } from "./page-generators";
 import { generateProxy } from "./middlewareTemplate";
 import { resolvePagesInfo } from "./pageResolver";
 import {
@@ -451,6 +452,24 @@ export function compileNextjsV16WebClient(
         .join("\n              ")
     : "";
 
+  const rootLayoutPageInfo = pagesInfo.find(
+    (p) => p.isLayout && (p.isRoot || p.routePath === "app/layout.tsx"),
+  );
+  const rootRealtimeConns = rootLayoutPageInfo?.realtimeConnections || [];
+  const hasRootEventsDrawer = rootRealtimeConns.length > 0;
+
+  if (hasRootEventsDrawer) {
+    files.push({
+      filename: "app/_components/LayoutEventsDrawer.tsx",
+      language: "typescript",
+      content: generateLayoutEventsDrawer(
+        rootRealtimeConns,
+        Boolean(authNode),
+        "Root",
+      ),
+    });
+  }
+
   files.push({
     filename: "app/layout.tsx",
     language: "typescript",
@@ -459,6 +478,7 @@ export function compileNextjsV16WebClient(
       navLinksHtml,
       showNav,
       resolvedProviders.hasProviders,
+      hasRootEventsDrawer,
     ),
   });
 

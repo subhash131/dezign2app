@@ -10,12 +10,14 @@ import {
   ConditionNode,
 } from "@workspace/canvas/types";
 import { slugToComponentName } from "./slugUtils";
+import { generateLayoutEventsDrawer } from "./page-generators";
 
 export function generateRootLayout(
   projectName: string,
   pagesNavLinks?: string,
   showNav: boolean = false,
   hasProviders: boolean = false,
+  hasEventsDrawer: boolean = false,
 ): string {
   const navBar = showNav && pagesNavLinks && pagesNavLinks.trim().length > 0
     ? `\n        <nav className="border-b border-border bg-background/80 backdrop-blur sticky top-0 z-50 px-6 py-3">
@@ -31,11 +33,12 @@ export function generateRootLayout(
     : "";
 
   const providersImport = hasProviders ? `\nimport { AppProviders } from "./providers";` : "";
+  const drawerImport = hasEventsDrawer ? `\nimport { LayoutEventsDrawer } from "./_components/LayoutEventsDrawer";` : "";
   const childrenJsx = hasProviders
     ? `<AppProviders>{children}</AppProviders>`
     : `{children}`;
 
-  return `import type { Metadata } from "next";${showNav && pagesNavLinks ? `\nimport Link from "next/link";` : ""}${providersImport}
+  return `import type { Metadata } from "next";${showNav && pagesNavLinks ? `\nimport Link from "next/link";` : ""}${providersImport}${drawerImport}
 import "@workspace/ui/globals.css";
 
 export const metadata: Metadata = {
@@ -53,7 +56,7 @@ export default function RootLayout({
       <body className="bg-background text-foreground min-h-screen antialiased flex flex-col font-sans">${navBar}
         <div className="flex-1">
           ${childrenJsx}
-        </div>
+        </div>${hasEventsDrawer ? `\n        <LayoutEventsDrawer />` : ""}
       </body>
     </html>
   );
@@ -127,6 +130,7 @@ export function generateSectionLayout(
   zone?: WebAppZone,
   layoutNode?: BackendNode,
   authNode?: BackendNode,
+  hasEventsDrawer: boolean = false,
 ): string {
   const isPublic = groupName === "public";
   const componentName = slugToComponentName(groupName).replace(/Page$/, "") + "Layout";
@@ -272,6 +276,10 @@ import { PanelLeft, LayoutDashboard, BarChart2, Folder, Settings } from "lucide-
     headerImports = `${topbarImports}\n`;
   }
 
+  if (hasEventsDrawer) {
+    headerImports = `${headerImports}import { LayoutEventsDrawer } from "./_components/LayoutEventsDrawer";\n`;
+  }
+
   const sidebarTopBarJsx = topbarComp
     ? `          <header className="${topbarSticky ? "sticky top-0 z-50 " : ""}w-full border-b border-border bg-background/80 backdrop-blur px-6 py-3 flex items-center justify-between gap-4">
             <Link href="/" className="flex items-center gap-2 font-bold text-sm tracking-tight text-foreground hover:opacity-90 transition-opacity">
@@ -330,7 +338,7 @@ ${staticItemsJsx}
         <div className="flex-1 flex flex-col min-w-0">
 ${sidebarTopBarJsx}          <main className="flex-1 p-6 overflow-auto">
             {children}
-          </main>
+          </main>${hasEventsDrawer ? `\n          <LayoutEventsDrawer />` : ""}
         </div>
       </div>
     </SidebarProvider>`
@@ -350,10 +358,10 @@ ${authButtonsJsx}
       </header>
       <main className="flex-1">
         {children}
-      </main>
+      </main>${hasEventsDrawer ? `\n      <LayoutEventsDrawer />` : ""}
     </div>`
     : `    <div className="min-h-screen flex flex-col bg-background text-foreground">
-${sectionsJsx ? `${sectionsJsx}\n` : ""}      <div className="flex-1">{children}</div>
+${sectionsJsx ? `${sectionsJsx}\n` : ""}      <div className="flex-1">{children}</div>${hasEventsDrawer ? `\n      <LayoutEventsDrawer />` : ""}
     </div>`;
 
   if (isPublic || !isAuthConnected) {
@@ -577,6 +585,7 @@ export function generateRouteGroupLayouts(
         Boolean(n.data?.isLayout) || n.data?.label?.trim().toLowerCase() === "layout";
       if (!isLayout) return false;
       if (!matchedZone) return false;
+      if (n.data?.zoneId === matchedZone.id) return true;
       return allEdges.some((e) => {
         return (
           (e.source === webAppNode?.id &&
@@ -588,6 +597,28 @@ export function generateRouteGroupLayouts(
         );
       });
     });
+
+    // Check for layout-level real-time stream connections
+    const layoutPageInfo = pagesInfo.find(
+      (p) =>
+        (connectedLayoutNode && p.nodeId === connectedLayoutNode.id) ||
+        (p.isLayout && (p.routeGroup === leafGroup || p.routeGroupPath === folderPath)),
+    );
+
+    const layoutRealtimeConns = layoutPageInfo?.realtimeConnections ?? [];
+    const hasEventsDrawer = Array.isArray(layoutRealtimeConns) && layoutRealtimeConns.length > 0;
+
+    if (hasEventsDrawer) {
+      files.push({
+        filename: `app/${folderPath}/_components/LayoutEventsDrawer.tsx`,
+        language: "typescript",
+        content: generateLayoutEventsDrawer(
+          layoutRealtimeConns,
+          Boolean(authNode),
+          leafGroup,
+        ),
+      });
+    }
 
     // If layout node has custom source code written in Studio or AI, use it directly
     if (connectedLayoutNode?.data?.pageSourceCode) {
@@ -628,6 +659,7 @@ export function generateRouteGroupLayouts(
         matchedZone,
         connectedLayoutNode,
         authNode,
+        hasEventsDrawer,
       ),
     });
   });
