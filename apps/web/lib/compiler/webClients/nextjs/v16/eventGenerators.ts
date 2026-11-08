@@ -165,6 +165,11 @@ export function generateEventComponent(
     });
   }
 
+  const effectivePathParamBindings =
+    navStep?.pathParamBindings || eventItem?.pathParamBindings;
+  const effectiveQueryParamBindings =
+    navStep?.queryParamBindings || eventItem?.queryParamBindings;
+
   // 4B. If no form inputs configured, render a clean, direct action Button
   if (!params.hasFields) {
     return generateSimpleButtonEventTemplate({
@@ -181,6 +186,8 @@ export function generateEventComponent(
       serviceName,
       actionSteps: eventItem?.actionSteps,
       targetRoute: navStep?.targetRoute || targetRoute || eventItem?.targetRoute,
+      pathParamBindings: effectivePathParamBindings,
+      queryParamBindings: effectiveQueryParamBindings,
     });
   }
 
@@ -200,6 +207,8 @@ export function generateEventComponent(
     serviceName,
     actionSteps: eventItem?.actionSteps,
     targetRoute: navStep?.targetRoute || targetRoute || eventItem?.targetRoute,
+    pathParamBindings: effectivePathParamBindings,
+    queryParamBindings: effectiveQueryParamBindings,
   });
 }
 

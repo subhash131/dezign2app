@@ -219,7 +219,7 @@ export function partitionTransformerSteps(
           (!b.source.stepId || !preStepIds.has(b.source.stepId)),
       );
 
-      if (referencesTriggerResponse || (step.order > 1 && preSteps.length > 0)) {
+      if (referencesTriggerResponse || step.order > 1) {
         postSteps.push(step);
       } else {
         preSteps.push(step);
@@ -301,6 +301,18 @@ export function renderTransformerInvocationList(
   return lines.length > 0 ? `${lines.join("\n")}\n` : "";
 }
 
+function formatFieldAccess(varName: string, fieldPath?: string): string {
+  if (!fieldPath || fieldPath === "*" || fieldPath === "$") {
+    return `String(${varName} ?? "")`;
+  }
+  const chain = fieldPath
+    .split(".")
+    .filter(Boolean)
+    .map((seg) => (/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(seg) ? seg : `[${JSON.stringify(seg)}]`))
+    .join("?.");
+  return `String(${varName}?.${chain} ?? "")`;
+}
+
 /**
  * Renders navigation router.push(...) invocation with resolved path parameters and query parameters.
  */
@@ -314,6 +326,8 @@ export function renderActionStepNavigation(
     lastTransformerOutputVar?: string;
     apiStepId?: string;
     indent?: string;
+    pathParamBindings?: NavigationPathParamBinding[];
+    queryParamBindings?: NavigationQueryParamBinding[];
   },
 ): NavigationRenderResult {
   const route = navStep?.targetRoute || targetRoute;
@@ -333,9 +347,9 @@ export function renderActionStepNavigation(
   let needsUseSearchParams = false;
 
   const pathParamBindings: NavigationPathParamBinding[] =
-    navStep?.pathParamBindings || [];
+    navStep?.pathParamBindings || ctx.pathParamBindings || [];
   const queryParamBindings: NavigationQueryParamBinding[] =
-    navStep?.queryParamBindings || [];
+    navStep?.queryParamBindings || ctx.queryParamBindings || [];
 
   let pathTemplate = route;
   const paramMatches: string[] = [];
@@ -369,20 +383,26 @@ export function renderActionStepNavigation(
     } else if (src.kind === "prev_response") {
       const field = src.fieldPath || param;
       if (src.stepId && stepOutputMap.has(src.stepId)) {
-        const varName = stepOutputMap.get(src.stepId);
-        expr = `String((typeof ${varName} === "object" && ${varName} !== null ? (${varName} as Record<string, unknown>)?.["${field}"] : ${varName}) ?? "")`;
-      } else if (ctx.apiStepId && src.stepId === ctx.apiStepId) {
+        const varName = stepOutputMap.get(src.stepId)!;
+        expr = formatFieldAccess(varName, field);
+      } else if (
+        (ctx.apiStepId && src.stepId === ctx.apiStepId) ||
+        src.stepId === "api_call" ||
+        src.stepId === "trigger" ||
+        src.stepId === "endpoint" ||
+        src.stepId === "api"
+      ) {
         const target = ctx.resDataVar || "resData";
-        expr = `String((typeof ${target} === "object" && ${target} !== null ? (${target} as Record<string, unknown>)?.["${field}"] : ${target}) ?? "")`;
+        expr = formatFieldAccess(target, field);
       } else if (ctx.lastTransformerOutputVar) {
         const varName = ctx.lastTransformerOutputVar;
-        expr = `String((typeof ${varName} === "object" && ${varName} !== null ? (${varName} as Record<string, unknown>)?.["${field}"] : ${varName}) ?? "")`;
+        expr = formatFieldAccess(varName, field);
       } else if (ctx.resDataVar) {
         const target = ctx.resDataVar;
-        expr = `String((typeof ${target} === "object" && ${target} !== null ? (${target} as Record<string, unknown>)?.["${field}"] : ${target}) ?? "")`;
+        expr = formatFieldAccess(target, field);
       } else if (ctx.hasTriggerResult) {
         const target = "resData";
-        expr = `String((typeof ${target} === "object" && ${target} !== null ? (${target} as Record<string, unknown>)?.["${field}"] : ${target}) ?? "")`;
+        expr = formatFieldAccess(target, field);
       } else {
         expr = `""`;
       }
@@ -425,20 +445,26 @@ export function renderActionStepNavigation(
     } else if (src.kind === "prev_response") {
       const field = src.fieldPath || q.key;
       if (src.stepId && stepOutputMap.has(src.stepId)) {
-        const varName = stepOutputMap.get(src.stepId);
-        valExpr = `String((typeof ${varName} === "object" && ${varName} !== null ? (${varName} as Record<string, unknown>)?.["${field}"] : ${varName}) ?? "")`;
-      } else if (ctx.apiStepId && src.stepId === ctx.apiStepId) {
+        const varName = stepOutputMap.get(src.stepId)!;
+        valExpr = formatFieldAccess(varName, field);
+      } else if (
+        (ctx.apiStepId && src.stepId === ctx.apiStepId) ||
+        src.stepId === "api_call" ||
+        src.stepId === "trigger" ||
+        src.stepId === "endpoint" ||
+        src.stepId === "api"
+      ) {
         const target = ctx.resDataVar || "resData";
-        valExpr = `String((typeof ${target} === "object" && ${target} !== null ? (${target} as Record<string, unknown>)?.["${field}"] : ${target}) ?? "")`;
+        valExpr = formatFieldAccess(target, field);
       } else if (ctx.lastTransformerOutputVar) {
         const varName = ctx.lastTransformerOutputVar;
-        valExpr = `String((typeof ${varName} === "object" && ${varName} !== null ? (${varName} as Record<string, unknown>)?.["${field}"] : ${varName}) ?? "")`;
+        valExpr = formatFieldAccess(varName, field);
       } else if (ctx.resDataVar) {
         const target = ctx.resDataVar;
-        valExpr = `String((typeof ${target} === "object" && ${target} !== null ? (${target} as Record<string, unknown>)?.["${field}"] : ${target}) ?? "")`;
+        valExpr = formatFieldAccess(target, field);
       } else if (ctx.hasTriggerResult) {
         const target = "resData";
-        valExpr = `String((typeof ${target} === "object" && ${target} !== null ? (${target} as Record<string, unknown>)?.["${field}"] : ${target}) ?? "")`;
+        valExpr = formatFieldAccess(target, field);
       }
     } else if (src.kind === "state_var" && src.storeName) {
       const cleanStore = src.storeName.replace(/Store$/i, "");
