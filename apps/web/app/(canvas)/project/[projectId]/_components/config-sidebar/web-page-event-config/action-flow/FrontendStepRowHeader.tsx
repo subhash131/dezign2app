@@ -103,10 +103,30 @@ export function formatStepCodePreview(
             );
           }
         });
+        const method = step.navMethod || "router_push";
+        if (method === "history_push") {
+          return hasDynamicExpr
+            ? `history.pushState(..., \`${templateRoute}\`)`
+            : `history.pushState(..., "${templateRoute}")`;
+        }
+        if (method === "history_replace") {
+          return hasDynamicExpr
+            ? `history.replaceState(..., \`${templateRoute}\`)`
+            : `history.replaceState(..., "${templateRoute}")`;
+        }
+        if (method === "router_replace") {
+          return hasDynamicExpr
+            ? `router.replace(\`${templateRoute}\`)`
+            : `router.replace("${templateRoute}")`;
+        }
         return hasDynamicExpr
           ? `router.push(\`${templateRoute}\`)`
           : `router.push("${templateRoute}")`;
       }
+      const method = step.navMethod || "router_push";
+      if (method === "history_push") return `history.pushState(..., "${route}")`;
+      if (method === "history_replace") return `history.replaceState(..., "${route}")`;
+      if (method === "router_replace") return `router.replace("${route}")`;
       return `router.push("${route}")`;
     }
 

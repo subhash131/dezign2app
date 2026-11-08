@@ -498,6 +498,12 @@ export type NavigationQueryParamBinding = {
   source: FrontendFieldSource;
 };
 
+export type NavigationMethod =
+  | "router_push"
+  | "router_replace"
+  | "history_push"
+  | "history_replace";
+
 export type FrontendActionStepDraft = {
   id: string;
   order: number;
@@ -542,6 +548,7 @@ export type FrontendActionStepDraft = {
   targetRoute?: string;
   targetPageId?: string;
   navCondition?: "direct" | "on_success" | "on_error";
+  navMethod?: NavigationMethod;
   pathParamBindings?: NavigationPathParamBinding[];
   queryParamBindings?: NavigationQueryParamBinding[];
 

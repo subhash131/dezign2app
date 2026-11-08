@@ -31,6 +31,7 @@ import type {
   FrontendActionStepDraft,
   FrontendFieldSource,
   NavigationPathParamBinding,
+  NavigationMethod,
   AvailablePath,
 } from "./types";
 import { ActionFlowCombobox, ComboboxOption } from "./ActionFlowCombobox";
@@ -142,6 +143,7 @@ export const NavigationStep: React.FC<NavigationStepProps> = ({
   const navType = draft.navType || "route";
   const targetRoute = draft.targetRoute || "/";
   const navCondition = draft.navCondition || "direct";
+  const navMethod: NavigationMethod = draft.navMethod || "router_push";
 
   // Build configured route options from all canvas web pages
   const configuredRouteOptions: ComboboxOption[] = useMemo(() => {
@@ -499,13 +501,31 @@ export const NavigationStep: React.FC<NavigationStepProps> = ({
       preview = preview.replace(new RegExp(`\\[${b.paramName}\\]`, "g"), rep);
     });
 
-    return {
-      text: isDynamic
+    const method = draft.navMethod || "router_push";
+    let previewText = "";
+    if (method === "history_push") {
+      previewText = isDynamic
+        ? `history.pushState({}, "", \`${preview}\`)`
+        : `history.pushState({}, "", "${preview}")`;
+    } else if (method === "history_replace") {
+      previewText = isDynamic
+        ? `history.replaceState({}, "", \`${preview}\`)`
+        : `history.replaceState({}, "", "${preview}")`;
+    } else if (method === "router_replace") {
+      previewText = isDynamic
+        ? `router.replace(\`${preview}\`)`
+        : `router.replace("${preview}")`;
+    } else {
+      previewText = isDynamic
         ? `router.push(\`${preview}\`)`
-        : `router.push("${preview}")`,
+        : `router.push("${preview}")`;
+    }
+
+    return {
+      text: previewText,
       isDynamic,
     };
-  }, [targetRoute, draft.pathParamBindings]);
+  }, [targetRoute, draft.pathParamBindings, draft.navMethod]);
 
   // Check if all detected dynamic params have a non-empty mapping
   const allParamsMapped = useMemo(() => {
@@ -565,11 +585,58 @@ export const NavigationStep: React.FC<NavigationStepProps> = ({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="direct">Immediate</SelectItem>
-              <SelectItem value="on_success">On Prior Success</SelectItem>
-              <SelectItem value="on_error">On Prior Error</SelectItem>
+              <SelectItem value="on_success">On Prior step Success</SelectItem>
+              <SelectItem value="on_error">On Prior step Error</SelectItem>
             </SelectContent>
           </Select>
         </div>
+      </div>
+
+      {/* Transition / History Method */}
+      <div className="space-y-1.5 p-2 rounded-lg border bg-secondary/20">
+        <div className="flex items-center justify-between">
+          <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+            Transition / History Method
+          </Label>
+          <span className="text-[9px] font-mono text-primary font-semibold">
+            {navMethod === "history_push" || navMethod === "history_replace"
+              ? "In-Place (No Reload)"
+              : "Next.js Router"}
+          </span>
+        </div>
+        <Select
+          value={navMethod}
+          onValueChange={(val: string) =>
+            onChange({ ...draft, navMethod: val as NavigationMethod })
+          }
+        >
+          <SelectTrigger className="w-full h-7 text-xs bg-background">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="router_push">
+              router.push() &mdash; Standard route navigation
+            </SelectItem>
+            <SelectItem value="router_replace">
+              router.replace() &mdash; Replace current route
+            </SelectItem>
+            <SelectItem value="history_push">
+              history.pushState() &mdash; Push URL in-place (No reload/re-render)
+            </SelectItem>
+            <SelectItem value="history_replace">
+              history.replaceState() &mdash; Replace URL in-place (No reload/re-render)
+            </SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-[10px] text-muted-foreground leading-relaxed">
+          {navMethod === "history_push"
+            ? "Updates browser address bar using window.history.pushState without unmounting or re-rendering the page. Perfect for new chats to bookmark the ID while streaming."
+            : navMethod === "history_replace"
+            ? "Replaces current browser address bar entry using window.history.replaceState without reloading or interrupting active connections."
+            : navMethod === "router_replace"
+            ? "Replaces current history entry via Next.js router.replace() without pushing a new history item."
+            : "Standard Next.js router.push() navigation. Pushes a new entry onto the browser history stack."}
+        </p>
       </div>
 
       {/* Target Destination Section */}

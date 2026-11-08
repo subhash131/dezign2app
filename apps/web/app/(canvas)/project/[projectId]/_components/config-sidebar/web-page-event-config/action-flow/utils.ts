@@ -932,6 +932,15 @@ function formatDraftStep(
     case "navigation": {
       const route = draft.targetRoute || "/";
       const bindings = draft.pathParamBindings || [];
+      const method = draft.navMethod || "router_push";
+      const fnName =
+        method === "history_push"
+          ? "history.pushState"
+          : method === "history_replace"
+          ? "history.replaceState"
+          : method === "router_replace"
+          ? "router.replace"
+          : "router.push";
       if (bindings.length > 0) {
         let templateRoute = route;
         bindings.forEach((b) => {
@@ -941,14 +950,14 @@ function formatDraftStep(
           );
         });
         lines.push(
-          `// Step ${stepNum}: [NAVIGATE] -> router.push(\`${templateRoute}\`) (${draft.navCondition || "direct"})`,
+          `// Step ${stepNum}: [NAVIGATE] -> ${fnName}(\`${templateRoute}\`) (${draft.navCondition || "direct"})`,
         );
         bindings.forEach((b) => {
           lines.push(`//         [${b.paramName}] <- ${formatFieldSource(b.source)}`);
         });
       } else {
         lines.push(
-          `// Step ${stepNum}: [NAVIGATE] -> router.push("${route}") (${draft.navCondition || "direct"})`,
+          `// Step ${stepNum}: [NAVIGATE] -> ${fnName}("${route}") (${draft.navCondition || "direct"})`,
         );
       }
       break;
