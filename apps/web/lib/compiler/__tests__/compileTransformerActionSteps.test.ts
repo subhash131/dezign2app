@@ -122,7 +122,7 @@ describe("WebPageNode Action Transformer Step Compilation", () => {
     expect(code).toContain('import { generateChatId } from "@workspace/transformers";');
     expect(code).toContain("const router = useRouter();");
     expect(code).toContain("const generateChatIdResult = await generateChatId();");
-    expect(code).toContain('router.push(`/chat/${String((typeof generateChatIdResult === "object" && generateChatIdResult !== null ? (generateChatIdResult as Record<string, unknown>)?.["id"] : generateChatIdResult) ?? "")}`);');
+    expect(code).toContain('router.push(`/chat/${String(generateChatIdResult?.id ?? "")}`);');
   });
 
   it("compiles pre-trigger and post-trigger transformer steps around an API endpoint call", () => {
@@ -472,7 +472,7 @@ describe("WebPageNode Action Transformer Step Compilation", () => {
     );
 
     expect(code).toContain("const generateChatIdResult = await generateChatId();");
-    expect(code).toContain('router.push(`/chat/${String((typeof generateChatIdResult === "object" && generateChatIdResult !== null ? (generateChatIdResult as Record<string, unknown>)?.["id"] : generateChatIdResult) ?? "")}`);');
+    expect(code).toContain('router.push(`/chat/${String(generateChatIdResult?.id ?? "")}`);');
     expect(code).not.toContain("router.push(`/chat/${String(resData?.id ?? \"\")}`);");
     expect(code).toContain("const resData =");
   });
@@ -519,7 +519,7 @@ describe("WebPageNode Action Transformer Step Compilation", () => {
       eventItem,
     );
 
-    expect(code).toContain('window.history.pushState({}, "", `/chat/${String((typeof resData === "object" && resData !== null ? (resData as Record<string, unknown>)?.["conversationId"] : resData) ?? "")}`);');
+    expect(code).toContain('window.history.pushState({}, "", `/chat/${String(resData?.conversationId ?? "")}`);');
     expect(code).not.toContain('router.push');
     expect(code).not.toContain('useRouter');
   });
@@ -590,6 +590,190 @@ describe("WebPageNode Action Transformer Step Compilation", () => {
 
     expect(codeRouterReplace).toContain('router.replace(`/chat/${"conv-123"}`);');
     expect(codeRouterReplace).toContain('const router = useRouter();');
+  });
+
+  it("resolves navigation step to generateChatIdResult after API call in interactive form without resData reference errors", () => {
+    const eventItem: UIEventItem = {
+      id: "act-send-msg",
+      name: "send message",
+      event: "click",
+      actionSteps: [
+        {
+          id: "step-trans-chat-id",
+          order: 2,
+          type: "transform",
+          name: "generateChatIdResult",
+          outputVariable: "generateChatIdResult",
+          transformerName: "generateChatId",
+          functionRef: {
+            name: "generateChatId",
+            importPath: "@workspace/transformers",
+          },
+        },
+        {
+          id: "step-nav-to-chat",
+          order: 3,
+          type: "navigation",
+          targetRoute: "/chat/:id",
+          pathParamBindings: [
+            {
+              paramName: "id",
+              source: {
+                kind: "prev_response",
+                stepId: "",
+                fieldPath: "id",
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    const code = generateEventComponent(
+      "send message",
+      "click",
+      "http://localhost:8080/send-message/:id",
+      "POST",
+      "SendMessageAction",
+      "/chat/:id",
+      undefined,
+      true,
+      undefined,
+      undefined,
+      {
+        fields: [{ name: "user_message", type: "string", required: true }],
+      },
+      eventItem,
+    );
+
+    // generateChatId executed after onTrigger and before router.push
+    const triggerIdx = code.indexOf("await onTrigger?.(");
+    const transIdx = code.indexOf("await generateChatId(");
+    const navIdx = code.indexOf("router.push(");
+
+    expect(triggerIdx).toBeGreaterThan(-1);
+    expect(transIdx).toBeGreaterThan(triggerIdx);
+    expect(navIdx).toBeGreaterThan(transIdx);
+
+    // Correct variable reference to generateChatIdResult, resData is safely declared
+    expect(code).toContain("const resData =");
+    expect(code).toContain("generateChatIdResult");
+    expect(code).not.toContain("router.push(`/chat/${String(resData?.id ?? \"\")}`);");
+  });
+
+  it("resolves navigation prev_response to explicit api_call step when stepId points to api_call", () => {
+    const eventItem: UIEventItem = {
+      id: "act-api-nav",
+      name: "create order",
+      event: "click",
+      actionSteps: [
+        {
+          id: "step-api-1",
+          order: 1,
+          type: "api_call",
+        },
+        {
+          id: "step-trans-2",
+          order: 2,
+          type: "transform",
+          name: "formatResult",
+          outputVariable: "formatResult",
+          transformerName: "formatOrder",
+          functionRef: {
+            name: "formatOrder",
+            importPath: "@workspace/transformers",
+          },
+        },
+        {
+          id: "step-nav-3",
+          order: 3,
+          type: "navigation",
+          targetRoute: "/orders/:orderId",
+          pathParamBindings: [
+            {
+              paramName: "orderId",
+              source: {
+                kind: "prev_response",
+                stepId: "step-api-1",
+                fieldPath: "orderId",
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    const code = generateEventComponent(
+      "create order",
+      "click",
+      "http://localhost:8080/api/orders",
+      "POST",
+      "CreateOrderAction",
+      "/orders/:orderId",
+      undefined,
+      true,
+      undefined,
+      undefined,
+      undefined,
+      eventItem,
+    );
+
+    expect(code).toContain("const resData =");
+    // Explicit reference to step-api-1 resolves to resData
+    expect(code).toContain('router.push(`/orders/${String(resData?.orderId ?? "")}`);');
+  });
+
+  it("preserves navigation bindings from eventItem when navStep actionStep is omitted", () => {
+    const eventItem: UIEventItem = {
+      id: "act-implicit-nav",
+      name: "send message",
+      event: "click",
+      targetRoute: "/chat/:id",
+      pathParamBindings: [
+        {
+          paramName: "id",
+          source: {
+            kind: "prev_response",
+            stepId: "step-trans-1",
+            fieldPath: "id",
+          },
+        },
+      ],
+      actionSteps: [
+        {
+          id: "step-trans-1",
+          order: 1,
+          type: "transform",
+          name: "generateChatIdResult",
+          outputVariable: "generateChatIdResult",
+          transformerName: "generateChatId",
+          functionRef: {
+            name: "generateChatId",
+            importPath: "@workspace/transformers",
+          },
+        },
+      ],
+    };
+
+    const code = generateEventComponent(
+      "send message",
+      "click",
+      "http://localhost:8080/send-message/:id",
+      "POST",
+      "SendMessageAction",
+      "/chat/:id",
+      undefined,
+      true,
+      undefined,
+      undefined,
+      {
+        fields: [{ name: "user_message", type: "string", required: true }],
+      },
+      eventItem,
+    );
+
+    expect(code).toContain("generateChatIdResult");
+    expect(code).toContain('router.push(`/chat/${String(generateChatIdResult?.id ?? "")}`);');
   });
 });
 
