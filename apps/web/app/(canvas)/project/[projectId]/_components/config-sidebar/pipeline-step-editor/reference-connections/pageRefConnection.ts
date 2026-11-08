@@ -1,6 +1,7 @@
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { PipelineStepDraft } from "../types";
 import { flattenAllPipelineSteps } from "../stepConstants";
+import { isLayoutNode, getLayoutNodeDetails } from "./pageRefLayoutUtils";
 
 // ---------------------------------------------------------------------------
 // Web Page Ref Node & Edge Synchronization Helpers
@@ -99,20 +100,25 @@ export function ensurePageRefConnection({
     };
 
     const newRefId = crypto.randomUUID();
+    const isLayout = isLayoutNode(targetWebPage);
+    const layoutDetails = isLayout && targetWebPage ? getLayoutNodeDetails(targetWebPage, allNodes, edges) : null;
     const pageLabel = targetWebPage?.data?.label || "Page";
     const cleanLabel = pageLabel.trim().toLowerCase();
-    const isRoot = targetWebPage?.data?.isRoot === true || cleanLabel === "/";
+    const isRoot = !isLayout && (targetWebPage?.data?.isRoot === true || cleanLabel === "/");
+    const displayLabel = layoutDetails ? layoutDetails.displayTitle : isRoot ? "/" : pageLabel;
 
     store.addNode({
       id: newRefId,
       type: "page_ref",
       position: newPos,
       data: {
-        label: targetWebPage ? `Ref: ${isRoot ? "/" : pageLabel}` : "Page Ref",
+        label: targetWebPage ? `Ref: ${displayLabel}` : "Page Ref",
         targetPageId: resolvedTargetPageId,
         pageRefId: resolvedTargetPageId,
-        targetPageLabel: targetWebPage ? pageLabel : undefined,
-        description: "Target page reference for real-time delivery",
+        targetPageLabel: layoutDetails ? layoutDetails.displayTitle : targetWebPage ? pageLabel : undefined,
+        description: isLayout
+          ? "Target layout reference for persistent real-time streaming"
+          : "Target page reference for real-time delivery",
       },
     });
 
@@ -125,17 +131,20 @@ export function ensurePageRefConnection({
     pageRefNode.data?.targetPageId !== resolvedTargetPageId
   ) {
     // If pageRefNode exists and targetPageId was updated, update pageRefNode details
+    const isLayout = isLayoutNode(targetWebPage);
+    const layoutDetails = isLayout ? getLayoutNodeDetails(targetWebPage, allNodes, edges) : null;
     const pageLabel = targetWebPage.data?.label || "Page";
     const cleanLabel = pageLabel.trim().toLowerCase();
-    const isRoot = targetWebPage.data?.isRoot === true || cleanLabel === "/";
+    const isRoot = !isLayout && (targetWebPage.data?.isRoot === true || cleanLabel === "/");
+    const displayLabel = layoutDetails ? layoutDetails.displayTitle : isRoot ? "/" : pageLabel;
 
     store.updateNode(pageRefNode.id, {
       data: {
         ...pageRefNode.data,
         targetPageId: resolvedTargetPageId,
         pageRefId: resolvedTargetPageId,
-        targetPageLabel: pageLabel,
-        label: `Ref: ${isRoot ? "/" : pageLabel}`,
+        targetPageLabel: layoutDetails ? layoutDetails.displayTitle : pageLabel,
+        label: `Ref: ${displayLabel}`,
       },
     });
   }

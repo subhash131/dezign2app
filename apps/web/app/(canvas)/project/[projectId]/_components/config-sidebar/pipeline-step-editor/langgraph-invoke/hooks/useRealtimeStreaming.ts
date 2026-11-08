@@ -15,6 +15,14 @@ import {
   resolveInvokingPage,
   resolveConnectedPageRefNode,
 } from "../utils";
+import {
+  resolvePageRefTargets,
+  ensureLayoutNodeForTarget,
+  isLayoutNode,
+  getLayoutNodeDetails,
+  type PageTargetOption,
+  type LayoutTargetOption,
+} from "../../reference-connections/pageRefLayoutUtils";
 
 export interface UseRealtimeStreamingParams {
   step: PipelineStepDraft;
@@ -59,6 +67,10 @@ export function useRealtimeStreaming({
     return allNodes.filter((n) => n.type === "webPage");
   }, [allNodes]);
 
+  const { pages: targetPages, layouts: targetLayouts } = useMemo(() => {
+    return resolvePageRefTargets(allNodes, allEdges);
+  }, [allNodes, allEdges]);
+
   // Detect which WebPage node invokes/connects to this endpoint
   const invokingPage = useMemo(() => {
     return resolveInvokingPage(allNodes, allEdges, serviceNodeId, endpoint);
@@ -83,6 +95,16 @@ export function useRealtimeStreaming({
       defaultTargetPage
     );
   }, [allWebPages, selectedTargetPageId, defaultTargetPage]);
+
+  const isTargetLayout = useMemo(() => {
+    return isLayoutNode(selectedTargetPage);
+  }, [selectedTargetPage]);
+
+  const targetLayoutDetails = useMemo(() => {
+    return isTargetLayout && selectedTargetPage
+      ? getLayoutNodeDetails(selectedTargetPage, allNodes, allEdges)
+      : null;
+  }, [isTargetLayout, selectedTargetPage, allNodes, allEdges]);
 
   // Dynamic route & query parameter detection for the target web page
   const targetRouteInfo = useMemo(() => {
@@ -173,9 +195,12 @@ export function useRealtimeStreaming({
   const handleConnectPushToClientNode = useCallback(
     (targetPageIdToConnect?: string) => {
       if (!serviceNodeId) return;
-      const targetPageId =
+      let targetPageId =
         targetPageIdToConnect || selectedTargetPageId || defaultTargetPage?.id;
       if (!targetPageId) return;
+
+      // Ensure actual layout node exists on canvas if a layout creation key was chosen
+      targetPageId = ensureLayoutNodeForTarget(targetPageId, allNodes, allEdges);
 
       const store = useBackendCanvasStore.getState();
       const prevTargetPageId = step.clientDeliveryTargetPageId;
@@ -1031,6 +1056,10 @@ export function useRealtimeStreaming({
     handleToggleTrackTokenUsage,
     targetRouteInfo,
     selectedTargetPage,
+    targetPages,
+    targetLayouts,
+    isTargetLayout,
+    targetLayoutDetails,
     getPathParamBinding,
     hasCustomPathParamBinding,
     handlePathParamBindingChange,
