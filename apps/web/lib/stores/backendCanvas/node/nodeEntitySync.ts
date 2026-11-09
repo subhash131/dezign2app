@@ -333,6 +333,21 @@ export function resolveCascadeDeletedNodeIds(
           }
         }
 
+        // 3c. Companion TypesNode derived from a deleted LangGraph node
+        if (
+          Boolean(node.data?.isLangGraphPackage) ||
+          node.id.startsWith("types-langgraph-") ||
+          Boolean(node.data?.sourceLangGraphId)
+        ) {
+          const langGraphId =
+            node.data?.sourceLangGraphId || node.id.replace("types-langgraph-", "");
+          if (allIdsSet.has(langGraphId)) {
+            allIdsSet.add(node.id);
+            addedNew = true;
+            continue;
+          }
+        }
+
         // 4. Extended TypesNode extending a deleted TypesNode
         if (
           node.data?.extendedFromNodeId &&

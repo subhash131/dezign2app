@@ -141,6 +141,14 @@ export function classifyHandle(
 
   if (nodeType === "langgraph") {
     if (
+      id === "types-in" ||
+      id.startsWith("types-in") ||
+      id === "type-in" ||
+      id.startsWith("type-in")
+    ) {
+      return "type-in";
+    }
+    if (
       id === "input-start" ||
       id.startsWith("langgraph-in-") ||
       id.startsWith("route-in-")

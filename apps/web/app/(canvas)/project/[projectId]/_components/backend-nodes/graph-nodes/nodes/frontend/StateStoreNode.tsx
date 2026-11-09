@@ -82,6 +82,7 @@ export const StateStoreNode = ({
   const allNodes = useBackendCanvasStore((s) => s.nodes);
   const edges = useBackendCanvasStore((s) => s.edges);
   const addEdge = useBackendCanvasStore((s) => s.addEdge);
+  const updateEdge = useBackendCanvasStore((s) => s.updateEdge);
   const updateNode = useBackendCanvasStore((s) => s.updateNode);
   const deleteNode = useBackendCanvasStore((s) => s.deleteNode);
   const deleteEdge = useBackendCanvasStore((s) => s.deleteEdge);
@@ -360,9 +361,17 @@ export const StateStoreNode = ({
     data.fields.forEach((f) => {
       if (!f.type) return;
       const baseTypeName = f.type.replace(/\[\]$/, "").trim();
+      const expectedTargetHandle = `store-field-in-${f.id}`;
+
+      // Clean up any edge if the field has transitioned to a primitive type
       if (!baseTypeName || ["string", "number", "boolean", "array", "object", "any"].includes(baseTypeName.toLowerCase())) {
+        const stalePrimitiveEdges = edges.filter(
+          (e) => e.target === id && e.targetHandle === expectedTargetHandle,
+        );
+        stalePrimitiveEdges.forEach((e) => deleteEdge(e.id));
         return;
       }
+
       const matchingNodes = allNodes.filter(
         (n) => n.type === "types" && (n.data?.types || []).some((t: CustomTypeItem) => t.name === baseTypeName),
       );
@@ -386,26 +395,31 @@ export const StateStoreNode = ({
       if (!typeItem) return;
 
       const expectedSourceHandle = `type-out-${typeItem.id}`;
-      const expectedTargetHandle = `store-field-in-${f.id}`;
 
-      // Clean up any stale edge connecting to this field from an erroneous Entity Types node or old type
-      const staleEdges = edges.filter(
-        (e) =>
-          e.target === id &&
-          e.targetHandle === expectedTargetHandle &&
-          (e.source !== typesNode.id || e.sourceHandle !== expectedSourceHandle),
-      );
-      staleEdges.forEach((e) => deleteEdge(e.id));
-
-      const edgeExists = edges.some(
-        (e) =>
-          e.source === typesNode.id &&
-          e.target === id &&
-          e.sourceHandle === expectedSourceHandle &&
-          e.targetHandle === expectedTargetHandle,
+      const existingEdgesForField = edges.filter(
+        (e) => e.target === id && e.targetHandle === expectedTargetHandle,
       );
 
-      if (!edgeExists) {
+      if (existingEdgesForField.length > 0) {
+        const primary = existingEdgesForField[0]!;
+        // Update the edge in-place if source node or source handle changed
+        if (primary.source !== typesNode.id || primary.sourceHandle !== expectedSourceHandle) {
+          updateEdge(primary.id, {
+            source: typesNode.id,
+            sourceHandle: expectedSourceHandle,
+            data: {
+              label: typeItem.name,
+              isTypeReference: true,
+              baseTypeName: typeItem.name,
+            },
+          });
+        }
+        // Prune any duplicate edges targeting this same field
+        for (let i = 1; i < existingEdgesForField.length; i++) {
+          const dup = existingEdgesForField[i];
+          if (dup) deleteEdge(dup.id);
+        }
+      } else {
         addEdge({
           id: `edge-type-${typesNode.id}-${typeItem.id}-${id}-${f.id}`,
           source: typesNode.id,
@@ -421,7 +435,7 @@ export const StateStoreNode = ({
         });
       }
     });
-  }, [data.fields, id, allNodes, edges, addEdge]);
+  }, [data.fields, id, allNodes, edges, addEdge, updateEdge, deleteEdge]);
 
   return (
     <div

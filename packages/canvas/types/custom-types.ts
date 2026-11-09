@@ -69,5 +69,11 @@ export interface CanvasTypesNodeData {
   sourceServiceName?: string;
   isServiceEndpointSchemas?: boolean;
   serviceUpdatedAt?: number;
+  // LangGraph-derived type synchronization tracking
+  sourceLangGraphId?: string;
+  sourceLangGraphName?: string;
+  targetLangGraphId?: string;
+  isLangGraphPackage?: boolean;
+  langGraphUpdatedAt?: number;
 }
 

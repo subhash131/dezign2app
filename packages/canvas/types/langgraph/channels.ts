@@ -16,12 +16,13 @@ export type LangGraphStateChannel = {
     | "merge_object"
     | "concat_array"
     | (string & {});
+  description?: string;
   defaultValue?:
     | string
     | number
     | boolean
-    | Record<string, unknown>
-    | unknown[];
+    | Record<string, string | number | boolean>
+    | string[];
   customReducerCode?: string;
   customTypeId?: string;
   customTypeName?: string;
@@ -68,8 +69,8 @@ export type LangGraphInputChannel = {
     | string
     | number
     | boolean
-    | Record<string, unknown>
-    | unknown[];
+    | Record<string, string | number | boolean>
+    | string[];
   /** Whether this came from the connected endpoint or was manually added */
   source?: "request" | "custom";
   /** Which state channel key this input initializes */
