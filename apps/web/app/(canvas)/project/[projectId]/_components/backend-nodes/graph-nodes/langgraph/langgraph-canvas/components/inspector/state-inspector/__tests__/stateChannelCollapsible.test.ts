@@ -172,7 +172,7 @@ describe("State Channel Reducer Configuration", () => {
       expect(code).toContain('name: ""');
       expect(code).toContain('action === "reset"');
       expect(code).toContain('action === "replace"');
-      expect(code).toContain('payload.id !== undefined ? payload.id : initial.id');
+      expect(code).toContain('shallowEqual');
 
       // Evaluate the generated reducer
       const fn = new Function("return " + code)();
