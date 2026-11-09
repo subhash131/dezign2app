@@ -78,7 +78,7 @@ export const STRING_REDUCER_PRESETS = {
 export const BOOLEAN_REDUCER_PRESETS = {
   standard: `(prev, next) => {
   const current = typeof prev === "boolean" ? prev : false;
-  const action = typeof next === "object" && next !== null && "action" in next ? next.action : undefined;
+  const action = next?.action;
 
   // 1. Action: toggle
   if (action === "toggle") {
@@ -135,11 +135,14 @@ export const ARRAY_REDUCER_PRESETS = {
   appendOnly: `(prev, next) => {
   const prevArr = Array.isArray(prev) ? prev : [];
   const incoming = next?.value !== undefined ? next.value : next;
-  return [...prevArr, ...(Array.isArray(incoming) ? incoming : (incoming != null ? [incoming] : []))];
+  const items = Array.isArray(incoming) ? incoming : (incoming != null ? [incoming] : []);
+  return items.length === 0 ? prevArr : [...prevArr, ...items];
 }`,
   replace: `(prev, next) => {
+  const prevArr = Array.isArray(prev) ? prev : [];
   const raw = next?.value !== undefined ? next.value : next;
-  return Array.isArray(raw) ? raw : (raw != null ? [raw] : []);
+  const nextArr = Array.isArray(raw) ? raw : (raw != null ? [raw] : []);
+  return nextArr.length === prevArr.length && nextArr.every((it, i) => Object.is(it, prevArr[i])) ? prevArr : nextArr;
 }`,
 };
 
@@ -242,8 +245,13 @@ const StoreVariableCard = React.memo(function StoreVariableCard({
         raw.includes("Initial shape guaranteed by type schema") &&
         extractFieldsFromCustomType(matchedCustomType).some((f) => !raw.includes(`${f.name}:`)),
     );
+    const isArrayWithObjectReducer = Boolean(
+      isArray &&
+        raw &&
+        raw.includes("Initial shape guaranteed by type schema"),
+    );
 
-    if (typeChanged || isLegacyOrEmpty || isTypeMismatch || isGenericOnTypedSchema || isSchemaMismatch) {
+    if (typeChanged || isLegacyOrEmpty || isTypeMismatch || isArrayWithObjectReducer || isGenericOnTypedSchema || isSchemaMismatch) {
       const suggested = getSuggestedReducerCodeForChannelType(
         field.type,
         matchedCustomType,
@@ -253,6 +261,7 @@ const StoreVariableCard = React.memo(function StoreVariableCard({
       onUpdateField(field.id, {
         customReducerCode: suggested,
         actions: standardActions,
+        defaultValue: isArray && (field.defaultValue === "" || field.defaultValue === null || field.defaultValue === undefined) ? [] : field.defaultValue,
         customTypeId: matchedCustomType?.id || field.customTypeId,
       });
     }

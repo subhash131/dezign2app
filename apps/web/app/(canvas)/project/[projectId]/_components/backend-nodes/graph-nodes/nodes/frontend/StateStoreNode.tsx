@@ -66,7 +66,7 @@ import {
 export function getSupportedActionsForType(type?: string, isArray?: boolean): string[] {
   const clean = (type || "string").toLowerCase().trim();
   if (isArray || clean.endsWith("[]") || clean === "array") {
-    return ["set", "append", "pop", "remove", "reset"];
+    return ["set", "append", "prepend", "pop", "remove", "update", "reset"];
   }
   switch (clean) {
     case "number":
@@ -498,13 +498,19 @@ export const StateStoreNode = ({
           f.customReducerCode.includes("Initial shape guaranteed by type schema") &&
           extractFieldsFromCustomType(matchedCustom).some((field) => !f.customReducerCode?.includes(`${field.name}:`)),
       );
-      if (isMissingCode || isMismatched || isSchemaMismatch) {
+      const isArrayWithObjectReducer = Boolean(
+        isArray &&
+          f.customReducerCode &&
+          f.customReducerCode.includes("Initial shape guaranteed by type schema"),
+      );
+      if (isMissingCode || isMismatched || isSchemaMismatch || isArrayWithObjectReducer) {
         needsUpdate = true;
         const generated = getSuggestedReducerCodeForChannelType(f.type, matchedCustom, isArray);
         return {
           ...f,
           customReducerCode: generated,
-          actions: f.actions && f.actions.length > 0 ? f.actions : getSupportedActionsForType(f.type, isArray),
+          actions: getSupportedActionsForType(f.type, isArray),
+          defaultValue: isArray && (f.defaultValue === "" || f.defaultValue === null || f.defaultValue === undefined) ? [] : f.defaultValue,
           customTypeId: matchedCustom?.id || f.customTypeId,
         };
       }
