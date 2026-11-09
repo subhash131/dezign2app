@@ -15,6 +15,7 @@ import { ProjectFolderModal } from "./ProjectFolderModal";
 import {
   useSidebarStore,
   getEffectiveConfigSidebarWidth,
+  getEffectiveLangGraphInspectorWidth,
 } from "@/lib/stores/sidebarStore";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { NodePaletteSidebar } from "./NodePaletteSidebar";
@@ -204,7 +205,9 @@ export function ProjectCanvasLayout({
             ) : (
               langGraphInspectorOpen && (
                 <div
-                  style={{ width: `${langGraphInspectorWidth}px` }}
+                  style={{
+                    width: `${getEffectiveLangGraphInspectorWidth(langGraphInspectorWidth)}px`,
+                  }}
                   className="shrink-0 pointer-events-none"
                 />
               )

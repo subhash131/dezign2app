@@ -719,7 +719,7 @@ export function LangGraphStudioView({
         <ToolsSidebar onAddStep={handleAddStep} />
 
         {/* Center Canvas */}
-        <div className="flex-1 relative">
+        <div className="flex-1 min-w-0 relative">
           <style>{`
             .react-flow__node {
               border-radius: 1rem !important;

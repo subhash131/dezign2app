@@ -126,17 +126,20 @@ export const ConfigSidebar = () => {
       if (!isDragging.current) return;
       const newWidth = window.innerWidth - e.clientX;
       const minW = Math.max(360, Math.round(window.innerWidth * 0.18));
-      const maxW = Math.min(1200, Math.round(window.innerWidth * 0.50));
-      if (newWidth >= minW && newWidth <= maxW) {
-        setWidth(newWidth);
-      }
+      const maxW = Math.round(window.innerWidth * 0.70);
+      const clamped = Math.max(minW, Math.min(maxW, newWidth));
+      setWidth(clamped);
     };
     const handleMouseUp = () => {
-      isDragging.current = false;
+      if (isDragging.current) {
+        isDragging.current = false;
+        document.body.style.userSelect = "";
+      }
     };
     document.addEventListener("mousemove", handleMouseMove);
     document.addEventListener("mouseup", handleMouseUp);
     return () => {
+      document.body.style.userSelect = "";
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
     };
@@ -178,13 +181,15 @@ export const ConfigSidebar = () => {
           e.preventDefault();
         }}
         className="p-0 bg-background/80 backdrop-blur-xl border-l border-border/50 shadow-2xl transition-none flex flex-col"
-        style={{ maxWidth: "100vw", width: effectiveWidth }}
+        style={{ maxWidth: "70vw", width: effectiveWidth }}
       >
         {/* Resize handle */}
         <div
           className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-primary/20 z-50 transition-colors"
-          onMouseDown={() => {
+          onMouseDown={(e) => {
+            e.preventDefault();
             isDragging.current = true;
+            document.body.style.userSelect = "none";
           }}
         />
 
