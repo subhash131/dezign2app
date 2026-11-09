@@ -13,6 +13,7 @@ import {
   Check,
   Trash2,
   Braces,
+  Brackets,
   GitMerge,
   Copy,
   MoreVertical,
@@ -249,8 +250,8 @@ export const StateStoreNode = ({
     const updatedFields = (data.fields || []).map((f) => {
       if (f.id !== fieldId) return f;
       const updated = { ...f, ...patch };
-      if (patch.type && !patch.actions) {
-        updated.actions = getSupportedActionsForType(patch.type, updated.isArray);
+      if ((patch.type || patch.isArray !== undefined) && !patch.actions) {
+        updated.actions = getSupportedActionsForType(updated.type, updated.isArray);
       }
       if (patch.name && (!f.reducer || f.reducer === `${f.name}_reducer` || f.reducer.endsWith("_reducer"))) {
         updated.reducer = `${patch.name}_reducer`;
@@ -263,6 +264,39 @@ export const StateStoreNode = ({
         fields: updatedFields,
       },
     });
+  };
+
+  const handleToggleArrayField = (fieldId: string) => {
+    const field = (data.fields || []).find((f) => f.id === fieldId);
+    if (!field) return;
+
+    const currentIsArray = Boolean(
+      field.isArray || field.type?.endsWith("[]") || field.type === "array",
+    );
+    const rawType = (field.type || "string").trim();
+    const cleanBase = rawType.replace(/\[\]$/, "").trim() || "string";
+    const isCustom = availableCustomTypes.some((t) => t.name === cleanBase);
+
+    if (currentIsArray) {
+      const nextType = cleanBase === "array" ? "string" : cleanBase;
+      const isNextCustom = availableCustomTypes.some((t) => t.name === nextType);
+      const nextActions = getSupportedActionsForType(isNextCustom ? "object" : nextType, false);
+      handleUpdateField(fieldId, {
+        type: nextType,
+        isArray: false,
+        defaultValue: isNextCustom ? null : "",
+        actions: nextActions,
+      });
+    } else {
+      const nextType = cleanBase === "array" ? "array" : `${cleanBase}[]`;
+      const nextActions = getSupportedActionsForType(nextType, true);
+      handleUpdateField(fieldId, {
+        type: nextType,
+        isArray: true,
+        defaultValue: [],
+        actions: nextActions,
+      });
+    }
   };
 
   const handleDeleteField = (fieldId: string, e?: React.MouseEvent) => {
@@ -571,12 +605,19 @@ export const StateStoreNode = ({
               const isDupe = duplicateFieldIds.has(f.id);
               const isEditingField = editingFieldId === f.id;
               const cleanFieldBaseType = (f.type || "").replace(/\[\]$/, "").trim();
+              const isFieldArray = Boolean(
+                f.isArray || f.type?.endsWith("[]") || f.type === "array",
+              );
+              const displayType = isFieldArray && !cleanFieldBaseType.endsWith("[]") && cleanFieldBaseType !== "array"
+                ? `${cleanFieldBaseType}[]`
+                : f.type || "string";
               const isCustomType = availableCustomTypes.some(
                 (t) => t.name === f.type || t.name === cleanFieldBaseType,
               );
-              const supportedActions = f.actions && f.actions.length > 0
-                ? f.actions
-                : getSupportedActionsForType(f.type, f.isArray);
+              const supportedActions =
+                f.actions && f.actions.length > 0 && !(isFieldArray && !f.actions.includes("append"))
+                  ? f.actions
+                  : getSupportedActionsForType(f.type, isFieldArray);
               const reducerName = f.reducer || `${f.name || "state"}_reducer`;
 
               const isOutputConnected = edges.some(
@@ -671,21 +712,63 @@ export const StateStoreNode = ({
 
                     <div className="flex flex-col gap-1">
                       <div className="flex items-center justify-between">
-                        <span className="text-[9px] text-muted-foreground font-medium">Type</span>
+                        <span className="text-[9px] text-muted-foreground font-semibold uppercase tracking-wider">
+                          Type
+                        </span>
+                        <button
+                          type="button"
+                          className={cn(
+                            "h-5 px-2 text-[10px] font-mono rounded transition-all flex items-center gap-1.5 cursor-pointer border select-none",
+                            isFieldArray
+                              ? "bg-cyan-500/15 text-cyan-300 border-cyan-500/40 hover:bg-cyan-500/25 shadow-2xs"
+                              : "bg-background/60 text-muted-foreground/80 hover:text-foreground border-border/50 hover:bg-secondary/70",
+                          )}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleArrayField(f.id);
+                          }}
+                          title={
+                            isFieldArray
+                              ? "Array type active (click to make single)"
+                              : "Single value (click to make array [])"
+                          }
+                        >
+                          <span
+                            className={cn(
+                              "font-bold text-[11px]",
+                              isFieldArray ? "text-cyan-400" : "text-muted-foreground/60",
+                            )}
+                          >
+                            []
+                          </span>
+                          <span className="text-[9.5px] font-medium tracking-wide">Array</span>
+                          {isFieldArray && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shadow-[0_0_6px_rgba(6,182,212,0.8)]" />
+                          )}
+                        </button>
                       </div>
                       <TwoStepTypeSelector
-                        value={f.type}
+                        value={cleanFieldBaseType}
                         onValueChange={(newType) => {
                           const cleanNewType = newType.replace(/\[\]$/, "").trim();
                           const isCustom = availableCustomTypes.some(
-                            (t) => t.name === newType || t.name === cleanNewType,
+                            (t) => t.name === cleanNewType,
                           );
+                          const targetType = isFieldArray
+                            ? cleanNewType === "array" ? "array" : `${cleanNewType}[]`
+                            : cleanNewType;
                           const patch: Partial<GlobalStoreField> = {
-                            type: newType,
-                            actions: getSupportedActionsForType(isCustom ? "object" : newType, f.isArray),
+                            type: targetType,
+                            isArray: isFieldArray || cleanNewType === "array",
+                            actions: getSupportedActionsForType(
+                              isCustom && !isFieldArray ? "object" : targetType,
+                              isFieldArray || cleanNewType === "array",
+                            ),
                           };
-                          if (isCustom && (f.defaultValue === "" || f.defaultValue === undefined)) {
+                          if (isCustom && !isFieldArray && (f.defaultValue === "" || f.defaultValue === undefined)) {
                             patch.defaultValue = null;
+                          } else if ((isFieldArray || cleanNewType === "array") && (f.defaultValue === "" || f.defaultValue === undefined || f.defaultValue === null)) {
+                            patch.defaultValue = [];
                           }
                           handleUpdateField(f.id, patch);
                         }}
@@ -765,14 +848,14 @@ export const StateStoreNode = ({
                         className="text-[8px] px-1 py-0 h-4 border-cyan-500/40 bg-cyan-500/10 text-cyan-400 font-mono font-normal shrink-0 flex items-center gap-1"
                       >
                         <Braces className="w-2.5 h-2.5" />
-                        {f.type}
+                        {displayType}
                       </Badge>
                     ) : (
                       <Badge
                         variant="outline"
                         className="text-[8px] px-1 py-0 h-4 border-border/60 text-muted-foreground font-mono font-normal shrink-0"
                       >
-                        {f.type}
+                        {displayType}
                       </Badge>
                     )}
 
@@ -823,12 +906,22 @@ export const StateStoreNode = ({
                           <MoreVertical className="w-3 h-3" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-44 text-xs font-sans">
+                      <DropdownMenuContent align="end" className="w-48 text-xs font-sans">
                         <DropdownMenuItem
                           onClick={() => setEditingFieldId(f.id)}
                           className="gap-2 text-xs cursor-pointer"
                         >
                           <Pencil className="w-3.5 h-3.5" /> Edit inline
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleArrayField(f.id);
+                          }}
+                          className="gap-2 text-xs cursor-pointer"
+                        >
+                          <Brackets className="w-3.5 h-3.5 text-cyan-400" />
+                          {isFieldArray ? "Convert to single" : "Convert to array []"}
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => handleOpenConfig()}

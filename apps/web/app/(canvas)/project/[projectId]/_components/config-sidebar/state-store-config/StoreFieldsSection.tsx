@@ -502,7 +502,7 @@ const StoreVariableCard = React.memo(function StoreVariableCard({
               className={cn(
                 "h-7 px-2 font-mono text-xs font-bold shrink-0 rounded-md transition-all cursor-pointer mt-0",
                 isArray
-                  ? "bg-indigo-600 text-white shadow-xs hover:bg-indigo-500"
+                  ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-xs hover:bg-cyan-500/30"
                   : "bg-secondary/60 text-muted-foreground hover:bg-secondary hover:text-foreground border border-border/40",
               )}
               onClick={handleToggleArray}
