@@ -872,7 +872,7 @@ const StoreVariableCard = React.memo(function StoreVariableCard({
                   onChange={(e) => handleCodeChange(e.target.value)}
                   debounceMs={200}
                   className={cn(
-                    "font-mono text-xs bg-zinc-950/90 border-border/80 leading-relaxed text-zinc-100 resize-y w-full rounded-md p-3 focus-visible:ring-indigo-500/40 focus-visible:border-indigo-500/60 transition-all shadow-inner",
+                    "font-mono text-xl bg-zinc-950/90 border-border/80 leading-relaxed text-zinc-100 resize-y w-full rounded-md p-3 focus-visible:ring-indigo-500/40 focus-visible:border-indigo-500/60 transition-all shadow-inner",
                     isTallEditor ? "min-h-[460px] h-[520px]" : "min-h-[280px] h-[340px]",
                   )}
                   placeholder="(prev, next) => next"
@@ -890,7 +890,7 @@ const StoreVariableCard = React.memo(function StoreVariableCard({
 
               {/* Fullscreen / Modal Reducer Editor Dialog */}
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                <DialogContent className="max-w-4xl w-[94vw] h-[86vh] flex flex-col p-0 gap-0 overflow-hidden font-sans border-border/80 bg-background/95 backdrop-blur-xl shadow-2xl">
+                <DialogContent className="max-w-[70vw] sm:max-w-5xl lg:max-w-[70vw] w-[94vw] h-[86vh] flex flex-col p-0 gap-0 overflow-hidden font-sans border-border/80 bg-background/95 backdrop-blur-xl shadow-2xl">
                   <DialogHeader className="p-4 pb-3 border-b border-border/50 bg-muted/20 flex flex-row items-center justify-between shrink-0">
                     <div>
                       <DialogTitle className="text-base font-bold font-mono flex items-center gap-2 text-foreground">
@@ -1039,7 +1039,7 @@ const StoreVariableCard = React.memo(function StoreVariableCard({
                         value={currentCode}
                         onChange={(e) => handleCodeChange(e.target.value)}
                         debounceMs={150}
-                        className="flex-1 w-full font-mono text-xs bg-zinc-950 text-zinc-100 p-4 leading-relaxed border-border/80 resize-none rounded-md focus-visible:ring-indigo-500/50 shadow-inner"
+                        className="flex-1 w-full font-mono text-xl bg-zinc-950 text-zinc-100 p-4 leading-relaxed border-border/80 resize-none rounded-md focus-visible:ring-indigo-500/50 shadow-inner"
                         placeholder="(prev, next) => next"
                         spellCheck={false}
                       />
