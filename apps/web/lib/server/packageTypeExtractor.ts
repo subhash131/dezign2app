@@ -171,9 +171,38 @@ function findInPnpmStore(pnpmStoreDir: string, pkg: string): string | null {
   return null;
 }
 
+/**
+ * Parses package name and optional subpath:
+ * e.g. "@langchain/core/messages" -> { basePkg: "@langchain/core", subpath: "./messages" }
+ * e.g. "uuid/v4" -> { basePkg: "uuid", subpath: "./v4" }
+ */
+export function parsePackageIdentifier(pkg: string): { basePkg: string; subpath?: string } {
+  const trimmed = pkg.trim();
+  if (trimmed.startsWith("@")) {
+    const parts = trimmed.split("/");
+    if (parts.length > 2) {
+      return {
+        basePkg: `${parts[0]}/${parts[1]}`,
+        subpath: `./${parts.slice(2).join("/")}`,
+      };
+    }
+    return { basePkg: trimmed };
+  } else {
+    const parts = trimmed.split("/");
+    if (parts.length > 1) {
+      return {
+        basePkg: parts[0]!,
+        subpath: `./${parts.slice(1).join("/")}`,
+      };
+    }
+    return { basePkg: trimmed };
+  }
+}
+
 export function resolvePackageDirectory(pkg: string, projectDir?: string): string | null {
   const cwd = process.cwd();
-  const pkgParts = pkg.split("/");
+  const { basePkg } = parsePackageIdentifier(pkg);
+  const pkgParts = basePkg.split("/");
 
   const searchStarts: string[] = [];
   if (projectDir) {
@@ -184,6 +213,10 @@ export function resolvePackageDirectory(pkg: string, projectDir?: string): strin
       if (fs.existsSync(subTransformers)) searchStarts.push(subTransformers);
       const subBackend = path.join(clean, "packages", "backend");
       if (fs.existsSync(subBackend)) searchStarts.push(subBackend);
+      const subLg = path.join(clean, "packages", "langgraph");
+      if (fs.existsSync(subLg)) searchStarts.push(subLg);
+      const directLg = path.join(clean, "langgraph");
+      if (fs.existsSync(directLg)) searchStarts.push(directLg);
     }
   }
   searchStarts.push(cwd);
@@ -193,6 +226,8 @@ export function resolvePackageDirectory(pkg: string, projectDir?: string): strin
     path.resolve(cwd, "../.."),
     path.resolve(cwd, "apps/web"),
     path.resolve(cwd, "packages/backend"),
+    path.resolve(cwd, "packages/langgraph"),
+    path.resolve(cwd, "langgraph"),
   ];
   for (const loc of knownLocations) {
     if (fs.existsSync(loc) && !searchStarts.includes(loc)) {
@@ -215,22 +250,54 @@ export function resolvePackageDirectory(pkg: string, projectDir?: string): strin
 
       // 2. pnpm virtual store: <currentDir>/node_modules/.pnpm/<escapedPkg>@<version>/node_modules/<pkg>
       const pnpmVirtual = path.join(currentDir, "node_modules", ".pnpm");
-      const foundInPnpm = findInPnpmStore(pnpmVirtual, pkg);
+      const foundInPnpm = findInPnpmStore(pnpmVirtual, basePkg);
       if (foundInPnpm) {
         return foundInPnpm;
       }
 
       // 3. Monorepo subpackages: <currentDir>/apps/*/node_modules/<pkg> & <currentDir>/packages/*/node_modules/<pkg>
-      for (const sub of ["apps", "packages"]) {
+      // Also check nested langgraph folders: <currentDir>/packages/langgraph/*/node_modules/<pkg> & <currentDir>/langgraph/*/node_modules/<pkg>
+      const subFolderCandidates = ["apps", "packages", "langgraph", "packages/langgraph"];
+      for (const sub of subFolderCandidates) {
         const subFolder = path.join(currentDir, sub);
         if (fs.existsSync(subFolder)) {
           try {
             const entries = fs.readdirSync(subFolder, { withFileTypes: true });
             for (const entry of entries) {
-              if (entry.isDirectory()) {
+              if (entry.isDirectory() || entry.isSymbolicLink()) {
                 const cand = path.join(subFolder, entry.name, "node_modules", ...pkgParts);
                 if (fs.existsSync(cand) && fs.existsSync(path.join(cand, "package.json"))) {
                   return cand;
+                }
+              }
+            }
+          } catch {}
+        }
+      }
+
+      // 4. Workspace package check: if pkg is a workspace package (e.g. @workspace/langgraph-agent), find its directory by package.json name or folder slug
+      for (const sub of subFolderCandidates) {
+        const subFolder = path.join(currentDir, sub);
+        if (fs.existsSync(subFolder)) {
+          try {
+            const entries = fs.readdirSync(subFolder, { withFileTypes: true });
+            for (const entry of entries) {
+              if (entry.isDirectory() || entry.isSymbolicLink()) {
+                const dir = path.join(subFolder, entry.name);
+                const pjPath = path.join(dir, "package.json");
+                if (fs.existsSync(pjPath)) {
+                  try {
+                    const pj = JSON.parse(fs.readFileSync(pjPath, "utf-8"));
+                    if (pj.name === basePkg) {
+                      return dir;
+                    }
+                    // Match slug e.g. @workspace/langgraph-agent matches folder LangGraph-Agent or langgraph-agent
+                    const slug = basePkg.replace(/^@workspace\//, "").replace(/^langgraph-/, "").toLowerCase();
+                    const folderSlug = entry.name.toLowerCase().replace(/^langgraph-/, "");
+                    if (slug === folderSlug) {
+                      return dir;
+                    }
+                  } catch {}
                 }
               }
             }
@@ -247,11 +314,74 @@ export function resolvePackageDirectory(pkg: string, projectDir?: string): strin
   return null;
 }
 
+type ExportTargetValue =
+  | string
+  | { [key: string]: ExportTargetValue | undefined }
+  | null
+  | undefined;
+
+/**
+ * Recursively resolves a .d.ts / .d.mts / .d.cts file path from an export entry object/string.
+ */
+function findTypesInExportEntry(entry: ExportTargetValue, pkgDir: string): string | null {
+  if (!entry) return null;
+  if (typeof entry === "string") {
+    if (
+      entry.endsWith(".d.ts") ||
+      entry.endsWith(".d.mts") ||
+      entry.endsWith(".d.cts")
+    ) {
+      const cand = path.resolve(pkgDir, entry);
+      if (fs.existsSync(cand)) return cand;
+    }
+    return null;
+  }
+  if (typeof entry === "object" && entry !== null) {
+    const entryObj = entry as Record<string, ExportTargetValue | undefined>;
+    if (typeof entryObj.types === "string") {
+      const cand = path.resolve(pkgDir, entryObj.types);
+      if (fs.existsSync(cand)) return cand;
+    }
+    for (const key of ["import", "require", "node", "default"]) {
+      const val = entryObj[key];
+      if (typeof val === "object" && val !== null) {
+        const nested = findTypesInExportEntry(val, pkgDir);
+        if (nested) return nested;
+      } else if (
+        typeof val === "string" &&
+        (val.endsWith(".d.ts") ||
+          val.endsWith(".d.mts") ||
+          val.endsWith(".d.cts"))
+      ) {
+        const cand = path.resolve(pkgDir, val);
+        if (fs.existsSync(cand)) return cand;
+      }
+    }
+  }
+  return null;
+}
+
+const LANGCHAIN_CORE_PRIORITY_SUBPATHS = new Set([
+  "./messages",
+  "./prompts",
+  "./runnables",
+  "./tools",
+  "./documents",
+  "./output_parsers",
+  "./chat_history",
+]);
+
 function resolveDtsEntry(
   pkgDir: string,
   pkgName?: string,
   projectDir?: string,
-): { dtsPath: string | null; jsPath: string | null; version?: string } {
+  subpath?: string,
+): {
+  dtsPath: string | null;
+  jsPath: string | null;
+  version?: string;
+  subpathDtsPaths?: string[];
+} {
   const pkgJsonPath = path.join(pkgDir, "package.json");
   if (!fs.existsSync(pkgJsonPath)) {
     return { dtsPath: null, jsPath: null };
@@ -268,52 +398,33 @@ function resolveDtsEntry(
   const version = pkgJson.version;
   let dtsCandidate: string | null = null;
   let jsCandidate: string | null = null;
+  const subpathDtsPaths: string[] = [];
 
   // 1. Check exports map for types or js entry
   if (pkgJson.exports) {
-    const rootExport = pkgJson.exports["."];
-    if (typeof rootExport === "string") {
-      if (rootExport.endsWith(".d.ts") || rootExport.endsWith(".d.mts")) {
-        const candidate = path.resolve(pkgDir, rootExport);
-        if (fs.existsSync(candidate)) dtsCandidate = candidate;
-      } else {
-        const candidate = path.resolve(pkgDir, rootExport);
-        if (fs.existsSync(candidate)) jsCandidate = candidate;
+    // If a subpath was requested (e.g. "./messages" from @langchain/core/messages)
+    if (subpath && pkgJson.exports[subpath]) {
+      const foundSubDts = findTypesInExportEntry(pkgJson.exports[subpath], pkgDir);
+      if (foundSubDts) dtsCandidate = foundSubDts;
+    }
+
+    // Collect priority subpath d.ts files in case root index is empty or has submodules (like @langchain/core)
+    for (const [expKey, expVal] of Object.entries(pkgJson.exports)) {
+      if (expKey === "." || expKey === "./package.json") continue;
+      if (pkgName === "@langchain/core" && !LANGCHAIN_CORE_PRIORITY_SUBPATHS.has(expKey)) {
+        continue;
       }
-    } else if (typeof rootExport === "object" && rootExport !== null) {
-      if (typeof rootExport.types === "string") {
-        const candidate = path.resolve(pkgDir, rootExport.types);
-        if (fs.existsSync(candidate)) dtsCandidate = candidate;
+      const subDts = findTypesInExportEntry(expVal, pkgDir);
+      if (subDts && fs.existsSync(subDts) && !subpathDtsPaths.includes(subDts)) {
+        subpathDtsPaths.push(subDts);
       }
-      if (typeof rootExport.node === "object" && rootExport.node !== null) {
-        const nodeTypes = rootExport.node.types;
-        if (typeof nodeTypes === "string") {
-          const candidate = path.resolve(pkgDir, nodeTypes);
-          if (fs.existsSync(candidate)) dtsCandidate = candidate;
-        }
-        if (!jsCandidate) {
-          const nodeModule =
-            rootExport.node.module || rootExport.node.import || rootExport.node.require;
-          if (typeof nodeModule === "string") {
-            const cand = path.resolve(pkgDir, nodeModule);
-            if (fs.existsSync(cand)) jsCandidate = cand;
-          }
-        }
-      }
-      if (typeof rootExport.default === "object" && rootExport.default !== null) {
-        const defaultTypes = rootExport.default.types;
-        if (typeof defaultTypes === "string") {
-          const candidate = path.resolve(pkgDir, defaultTypes);
-          if (fs.existsSync(candidate)) dtsCandidate = candidate;
-        }
-      }
-      if (!jsCandidate) {
-        const def =
-          rootExport.import || rootExport.module || rootExport.default || rootExport.require;
-        if (typeof def === "string") {
-          const cand = path.resolve(pkgDir, def);
-          if (fs.existsSync(cand)) jsCandidate = cand;
-        }
+    }
+
+    if (!dtsCandidate) {
+      const rootExport = pkgJson.exports["."];
+      if (rootExport) {
+        const found = findTypesInExportEntry(rootExport, pkgDir);
+        if (found) dtsCandidate = found;
       }
     }
   }
@@ -332,13 +443,16 @@ function resolveDtsEntry(
     const commonDtsFallbacks = [
       "index.d.ts",
       "index.d.mts",
+      "index.d.cts",
       "dist/index.d.ts",
       "dist/index.d.mts",
+      "dist/index.d.cts",
       "dist/esm/index.d.ts",
       "dist/esm-node/index.d.ts",
       "build/index.d.ts",
       "types/index.d.ts",
       "lib/index.d.ts",
+      "src/index.ts",
     ];
     for (const fallback of commonDtsFallbacks) {
       const candidate = path.resolve(pkgDir, fallback);
@@ -395,13 +509,28 @@ function resolveDtsEntry(
     }
   }
 
-  return { dtsPath: dtsCandidate, jsPath: jsCandidate, version };
+  return {
+    dtsPath: dtsCandidate,
+    jsPath: jsCandidate,
+    version,
+    subpathDtsPaths: subpathDtsPaths.length > 0 ? subpathDtsPaths : undefined,
+  };
 }
 
 function cleanPropertyType(typeString: string): string {
   const trimmed = typeString.trim();
   if (!trimmed || trimmed === "any" || trimmed === "unknown") {
     return "string";
+  }
+  // Simplify complex LangChain message content types to readable TypeScript unions
+  if (
+    trimmed.includes("$InferMessageContent") ||
+    (trimmed.includes("ContentBlock") && trimmed.includes("string"))
+  ) {
+    return "string | (string | Record<string, string | number | boolean>)[]";
+  }
+  if (trimmed.includes("$InferResponseMetadata") || trimmed.includes("BaseMessageFields")) {
+    return "Record<string, string | number | boolean>";
   }
   // Normalize multi-line formatting without truncating types
   return trimmed.replace(/\s+/g, " ");
@@ -431,6 +560,7 @@ function extractTypeFromDecl(
   symName: string,
   trimmedPkg: string,
   seenNames: Set<string>,
+  typeChecker?: ts.TypeChecker,
 ): CustomTypeItem | null {
   // Check for Interface Declaration
   if (ts.isInterfaceDeclaration(primaryDecl)) {
@@ -591,6 +721,119 @@ function extractTypeFromDecl(
     return item;
   }
 
+  // Check for Class Declaration (e.g. BaseMessage, HumanMessage, AIMessage from @langchain/core, PostgresSaver)
+  if (ts.isClassDeclaration(primaryDecl)) {
+    seenNames.add(symName);
+    const description = extractJsDocComment(primaryDecl, primaryDecl.getSourceFile());
+    const fields: CustomTypeField[] = [];
+    const seenFieldNames = new Set<string>();
+
+    // 1. Direct property declarations & getters in the class AST
+    for (const member of primaryDecl.members) {
+      if ((ts.isPropertyDeclaration(member) || ts.isGetAccessorDeclaration(member)) && member.name) {
+        const propName = member.name.getText(primaryDecl.getSourceFile());
+        // Skip internal symbols and private identifiers
+        if (
+          propName.startsWith("_") ||
+          propName.startsWith("[") ||
+          propName.startsWith("#") ||
+          seenFieldNames.has(propName)
+        ) {
+          continue;
+        }
+
+        const isStatic = member.modifiers?.some((m) => m.kind === ts.SyntaxKind.StaticKeyword);
+        if (isStatic) continue;
+
+        seenFieldNames.add(propName);
+        const rawType = member.type
+          ? member.type.getText(primaryDecl.getSourceFile())
+          : typeChecker
+            ? typeChecker.typeToString(typeChecker.getTypeAtLocation(member))
+            : "string";
+        const propDesc = extractJsDocComment(member, primaryDecl.getSourceFile());
+        const isArray = member.type
+          ? ts.isArrayTypeNode(member.type) || rawType.endsWith("[]")
+          : rawType.endsWith("[]");
+
+        fields.push({
+          id: `f-${symName}-${propName}`,
+          name: propName,
+          type: cleanPropertyType(rawType),
+          required: member.questionToken === undefined,
+          isArray,
+          description: propDesc,
+        });
+      }
+    }
+
+    // 2. If typeChecker is available, inspect instance type symbol properties (inherited from base classes like BaseMessage)
+    if (typeChecker) {
+      try {
+        const sym: ts.Symbol | undefined = primaryDecl.name
+          ? typeChecker.getSymbolAtLocation(primaryDecl.name)
+          : typeChecker.getSymbolAtLocation(primaryDecl);
+        if (sym) {
+          const instanceType = typeChecker.getDeclaredTypeOfSymbol(sym);
+          const allProps = instanceType.getProperties();
+          for (const prop of allProps) {
+            const pName = prop.name;
+            if (
+              pName.startsWith("_") ||
+              pName.startsWith("[") ||
+              pName.startsWith("#") ||
+              seenFieldNames.has(pName)
+            ) {
+              continue;
+            }
+            if (
+              [
+                "toJSON",
+                "toDict",
+                "toFormattedString",
+                "getType",
+                "contentBlocks",
+                "constructor",
+              ].includes(pName)
+            ) {
+              continue;
+            }
+
+            const propTypeObj = typeChecker.getTypeOfSymbolAtLocation(prop, primaryDecl);
+            if (propTypeObj.getCallSignatures().length > 0) continue; // Skip methods
+
+            seenFieldNames.add(pName);
+            const typeStr = typeChecker.typeToString(propTypeObj);
+            const pDecl = prop.declarations?.[0];
+            const pDesc = pDecl ? extractJsDocComment(pDecl, pDecl.getSourceFile()) : undefined;
+
+            fields.push({
+              id: `f-${symName}-${pName}`,
+              name: pName,
+              type: cleanPropertyType(typeStr),
+              required: true,
+              isArray: typeStr.endsWith("[]"),
+              description: pDesc,
+            });
+          }
+        }
+      } catch {}
+    }
+
+    const item: CustomTypeItem = {
+      id: `type-${trimmedPkg}-${symName}`,
+      name: symName,
+      kind: "interface",
+      description: description || `Class contract for ${symName} from ${trimmedPkg}`,
+      fields,
+      packageSource: trimmedPkg,
+      isReadOnly: true,
+      isExtendable: true,
+      rawCode: primaryDecl.getText(primaryDecl.getSourceFile()),
+    };
+    return item;
+  }
+
   return null;
 }
 
@@ -608,7 +851,25 @@ export function extractPackageTypesFromNodeModules(
     };
   }
 
-  const pkgDir = resolvePackageDirectory(trimmedPkg, projectDir);
+  const { basePkg, subpath } = parsePackageIdentifier(trimmedPkg);
+
+  let pkgDir = resolvePackageDirectory(trimmedPkg, projectDir);
+  if (
+    !pkgDir &&
+    (trimmedPkg.startsWith("@workspace/langgraph") ||
+      trimmedPkg.includes("langgraph"))
+  ) {
+    // If workspace package folder doesn't exist yet on disk, but @langchain is installed in node_modules, use node_modules
+    const lcCandidate = [
+      projectDir ? path.join(projectDir, "node_modules", "@langchain") : null,
+      path.join(process.cwd(), "apps", "web", "node_modules", "@langchain"),
+      path.join(process.cwd(), "node_modules", "@langchain"),
+    ].find((d) => d && fs.existsSync(d));
+    if (lcCandidate) {
+      pkgDir = path.dirname(lcCandidate);
+    }
+  }
+
   if (!pkgDir) {
     if (trimmedPkg === "uuid") {
       const fallbackResult: PackageTypeExtractionResult = {
@@ -629,7 +890,12 @@ export function extractPackageTypesFromNodeModules(
     };
   }
 
-  const { dtsPath, jsPath, version } = resolveDtsEntry(pkgDir, trimmedPkg, projectDir);
+  const { dtsPath, jsPath, version, subpathDtsPaths } = resolveDtsEntry(
+    pkgDir,
+    basePkg,
+    projectDir,
+    subpath,
+  );
   const targetEntryPath = dtsPath || jsPath;
 
   const cacheKey = `${trimmedPkg}@${version || "unknown"}:${projectDir || "default"}`;
@@ -643,19 +909,40 @@ export function extractPackageTypesFromNodeModules(
   const seenNames = new Set<string>();
   const seenExportNames = new Set<string>();
 
+  // Determine entry files to parse
+  const entryFiles: string[] = [];
   if (targetEntryPath && fs.existsSync(targetEntryPath)) {
+    entryFiles.push(targetEntryPath);
+  }
+
+  // If scanning @langchain/core (which has an empty root export {}), or if targetEntryPath is empty and subpaths exist, include subpaths
+  if (
+    subpathDtsPaths &&
+    subpathDtsPaths.length > 0 &&
+    (basePkg === "@langchain/core" || entryFiles.length === 0)
+  ) {
+    for (const p of subpathDtsPaths) {
+      if (!entryFiles.includes(p)) {
+        entryFiles.push(p);
+      }
+    }
+  }
+
+  if (entryFiles.length > 0) {
     try {
-      const program = ts.createProgram([targetEntryPath], {
+      const program = ts.createProgram(entryFiles, {
         allowJs: true,
         declaration: true,
         target: ts.ScriptTarget.Latest,
-        moduleResolution: ts.ModuleResolutionKind.NodeNext,
+        moduleResolution: ts.ModuleResolutionKind.Bundler,
       });
 
       const typeChecker = program.getTypeChecker();
-      const sourceFile = program.getSourceFile(targetEntryPath);
 
-      if (sourceFile) {
+      for (const filePath of entryFiles) {
+        const sourceFile = program.getSourceFile(filePath);
+        if (!sourceFile) continue;
+
         // Helper to determine kind and signature
         const recordExportSymbol = (sym: ts.Symbol, name: string, isDefault = false) => {
           if (seenExportNames.has(name) || name.startsWith("_")) return;
@@ -670,7 +957,7 @@ export function extractPackageTypesFromNodeModules(
 
           const decls = targetSym.declarations;
           const primaryDecl = decls && decls.length > 0 ? decls[0] : undefined;
-          const desc = primaryDecl ? extractJsDocComment(primaryDecl, sourceFile) : undefined;
+          const desc = primaryDecl ? extractJsDocComment(primaryDecl, primaryDecl.getSourceFile()) : undefined;
 
           let kind: PackageExportSymbol["kind"] = "function";
           let signature: string | undefined;
@@ -738,7 +1025,7 @@ export function extractPackageTypesFromNodeModules(
             if (declarations && declarations.length > 0) {
               const primaryDecl = declarations[0];
               if (primaryDecl) {
-                const item = extractTypeFromDecl(primaryDecl, symName, trimmedPkg, seenNames);
+                const item = extractTypeFromDecl(primaryDecl, symName, trimmedPkg, seenNames, typeChecker);
                 if (item) extractedTypes.push(item);
               }
             }
@@ -752,7 +1039,8 @@ export function extractPackageTypesFromNodeModules(
           if (
             (ts.isInterfaceDeclaration(stmt) ||
               ts.isTypeAliasDeclaration(stmt) ||
-              ts.isEnumDeclaration(stmt)) &&
+              ts.isEnumDeclaration(stmt) ||
+              ts.isClassDeclaration(stmt)) &&
             stmt.name
           ) {
             const symName = stmt.name.text;
@@ -761,7 +1049,7 @@ export function extractPackageTypesFromNodeModules(
               symName !== "default" &&
               !seenNames.has(symName)
             ) {
-              const item = extractTypeFromDecl(stmt, symName, trimmedPkg, seenNames);
+              const item = extractTypeFromDecl(stmt, symName, trimmedPkg, seenNames, typeChecker);
               if (item) extractedTypes.push(item);
             }
           }
@@ -785,7 +1073,72 @@ export function extractPackageTypesFromNodeModules(
     }
   }
 
-  // 3. Fallback: For packages with exports but no extracted types (or uuid), ensure types are populated
+  // 3. LangGraph Agent Package Discovery:
+  // If this is a LangGraph agent package (e.g. @workspace/langgraph-agent or folder containing LangGraph),
+  // automatically discover and read all installed dependencies inside node_modules/@langchain (core, langgraph, langgraph-checkpoint-postgres)
+  const isLangGraphPackage =
+    !trimmedPkg.startsWith("@langchain/") &&
+    (trimmedPkg.startsWith("@workspace/langgraph") ||
+      trimmedPkg.startsWith("@workspace/") ||
+      (pkgDir.toLowerCase().includes("langgraph") && !pkgDir.includes("@langchain")));
+
+  if (isLangGraphPackage) {
+    const langchainCandidateDirs: string[] = [
+      path.join(pkgDir, "@langchain"),
+      path.join(pkgDir, "node_modules", "@langchain"),
+      path.join(process.cwd(), "apps", "web", "node_modules", "@langchain"),
+      path.join(process.cwd(), "node_modules", "@langchain"),
+    ];
+    if (projectDir) {
+      langchainCandidateDirs.unshift(path.join(projectDir, "node_modules", "@langchain"));
+      // Check subproject folders like projectDir/langgraph/*/node_modules/@langchain
+      for (const sub of ["langgraph", "packages/langgraph"]) {
+        const subRoot = path.join(projectDir, sub);
+        if (fs.existsSync(subRoot)) {
+          try {
+            const entries = fs.readdirSync(subRoot, { withFileTypes: true });
+            for (const entry of entries) {
+              if (entry.isDirectory() || entry.isSymbolicLink()) {
+                langchainCandidateDirs.unshift(path.join(subRoot, entry.name, "node_modules", "@langchain"));
+              }
+            }
+          } catch {}
+        }
+      }
+    }
+
+    for (const lcDir of langchainCandidateDirs) {
+      if (fs.existsSync(lcDir)) {
+        try {
+          const pkgs = fs.readdirSync(lcDir, { withFileTypes: true });
+          for (const pkgEntry of pkgs) {
+            if (!(pkgEntry.isDirectory() || pkgEntry.isSymbolicLink())) continue;
+            const fullPkgName = `@langchain/${pkgEntry.name}`;
+            const subRes = extractPackageTypesFromNodeModules(fullPkgName, projectDir);
+            if (subRes.installed && subRes.types.length > 0) {
+              for (const t of subRes.types) {
+                if (!seenNames.has(t.name)) {
+                  seenNames.add(t.name);
+                  extractedTypes.push(t);
+                }
+              }
+              if (subRes.exports) {
+                for (const e of subRes.exports) {
+                  if (!seenExportNames.has(e.name)) {
+                    seenExportNames.add(e.name);
+                    extractedExports.push(e);
+                  }
+                }
+              }
+            }
+          }
+        } catch {}
+        break;
+      }
+    }
+  }
+
+  // 4. Fallback: For packages with exports but no extracted types (or uuid), ensure types are populated
   if (trimmedPkg === "uuid") {
     for (const b of UUID_BUILTIN_TYPES) {
       if (!extractedTypes.some((t) => t.name === b.name)) {
@@ -801,8 +1154,8 @@ export function extractPackageTypesFromNodeModules(
         name: exp.name,
         kind: exp.kind === "function" ? "function" : "type",
         description: exp.description || `Exported ${exp.kind} ${exp.name} from ${trimmedPkg}`,
-        returnType: exp.kind === "function" ? (exp.signature || "any") : undefined,
-        typeAliasValue: exp.kind !== "function" ? (exp.signature || "any") : undefined,
+        returnType: exp.kind === "function" ? (exp.signature || "string") : undefined,
+        typeAliasValue: exp.kind !== "function" ? (exp.signature || "string") : undefined,
         packageSource: trimmedPkg,
         isReadOnly: true,
         isExtendable: true,

@@ -834,9 +834,10 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
           ),
         ]);
 
-        // 2. Execute all upserts after removals have completed
-        await Promise.all([
-          ...uniqueNodesToSync.map((n) => {
+        // 2a. Execute all node upserts first so source & target nodes are committed in Convex before edges reference them
+        const failedNodeIds = new Set<string>();
+        await Promise.all(
+          uniqueNodesToSync.map(async (n) => {
             let position = n.position;
 
             let cleanStyle:
@@ -868,18 +869,30 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
 
             const finalData = sanitizeForConvex(baseData) as typeof baseData;
 
-            return upsertNode({
-              projectId: pid,
-              nodeId: n.id,
-              type: n.type,
-              position: position,
-              data: finalData,
-              fractionalIndex: n.fractionalIndex,
-            }).catch((err) => {
+            try {
+              await upsertNode({
+                projectId: pid,
+                nodeId: n.id,
+                type: n.type,
+                position: position,
+                data: finalData,
+                fractionalIndex: n.fractionalIndex,
+              });
+            } catch (err) {
+              failedNodeIds.add(n.id);
               console.warn(`[useBackendSync] Error upserting node ${n.id}:`, err);
-            });
+            }
           }),
-          ...uniqueEdgesToSync.map((e) =>
+        );
+
+        // Filter out edges whose source or target node failed to upsert to avoid SOURCE_NODE_NOT_FOUND
+        const validEdgesToSync = uniqueEdgesToSync.filter(
+          (e) => !failedNodeIds.has(e.source) && !failedNodeIds.has(e.target),
+        );
+
+        // 2b. Execute edges, endpoints, events, and identity provider upserts after nodes are saved
+        await Promise.all([
+          ...validEdgesToSync.map((e) =>
             upsertEdge({
               projectId: pid,
               edgeId: e.id,

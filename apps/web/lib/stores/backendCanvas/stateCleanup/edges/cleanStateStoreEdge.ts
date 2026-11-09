@@ -1,4 +1,4 @@
-import { BackendEdge } from "@/types/canvas";
+import { BackendEdge, CustomTypeItem } from "@/types/canvas";
 import { EdgeCleanupContext } from "../types";
 
 /**
@@ -29,11 +29,27 @@ export function cleanStateStoreEdge(
         }
 
         if (isTypeEdge) {
-          // Disconnected custom type from state object - reset type to primitive/any
+          // Disconnected custom type from state object
+          const targetState = section.stateObjects.find((st) => st.id === stateId);
+          const cleanStateType = (targetState?.type || "string").replace(/\[\]$/, "").trim();
+          const sourceNode = ctx.nextNodes.find((n) => n.id === edge.source);
+          const matchedTypeItem = sourceNode?.data?.types?.find(
+            (t) => `type-out-${t.id}` === edge.sourceHandle || t.name === edge.data?.baseTypeName,
+          );
+          const edgeTypeName = edge.data?.baseTypeName || edge.data?.label || matchedTypeItem?.name;
+          const hasRemainingEdge = ctx.nextEdges.some(
+            (e) => !ctx.removedSet.has(e.id) && e.id !== edge.id && e.target === edge.target && e.targetHandle === edge.targetHandle,
+          );
+
+          // If another edge is still connected or if the state object's type was already changed to something else, do not overwrite it
+          if (hasRemainingEdge || (edgeTypeName && cleanStateType.toLowerCase() !== edgeTypeName.toLowerCase())) {
+            return section;
+          }
+
           const updatedStates = section.stateObjects.map((st) => {
             if (st.id === stateId) {
               const isArray = st.type?.endsWith("[]");
-              return { ...st, type: isArray ? "any[]" : "any" };
+              return { ...st, type: isArray ? "string[]" : "string" };
             }
             return st;
           });
@@ -89,6 +105,32 @@ export function cleanStateStoreEdge(
     const fieldId = edge.targetHandle.replace("store-field-in-", "");
     const storeNode = ctx.nextNodes.find((n) => n.id === edge.target);
     if (storeNode?.data?.fields && Array.isArray(storeNode.data.fields)) {
+      const targetField = storeNode.data.fields.find((f) => f.id === fieldId);
+      if (!targetField) return;
+
+      const cleanFieldType = (targetField.type || "string").replace(/\[\]$/, "").trim();
+
+      // Find the type name associated with this deleted edge
+      const sourceNode = ctx.nextNodes.find((n) => n.id === edge.source);
+      const matchedTypeItem = sourceNode?.data?.types?.find(
+        (t) => `type-out-${t.id}` === edge.sourceHandle || t.name === edge.data?.baseTypeName,
+      );
+      const edgeTypeName = edge.data?.baseTypeName || edge.data?.label || matchedTypeItem?.name;
+
+      // Check if there is still an active edge pointing to this field handle
+      const hasRemainingEdge = ctx.nextEdges.some(
+        (e) => !ctx.removedSet.has(e.id) && e.id !== edge.id && e.target === edge.target && e.targetHandle === edge.targetHandle,
+      );
+
+      // If another edge is still connected, or if the field's current type does NOT match the deleted edge
+      // (which happens when the user selected a new type in the dropdown and this old edge is just stale),
+      // DO NOT reset the field's type!
+      if (hasRemainingEdge) return;
+      if (edgeTypeName && cleanFieldType.toLowerCase() !== edgeTypeName.toLowerCase()) {
+        return;
+      }
+
+      // If the user genuinely deleted the connecting type edge from canvas, reset to string (or string[])
       let storeChanged = false;
       const newFields = storeNode.data.fields.map((f) => {
         if (f.id === fieldId) {
@@ -96,7 +138,7 @@ export function cleanStateStoreEdge(
           const isArray = f.isArray || f.type?.endsWith("[]");
           return {
             ...f,
-            type: isArray ? "any[]" : "any",
+            type: isArray ? "string[]" : "string",
           };
         }
         return f;

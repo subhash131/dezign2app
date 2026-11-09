@@ -70,6 +70,13 @@ export const typesNodeDataSchema = baseNodeDataSchema
     sourceServiceName: z.string().optional(),
     isServiceEndpointSchemas: z.boolean().optional(),
     serviceUpdatedAt: z.number().optional(),
+
+    // LangGraph-derived type synchronization tracking
+    targetLangGraphId: z.string().optional(),
+    sourceLangGraphId: z.string().optional(),
+    sourceLangGraphName: z.string().optional(),
+    isLangGraphPackage: z.boolean().optional(),
+    langGraphUpdatedAt: z.number().optional(),
   })
   .passthrough();
 

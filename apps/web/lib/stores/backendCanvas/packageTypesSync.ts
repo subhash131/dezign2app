@@ -103,17 +103,27 @@ export async function refreshPackageTypesFromNodeModules(
   if (!currentNode) return false;
 
   if (result.installed) {
+    const existingTypes: CustomTypeItem[] = Array.isArray(currentNode.data?.types)
+      ? currentNode.data.types
+      : [];
+    const mergedTypes = [...result.types];
+    for (const ext of existingTypes) {
+      if (!mergedTypes.some((t) => t.name === ext.name)) {
+        mergedTypes.push(ext);
+      }
+    }
+
     useBackendCanvasStore.getState().updateNode(typesNodeId, {
       data: {
         ...currentNode.data,
         label: currentNode.data.label || pkg,
         isInstalled: true,
         installError: undefined,
-        types: result.types,
+        types: mergedTypes,
         packageVersion: result.version,
       },
     });
-    if (result.types.length > 0) {
+    if (mergedTypes.length > 0) {
       toast.success(`Inferred ${result.types.length} types from ${pkg} in node_modules`);
     } else {
       toast.success(`Package "${pkg}" detected in node_modules`);

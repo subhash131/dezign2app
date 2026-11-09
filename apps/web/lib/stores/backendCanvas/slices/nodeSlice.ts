@@ -14,6 +14,8 @@ import {
   isNodeDerivedFromService,
   buildServiceTypesNodeAndEdge,
   syncServiceTypesNode,
+  isNodeDerivedFromLangGraph,
+  buildLangGraphTypesNodeAndEdge,
 } from "../node";
 
 export interface NodeSlice {
@@ -364,6 +366,34 @@ export const createNodeSlice = (
         const companionRes = buildServiceTypesNodeAndEdge(
           updated,
           serviceEndpoints,
+          nextNodes,
+          edgeSync.edgesChanged ? edgeSync.nextEdges : get().edges,
+        );
+        nextNodes = nextNodes.map((n) =>
+          n.id === companionRes.typesNode.id ? companionRes.typesNode : n,
+        );
+        update.nodes = nextNodes;
+        update.pendingNodeUpserts = [
+          ...(update.pendingNodeUpserts || []),
+          companionRes.typesNode,
+        ];
+      }
+    }
+
+    // 4. Synchronize LangGraph label or channel changes to companion TypesNode
+    if (
+      updated.type === "langgraph" &&
+      effectiveChanges.data &&
+      ("label" in effectiveChanges.data ||
+        "stateChannels" in effectiveChanges.data ||
+        "inputChannels" in effectiveChanges.data)
+    ) {
+      const companionNode = nextNodes.find(
+        (n) => n.type === "types" && isNodeDerivedFromLangGraph(n, id),
+      );
+      if (companionNode) {
+        const companionRes = buildLangGraphTypesNodeAndEdge(
+          updated,
           nextNodes,
           edgeSync.edgesChanged ? edgeSync.nextEdges : get().edges,
         );

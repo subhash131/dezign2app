@@ -19,6 +19,7 @@ import {
   buildCompanionTypesNodeAndEdge,
 } from "./nodeEntitySync";
 import { buildServiceTypesNodeAndEdge } from "./serviceEndpointTypesSync";
+import { buildLangGraphTypesNodeAndEdge } from "./langGraphTypesSync";
 import { createDefaultHealthEndpoint } from "@/lib/utils/healthCheckEndpoint";
 
 /**
@@ -409,6 +410,31 @@ export function prepareNodeForAddition(
     if (!nextEdges.some((e) => e.id === serviceCompanionRes.typesEdge.id)) {
       nextEdges = [...nextEdges, serviceCompanionRes.typesEdge];
       nextPendingEdges = [...nextPendingEdges, serviceCompanionRes.typesEdge];
+    }
+  }
+
+  // 8.5 Auto-generate companion TypesNode for LangGraph if not skipped
+  if (node.type === "langgraph" && !node.data?.skipTypesNode) {
+    const lgCompanionRes = buildLangGraphTypesNodeAndEdge(
+      node,
+      nextNodes,
+      nextEdges,
+    );
+    if (lgCompanionRes.isExistingNode) {
+      nextNodes = nextNodes.map((n) =>
+        n.id === lgCompanionRes.typesNode.id ? lgCompanionRes.typesNode : n,
+      );
+      nextPendingNodes = [
+        ...nextPendingNodes.filter((n) => n.id !== lgCompanionRes.typesNode.id),
+        lgCompanionRes.typesNode,
+      ];
+    } else {
+      nextNodes = [...nextNodes, lgCompanionRes.typesNode];
+      nextPendingNodes = [...nextPendingNodes, lgCompanionRes.typesNode];
+    }
+    if (!nextEdges.some((e) => e.id === lgCompanionRes.typesEdge.id)) {
+      nextEdges = [...nextEdges, lgCompanionRes.typesEdge];
+      nextPendingEdges = [...nextPendingEdges, lgCompanionRes.typesEdge];
     }
   }
 

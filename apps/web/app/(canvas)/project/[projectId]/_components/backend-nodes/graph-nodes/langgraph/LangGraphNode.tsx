@@ -28,6 +28,7 @@ import type {
 import { cn } from "@workspace/ui/lib/utils";
 import {
   CANVAS_HANDLE_CLASS,
+  CANVAS_HANDLE_LEFT_OFFSET_CLASS,
   CANVAS_HANDLE_RIGHT_OFFSET_CLASS,
 } from "@workspace/canvas/constants";
 import { Button } from "@workspace/ui/components/button";
@@ -386,7 +387,7 @@ export const LangGraphNode = React.memo(({
       <div className="px-3 py-1 bg-muted/20 border-b flex items-center gap-1.5 text-[10px] text-muted-foreground">
         <ShieldCheck className="w-3 h-3 text-primary shrink-0" />
         <span className="truncate">
-          {inputChannels.length} inputs · {(graphSteps.length || 0) + ((data.agentDefinitions as unknown[])?.length || 0)} steps ·{" "}
+          {inputChannels.length} inputs · {(graphSteps.length || 0) + (data.agentDefinitions?.length || 0)} steps ·{" "}
           {stateChannels.length} state fields
           {connectedRoutesCount > 0 && (
             <> · <span className="text-primary font-semibold">{connectedRoutesCount} routes</span></>
@@ -394,6 +395,20 @@ export const LangGraphNode = React.memo(({
         </span>
       </div>
 
+
+      {/* Types Reference Target Handle (Left) */}
+      <Handle
+        type="target"
+        position={Position.Left}
+        id="types-in"
+        className={cn(
+          CANVAS_HANDLE_CLASS,
+          CANVAS_HANDLE_LEFT_OFFSET_CLASS,
+          "!bg-indigo-400 rounded-full border-2 border-background opacity-0 group-hover:opacity-100 transition-all hover:scale-125",
+        )}
+        style={{ top: "35px" }}
+        title="Types contract reference"
+      />
 
       {/* Outbound source handle on right feeding into ServiceNode endpoint-in */}
       <Handle
@@ -496,37 +511,42 @@ export const LangGraphNode = React.memo(({
         {/* Steps mini-list */}
         <div className="flex flex-wrap gap-1.5">
           {[
-            ...graphSteps,
-            ...((data.agentDefinitions as Array<{ id?: string; agentId?: string; name?: string; stateUpdates?: unknown[] }>) || []).map((ag) => ({
+            ...graphSteps.map((step) => ({
+              id: step.id,
+              name: step.name,
+              hasUpdates: Boolean(
+                step.stateUpdates &&
+                  ((Array.isArray(step.stateUpdates) && step.stateUpdates.length > 0) ||
+                    (!Array.isArray(step.stateUpdates) && Object.keys(step.stateUpdates).length > 0)),
+              ),
+            })),
+            ...(data.agentDefinitions || []).map((ag) => ({
               id: ag.id || ag.agentId || "agentNode",
               name: ag.name || "agentNode",
-              stateUpdates: ag.stateUpdates || [],
+              hasUpdates: Boolean(ag.stateUpdates && ag.stateUpdates.length > 0),
             })),
-          ].slice(0, 4).map((step: { id?: string; name?: string; stateUpdates?: unknown[] }, idx: number) => {
-            const hasUpdates = Boolean(
-              step.stateUpdates && step.stateUpdates.length > 0,
-            );
+          ].slice(0, 4).map((step, idx) => {
             const stepKey = step.id?.trim() ? `step-${step.id}-${idx}` : `step-empty-${idx}`;
             return (
               <span
                 key={stepKey}
                 className={cn(
                   "text-[10px] px-2 py-0.5 rounded-md border font-mono flex items-center gap-1",
-                  hasUpdates
+                  step.hasUpdates
                     ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
                     : "bg-secondary text-foreground border-border/50",
                 )}
               >
                 {step.name || step.id || `Step ${idx + 1}`}
-                {hasUpdates && (
+                {step.hasUpdates && (
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
                 )}
               </span>
             );
           })}
-          {(graphSteps.length + ((data.agentDefinitions as unknown[])?.length || 0)) > 4 && (
+          {(graphSteps.length + (data.agentDefinitions?.length || 0)) > 4 && (
             <span className="text-[10px] px-2 py-0.5 rounded-md bg-secondary/40 text-muted-foreground border border-border/50 font-mono">
-              +{(graphSteps.length + ((data.agentDefinitions as unknown[])?.length || 0)) - 4} more
+              +{(graphSteps.length + (data.agentDefinitions?.length || 0)) - 4} more
             </span>
           )}
         </div>
