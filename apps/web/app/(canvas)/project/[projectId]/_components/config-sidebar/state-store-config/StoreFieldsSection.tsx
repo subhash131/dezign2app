@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useCallback, useEffect } from "react";
+import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { Label } from "@workspace/ui/components/label";
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
@@ -57,41 +57,18 @@ import {
   getSuggestedReducerCodeForChannelType,
   extractActionsFromReducerCode,
   generateSchemaAwareReducerCode,
+  generateSchemaAwareArrayReducerCode,
+  isReducerCodeCompatibleWithType,
   REDUCER_CODE_PRESETS,
+  getAvailableCustomTypes,
+  resolveCustomType,
+  extractFieldsFromCustomType,
 } from "../../backend-nodes/graph-nodes/langgraph/langgraph-canvas/components/inspector/state-inspector/constants";
 import { getSupportedActionsForType } from "../../backend-nodes/graph-nodes/nodes/frontend/StateStoreNode";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 
 export const STRING_REDUCER_PRESETS = {
-  standard: `(prev, next) => {
-  const current = typeof prev === "string" ? prev : "";
-  const action = typeof next === "object" && next !== null && "action" in next ? next.action : undefined;
-
-  // 1. Default update: set / replace
-  if (!action || action === "" || action === "default" || action === "set") {
-    const raw = typeof next === "object" && next !== null && "value" in next ? next.value : next;
-    return raw !== undefined ? String(raw) : current;
-  }
-
-  // 2. Action: append - appends incoming string
-  if (action === "append") {
-    const raw = next?.value !== undefined ? next.value : next;
-    return current + (raw !== undefined ? String(raw) : "");
-  }
-
-  // 3. Action: prepend - prepends incoming string
-  if (action === "prepend") {
-    const raw = next?.value !== undefined ? next.value : next;
-    return (raw !== undefined ? String(raw) : "") + current;
-  }
-
-  // 4. Action: reset / clear
-  if (action === "reset" || action === "clear") {
-    return "";
-  }
-
-  return current;
-}`,
+  standard: REDUCER_CODE_PRESETS.string,
   replace: `(prev, next) => {
   const raw = typeof next === "object" && next !== null && "value" in next ? next.value : next;
   return raw !== undefined ? String(raw) : (prev ?? "");
@@ -206,16 +183,21 @@ const StoreVariableCard = React.memo(function StoreVariableCard({
   const isArray = Boolean(field.isArray || field.type?.endsWith("[]"));
   const baseType = (field.type || "string").replace(/\[\]$/, "").trim();
   const matchedCustomType = useMemo(
-    () => availableCustomTypes.find((t) => t.name === baseType),
-    [availableCustomTypes, baseType],
+    () =>
+      resolveCustomType({
+        availableTypes: availableCustomTypes,
+        typeName: baseType,
+        typeId: field.customTypeId,
+      }),
+    [availableCustomTypes, baseType, field.customTypeId],
   );
 
   const reducerName = field.reducer || `${field.name || "state"}_reducer`;
 
-  // Compute recommended code for this field type & schema
+  // Compute recommended code dynamically for this field type, schema & array status
   const recommendedCode = useMemo(() => {
-    return getSuggestedReducerCodeForChannelType(baseType, matchedCustomType);
-  }, [baseType, matchedCustomType]);
+    return getSuggestedReducerCodeForChannelType(field.type, matchedCustomType, isArray);
+  }, [field.type, matchedCustomType, isArray]);
 
   const currentCode = field.customReducerCode || recommendedCode;
 
@@ -230,6 +212,51 @@ const StoreVariableCard = React.memo(function StoreVariableCard({
     setCopied(true);
     setTimeout(() => setCopied(false), 1800);
   }, [currentCode]);
+
+  // Auto-migrate legacy, empty, or type-mismatched reducer code to the dynamically generated template
+  const prevTypeRef = useRef(field.type);
+  const prevIsArrayRef = useRef(isArray);
+
+  useEffect(() => {
+    const typeChanged =
+      prevTypeRef.current !== field.type || prevIsArrayRef.current !== isArray;
+    prevTypeRef.current = field.type;
+    prevIsArrayRef.current = isArray;
+
+    const raw = field.customReducerCode;
+    const isLegacyOrEmpty = !raw || !raw.trim() || !raw.includes("action");
+    const isTypeMismatch = Boolean(
+      raw && !isReducerCodeCompatibleWithType(raw, field.type, isArray),
+    );
+    const isGenericOnTypedSchema = Boolean(
+      matchedCustomType &&
+        !isArray &&
+        (!raw ||
+          raw === REDUCER_CODE_PRESETS.object ||
+          !raw.includes("Initial shape guaranteed by type schema")),
+    );
+    const isSchemaMismatch = Boolean(
+      matchedCustomType &&
+        !isArray &&
+        raw &&
+        raw.includes("Initial shape guaranteed by type schema") &&
+        extractFieldsFromCustomType(matchedCustomType).some((f) => !raw.includes(`${f.name}:`)),
+    );
+
+    if (typeChanged || isLegacyOrEmpty || isTypeMismatch || isGenericOnTypedSchema || isSchemaMismatch) {
+      const suggested = getSuggestedReducerCodeForChannelType(
+        field.type,
+        matchedCustomType,
+        isArray,
+      );
+      const standardActions = getSupportedActionsForType(field.type, isArray);
+      onUpdateField(field.id, {
+        customReducerCode: suggested,
+        actions: standardActions,
+        customTypeId: matchedCustomType?.id || field.customTypeId,
+      });
+    }
+  }, [field.id, field.type, isArray, field.customReducerCode, matchedCustomType, onUpdateField]);
 
   // Auto-detect action types from reducer code + type defaults
   const detectedActions = useMemo(() => {
@@ -252,49 +279,81 @@ const StoreVariableCard = React.memo(function StoreVariableCard({
   );
 
   const handleTypeChange = useCallback(
-    (selectedBase: string) => {
+    (selectedBase: string, selectedTypeItem?: CustomTypeItem, groupId?: string) => {
       const cleanBase = selectedBase.replace(/\[\]$/, "").trim();
-      const newType = isArray ? `${cleanBase}[]` : cleanBase;
-      const customMatch = availableCustomTypes.find((t) => t.name === cleanBase);
-      const newActions = getSupportedActionsForType(newType, isArray);
-      const newSuggestedCode = getSuggestedReducerCodeForChannelType(cleanBase, customMatch);
+      const targetIsArray = isArray || cleanBase === "array";
+      const newType = targetIsArray ? (cleanBase === "array" ? "array" : `${cleanBase}[]`) : cleanBase;
+      const customMatch =
+        selectedTypeItem ||
+        resolveCustomType({
+          availableTypes: availableCustomTypes,
+          typeName: cleanBase,
+          typeId: field.customTypeId,
+        });
+      const newActions = getSupportedActionsForType(newType, targetIsArray);
+      const newSuggestedCode = getSuggestedReducerCodeForChannelType(
+        newType,
+        customMatch,
+        targetIsArray,
+      );
 
       const patch: Partial<GlobalStoreField> = {
         type: newType,
-        isArray,
+        isArray: targetIsArray,
         actions: newActions,
         customReducerCode: newSuggestedCode,
+        customTypeId: customMatch?.id,
+        customTypeGroupId: groupId,
       };
 
-      if (customMatch && !isArray && (field.defaultValue === "" || field.defaultValue === undefined)) {
+      if (customMatch && !targetIsArray && (field.defaultValue === "" || field.defaultValue === undefined)) {
         patch.defaultValue = null;
+      } else if (targetIsArray && (field.defaultValue === "" || field.defaultValue === undefined || field.defaultValue === null)) {
+        patch.defaultValue = [];
       }
 
       onUpdateField(field.id, patch);
     },
-    [field.id, field.defaultValue, isArray, availableCustomTypes, onUpdateField],
+    [field.id, field.defaultValue, field.customTypeId, isArray, availableCustomTypes, onUpdateField],
   );
 
   const handleToggleArray = useCallback(() => {
     if (isArray) {
-      const newActions = getSupportedActionsForType(baseType, false);
+      const newType = baseType === "array" ? "string" : baseType;
+      const customMatch = resolveCustomType({
+        availableTypes: availableCustomTypes,
+        typeName: newType,
+        typeId: field.customTypeId,
+      });
+      const newActions = getSupportedActionsForType(newType, false);
+      const newSuggestedCode = getSuggestedReducerCodeForChannelType(newType, customMatch, false);
       onUpdateField(field.id, {
-        type: baseType,
+        type: newType,
         isArray: false,
-        defaultValue: undefined,
+        defaultValue: customMatch ? null : "",
         actions: newActions,
+        customReducerCode: newSuggestedCode,
+        customTypeId: customMatch?.id || field.customTypeId,
       });
     } else {
-      const newType = `${baseType}[]`;
+      const newType = baseType === "array" ? "array" : `${baseType}[]`;
+      const customMatch = resolveCustomType({
+        availableTypes: availableCustomTypes,
+        typeName: baseType,
+        typeId: field.customTypeId,
+      });
       const newActions = getSupportedActionsForType(newType, true);
+      const newSuggestedCode = getSuggestedReducerCodeForChannelType(newType, customMatch, true);
       onUpdateField(field.id, {
         type: newType,
         isArray: true,
         defaultValue: [],
         actions: newActions,
+        customReducerCode: newSuggestedCode,
+        customTypeId: customMatch?.id || field.customTypeId,
       });
     }
-  }, [field.id, isArray, baseType, onUpdateField]);
+  }, [field.id, field.customTypeId, isArray, baseType, availableCustomTypes, onUpdateField]);
 
   const defaultString = useMemo(() => {
     if (field.defaultValue === undefined || field.defaultValue === null) {
@@ -493,6 +552,8 @@ const StoreVariableCard = React.memo(function StoreVariableCard({
             </Label>
             <TwoStepTypeSelector
               value={baseType}
+              selectedTypeId={field.customTypeId}
+              selectedGroupId={field.customTypeGroupId}
               onValueChange={handleTypeChange}
               allNodes={allNodes}
               className="flex-1"
@@ -724,6 +785,17 @@ const StoreVariableCard = React.memo(function StoreVariableCard({
 
                   {isArray && (
                     <>
+                      {matchedCustomType ? (
+                        <button
+                          type="button"
+                          onClick={() => handleApplyPreset(generateSchemaAwareArrayReducerCode(matchedCustomType))}
+                          className="text-[8.5px] px-2 py-0.5 rounded bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 font-mono transition-colors cursor-pointer border border-cyan-500/40 font-semibold flex items-center gap-1"
+                          title={`Type-safe array reducer generated from ${matchedCustomType.name} schema`}
+                        >
+                          <Braces size={9} />
+                          <span>⚡ Type-Safe Array ({matchedCustomType.name}[])</span>
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         onClick={() => handleApplyPreset(ARRAY_REDUCER_PRESETS.standard)}
@@ -979,7 +1051,18 @@ const StoreVariableCard = React.memo(function StoreVariableCard({
                           </div>
                         )}
                         {isArray && (
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {matchedCustomType ? (
+                              <button
+                                type="button"
+                                onClick={() => handleApplyPreset(generateSchemaAwareArrayReducerCode(matchedCustomType))}
+                                className="text-[9px] px-2 py-0.5 rounded bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 font-mono transition-colors cursor-pointer border border-cyan-500/40 font-semibold flex items-center gap-1"
+                                title={`Type-safe array reducer generated from ${matchedCustomType.name} schema`}
+                              >
+                                <Braces size={9} />
+                                <span>⚡ Type-Safe Array ({matchedCustomType.name}[])</span>
+                              </button>
+                            ) : null}
                             <button
                               type="button"
                               onClick={() => handleApplyPreset(ARRAY_REDUCER_PRESETS.standard)}
@@ -1097,17 +1180,7 @@ export const StoreFieldsSection: React.FC<StoreFieldsSectionProps> = ({
   const allNodes = useBackendCanvasStore((s) => s.nodes);
 
   const availableCustomTypes = useMemo(() => {
-    const types: CustomTypeItem[] = [];
-    allNodes.forEach((n) => {
-      if (n.type === "types" && n.data?.types) {
-        n.data.types.forEach((t: CustomTypeItem) => {
-          if (t && t.name && !types.some((existing) => existing.id === t.id)) {
-            types.push(t);
-          }
-        });
-      }
-    });
-    return types;
+    return getAvailableCustomTypes(allNodes);
   }, [allNodes]);
 
   const duplicateFieldNames = useMemo(() => {

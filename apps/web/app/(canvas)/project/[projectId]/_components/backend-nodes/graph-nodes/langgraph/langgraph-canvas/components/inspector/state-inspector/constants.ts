@@ -101,28 +101,65 @@ export const REDUCER_CODE_PRESETS = {
   return prevArr;
 }`,
   array: `(prev, next) => {
-  const action = typeof next === "object" && next !== null && "action" in next ? next.action : undefined;
+  const action = typeof next === "object" && next !== null && "action" in next ? next.action : next?.action;
   const prevArr = Array.isArray(prev) ? prev : [];
 
-  // 1. Default update: when action is undefined, "", or "default" (appends items)
-  // e.g. dispatch { items: [newItem] } or { items: newItem }
-  if (!action || action === "" || action === "default") {
-    const incoming = typeof next === "object" && next !== null && "value" in next && next.value !== undefined ? next.value : next;
-    const nextArr = Array.isArray(incoming) ? incoming : (incoming != null ? [incoming] : []);
-    return [...prevArr, ...nextArr];
-  }
-
-  // 2. Action: replace - overwrites entire array
-  // e.g. dispatch { items: { action: "replace", value: [1, 2, 3] } }
-  if (action === "replace") {
-    const incoming = typeof next === "object" && next !== null && "value" in next && next.value !== undefined ? next.value : next;
-    return Array.isArray(incoming) ? incoming : (incoming != null ? [incoming] : []);
-  }
-
-  // 3. Action: reset / clear - empties array
+  // 1. Action: reset / clear - empties array
   // e.g. dispatch { items: { action: "reset" } }
   if (action === "reset" || action === "clear") {
     return [];
+  }
+
+  const rawValue = typeof next === "object" && next !== null && "value" in next && next.value !== undefined ? next.value : next;
+
+  // 2. Action: replace / set - overwrites entire array
+  // e.g. dispatch { items: { action: "replace", value: [1, 2, 3] } }
+  if (action === "replace" || action === "set") {
+    return Array.isArray(rawValue) ? rawValue : (rawValue != null ? [rawValue] : []);
+  }
+
+  // 3. Action: append / add - appends items
+  // e.g. dispatch { items: { action: "append", value: newItem } }
+  if (action === "append" || action === "add") {
+    const nextArr = Array.isArray(rawValue) ? rawValue : (rawValue != null ? [rawValue] : []);
+    return [...prevArr, ...nextArr];
+  }
+
+  // 4. Action: prepend - adds items to front
+  // e.g. dispatch { items: { action: "prepend", value: newItem } }
+  if (action === "prepend") {
+    const nextArr = Array.isArray(rawValue) ? rawValue : (rawValue != null ? [rawValue] : []);
+    return [...nextArr, ...prevArr];
+  }
+
+  // 5. Action: pop - removes last element
+  // e.g. dispatch { items: { action: "pop" } }
+  if (action === "pop") {
+    return prevArr.slice(0, -1);
+  }
+
+  // 6. Action: remove / filter - removes by id or index or value
+  // e.g. dispatch { items: { action: "remove", id: "123" } }
+  if (action === "remove" || action === "filter") {
+    const target = typeof next === "object" && next !== null && "id" in next
+      ? next.id
+      : (typeof next === "object" && next !== null && "index" in next
+        ? next.index
+        : rawValue);
+    return prevArr.filter((item, idx) => {
+      if (typeof item === "object" && item !== null && "id" in item) {
+        return item.id !== target;
+      }
+      return idx !== target && item !== target;
+    });
+  }
+
+  // 7. Default update: when action is undefined, "", or "default" (appends items or replaces if array)
+  // e.g. dispatch { items: [newItem] } or { items: newItem }
+  if (!action || action === "" || action === "default") {
+    if (Array.isArray(rawValue)) return rawValue;
+    const hasItem = rawValue != null && (typeof rawValue !== "object" || Object.keys(rawValue).length > 0);
+    return hasItem ? [...prevArr, rawValue] : prevArr;
   }
 
   return prevArr;
@@ -158,7 +195,7 @@ export const REDUCER_CODE_PRESETS = {
 }`,
   number: `(prev, next) => {
   const current = typeof prev === "number" && !Number.isNaN(prev) ? prev : 0;
-  const action = typeof next === "object" && next !== null && "action" in next ? next.action : undefined;
+  const action = typeof next === "object" && next !== null && "action" in next ? next.action : next?.action;
 
   // Extract raw incoming value
   const rawValue = typeof next === "object" && next !== null && "value" in next
@@ -242,7 +279,7 @@ export const REDUCER_CODE_PRESETS = {
 }`,
   string: `(prev, next) => {
   const current = typeof prev === "string" ? prev : "";
-  const action = typeof next === "object" && next !== null && "action" in next ? next.action : undefined;
+  const action = typeof next === "object" && next !== null && "action" in next ? next.action : next?.action;
 
   // Extract raw incoming string
   const rawValue = typeof next === "object" && next !== null && "value" in next
@@ -250,9 +287,9 @@ export const REDUCER_CODE_PRESETS = {
     : next;
   const incoming = rawValue !== undefined && rawValue !== null ? String(rawValue) : "";
 
-  // 1. Default update: replaces current string with incoming value (last-value-wins)
-  // e.g. dispatch { message: "hello" }
-  if (!action || action === "" || action === "default" || action === "replace" || action === "set") {
+  // 1. Action: replace / set - explicitly replaces current string
+  // e.g. dispatch { notes: { action: "replace", value: "new text" } }
+  if (action === "replace" || action === "set") {
     return incoming;
   }
 
@@ -274,6 +311,13 @@ export const REDUCER_CODE_PRESETS = {
   // e.g. dispatch { notes: { action: "reset" } }
   if (action === "reset" || action === "clear") {
     return "";
+  }
+
+  // 5. Default update: concats incoming text directly (with optional separator)
+  // e.g. dispatch { message: " second" }
+  if (!action || action === "" || action === "default") {
+    const sep = typeof next === "object" && next !== null && "separator" in next && next.separator !== undefined ? String(next.separator) : "";
+    return current ? \`\${current}\${sep}\${incoming}\` : incoming;
   }
 
   return current;
@@ -374,10 +418,25 @@ export function extractFieldsFromCustomType(
  */
 export function getDefaultValueForField(field: CustomTypeField): string {
   if (field.defaultValue !== undefined && field.defaultValue !== "") {
-    return field.defaultValue;
+    const raw = String(field.defaultValue);
+    if (
+      (raw.startsWith('"') && raw.endsWith('"')) ||
+      (raw.startsWith("'") && raw.endsWith("'")) ||
+      raw === "true" ||
+      raw === "false" ||
+      !Number.isNaN(Number(raw)) ||
+      raw.startsWith("{") ||
+      raw.startsWith("[")
+    ) {
+      return raw;
+    }
+    return JSON.stringify(raw);
   }
   if (field.required === false) {
     return "undefined";
+  }
+  if (Array.isArray(field.enumValues) && field.enumValues.length > 0) {
+    return JSON.stringify(field.enumValues[0]);
   }
   const t = (field.type || "string").toLowerCase().trim();
   if (field.isArray || t.endsWith("[]") || t.startsWith("array<") || t === "array") {
@@ -394,6 +453,18 @@ export function getDefaultValueForField(field: CustomTypeField): string {
   }
   if (t === "object" || t.startsWith("{") || t.startsWith("record<")) {
     return "{}";
+  }
+  if (t === "enum") {
+    return '""';
+  }
+  if (field.type && field.type.includes("|")) {
+    const parts = field.type.split("|").map((p) => p.trim());
+    const firstLiteral = parts.find(
+      (p) => (p.startsWith('"') && p.endsWith('"')) || (p.startsWith("'") && p.endsWith("'")),
+    );
+    if (firstLiteral) {
+      return firstLiteral;
+    }
   }
   return '""';
 }
@@ -440,7 +511,7 @@ ${initialLines}  };
     ? { ...initial, ...prev }
     : { ...initial };
 
-  const action = typeof next === "object" && next !== null && "action" in next ? next.action : undefined;
+  const action = typeof next === "object" && next !== null && "action" in next ? next.action : next?.action;
 
   // 1. Action: reset / clear - resets back to typed initial values
   // e.g. dispatch { action: "reset" }
@@ -449,9 +520,10 @@ ${initialLines}  };
   }
 
   // Extract payload cleanly (stripping action metadata so it never leaks into state)
-  const payload = typeof next === "object" && next !== null && "value" in next && typeof next.value === "object" && next.value !== null
+  const rawPayload = typeof next === "object" && next !== null && "value" in next && typeof next.value === "object" && next.value !== null
     ? next.value
     : (typeof next === "object" && next !== null ? next : {});
+  const { action: _unusedAction, ...payload } = rawPayload;
 
   // 2. Action: replace / set - overwrites with incoming values (defaults missing fields)
   // e.g. dispatch { action: "replace", value: { ... } }
@@ -474,42 +546,151 @@ ${updateLines}    };
 };`;
 }
 
+/**
+ * Generates an action-aware, schema-safe array reducer for a custom type / interface.
+ * Handles append, prepend, pop, remove by id/index, replace/set, and reset.
+ */
+export function generateSchemaAwareArrayReducerCode(
+  customType: CustomTypeItem,
+): string {
+  const fields = extractFieldsFromCustomType(customType);
+  const typeLabel = customType.name ? ` for ${customType.name}[]` : "";
+  const idField = fields.find((f) => f.name === "id" || f.name === "_id")?.name || "id";
+
+  return `(prev, next) => {
+  // Array reducer${typeLabel}
+  const prevArr = Array.isArray(prev) ? prev : [];
+  const action = typeof next === "object" && next !== null && "action" in next ? next.action : next?.action;
+
+  // 1. Action: reset / clear - resets array to empty
+  // e.g. dispatch { action: "reset" }
+  if (action === "reset" || action === "clear") {
+    return [];
+  }
+
+  // Extract incoming payload cleanly (stripping action metadata)
+  const rawValue = typeof next === "object" && next !== null && "value" in next
+    ? next.value
+    : next;
+
+  // 2. Action: set / replace - overwrites entire array
+  // e.g. dispatch { action: "set", value: [...] }
+  if (action === "set" || action === "replace") {
+    return Array.isArray(rawValue) ? rawValue : (rawValue != null ? [rawValue] : []);
+  }
+
+  // 3. Action: append / add - appends item(s) to array
+  // e.g. dispatch { action: "append", value: newItem }
+  if (action === "append" || action === "add") {
+    const items = Array.isArray(rawValue) ? rawValue : (rawValue != null ? [rawValue] : []);
+    return [...prevArr, ...items];
+  }
+
+  // 4. Action: prepend - adds item(s) to front of array
+  // e.g. dispatch { action: "prepend", value: newItem }
+  if (action === "prepend") {
+    const items = Array.isArray(rawValue) ? rawValue : (rawValue != null ? [rawValue] : []);
+    return [...items, ...prevArr];
+  }
+
+  // 5. Action: pop - removes last element
+  // e.g. dispatch { action: "pop" }
+  if (action === "pop") {
+    return prevArr.slice(0, -1);
+  }
+
+  // 6. Action: remove / filter - removes item by id or index
+  // e.g. dispatch { action: "remove", id: "123" } or { action: "remove", value: 0 }
+  if (action === "remove" || action === "filter") {
+    const target = typeof next === "object" && next !== null && "id" in next
+      ? next.id
+      : (typeof next === "object" && next !== null && "index" in next
+        ? next.index
+        : (typeof rawValue === "object" && rawValue !== null && "${idField}" in rawValue ? rawValue.${idField} : rawValue));
+    return prevArr.filter((item, idx) => {
+      if (typeof item === "object" && item !== null && "${idField}" in item) {
+        return item.${idField} !== target;
+      }
+      return idx !== target && item !== target;
+    });
+  }
+
+  // 7. Default update: appends item(s) or replaces if an array is passed directly
+  // e.g. dispatch [item1, item2] or dispatch newItem
+  if (!action || action === "" || action === "default") {
+    if (Array.isArray(rawValue)) return rawValue;
+    const hasItem = rawValue != null && (typeof rawValue !== "object" || Object.keys(rawValue).length > 0);
+    return hasItem ? [...prevArr, rawValue] : prevArr;
+  }
+
+  return prevArr;
+};`;
+}
+
 export function getSuggestedReducerCodeForChannelType(
   type?: string,
   customTypeSchema?: CustomTypeItem | null,
+  isArray?: boolean,
 ): string {
-  if (customTypeSchema) {
+  const cleanType = (type || "string").trim();
+  const isTargetArray = Boolean(
+    isArray ||
+    cleanType.endsWith("[]") ||
+    cleanType.toLowerCase() === "array" ||
+    cleanType.toLowerCase().startsWith("array<")
+  );
+
+  // 1. Array of custom type schema
+  if (isTargetArray && customTypeSchema) {
+    return generateSchemaAwareArrayReducerCode(customTypeSchema);
+  }
+
+  // 2. Single object of custom type schema
+  if (!isTargetArray && customTypeSchema) {
     const schemaCode = generateSchemaAwareReducerCode(customTypeSchema);
     if (schemaCode) return schemaCode;
   }
+
+  // 3. Messages / Chat
   if (
-    type === "messages" ||
-    type === "BaseMessage" ||
-    type === "BaseMessage[]" ||
-    type === "HumanMessage" ||
-    type === "HumanMessage[]" ||
-    type === "AIMessage" ||
-    type === "AIMessage[]" ||
-    type === "SystemMessage" ||
-    type === "SystemMessage[]"
+    cleanType === "messages" ||
+    cleanType === "BaseMessage" ||
+    cleanType === "BaseMessage[]" ||
+    cleanType === "HumanMessage" ||
+    cleanType === "HumanMessage[]" ||
+    cleanType === "AIMessage" ||
+    cleanType === "AIMessage[]" ||
+    cleanType === "SystemMessage" ||
+    cleanType === "SystemMessage[]"
   ) {
     return REDUCER_CODE_PRESETS.chat;
   }
-  if (type === "array") {
+
+  // 4. Array (generic or primitive[])
+  if (isTargetArray) {
     return REDUCER_CODE_PRESETS.array;
   }
-  if (type === "number") {
+
+  // 5. Primitive number
+  if (cleanType === "number") {
     return REDUCER_CODE_PRESETS.number;
   }
-  if (type === "object" || type === "json") {
+
+  // 6. Primitive object or json
+  if (cleanType === "object" || cleanType === "json") {
     return REDUCER_CODE_PRESETS.object;
   }
-  if (type === "string") {
+
+  // 7. Primitive string
+  if (cleanType === "string") {
     return REDUCER_CODE_PRESETS.string;
   }
-  if (type === "boolean") {
+
+  // 8. Primitive boolean
+  if (cleanType === "boolean") {
     return REDUCER_CODE_PRESETS.boolean;
   }
+
   return DEFAULT_REDUCER_CODE;
 }
 
@@ -521,11 +702,31 @@ export function getSuggestedReducerCodeForChannelType(
 export function isReducerCodeCompatibleWithType(
   code?: string,
   type?: string,
+  isArray?: boolean,
 ): boolean {
   if (!code || typeof code !== "string" || !code.trim()) return false;
   if (!type) return true;
 
-  if (type === "number") {
+  const clean = type.trim();
+  const isTargetArray = Boolean(
+    isArray ||
+    clean.endsWith("[]") ||
+    clean.toLowerCase() === "array" ||
+    clean.toLowerCase().startsWith("array<")
+  );
+
+  if (isTargetArray) {
+    if (
+      code.includes('typeof prev === "string"') ||
+      code.includes('typeof prev === "number"') ||
+      code.includes("Boolean(prev)")
+    ) {
+      return false;
+    }
+    return true;
+  }
+
+  if (clean === "number") {
     // If code has string-specific concatenation or array-specific functions, it's incompatible with number
     if (
       code.includes('typeof prev === "string"') ||
@@ -538,7 +739,7 @@ export function isReducerCodeCompatibleWithType(
     return true;
   }
 
-  if (type === "string") {
+  if (clean === "string") {
     if (
       code.includes('typeof prev === "number"') ||
       code.includes("Array.isArray(prev)") ||
@@ -549,7 +750,7 @@ export function isReducerCodeCompatibleWithType(
     return true;
   }
 
-  if (type === "boolean") {
+  if (clean === "boolean") {
     if (
       code.includes('typeof prev === "string"') ||
       code.includes('typeof prev === "number"') ||
@@ -560,18 +761,7 @@ export function isReducerCodeCompatibleWithType(
     return true;
   }
 
-  if (type === "array" || type === "messages") {
-    if (
-      code.includes('typeof prev === "string"') ||
-      code.includes('typeof prev === "number"') ||
-      code.includes("Boolean(prev)")
-    ) {
-      return false;
-    }
-    return true;
-  }
-
-  if (type === "object" || type === "json") {
+  if (clean === "object" || clean === "json") {
     if (
       code.includes('typeof prev === "string"') ||
       code.includes('typeof prev === "number"') ||
@@ -791,3 +981,78 @@ export function getActionsForReducer(
 
   return actions;
 }
+
+/**
+ * Gathers and prioritizes custom types from canvas nodes.
+ * User-created types in standalone TypesNode take FIRST priority,
+ * followed by Service Types, Database Entity Types, and external Package Types (e.g. @workspace/langgraph-agent).
+ */
+export function getAvailableCustomTypes(
+  nodes: Array<{ type?: string; data?: any; id?: string }>,
+): CustomTypeItem[] {
+  const userTypes: CustomTypeItem[] = [];
+  const serviceTypes: CustomTypeItem[] = [];
+  const entityTypes: CustomTypeItem[] = [];
+  const packageTypes: CustomTypeItem[] = [];
+
+  nodes.forEach((n) => {
+    if (n.type !== "types" || !Array.isArray(n.data?.types)) return;
+
+    const isServiceDerived = Boolean(
+      n.data?.isServiceEndpointSchemas ||
+        n.data?.sourceServiceId ||
+        (typeof n.id === "string" && n.id.startsWith("types-service-")),
+    );
+    const isEntitySchemas = Boolean(
+      n.data?.isEntitySchemas ||
+        n.id === "types-entity-schemas" ||
+        n.data?.sourceEntityId ||
+        n.data?.label === "Entity Types",
+    );
+    const isPackageNode = Boolean(
+      n.data?.isPackageNode ||
+        (n.data?.packageSources && n.data.packageSources.length > 0 && !n.data?.isExtended) ||
+        n.data?.packageName,
+    );
+
+    n.data.types.forEach((t: CustomTypeItem) => {
+      if (!t || !t.name) return;
+      if (isServiceDerived) {
+        if (!serviceTypes.some((ex) => ex.id === t.id)) serviceTypes.push(t);
+      } else if (isEntitySchemas) {
+        if (!entityTypes.some((ex) => ex.id === t.id)) entityTypes.push(t);
+      } else if (isPackageNode) {
+        if (!packageTypes.some((ex) => ex.id === t.id)) packageTypes.push(t);
+      } else {
+        if (!userTypes.some((ex) => ex.id === t.id)) userTypes.push(t);
+      }
+    });
+  });
+
+  // User-created custom types take precedence over package/agent types!
+  return [...userTypes, ...serviceTypes, ...entityTypes, ...packageTypes];
+}
+
+/**
+ * Resolves the matching CustomTypeItem for a field.
+ * Prefers exact matching by typeId if present, otherwise finds by type name
+ * using the prioritized availableTypes list.
+ */
+export function resolveCustomType({
+  availableTypes,
+  typeName,
+  typeId,
+}: {
+  availableTypes: CustomTypeItem[];
+  typeName?: string;
+  typeId?: string;
+}): CustomTypeItem | undefined {
+  if (typeId) {
+    const byId = availableTypes.find((t) => t.id === typeId);
+    if (byId) return byId;
+  }
+  if (!typeName) return undefined;
+  const clean = typeName.replace(/\[\]$/, "").trim();
+  return availableTypes.find((t) => t.name === clean);
+}
+
