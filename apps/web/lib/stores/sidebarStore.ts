@@ -4,13 +4,25 @@ import { persist, createJSONStorage } from "zustand/middleware";
 export function getEffectiveConfigSidebarWidth(width?: number): number {
   if (typeof window !== "undefined") {
     const minW = Math.max(360, Math.round(window.innerWidth * 0.18));
-    const maxW = Math.min(1200, Math.round(window.innerWidth * 0.50));
+    const maxW = Math.round(window.innerWidth * 0.70);
     if (!width || width < minW) {
       return Math.max(540, Math.min(840, Math.round(window.innerWidth * 0.28)));
     }
     return Math.max(minW, Math.min(maxW, width));
   }
   return width || 560;
+}
+
+export function getEffectiveLangGraphInspectorWidth(width?: number): number {
+  if (typeof window !== "undefined") {
+    const minW = Math.max(340, Math.round(window.innerWidth * 0.18));
+    const maxW = Math.round(window.innerWidth * 0.70);
+    if (!width || width < minW) {
+      return Math.max(480, Math.min(840, Math.round(window.innerWidth * 0.28)));
+    }
+    return Math.max(minW, Math.min(maxW, width));
+  }
+  return width || 520;
 }
 
 export interface SidebarState {
@@ -135,8 +147,8 @@ export const useSidebarStore = create<SidebarState>()(
               : 360;
           const maxVal =
             typeof window !== "undefined"
-              ? Math.min(1200, Math.round(window.innerWidth * 0.5))
-              : 1000;
+              ? Math.round(window.innerWidth * 0.70)
+              : 1400;
           return { configSidebarWidth: Math.max(minW, Math.min(maxVal, val)) };
         }),
 
@@ -181,8 +193,8 @@ export const useSidebarStore = create<SidebarState>()(
               : 340;
           const maxW =
             typeof window !== "undefined"
-              ? Math.min(1100, Math.round(window.innerWidth * 0.48))
-              : 1100;
+              ? Math.round(window.innerWidth * 0.70)
+              : 1400;
           return { langGraphInspectorWidth: Math.min(Math.max(val, minW), maxW) };
         }),
     }),

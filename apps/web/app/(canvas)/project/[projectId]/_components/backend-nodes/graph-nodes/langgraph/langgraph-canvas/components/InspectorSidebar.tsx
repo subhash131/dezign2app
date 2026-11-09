@@ -1,6 +1,9 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useMemo } from "react";
 import { X } from "lucide-react";
-import { useSidebarStore } from "@/lib/stores/sidebarStore";
+import {
+  useSidebarStore,
+  getEffectiveLangGraphInspectorWidth,
+} from "@/lib/stores/sidebarStore";
 import type {
   LangGraphStateChannel,
   LangGraphInputChannel,
@@ -183,6 +186,10 @@ export function InspectorSidebar({
 }: InspectorSidebarProps) {
   const width = useSidebarStore((s) => s.langGraphInspectorWidth);
   const setWidth = useSidebarStore((s) => s.setLangGraphInspectorWidth);
+  const effectiveWidth = useMemo(
+    () => getEffectiveLangGraphInspectorWidth(width),
+    [width],
+  );
   const setLangGraphInspectorOpen = useSidebarStore(
     (s) => s.setLangGraphInspectorOpen,
   );
@@ -193,17 +200,22 @@ export function InspectorSidebar({
       mouseDownEvent.preventDefault();
       mouseDownEvent.stopPropagation();
       setIsResizing(true);
+      document.body.style.userSelect = "none";
 
       const startX = mouseDownEvent.clientX;
-      const startWidth = width;
+      const startWidth = effectiveWidth;
 
       const onMouseMove = (mouseMoveEvent: MouseEvent) => {
         const deltaX = startX - mouseMoveEvent.clientX;
-        setWidth(startWidth + deltaX);
+        const minW = Math.max(340, Math.round(window.innerWidth * 0.18));
+        const maxW = Math.round(window.innerWidth * 0.70);
+        const nextWidth = Math.max(minW, Math.min(maxW, startWidth + deltaX));
+        setWidth(nextWidth);
       };
 
       const onMouseUp = () => {
         setIsResizing(false);
+        document.body.style.userSelect = "";
         window.removeEventListener("mousemove", onMouseMove);
         window.removeEventListener("mouseup", onMouseUp);
       };
@@ -211,7 +223,7 @@ export function InspectorSidebar({
       window.addEventListener("mousemove", onMouseMove);
       window.addEventListener("mouseup", onMouseUp);
     },
-    [width, setWidth],
+    [effectiveWidth, setWidth],
   );
 
   useEffect(() => {
@@ -274,7 +286,7 @@ export function InspectorSidebar({
   return (
     <div
       data-inspector="true"
-      style={{ width: `${width}px` }}
+      style={{ width: `${effectiveWidth}px`, maxWidth: "70vw" }}
       className={`inspector-sidebar relative shrink-0 h-full flex flex-col nokey ${
         isResizing ? "select-none" : ""
       }`}
