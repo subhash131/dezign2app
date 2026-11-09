@@ -64,6 +64,11 @@ export const globalStoreFieldSchema = z.object({
   reducer: z.string().optional(),
   customReducerCode: z.string().optional(),
   actions: z.array(z.string()).optional(),
+  customTypeId: z.string().optional(),
+  customTypeGroupId: z.string().optional(),
+  suggestedComponent: z.string().optional(),
+  actionId: z.string().optional(),
+  actionType: z.string().optional(),
 });
 
 export type GlobalStoreFieldSchemaType = z.infer<typeof globalStoreFieldSchema>;
@@ -76,10 +81,13 @@ export const globalStoreActionSchema = z.object({
   actionType: z.enum([
     "set",
     "append",
+    "prepend",
     "pop",
     "remove",
     "toggle",
     "increment",
+    "decrement",
+    "update",
     "reset",
     "populate",
     "custom",
@@ -91,7 +99,7 @@ export const globalStoreActionSchema = z.object({
   responseMappingMode: z.enum(["replace", "merge", "custom"]).optional(),
   description: z.string().optional(),
   prompt: z.string().optional(),
-  defaultManipulatorType: z.enum(["populate", "reset", "setter", "mutate", "append", "pop"]).optional(),
+  defaultManipulatorType: z.enum(["populate", "reset", "setter", "mutate", "append", "pop", "prepend"]).optional(),
 });
 
 export type GlobalStoreActionSchemaType = z.infer<typeof globalStoreActionSchema>;
