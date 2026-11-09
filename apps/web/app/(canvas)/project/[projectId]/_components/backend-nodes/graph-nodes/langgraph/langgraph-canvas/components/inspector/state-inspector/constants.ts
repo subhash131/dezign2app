@@ -51,7 +51,7 @@ export function getChannelReducerName(key?: string): string {
 
 export const DEFAULT_REDUCER_CODE = `(prev, next) => {
   // Check action sent by node (e.g. { action: "replace", value: ... })
-  const action = typeof next === "object" && next !== null && "action" in next ? next.action : undefined;
+  const action = next?.action;
 
   // 1. Default update: when action is undefined, "", or "default"
   if (!action || action === "" || action === "default") {
@@ -75,127 +75,233 @@ export const DEFAULT_REDUCER_CODE = `(prev, next) => {
 
 export const REDUCER_CODE_PRESETS = {
   chat: `(prev, next) => {
-  const action = next?.action;
-  const prevArr = Array.isArray(prev) ? prev : [];
+  const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+  const list = Array.isArray(prev) ? prev : [];
 
-  // 1. Default update: when action is undefined, "", or "default" (appends incoming messages)
-  // e.g. dispatch { messages: [newMsg] } or { messages: newMsg }
-  if (!action || action === "" || action === "default") {
-    const incoming = next?.value !== undefined ? next.value : next;
-    return [...prevArr, ...(Array.isArray(incoming) ? incoming : (incoming != null ? [incoming] : []))];
+  // Bare array dispatch = replace
+  const action = Array.isArray(next) ? "set" : (isObj(next) ? next.action : undefined);
+
+  // Payload with action metadata stripped
+  let payload = next;
+  if (isObj(next)) {
+    if ("value" in next) payload = next.value;
+    else if ("action" in next) {
+      const { action: _a, index: _i, ...rest } = next;
+      payload = rest;
+    }
   }
 
-  // 2. Action: replace - overwrites entire message history
-  // e.g. dispatch { messages: { action: "replace", value: [systemMsg, userMsg] } }
-  if (action === "replace") {
-    const incoming = next?.value !== undefined ? next.value : next;
-    return Array.isArray(incoming) ? incoming : (incoming != null ? [incoming] : []);
-  }
+  const toItems = (v) =>
+    v == null ? [] :
+    Array.isArray(v) ? v :
+    isObj(v) && Object.keys(v).length === 0 ? [] :
+    [v];
 
-  // 3. Action: reset / clear - clears conversation history
-  // e.g. dispatch { messages: { action: "reset" } }
+  const sameItems = (a, b) =>
+    a.length === b.length && a.every((x, i) => Object.is(x, b[i]));
+
+  // 1. Action: reset / clear - clears conversation history
   if (action === "reset" || action === "clear") {
-    return [];
+    return list.length === 0 ? list : [];
   }
 
-  return prevArr;
+  // 2. Action: replace / set - overwrites entire message history
+  if (action === "replace" || action === "set") {
+    const items = toItems(payload);
+    return sameItems(items, list) ? list : items;
+  }
+
+  // 3. Action: append / add - appends messages
+  if (action === "append" || action === "add") {
+    const items = toItems(payload);
+    return items.length ? [...list, ...items] : list;
+  }
+
+  // 4. Action: pop - removes last message
+  if (action === "pop") {
+    return list.length ? list.slice(0, -1) : list;
+  }
+
+  // 5. Action: remove / filter - removes message by id or index
+  if (action === "remove" || action === "filter") {
+    const index = isObj(next) && typeof next.index === "number"
+      ? next.index
+      : typeof payload === "number" ? payload : undefined;
+
+    if (index !== undefined) {
+      return index >= 0 && index < list.length ? list.filter((_, i) => i !== index) : list;
+    }
+
+    const target = isObj(next) && "id" in next ? next.id
+      : isObj(payload) && "id" in payload ? payload.id
+      : payload;
+    if (target === undefined) return list;
+
+    const out = list.filter((it) =>
+      !(isObj(it) && "id" in it ? it.id === target : Object.is(it, target))
+    );
+    return out.length === list.length ? list : out;
+  }
+
+  // 6. Action: update / upsert - in-place streaming message update by id (keeps other messages stable)
+  if (action === "update" || action === "upsert") {
+    const patch = payload;
+    if (!isObj(patch) || patch.id === undefined) return list;
+    const i = list.findIndex((m) => isObj(m) && m.id === patch.id);
+    if (i === -1) return [...list, patch];
+    const merged = { ...list[i], ...patch };
+    return Object.keys(merged).every((k) => Object.is(merged[k], list[i][k]))
+      ? list
+      : list.map((m, j) => (j === i ? merged : m));
+  }
+
+  // 7. Default update: appends incoming messages or replaces if bare array is passed
+  if (!action || action === "" || action === "default") {
+    const items = toItems(payload);
+    return items.length ? [...list, ...items] : list;
+  }
+
+  return list;
 }`,
   array: `(prev, next) => {
-  const action = typeof next === "object" && next !== null && "action" in next ? next.action : next?.action;
-  const prevArr = Array.isArray(prev) ? prev : [];
+  const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+  const list = Array.isArray(prev) ? prev : [];
+
+  // Bare array dispatch = replace
+  const action = Array.isArray(next) ? "set" : (isObj(next) ? next.action : undefined);
+
+  // Payload with action metadata stripped
+  let payload = next;
+  if (isObj(next)) {
+    if ("value" in next) payload = next.value;
+    else if ("action" in next) {
+      const { action: _a, index: _i, ...rest } = next;
+      payload = rest;
+    }
+  }
+
+  const toItems = (v) =>
+    v == null ? [] :
+    Array.isArray(v) ? v :
+    isObj(v) && Object.keys(v).length === 0 ? [] :
+    [v];
+
+  const sameItems = (a, b) =>
+    a.length === b.length && a.every((x, i) => Object.is(x, b[i]));
 
   // 1. Action: reset / clear - empties array
   // e.g. dispatch { items: { action: "reset" } }
   if (action === "reset" || action === "clear") {
-    return [];
+    return list.length === 0 ? list : [];
   }
-
-  const rawValue = typeof next === "object" && next !== null && "value" in next && next.value !== undefined ? next.value : next;
 
   // 2. Action: replace / set - overwrites entire array
   // e.g. dispatch { items: { action: "replace", value: [1, 2, 3] } }
   if (action === "replace" || action === "set") {
-    return Array.isArray(rawValue) ? rawValue : (rawValue != null ? [rawValue] : []);
+    const items = toItems(payload);
+    return sameItems(items, list) ? list : items;
   }
 
   // 3. Action: append / add - appends items
   // e.g. dispatch { items: { action: "append", value: newItem } }
   if (action === "append" || action === "add") {
-    const nextArr = Array.isArray(rawValue) ? rawValue : (rawValue != null ? [rawValue] : []);
-    return [...prevArr, ...nextArr];
+    const items = toItems(payload);
+    return items.length ? [...list, ...items] : list;
   }
 
   // 4. Action: prepend - adds items to front
   // e.g. dispatch { items: { action: "prepend", value: newItem } }
   if (action === "prepend") {
-    const nextArr = Array.isArray(rawValue) ? rawValue : (rawValue != null ? [rawValue] : []);
-    return [...nextArr, ...prevArr];
+    const items = toItems(payload);
+    return items.length ? [...items, ...list] : list;
   }
 
   // 5. Action: pop - removes last element
   // e.g. dispatch { items: { action: "pop" } }
   if (action === "pop") {
-    return prevArr.slice(0, -1);
+    return list.length ? list.slice(0, -1) : list;
   }
 
   // 6. Action: remove / filter - removes by id or index or value
   // e.g. dispatch { items: { action: "remove", id: "123" } }
   if (action === "remove" || action === "filter") {
-    const target = typeof next === "object" && next !== null && "id" in next
-      ? next.id
-      : (typeof next === "object" && next !== null && "index" in next
-        ? next.index
-        : rawValue);
-    return prevArr.filter((item, idx) => {
-      if (typeof item === "object" && item !== null && "id" in item) {
-        return item.id !== target;
-      }
-      return idx !== target && item !== target;
-    });
+    const index = isObj(next) && typeof next.index === "number"
+      ? next.index
+      : typeof payload === "number" ? payload : undefined;
+
+    if (index !== undefined) {
+      return index >= 0 && index < list.length ? list.filter((_, i) => i !== index) : list;
+    }
+
+    const target = isObj(next) && "id" in next ? next.id
+      : isObj(payload) && "id" in payload ? payload.id
+      : payload;
+    if (target === undefined) return list;
+
+    const out = list.filter((it) =>
+      !(isObj(it) && "id" in it ? it.id === target : Object.is(it, target))
+    );
+    return out.length === list.length ? list : out;
   }
 
-  // 7. Default update: when action is undefined, "", or "default" (appends items or replaces if array)
+  // 7. Action: update / upsert - in-place update by id
+  // e.g. dispatch { items: { action: "update", id: "123", status: "done" } }
+  if (action === "update" || action === "upsert") {
+    const patch = payload;
+    if (!isObj(patch) || patch.id === undefined) return list;
+    const i = list.findIndex((m) => isObj(m) && m.id === patch.id);
+    if (i === -1) return [...list, patch];
+    const merged = { ...list[i], ...patch };
+    return Object.keys(merged).every((k) => Object.is(merged[k], list[i][k]))
+      ? list
+      : list.map((m, j) => (j === i ? merged : m));
+  }
+
+  // 8. Default update: when action is undefined, "", or "default" (appends items or replaces if array)
   // e.g. dispatch { items: [newItem] } or { items: newItem }
   if (!action || action === "" || action === "default") {
-    if (Array.isArray(rawValue)) return rawValue;
-    const hasItem = rawValue != null && (typeof rawValue !== "object" || Object.keys(rawValue).length > 0);
-    return hasItem ? [...prevArr, rawValue] : prevArr;
+    const items = toItems(payload);
+    return items.length ? [...list, ...items] : list;
   }
 
-  return prevArr;
+  return list;
 }`,
   object: `(prev, next) => {
-  const current = (prev && typeof prev === "object" && !Array.isArray(prev)) ? prev : {};
-  const action = typeof next === "object" && next !== null && "action" in next ? next.action : undefined;
+  const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+  if (!isObj(next)) return prev;
+
+  const current = isObj(prev) ? prev : {};
+  const { action, value, ...rest } = next;
+  const rawPayload = isObj(value) ? value : rest;
+  const { action: _ignored, ...cleanPayload } = rawPayload;
 
   // 1. Action: reset / clear - empties object
   // e.g. dispatch { profile: { action: "reset" } }
   if (action === "reset" || action === "clear") {
-    return {};
+    return isObj(prev) && Object.keys(prev).length === 0 ? prev : {};
   }
-
-  // Extract payload cleanly (stripping action metadata so it never leaks into state)
-  const payload = typeof next === "object" && next !== null && "value" in next && typeof next.value === "object" && next.value !== null
-    ? next.value
-    : (typeof next === "object" && next !== null ? next : {});
 
   // 2. Action: replace / set - overwrites entire object
   // e.g. dispatch { profile: { action: "replace", value: { status: "fresh" } } }
   if (action === "replace" || action === "set") {
-    return { ...payload };
+    return { ...cleanPayload };
   }
 
   // 3. Default update: shallow merges keys (when action is undefined, "", "default", "update", "patch")
   // e.g. dispatch { profile: { status: "active" } }
   if (!action || action === "" || action === "default" || action === "update" || action === "patch") {
-    return { ...current, ...payload };
+    const merged = { ...current, ...cleanPayload };
+    const prevKeys = Object.keys(current);
+    const mergedKeys = Object.keys(merged);
+    const unchanged = isObj(prev) && prevKeys.length === mergedKeys.length && prevKeys.every((k) => Object.is(current[k], merged[k]));
+    return unchanged ? prev : merged;
   }
 
   return current;
 }`,
   number: `(prev, next) => {
   const current = typeof prev === "number" && !Number.isNaN(prev) ? prev : 0;
-  const action = typeof next === "object" && next !== null && "action" in next ? next.action : next?.action;
+  const action = next?.action;
 
   // Extract raw incoming value
   const rawValue = typeof next === "object" && next !== null && "value" in next
@@ -240,7 +346,7 @@ export const REDUCER_CODE_PRESETS = {
 }`,
   counterActions: `(prev, next) => {
   const current = typeof prev === "number" && !Number.isNaN(prev) ? prev : 0;
-  const action = typeof next === "object" && next !== null && "action" in next ? next.action : undefined;
+  const action = next?.action;
 
   const rawValue = typeof next === "object" && next !== null && "value" in next
     ? next.value
@@ -279,7 +385,7 @@ export const REDUCER_CODE_PRESETS = {
 }`,
   string: `(prev, next) => {
   const current = typeof prev === "string" ? prev : "";
-  const action = typeof next === "object" && next !== null && "action" in next ? next.action : next?.action;
+  const action = next?.action;
 
   // Extract raw incoming string
   const rawValue = typeof next === "object" && next !== null && "value" in next
@@ -324,7 +430,7 @@ export const REDUCER_CODE_PRESETS = {
 }`,
   boolean: `(prev, next) => {
   const current = Boolean(prev);
-  const action = typeof next === "object" && next !== null && "action" in next ? next.action : undefined;
+  const action = next?.action;
 
   // 1. Default update: when action is undefined, "", or "default"
   // e.g. dispatch { is_active: true }
@@ -482,24 +588,6 @@ export function generateSchemaAwareReducerCode(
     ? fields.map((f) => `    ${f.name}: ${getDefaultValueForField(f)},`).join("\n") + "\n"
     : "";
 
-  const replaceLines = fields.length > 0
-    ? fields
-        .map(
-          (f) =>
-            `      ${f.name}: "${f.name}" in payload && payload.${f.name} !== undefined ? payload.${f.name} : initial.${f.name},`,
-        )
-        .join("\n") + "\n"
-    : "";
-
-  const updateLines = fields.length > 0
-    ? fields
-        .map(
-          (f) =>
-            `      ${f.name}: "${f.name}" in payload && payload.${f.name} !== undefined ? payload.${f.name} : current.${f.name},`,
-        )
-        .join("\n") + "\n"
-    : "";
-
   const typeLabel = customType.name ? ` for ${customType.name}` : "";
 
   return `(prev, next) => {
@@ -507,42 +595,42 @@ export function generateSchemaAwareReducerCode(
   const initial = {
 ${initialLines}  };
 
-  const current = (prev && typeof prev === "object" && !Array.isArray(prev))
-    ? { ...initial, ...prev }
-    : { ...initial };
+  const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+  if (!isObj(next)) return isObj(prev) ? prev : initial;
 
-  const action = typeof next === "object" && next !== null && "action" in next ? next.action : next?.action;
+  const defined = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
+  const shallowEqual = (a, b) => {
+    const ka = Object.keys(a);
+    return ka.length === Object.keys(b).length && ka.every((k) => Object.is(a[k], b[k]));
+  };
 
-  // 1. Action: reset / clear - resets back to typed initial values
+  const { action, value, ...rest } = next;
+  const rawPayload = isObj(value) ? value : rest;
+  const { action: _ignored, ...cleanPayload } = rawPayload;
+  const payload = defined(cleanPayload);
+
+  // 1. Action: reset / clear - restores initial typed shape
   // e.g. dispatch { action: "reset" }
   if (action === "reset" || action === "clear") {
-    return { ...initial };
+    return isObj(prev) && shallowEqual(prev, initial) ? prev : initial;
   }
-
-  // Extract payload cleanly (stripping action metadata so it never leaks into state)
-  const rawPayload = typeof next === "object" && next !== null && "value" in next && typeof next.value === "object" && next.value !== null
-    ? next.value
-    : (typeof next === "object" && next !== null ? next : {});
-  const { action: _unusedAction, ...payload } = rawPayload;
 
   // 2. Action: replace / set - overwrites with incoming values (defaults missing fields)
   // e.g. dispatch { action: "replace", value: { ... } }
   if (action === "replace" || action === "set") {
-    return {
-      ...payload,
-${replaceLines}    };
+    const nextState = { ...initial, ...payload };
+    return isObj(prev) && shallowEqual(nextState, prev) ? prev : nextState;
   }
 
   // 3. Default update: shallow merges keys while preserving schema integrity
   // e.g. dispatch { id: "1" } or { action: "update", value: { name: "Alice" } }
   if (!action || action === "" || action === "default" || action === "update" || action === "patch") {
-    return {
-      ...current,
-      ...payload,
-${updateLines}    };
+    const base = isObj(prev) ? { ...initial, ...defined(prev) } : initial;
+    const merged = { ...base, ...payload };
+    return isObj(prev) && shallowEqual(merged, prev) ? prev : merged;
   }
 
-  return current;
+  return isObj(prev) ? prev : initial;
 };`;
 }
 
@@ -559,71 +647,110 @@ export function generateSchemaAwareArrayReducerCode(
 
   return `(prev, next) => {
   // Array reducer${typeLabel}
-  const prevArr = Array.isArray(prev) ? prev : [];
-  const action = typeof next === "object" && next !== null && "action" in next ? next.action : next?.action;
+  const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+  const list = Array.isArray(prev) ? prev : [];
+
+  // Bare array dispatch = replace
+  const action = Array.isArray(next) ? "set" : (isObj(next) ? next.action : undefined);
+
+  // Payload with action metadata stripped
+  let payload = next;
+  if (isObj(next)) {
+    if ("value" in next) payload = next.value;
+    else if ("action" in next) {
+      const { action: _a, index: _i, ...rest } = next;
+      payload = rest;
+    }
+  }
+
+  const toItems = (v) =>
+    v == null ? [] :
+    Array.isArray(v) ? v :
+    isObj(v) && Object.keys(v).length === 0 ? [] :
+    [v];
+
+  const sameItems = (a, b) =>
+    a.length === b.length && a.every((x, i) => Object.is(x, b[i]));
 
   // 1. Action: reset / clear - resets array to empty
   // e.g. dispatch { action: "reset" }
   if (action === "reset" || action === "clear") {
-    return [];
+    return list.length === 0 ? list : [];
   }
-
-  // Extract incoming payload cleanly (stripping action metadata)
-  const rawValue = typeof next === "object" && next !== null && "value" in next
-    ? next.value
-    : next;
 
   // 2. Action: set / replace - overwrites entire array
   // e.g. dispatch { action: "set", value: [...] }
   if (action === "set" || action === "replace") {
-    return Array.isArray(rawValue) ? rawValue : (rawValue != null ? [rawValue] : []);
+    const items = toItems(payload);
+    return sameItems(items, list) ? list : items;
   }
 
   // 3. Action: append / add - appends item(s) to array
   // e.g. dispatch { action: "append", value: newItem }
   if (action === "append" || action === "add") {
-    const items = Array.isArray(rawValue) ? rawValue : (rawValue != null ? [rawValue] : []);
-    return [...prevArr, ...items];
+    const items = toItems(payload);
+    return items.length ? [...list, ...items] : list;
   }
 
   // 4. Action: prepend - adds item(s) to front of array
   // e.g. dispatch { action: "prepend", value: newItem }
   if (action === "prepend") {
-    const items = Array.isArray(rawValue) ? rawValue : (rawValue != null ? [rawValue] : []);
-    return [...items, ...prevArr];
+    const items = toItems(payload);
+    return items.length ? [...items, ...list] : list;
   }
 
   // 5. Action: pop - removes last element
   // e.g. dispatch { action: "pop" }
   if (action === "pop") {
-    return prevArr.slice(0, -1);
+    return list.length ? list.slice(0, -1) : list;
   }
 
   // 6. Action: remove / filter - removes item by id or index
   // e.g. dispatch { action: "remove", id: "123" } or { action: "remove", value: 0 }
   if (action === "remove" || action === "filter") {
-    const target = typeof next === "object" && next !== null && "id" in next
-      ? next.id
-      : (typeof next === "object" && next !== null && "index" in next
-        ? next.index
-        : (typeof rawValue === "object" && rawValue !== null && "${idField}" in rawValue ? rawValue.${idField} : rawValue));
-    return prevArr.filter((item, idx) => {
-      if (typeof item === "object" && item !== null && "${idField}" in item) {
+    const index = isObj(next) && typeof next.index === "number"
+      ? next.index
+      : typeof payload === "number" ? payload : undefined;
+
+    if (index !== undefined) {
+      return index >= 0 && index < list.length ? list.filter((_, i) => i !== index) : list;
+    }
+
+    const target = isObj(next) && "id" in next ? next.id
+      : isObj(payload) && "${idField}" in payload ? payload.${idField}
+      : (isObj(payload) && "id" in payload ? payload.id : payload);
+    if (target === undefined) return list;
+
+    const out = list.filter((item) => {
+      if (isObj(item) && "${idField}" in item) {
         return item.${idField} !== target;
       }
-      return idx !== target && item !== target;
+      return !Object.is(item, target);
     });
+    return out.length === list.length ? list : out;
   }
 
-  // 7. Default update: appends item(s) or replaces if an array is passed directly
+  // 7. Action: update / upsert - in-place update by id (keeps other items' references stable)
+  if (action === "update" || action === "upsert") {
+    const patch = payload;
+    const targetId = isObj(patch) ? ("${idField}" in patch ? patch.${idField} : patch.id) : undefined;
+    if (!isObj(patch) || targetId === undefined) return list;
+    const i = list.findIndex((m) => isObj(m) && ("${idField}" in m ? m.${idField} === targetId : m.id === targetId));
+    if (i === -1) return [...list, patch];
+    const merged = { ...list[i], ...patch };
+    return Object.keys(merged).every((k) => Object.is(merged[k], list[i][k]))
+      ? list
+      : list.map((m, j) => (j === i ? merged : m));
+  }
+
+  // 8. Default update: appends item(s) or replaces if bare array is passed
   // e.g. dispatch [item1, item2] or dispatch newItem
   if (!action || action === "" || action === "default") {
-    if (Array.isArray(rawValue)) return rawValue;
-    const hasItem = rawValue != null && (typeof rawValue !== "object" || Object.keys(rawValue).length > 0);
-    return hasItem ? [...prevArr, rawValue] : prevArr;
+    const items = toItems(payload);
+    return items.length ? [...list, ...items] : list;
   }
 
-  return prevArr;
+  return list;
 };`;
 }
 
@@ -719,7 +846,9 @@ export function isReducerCodeCompatibleWithType(
     if (
       code.includes('typeof prev === "string"') ||
       code.includes('typeof prev === "number"') ||
-      code.includes("Boolean(prev)")
+      code.includes("Boolean(prev)") ||
+      code.includes("Initial shape guaranteed by type schema") ||
+      (!code.includes("Array.isArray(prev)") && !code.includes("prevArr") && !code.includes("Array reducer"))
     ) {
       return false;
     }
@@ -731,6 +860,7 @@ export function isReducerCodeCompatibleWithType(
     if (
       code.includes('typeof prev === "string"') ||
       code.includes("Array.isArray(prev)") ||
+      code.includes("Array.isArray(v)") ||
       code.includes("${current}\\n") ||
       code.includes("Boolean(prev)")
     ) {
@@ -743,6 +873,7 @@ export function isReducerCodeCompatibleWithType(
     if (
       code.includes('typeof prev === "number"') ||
       code.includes("Array.isArray(prev)") ||
+      code.includes("Array.isArray(v)") ||
       code.includes("Boolean(prev)")
     ) {
       return false;
@@ -754,18 +885,21 @@ export function isReducerCodeCompatibleWithType(
     if (
       code.includes('typeof prev === "string"') ||
       code.includes('typeof prev === "number"') ||
-      code.includes("Array.isArray(prev)")
+      code.includes("Array.isArray(prev)") ||
+      code.includes("Array.isArray(v)")
     ) {
       return false;
     }
     return true;
   }
 
-  if (clean === "object" || clean === "json") {
+  if (clean === "object" || clean === "json" || !isTargetArray) {
     if (
       code.includes('typeof prev === "string"') ||
       code.includes('typeof prev === "number"') ||
-      code.includes("Boolean(prev)")
+      code.includes("Boolean(prev)") ||
+      code.includes("Array reducer") ||
+      (code.includes("const prevArr = Array.isArray(prev)") && !code.includes("Initial shape guaranteed by type schema"))
     ) {
       return false;
     }

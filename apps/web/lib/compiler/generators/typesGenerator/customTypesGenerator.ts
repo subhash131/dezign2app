@@ -1,11 +1,25 @@
 import { BackendNode } from "@/types/canvas";
 import { CompiledFile } from "@workspace/canvas/types";
 
+export function formatPropertyName(name: string): string {
+  const clean = (name || "").trim();
+  if (/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(clean)) {
+    return clean;
+  }
+  return JSON.stringify(clean);
+}
+
 export function sanitizeCustomTypeString(rawType: string): string {
-  const trimmed = (rawType || "string").trim();
+  let trimmed = (rawType || "string").trim();
   if (!trimmed || trimmed === "any" || trimmed === "unknown") {
     return "string";
   }
+  // Replace invalid truncated generic brackets like <...> with <string>
+  trimmed = trimmed.replace(/<\s*\.\.\.\s*>/g, "<string>");
+  // Clean up dangling union/intersection operators before closing brackets or end of string, e.g. ([Value] |)
+  trimmed = trimmed.replace(/[|&]\s*([)\]}>])/g, "$1");
+  trimmed = trimmed.replace(/[|&]\s*$/g, "").trim();
+
   // Guard against truncated type strings ending with ellipsis (e.g. "conn..." or "string | ...")
   if (/\.\.\.\s*$/.test(trimmed) || trimmed.endsWith("...")) {
     if (trimmed.startsWith("(") || trimmed.includes("=>")) {
@@ -72,6 +86,18 @@ export function generateCustomTypesModule(
       tNode.id.startsWith("types-service-") ||
       tNode.data?.sourceServiceId,
     );
+
+    const isLangGraphDerivedNode = Boolean(
+      tNode.data?.isLangGraphPackage ||
+      tNode.data?.sourceLangGraphId ||
+      tNode.id.startsWith("types-langgraph-") ||
+      (tNode.data?.isPackageNode && tNode.data?.packageName?.startsWith("@workspace/")),
+    );
+
+    // Filter out auto-derived LangGraph package types from custom.ts since packages/langgraph/<agent> already exports them
+    if (isLangGraphDerivedNode) {
+      return;
+    }
 
     const nodeLabel = tNode.data?.label || "Custom Types";
     const isRaw = tNode.data?.definitionMode === "raw";
@@ -143,12 +169,13 @@ export function generateCustomTypesModule(
                 if (itemName === "ChatMessage" && f.name === "role" && (f.type === "string" || !f.type)) {
                   finalType = '"user" | "assistant" | "system"';
                 }
-            return `  ${f.name}${f.required === false ? "?" : ""}: ${finalType};`;
+            const propName = formatPropertyName(f.name);
+            return `  ${propName}${f.required === false ? "?" : ""}: ${finalType};`;
           });
 
           let baseRef: string;
           if (omittedFields.length > 0) {
-            const omitUnion = omittedFields.map((f) => `"${f.name}"`).join(" | ");
+            const omitUnion = omittedFields.map((f) => JSON.stringify(f.name)).join(" | ");
             baseRef = `Omit<${baseName}, ${omitUnion}>`;
           } else {
             baseRef = baseName;
@@ -175,7 +202,11 @@ export function generateCustomTypesModule(
         if (item.kind === "enum") {
           const vals = item.enumValues || [];
           if (vals.length > 0) {
-            const enumLines = vals.map((v) => `  ${v} = "${v}",`).join("\n");
+            const enumLines = vals.map((v) => {
+              const clean = v.trim();
+              const key = formatPropertyName(clean);
+              return `  ${key} = ${JSON.stringify(clean)},`;
+            }).join("\n");
             customTypesCode += `export enum ${itemName} {\n${enumLines}\n}\n\n`;
           } else {
             customTypesCode += `export enum ${itemName} {}\n\n`;
@@ -197,7 +228,8 @@ export function generateCustomTypesModule(
                 if (itemName === "ChatMessage" && f.name === "role" && (f.type === "string" || !f.type)) {
                   finalType = '"user" | "assistant" | "system"';
                 }
-                  return `  ${f.name}${f.required === false ? "?" : ""}: ${finalType};`;
+                  const propName = formatPropertyName(f.name);
+                  return `  ${propName}${f.required === false ? "?" : ""}: ${finalType};`;
                 })
                 .join("\n");
               customTypesCode += `export type ${itemName} = {\n${fieldLines}\n};\n\n`;
@@ -211,7 +243,8 @@ export function generateCustomTypesModule(
                   finalType = '"user" | "assistant" | "system"';
                 }
               const opt = f.required === false ? "?" : "";
-              return `${f.name || "arg"}${opt}: ${finalType}`;
+              const propName = formatPropertyName(f.name || "arg");
+              return `${propName}${opt}: ${finalType}`;
             })
             .join(", ");
           const ret = sanitizeCustomTypeString(item.returnType || item.typeAliasValue || "void");
@@ -228,7 +261,8 @@ export function generateCustomTypesModule(
                 if (itemName === "ChatMessage" && f.name === "role" && (f.type === "string" || !f.type)) {
                   finalType = '"user" | "assistant" | "system"';
                 }
-                return `  ${f.name}${f.required === false ? "?" : ""}: ${finalType};`;
+                const propName = formatPropertyName(f.name);
+                return `  ${propName}${f.required === false ? "?" : ""}: ${finalType};`;
               })
               .join("\n");
             customTypesCode += `export interface ${itemName} {\n${fieldLines}\n}\n\n`;
