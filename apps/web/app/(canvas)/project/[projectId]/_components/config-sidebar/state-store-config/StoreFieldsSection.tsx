@@ -181,6 +181,7 @@ interface StoreVariableCardProps {
   index: number;
   isDuplicate?: boolean;
   availableCustomTypes: CustomTypeItem[];
+  allNodes?: ReturnType<typeof useBackendCanvasStore.getState>["nodes"];
   onUpdateField: (fieldId: string, patch: Partial<GlobalStoreField>) => void;
   onRemoveField: (fieldId: string) => void;
   onOpenTestForField?: (field: GlobalStoreField) => void;
@@ -191,6 +192,7 @@ const StoreVariableCard = React.memo(function StoreVariableCard({
   index,
   isDuplicate = false,
   availableCustomTypes,
+  allNodes,
   onUpdateField,
   onRemoveField,
   onOpenTestForField,
@@ -492,6 +494,7 @@ const StoreVariableCard = React.memo(function StoreVariableCard({
             <TwoStepTypeSelector
               value={baseType}
               onValueChange={handleTypeChange}
+              allNodes={allNodes}
               className="flex-1"
             />
             <Button
@@ -502,7 +505,7 @@ const StoreVariableCard = React.memo(function StoreVariableCard({
               className={cn(
                 "h-7 px-2 font-mono text-xs font-bold shrink-0 rounded-md transition-all cursor-pointer mt-0",
                 isArray
-                  ? "bg-indigo-600 text-white shadow-xs hover:bg-indigo-500"
+                  ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-xs hover:bg-cyan-500/30"
                   : "bg-secondary/60 text-muted-foreground hover:bg-secondary hover:text-foreground border border-border/40",
               )}
               onClick={handleToggleArray}
@@ -1062,7 +1065,7 @@ const StoreVariableCard = React.memo(function StoreVariableCard({
 
                   <DialogFooter className="p-3 border-t border-border/50 bg-muted/20 flex items-center justify-between sm:justify-between shrink-0">
                     <span className="text-[10px] text-muted-foreground font-mono">
-                      Signature: <code>(prev: {field.type}, next: any) =&gt; {field.type}</code>
+                      Signature: <code>(prev: {field.type}, next: {field.type}) =&gt; {field.type}</code>
                     </span>
                     <Button
                       type="button"
@@ -1179,6 +1182,7 @@ export const StoreFieldsSection: React.FC<StoreFieldsSectionProps> = ({
                 index={idx}
                 isDuplicate={isDuplicate}
                 availableCustomTypes={availableCustomTypes}
+                allNodes={allNodes}
                 onUpdateField={onUpdateField}
                 onRemoveField={onRemoveField}
                 onOpenTestForField={onOpenTestForField}

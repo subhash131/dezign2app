@@ -482,7 +482,17 @@ export function getSuggestedReducerCodeForChannelType(
     const schemaCode = generateSchemaAwareReducerCode(customTypeSchema);
     if (schemaCode) return schemaCode;
   }
-  if (type === "messages") {
+  if (
+    type === "messages" ||
+    type === "BaseMessage" ||
+    type === "BaseMessage[]" ||
+    type === "HumanMessage" ||
+    type === "HumanMessage[]" ||
+    type === "AIMessage" ||
+    type === "AIMessage[]" ||
+    type === "SystemMessage" ||
+    type === "SystemMessage[]"
+  ) {
     return REDUCER_CODE_PRESETS.chat;
   }
   if (type === "array") {
