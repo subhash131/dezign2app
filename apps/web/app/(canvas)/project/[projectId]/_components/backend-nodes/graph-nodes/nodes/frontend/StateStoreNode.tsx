@@ -51,6 +51,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu";
+import {
+  getSuggestedReducerCodeForChannelType,
+  isReducerCodeCompatibleWithType,
+  getAvailableCustomTypes,
+  resolveCustomType,
+  extractFieldsFromCustomType,
+} from "../../langgraph/langgraph-canvas/components/inspector/state-inspector/constants";
 
 /**
  * Returns supported action types handled by the single reducer of a state variable.
@@ -103,17 +110,7 @@ export const StateStoreNode = ({
   const inputRef = useRef<HTMLInputElement>(null);
 
   const availableCustomTypes = useMemo(() => {
-    const types: CustomTypeItem[] = [];
-    allNodes.forEach((n) => {
-      if (n.type === "types" && n.data?.types) {
-        n.data.types.forEach((t: CustomTypeItem) => {
-          if (t && t.name && !types.some((existing) => existing.id === t.id)) {
-            types.push(t);
-          }
-        });
-      }
-    });
-    return types;
+    return getAvailableCustomTypes(allNodes);
   }, [allNodes]);
 
   const currentStoreName = (data.storeName || data.label || "").trim();
@@ -226,7 +223,8 @@ export const StateStoreNode = ({
     }
     const newFieldId = `f-${Date.now()}`;
     const newFieldName = `field${nextNum}`;
-    const defaultActions = getSupportedActionsForType("string");
+    const defaultActions = getSupportedActionsForType("string", false);
+    const initialReducerCode = getSuggestedReducerCodeForChannelType("string", null, false);
     const newField: GlobalStoreField = {
       id: newFieldId,
       name: newFieldName,
@@ -234,6 +232,7 @@ export const StateStoreNode = ({
       defaultValue: "",
       reducer: `${newFieldName}_reducer`,
       actions: defaultActions,
+      customReducerCode: initialReducerCode,
     };
     updateNode(id, {
       data: {
@@ -251,11 +250,31 @@ export const StateStoreNode = ({
     const updatedFields = (data.fields || []).map((f) => {
       if (f.id !== fieldId) return f;
       const updated = { ...f, ...patch };
-      if ((patch.type || patch.isArray !== undefined) && !patch.actions) {
-        updated.actions = getSupportedActionsForType(updated.type, updated.isArray);
+      const isArray = Boolean(
+        updated.isArray || updated.type?.endsWith("[]") || updated.type === "array",
+      );
+      const cleanBase = (updated.type || "string").replace(/\[\]$/, "").trim();
+      const matchedCustom = resolveCustomType({
+        availableTypes: availableCustomTypes,
+        typeName: cleanBase,
+        typeId: updated.customTypeId,
+      });
+
+      if ((patch.type !== undefined || patch.isArray !== undefined) && !patch.actions) {
+        updated.actions = getSupportedActionsForType(updated.type, isArray);
+      }
+      if (
+        (patch.type !== undefined || patch.isArray !== undefined) &&
+        patch.customReducerCode === undefined
+      ) {
+        updated.customReducerCode = getSuggestedReducerCodeForChannelType(
+          updated.type,
+          matchedCustom,
+          isArray,
+        );
       }
       if (patch.name && (!f.reducer || f.reducer === `${f.name}_reducer` || f.reducer.endsWith("_reducer"))) {
-        updated.reducer = `${patch.name}_reducer`;
+        updated.reducer = `${patch.name.trim() || "state"}_reducer`;
       }
       return updated;
     });
@@ -276,26 +295,44 @@ export const StateStoreNode = ({
     );
     const rawType = (field.type || "string").trim();
     const cleanBase = rawType.replace(/\[\]$/, "").trim() || "string";
-    const isCustom = availableCustomTypes.some((t) => t.name === cleanBase);
+    const matchedCustom = resolveCustomType({
+      availableTypes: availableCustomTypes,
+      typeName: cleanBase,
+      typeId: field.customTypeId,
+    });
 
     if (currentIsArray) {
       const nextType = cleanBase === "array" ? "string" : cleanBase;
-      const isNextCustom = availableCustomTypes.some((t) => t.name === nextType);
+      const isNextCustom = Boolean(matchedCustom && cleanBase !== "array");
       const nextActions = getSupportedActionsForType(isNextCustom ? "object" : nextType, false);
+      const nextReducerCode = getSuggestedReducerCodeForChannelType(
+        nextType,
+        isNextCustom ? matchedCustom : null,
+        false,
+      );
       handleUpdateField(fieldId, {
         type: nextType,
         isArray: false,
         defaultValue: isNextCustom ? null : "",
         actions: nextActions,
+        customReducerCode: nextReducerCode,
+        customTypeId: matchedCustom?.id || field.customTypeId,
       });
     } else {
       const nextType = cleanBase === "array" ? "array" : `${cleanBase}[]`;
       const nextActions = getSupportedActionsForType(nextType, true);
+      const nextReducerCode = getSuggestedReducerCodeForChannelType(
+        nextType,
+        matchedCustom,
+        true,
+      );
       handleUpdateField(fieldId, {
         type: nextType,
         isArray: true,
         defaultValue: [],
         actions: nextActions,
+        customReducerCode: nextReducerCode,
+        customTypeId: matchedCustom?.id || field.customTypeId,
       });
     }
   };
@@ -377,17 +414,18 @@ export const StateStoreNode = ({
       );
       if (matchingNodes.length === 0) return;
 
-      // Prefer general/App Types nodes over Entity Types or specialized schemas
+      // Prefer standalone user custom types nodes over package, entity, or service schemas
       const typesNode =
         matchingNodes.find((n) => {
           const d = n.data;
-          const isEntityOrService =
+          const isEntityOrServiceOrPackage =
             n.id === "types-entity-schemas" ||
             d?.isEntitySchemas ||
             d?.label === "Entity Types" ||
             Boolean(d?.sourceEntityId) ||
-            Boolean(d?.isServiceEndpointSchemas);
-          return !isEntityOrService;
+            Boolean(d?.isServiceEndpointSchemas) ||
+            Boolean(d?.isPackageNode || d?.packageName || (d?.packageSources && d.packageSources.length > 0 && !d?.isExtended));
+          return !isEntityOrServiceOrPackage;
         }) || matchingNodes[0];
       if (!typesNode) return;
 
@@ -436,6 +474,51 @@ export const StateStoreNode = ({
       }
     });
   }, [data.fields, id, allNodes, edges, addEdge, updateEdge, deleteEdge]);
+
+  // Auto-heal / generate reducer function for any field missing customReducerCode or incompatible with its type
+  useEffect(() => {
+    if (!data.fields || data.fields.length === 0) return;
+    let needsUpdate = false;
+    const healed = data.fields.map((f) => {
+      const isArray = Boolean(f.isArray || f.type?.endsWith("[]") || f.type === "array");
+      const cleanBase = (f.type || "string").replace(/\[\]$/, "").trim();
+      const matchedCustom = resolveCustomType({
+        availableTypes: availableCustomTypes,
+        typeName: cleanBase,
+        typeId: f.customTypeId,
+      });
+      const isMissingCode = !f.customReducerCode || !f.customReducerCode.trim();
+      const isMismatched = Boolean(
+        f.customReducerCode && !isReducerCodeCompatibleWithType(f.customReducerCode, f.type, isArray),
+      );
+      const isSchemaMismatch = Boolean(
+        matchedCustom &&
+          !isArray &&
+          f.customReducerCode &&
+          f.customReducerCode.includes("Initial shape guaranteed by type schema") &&
+          extractFieldsFromCustomType(matchedCustom).some((field) => !f.customReducerCode?.includes(`${field.name}:`)),
+      );
+      if (isMissingCode || isMismatched || isSchemaMismatch) {
+        needsUpdate = true;
+        const generated = getSuggestedReducerCodeForChannelType(f.type, matchedCustom, isArray);
+        return {
+          ...f,
+          customReducerCode: generated,
+          actions: f.actions && f.actions.length > 0 ? f.actions : getSupportedActionsForType(f.type, isArray),
+          customTypeId: matchedCustom?.id || f.customTypeId,
+        };
+      }
+      return f;
+    });
+    if (needsUpdate) {
+      updateNode(id, {
+        data: {
+          ...data,
+          fields: healed,
+        },
+      });
+    }
+  }, [data.fields, id, availableCustomTypes, updateNode]);
 
   return (
     <div
@@ -763,25 +846,42 @@ export const StateStoreNode = ({
                       </div>
                       <TwoStepTypeSelector
                         value={cleanFieldBaseType}
-                        onValueChange={(newType) => {
+                        selectedTypeId={f.customTypeId}
+                        selectedGroupId={f.customTypeGroupId}
+                        onValueChange={(newType, typeItem, groupId) => {
                           const cleanNewType = newType.replace(/\[\]$/, "").trim();
-                          const isCustom = availableCustomTypes.some(
-                            (t) => t.name === cleanNewType,
-                          );
-                          const targetType = isFieldArray
+                          const matchedCustom =
+                            typeItem ||
+                            resolveCustomType({
+                              availableTypes: availableCustomTypes,
+                              typeName: cleanNewType,
+                              typeId: f.customTypeId,
+                            });
+                          const isCustom = Boolean(matchedCustom);
+                          const isTargetArray = isFieldArray || cleanNewType === "array";
+                          const targetType = isTargetArray
                             ? cleanNewType === "array" ? "array" : `${cleanNewType}[]`
                             : cleanNewType;
+                          const targetActions = getSupportedActionsForType(
+                            isCustom && !isTargetArray ? "object" : targetType,
+                            isTargetArray,
+                          );
+                          const generatedReducerCode = getSuggestedReducerCodeForChannelType(
+                            targetType,
+                            matchedCustom,
+                            isTargetArray,
+                          );
                           const patch: Partial<GlobalStoreField> = {
                             type: targetType,
-                            isArray: isFieldArray || cleanNewType === "array",
-                            actions: getSupportedActionsForType(
-                              isCustom && !isFieldArray ? "object" : targetType,
-                              isFieldArray || cleanNewType === "array",
-                            ),
+                            isArray: isTargetArray,
+                            actions: targetActions,
+                            customReducerCode: generatedReducerCode,
+                            customTypeId: matchedCustom?.id,
+                            customTypeGroupId: groupId,
                           };
-                          if (isCustom && !isFieldArray && (f.defaultValue === "" || f.defaultValue === undefined)) {
+                          if (isCustom && !isTargetArray && (f.defaultValue === "" || f.defaultValue === undefined)) {
                             patch.defaultValue = null;
-                          } else if ((isFieldArray || cleanNewType === "array") && (f.defaultValue === "" || f.defaultValue === undefined || f.defaultValue === null)) {
+                          } else if (isTargetArray && (f.defaultValue === "" || f.defaultValue === undefined || f.defaultValue === null)) {
                             patch.defaultValue = [];
                           }
                           handleUpdateField(f.id, patch);

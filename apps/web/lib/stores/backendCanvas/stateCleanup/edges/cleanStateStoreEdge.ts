@@ -1,5 +1,7 @@
 import { BackendEdge, CustomTypeItem } from "@/types/canvas";
 import { EdgeCleanupContext } from "../types";
+import { getSupportedActionsForType } from "@/app/(canvas)/project/[projectId]/_components/backend-nodes/graph-nodes/nodes/frontend/StateStoreNode";
+import { getSuggestedReducerCodeForChannelType } from "@/app/(canvas)/project/[projectId]/_components/backend-nodes/graph-nodes/langgraph/langgraph-canvas/components/inspector/state-inspector/constants";
 
 /**
  * Handles edge cleanup for StateStore connections, including section-state-in
@@ -135,10 +137,15 @@ export function cleanStateStoreEdge(
       const newFields = storeNode.data.fields.map((f) => {
         if (f.id === fieldId) {
           storeChanged = true;
-          const isArray = f.isArray || f.type?.endsWith("[]");
+          const isArray = Boolean(f.isArray || f.type?.endsWith("[]"));
+          const targetType = isArray ? "string[]" : "string";
+          const targetActions = getSupportedActionsForType(targetType, isArray);
+          const generatedReducerCode = getSuggestedReducerCodeForChannelType(targetType, null, isArray);
           return {
             ...f,
-            type: isArray ? "string[]" : "string",
+            type: targetType,
+            actions: targetActions,
+            customReducerCode: generatedReducerCode,
           };
         }
         return f;

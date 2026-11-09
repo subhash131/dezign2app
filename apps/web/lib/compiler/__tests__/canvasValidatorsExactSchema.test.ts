@@ -750,6 +750,52 @@ describe("Convex canvasValidators exact schema", () => {
     expect(parsedStore.success).toBe(true);
   });
 
+  it("validates stateStore node data with customTypeId, customTypeGroupId, and typed reducers in Convex & Zod schemas", async () => {
+    const { stateStoreNodeDataSchema } = await import("@workspace/canvas/schemas");
+    const { stateStoreConvexDataValidator } = await import(
+      "../../../../../packages/backend/convex/schema/canvasValidators"
+    );
+
+    // Exact payload reported in user's Convex upsertBackendNode error
+    const userStateStorePayload = {
+      actions: [
+        {
+          actionType: "set" as const,
+          defaultManipulatorType: "setter" as const,
+          id: "act-1793090734564-setStatusText",
+          name: "setStatusText",
+          targetFieldId: "f-1793090734564-statusText",
+          targetFieldName: "statusText",
+        },
+        {
+          actionType: "set" as const,
+          defaultManipulatorType: "setter" as const,
+          id: "act-1793091749120-setContent",
+          name: "setContent",
+          targetFieldId: "f-1793091749119-content",
+          targetFieldName: "content",
+        },
+      ],
+      fields: [
+        {
+          id: "f-1",
+          name: "message",
+          type: "Message",
+          actions: ["set", "update", "reset"],
+          customTypeId: "type-user-message",
+          customTypeGroupId: "group-1",
+          customReducerCode: "(prev, next) => {\n  // Initial shape guaranteed by type schema for Message\n  const initial = {\n    id: \"\",\n    sender: \"AI\",\n    content: \"\",\n  };\n\n  return next;\n}",
+        },
+      ],
+    };
+
+    const parsed = stateStoreNodeDataSchema.safeParse(userStateStorePayload);
+    expect(parsed.success).toBe(true);
+
+    expect(stateStoreConvexDataValidator).toBeDefined();
+    expect(stateStoreConvexDataValidator.fields.fields).toBeDefined();
+  });
+
   it("validates webPage actions with multi-manipulation storeActionBindings (populate, pop, etc.) in Convex & Zod schemas", async () => {
     const { webPageDataSchema } = await import("@workspace/canvas/schemas");
     const { webPageConvexDataValidator, storeActionBindingConvexValidator } = await import(

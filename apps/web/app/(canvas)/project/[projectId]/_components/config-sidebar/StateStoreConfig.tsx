@@ -22,6 +22,12 @@ import {
   StoreActionsSection,
   StoreLiveTestPlayground,
 } from "./state-store-config";
+import { getSupportedActionsForType } from "../backend-nodes/graph-nodes/nodes/frontend/StateStoreNode";
+import {
+  getSuggestedReducerCodeForChannelType,
+  getAvailableCustomTypes,
+  resolveCustomType,
+} from "../backend-nodes/graph-nodes/langgraph/langgraph-canvas/components/inspector/state-inspector/constants";
 
 export interface StateStoreConfigProps {
   id: string;
@@ -114,11 +120,16 @@ const StateStoreConfigContent: React.FC<
     while (existingNames.has(`field${nextNum}`.toLowerCase())) {
       nextNum++;
     }
+    const newFieldId = `f-${Date.now()}`;
+    const newFieldName = `field${nextNum}`;
     const newField: GlobalStoreField = {
-      id: `f-${Date.now()}`,
-      name: `field${nextNum}`,
+      id: newFieldId,
+      name: newFieldName,
       type: "string",
       defaultValue: "",
+      reducer: `${newFieldName}_reducer`,
+      actions: getSupportedActionsForType("string", false),
+      customReducerCode: getSuggestedReducerCodeForChannelType("string", null, false),
     };
     updateNode(node.id, {
       data: {
@@ -158,7 +169,38 @@ const StateStoreConfigContent: React.FC<
         });
       }
 
-      const updated = fields.map((f) => (f.id === fieldId ? { ...f, ...patch } : f));
+      const updated = fields.map((f) => {
+        if (f.id !== fieldId) return f;
+        const res = { ...f, ...patch };
+        const isArray = Boolean(
+          res.isArray || res.type?.endsWith("[]") || res.type === "array",
+        );
+        const cleanBase = (res.type || "string").replace(/\[\]$/, "").trim();
+        const availableCustomTypes = getAvailableCustomTypes(allNodes);
+        const matchedCustom = resolveCustomType({
+          availableTypes: availableCustomTypes,
+          typeName: cleanBase,
+          typeId: res.customTypeId,
+        });
+
+        if ((patch.type !== undefined || patch.isArray !== undefined) && !patch.actions) {
+          res.actions = getSupportedActionsForType(res.type, isArray);
+        }
+        if (
+          (patch.type !== undefined || patch.isArray !== undefined) &&
+          patch.customReducerCode === undefined
+        ) {
+          res.customReducerCode = getSuggestedReducerCodeForChannelType(
+            res.type,
+            matchedCustom,
+            isArray,
+          );
+        }
+        if (patch.name && (!f.reducer || f.reducer === `${f.name}_reducer` || f.reducer.endsWith("_reducer"))) {
+          res.reducer = `${patch.name.trim() || "state"}_reducer`;
+        }
+        return res;
+      });
       updateNode(node.id, {
         data: {
           ...node.data,
@@ -167,7 +209,7 @@ const StateStoreConfigContent: React.FC<
         },
       });
     },
-    [node, fields, actions, updateNode],
+    [node, fields, actions, allNodes, updateNode],
   );
 
   const handleSelectFieldAction = useCallback(

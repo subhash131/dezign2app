@@ -143,6 +143,8 @@ export interface GlobalStoreField {
   reducer?: string;
   customReducerCode?: string;
   actions?: string[];
+  customTypeId?: string;
+  customTypeGroupId?: string;
 }
 
 export interface GlobalStoreAction {

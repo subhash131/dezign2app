@@ -14,13 +14,13 @@ import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import type { BackendNode } from "@/types/canvas";
 import type { CustomTypeItem } from "@workspace/canvas/types";
 import { toPascalCase } from "@/lib/utils";
-import { Globe, Database, Package, Braces } from "lucide-react";
+import { Globe, Database, Package, Braces, Sparkles } from "lucide-react";
 import { cn } from "@workspace/ui/lib/utils";
 
 export interface TypeGroupInfo {
   id: string; // Node ID
   label: string; // e.g. "Conversations Types", "Entity Types"
-  iconType: "service" | "entity" | "package" | "custom";
+  iconType: "custom" | "service" | "entity" | "package";
   isServiceDerived?: boolean;
   serviceName?: string;
   types: CustomTypeItem[];
@@ -28,7 +28,9 @@ export interface TypeGroupInfo {
 
 export interface TwoStepTypeSelectorProps {
   value: string;
-  onValueChange: (newType: string) => void;
+  onValueChange: (newType: string, typeItem?: CustomTypeItem, groupId?: string) => void;
+  selectedTypeId?: string;
+  selectedGroupId?: string;
   allNodes?: BackendNode[];
   compact?: boolean;
   className?: string;
@@ -46,13 +48,16 @@ const PRIMITIVE_TYPES = [
 
 /**
  * Extracts and categorizes types nodes from the canvas into structured groups:
+ * - Standalone Custom Types (user-defined - highest priority)
  * - Service Types (e.g. Conversations Types)
  * - Database Entity Types (e.g. Entity Types)
- * - Package Types (imported npm packages)
- * - Standalone Custom Types
+ * - Package Types (imported npm packages / agent libraries)
  */
 export function extractTypeGroups(nodes: BackendNode[]): TypeGroupInfo[] {
-  const groups: TypeGroupInfo[] = [];
+  const customGroups: TypeGroupInfo[] = [];
+  const serviceGroups: TypeGroupInfo[] = [];
+  const entityGroups: TypeGroupInfo[] = [];
+  const packageGroups: TypeGroupInfo[] = [];
 
   nodes.forEach((n) => {
     if (n.type !== "types") return;
@@ -93,30 +98,59 @@ export function extractTypeGroups(nodes: BackendNode[]): TypeGroupInfo[] {
       if (!label || label === "Types") {
         label = `${serviceName} Types`;
       }
+      serviceGroups.push({
+        id: n.id,
+        label,
+        iconType,
+        isServiceDerived,
+        serviceName,
+        types,
+      });
     } else if (isEntitySchemas) {
       iconType = "entity";
       label = label || "Entity Types";
+      entityGroups.push({
+        id: n.id,
+        label,
+        iconType,
+        isServiceDerived,
+        serviceName,
+        types,
+      });
     } else if (isPackageNode) {
       iconType = "package";
       label = n.data?.packageName || label || "Package Types";
+      packageGroups.push({
+        id: n.id,
+        label,
+        iconType,
+        isServiceDerived,
+        serviceName,
+        types,
+      });
+    } else {
+      iconType = "custom";
+      label = label || "Custom Types";
+      customGroups.push({
+        id: n.id,
+        label,
+        iconType,
+        isServiceDerived,
+        serviceName,
+        types,
+      });
     }
-
-    groups.push({
-      id: n.id,
-      label,
-      iconType,
-      isServiceDerived,
-      serviceName,
-      types,
-    });
   });
 
-  return groups;
+  // Standalone user-defined types ALWAYS take precedence!
+  return [...customGroups, ...serviceGroups, ...entityGroups, ...packageGroups];
 }
 
 export const TwoStepTypeSelector: React.FC<TwoStepTypeSelectorProps> = ({
   value,
   onValueChange,
+  selectedTypeId,
+  selectedGroupId,
   allNodes: propNodes,
   compact = false,
   className,
@@ -133,8 +167,26 @@ export const TwoStepTypeSelector: React.FC<TwoStepTypeSelectorProps> = ({
 
   const matchedGroup = useMemo(() => {
     if (isPrimitive) return undefined;
+    if (selectedGroupId) {
+      const g = typeGroups.find((grp) => grp.id === selectedGroupId);
+      if (g) return g;
+    }
+    if (selectedTypeId) {
+      const g = typeGroups.find((grp) => grp.types.some((t) => t.id === selectedTypeId));
+      if (g) return g;
+    }
+    // Search typeGroups (custom user types first)
     return typeGroups.find((g) => g.types.some((t) => t.name === cleanBaseType));
-  }, [typeGroups, cleanBaseType, isPrimitive]);
+  }, [typeGroups, cleanBaseType, isPrimitive, selectedGroupId, selectedTypeId]);
+
+  const selectedTypeItemId = useMemo(() => {
+    if (!matchedGroup) return undefined;
+    if (selectedTypeId && matchedGroup.types.some((t) => t.id === selectedTypeId)) {
+      return selectedTypeId;
+    }
+    const byName = matchedGroup.types.find((t) => t.name === cleanBaseType);
+    return byName ? byName.id : undefined;
+  }, [matchedGroup, selectedTypeId, cleanBaseType]);
 
   const primaryValue = useMemo(() => {
     if (matchedGroup) {
@@ -149,25 +201,37 @@ export const TwoStepTypeSelector: React.FC<TwoStepTypeSelectorProps> = ({
   const handlePrimaryChange = (selected: string) => {
     if (selected.startsWith("primitive:")) {
       const prim = selected.replace("primitive:", "");
-      onValueChange(prim);
+      onValueChange(prim, undefined, undefined);
     } else if (selected.startsWith("group:")) {
       const groupId = selected.replace("group:", "");
       const targetGroup = typeGroups.find((g) => g.id === groupId);
       if (targetGroup && targetGroup.types.length > 0) {
         // If current value is already in this group, keep it; otherwise pick first type
-        const existingInGroup = targetGroup.types.find((t) => t.name === cleanBaseType);
-        onValueChange(existingInGroup ? existingInGroup.name : targetGroup.types[0]!.name);
+        const existingInGroup = targetGroup.types.find(
+          (t) => (selectedTypeId && t.id === selectedTypeId) || t.name === cleanBaseType,
+        );
+        const picked = existingInGroup || targetGroup.types[0]!;
+        onValueChange(picked.name, picked, targetGroup.id);
       }
     }
   };
 
-  const handleSecondaryChange = (selectedType: string) => {
-    if (selectedType && selectedType.trim()) {
-      onValueChange(selectedType.trim());
+  const handleSecondaryChange = (selectedTypeValue: string) => {
+    if (!selectedTypeValue || !selectedTypeValue.trim()) return;
+    const clean = selectedTypeValue.trim();
+    const targetItem = matchedGroup?.types.find((t) => t.id === clean || t.name === clean);
+    if (targetItem) {
+      onValueChange(targetItem.name, targetItem, matchedGroup?.id);
+    } else {
+      onValueChange(clean, undefined, matchedGroup?.id);
     }
   };
 
   // Partition groups for organized presentation in Dropdown 1
+  const customGroups = useMemo(
+    () => typeGroups.filter((g) => g.iconType === "custom"),
+    [typeGroups],
+  );
   const serviceGroups = useMemo(
     () => typeGroups.filter((g) => g.iconType === "service"),
     [typeGroups],
@@ -176,8 +240,8 @@ export const TwoStepTypeSelector: React.FC<TwoStepTypeSelectorProps> = ({
     () => typeGroups.filter((g) => g.iconType === "entity"),
     [typeGroups],
   );
-  const otherGroups = useMemo(
-    () => typeGroups.filter((g) => g.iconType !== "service" && g.iconType !== "entity"),
+  const packageGroups = useMemo(
+    () => typeGroups.filter((g) => g.iconType === "package"),
     [typeGroups],
   );
 
@@ -207,6 +271,25 @@ export const TwoStepTypeSelector: React.FC<TwoStepTypeSelectorProps> = ({
               </SelectItem>
             ))}
           </SelectGroup>
+
+          {/* User-defined Custom Types */}
+          {customGroups.length > 0 && (
+            <SelectGroup>
+              <SelectLabel className="text-[9px] uppercase font-bold tracking-wider text-purple-400 px-2 py-1 flex items-center gap-1">
+                <Sparkles size={11} className="text-purple-400" />
+                <span>Custom Types</span>
+              </SelectLabel>
+              {customGroups.map((g) => (
+                <SelectItem
+                  key={g.id}
+                  value={`group:${g.id}`}
+                  className="text-xs font-mono text-purple-300 font-semibold"
+                >
+                  {g.label} ({g.types.length})
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          )}
 
           {/* Service Types */}
           {serviceGroups.length > 0 && (
@@ -246,14 +329,14 @@ export const TwoStepTypeSelector: React.FC<TwoStepTypeSelectorProps> = ({
             </SelectGroup>
           )}
 
-          {/* Package & Custom Types */}
-          {otherGroups.length > 0 && (
+          {/* Package Types */}
+          {packageGroups.length > 0 && (
             <SelectGroup>
               <SelectLabel className="text-[9px] uppercase font-bold tracking-wider text-emerald-400 px-2 py-1 flex items-center gap-1">
                 <Package size={11} className="text-emerald-400" />
-                <span>Custom & Package Types</span>
+                <span>Package Types</span>
               </SelectLabel>
-              {otherGroups.map((g) => (
+              {packageGroups.map((g) => (
                 <SelectItem
                   key={g.id}
                   value={`group:${g.id}`}
@@ -288,8 +371,10 @@ export const TwoStepTypeSelector: React.FC<TwoStepTypeSelectorProps> = ({
                 <Globe size={9} className="text-sky-400" />
               ) : matchedGroup.iconType === "entity" ? (
                 <Database size={9} className="text-indigo-400" />
+              ) : matchedGroup.iconType === "package" ? (
+                <Package size={9} className="text-emerald-400" />
               ) : (
-                <Braces size={9} className="text-emerald-400" />
+                <Sparkles size={9} className="text-purple-400" />
               )}
               <span>Select from {matchedGroup.label}:</span>
             </span>
@@ -299,7 +384,7 @@ export const TwoStepTypeSelector: React.FC<TwoStepTypeSelectorProps> = ({
           </div>
 
           <Select
-            value={cleanBaseType}
+            value={selectedTypeItemId || cleanBaseType}
             onValueChange={handleSecondaryChange}
             disabled={disabled}
           >
@@ -326,7 +411,7 @@ export const TwoStepTypeSelector: React.FC<TwoStepTypeSelectorProps> = ({
                 return (
                   <SelectItem
                     key={t.id}
-                    value={t.name}
+                    value={t.id}
                     className="text-xs font-mono py-1.5"
                     title={`Full type: ${t.name}`}
                   >

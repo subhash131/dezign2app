@@ -15,6 +15,8 @@ import { getLastIndex } from "../../utils";
 import { ConnectionContext } from "../types";
 import { isStorageRefNode } from "../utils";
 import { toast } from "sonner";
+import { getSupportedActionsForType } from "@/app/(canvas)/project/[projectId]/_components/backend-nodes/graph-nodes/nodes/frontend/StateStoreNode";
+import { getSuggestedReducerCodeForChannelType } from "@/app/(canvas)/project/[projectId]/_components/backend-nodes/graph-nodes/langgraph/langgraph-canvas/components/inspector/state-inspector/constants";
 
 /**
  * Handles frontend Hook and Component connections to WebPages, Endpoints, or each other.
@@ -329,9 +331,18 @@ export function handleFrontendConnect({
         const updatedFields: GlobalStoreField[] = fields.map((f: GlobalStoreField): GlobalStoreField => {
           if (f.id === fieldId) {
             const isArray = Boolean(f.isArray || f.type?.endsWith("[]"));
+            const targetType = isArray ? `${typeItem.name}[]` : typeItem.name;
+            const targetActions = getSupportedActionsForType(targetType, isArray);
+            const generatedReducerCode = getSuggestedReducerCodeForChannelType(
+              targetType,
+              typeItem,
+              isArray,
+            );
             return {
               ...f,
-              type: isArray ? `${typeItem.name}[]` : typeItem.name,
+              type: targetType,
+              actions: targetActions,
+              customReducerCode: generatedReducerCode,
             };
           }
           return f;
