@@ -113,7 +113,21 @@ export function generateTriggerHandler(hasApiActions: boolean, hasStreamingActio
         },
         ...prev,
       ]);
-      return (result.data && typeof result.data === "object" ? { ...result, ...(result.data as object) } : result) as unknown as Record<string, string | number | boolean | null | undefined>;
+      const dataObj: Record<string, string | number | boolean | null | undefined> =
+        result.data && typeof result.data === "object" && !Array.isArray(result.data)
+          ? (result.data as Record<string, string | number | boolean | null | undefined>)
+          : {};
+      return {
+        id: result.id,
+        eventName: result.eventName,
+        eventType: result.eventType,
+        timestamp: result.timestamp,
+        url: result.url,
+        method: result.method,
+        status: result.status,
+        error: result.error,
+        ...dataObj,
+      };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Request failed";
       setTriggerLogs((prev) => [
@@ -129,7 +143,7 @@ export function generateTriggerHandler(hasApiActions: boolean, hasStreamingActio
         },
         ...prev,
       ]);
-      return { error: errorMessage } as unknown as Record<string, string | number | boolean | null | undefined>;
+      return { error: errorMessage };
     }
   };
 
@@ -262,7 +276,21 @@ export function generateTriggerHandler(hasApiActions: boolean, hasStreamingActio
           ...prev,
         ]);
       }
-      return (result.data && typeof result.data === "object" ? { ...result, ...(result.data as object) } : result) as unknown as Record<string, string | number | boolean | null | undefined>;
+      const dataObj: Record<string, string | number | boolean | null | undefined> =
+        result.data && typeof result.data === "object" && !Array.isArray(result.data)
+          ? (result.data as Record<string, string | number | boolean | null | undefined>)
+          : {};
+      return {
+        id: result.id,
+        eventName: result.eventName,
+        eventType: result.eventType,
+        timestamp: result.timestamp,
+        url: result.url,
+        method: result.method,
+        status: result.status,
+        error: result.error,
+        ...dataObj,
+      };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Request failed";
       setTriggerLogs((prev) => [
@@ -279,7 +307,7 @@ export function generateTriggerHandler(hasApiActions: boolean, hasStreamingActio
         },
         ...prev,
       ]);
-      return { error: errorMessage } as unknown as Record<string, string | number | boolean | null | undefined>;
+      return { error: errorMessage };
     }
   };
 

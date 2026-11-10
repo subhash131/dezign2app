@@ -13,14 +13,14 @@ import {
   MessageScrollerItem,
   MessageScrollerButton,
   useMessageScroller,
-} from "./message-scroller";
-import { Message, MessageContent, MessageAvatar } from "./message";
-import { Bubble, BubbleContent } from "./bubble";
+} from "@workspace/ui/components/message-scroller";
+import { Message, MessageContent, MessageAvatar } from "@workspace/ui/components/message";
+import { Bubble, BubbleContent } from "@workspace/ui/components/bubble";
 
 // Re-export all primitives
-export * from "./message-scroller";
-export * from "./message";
-export * from "./bubble";
+export * from "@workspace/ui/components/message-scroller";
+export * from "@workspace/ui/components/message";
+export * from "@workspace/ui/components/bubble";
 
 export interface ScriptedTurn {
   role: "user" | "assistant";
@@ -91,9 +91,11 @@ export function createChat() {
 }
 
 export interface ChatMessage {
-  id: string;
-  role: "user" | "assistant" | "system";
-  content: string;
+  id?: string;
+  role?: "user" | "assistant" | "system" | string;
+  sender?: "AI" | "USER" | "SYSTEM" | "user" | "assistant" | "system" | string;
+  content?: string;
+  text?: string;
   createdAt?: string;
 }
 
@@ -107,9 +109,23 @@ export interface ChatProps extends React.HTMLAttributes<HTMLDivElement> {
   emptyDescription?: string;
   title?: string;
   showAvatars?: boolean;
-  alignment?: "center" | "left" | "right" | "full" | "floating-right" | "floating-left";
-  maxWidth?: "sm" | "md" | "lg" | "xl" | "2xl" | "full";
-  variant?: "default" | "fullscreen" | "card" | "embedded";
+  alignment?: "center" | "left" | "right" | "full" | "floating-right" | "floating-left" | string;
+  maxWidth?: "sm" | "md" | "lg" | "xl" | "2xl" | "full" | string;
+  variant?: "default" | "fullscreen" | "card" | "embedded" | string;
+}
+
+interface NormalizedChatMessage {
+  id: string;
+  isUser: boolean;
+  content: string;
+}
+
+function normalizeMessage(msg: ChatMessage, idx: number): NormalizedChatMessage {
+  const roleVal = msg.role || msg.sender || "";
+  const isUser = roleVal.toLowerCase() === "user";
+  const idVal = msg.id || `msg-${idx}`;
+  const contentVal = msg.content ?? msg.text ?? "";
+  return { id: idVal, isUser, content: contentVal };
 }
 
 export const Chat = React.forwardRef<HTMLDivElement, ChatProps>(
@@ -174,7 +190,7 @@ export const Chat = React.forwardRef<HTMLDivElement, ChatProps>(
     const isFloating = alignment === "floating-right" || alignment === "floating-left";
     const isCard = variant === "card" || isFloating;
 
-    // Inner conversation stream max-width
+    // Chat panel max width
     let maxWClass = "max-w-3xl";
     if (maxWidth === "sm") maxWClass = "max-w-md";
     else if (maxWidth === "md") maxWClass = "max-w-xl";
@@ -183,18 +199,23 @@ export const Chat = React.forwardRef<HTMLDivElement, ChatProps>(
     else if (maxWidth === "2xl") maxWClass = "max-w-4xl";
     else if (maxWidth === "full") maxWClass = "max-w-full";
 
-    // Inner stream horizontal alignment (ChatGPT / Claude style)
-    let alignClass = "mx-auto";
-    if (alignment === "left") alignClass = "mr-auto";
-    else if (alignment === "right") alignClass = "ml-auto";
-    else if (alignment === "full") alignClass = "w-full";
-    else alignClass = "mx-auto"; // center default
-
-    const innerColumnClass = cn(
-      "w-full transition-all duration-150",
-      !isFloating && maxWClass,
-      !isFloating && alignClass,
-    );
+    // Alignment and boundary border styles:
+    // - Right-aligned: border-l (left border dividing from content) and pinned to the right
+    // - Left-aligned: border-r (right border dividing from content) and pinned to the left
+    // - Center-aligned: border-x (framed center column)
+    // - Full-width: border-x-0 stretching edge-to-edge
+    let layoutAlignmentClass = "self-center mx-auto border-x border-border/40";
+    if (alignment === "left") {
+      layoutAlignmentClass = "self-start mr-auto border-r border-border/60";
+    } else if (alignment === "right") {
+      layoutAlignmentClass = "self-end ml-auto border-l border-border/60";
+    } else if (alignment === "full" || maxWidth === "full") {
+      layoutAlignmentClass = "self-stretch w-full border-x-0";
+    } else if (isFloating) {
+      layoutAlignmentClass = alignment === "floating-right"
+        ? "fixed bottom-6 right-6 w-96 max-w-[calc(100vw-2rem)] shadow-2xl z-50 rounded-2xl border border-border/80 h-[520px]"
+        : "fixed bottom-6 left-6 w-96 max-w-[calc(100vw-2rem)] shadow-2xl z-50 rounded-2xl border border-border/80 h-[520px]";
+    }
 
     return (
       <div
@@ -203,19 +224,23 @@ export const Chat = React.forwardRef<HTMLDivElement, ChatProps>(
         className={cn(
           isCard
             ? "flex flex-col w-full rounded-xl border border-border/70 bg-card text-card-foreground shadow-xs overflow-hidden"
-            : "flex flex-col w-full h-full flex-1 min-h-0 bg-background text-foreground overflow-hidden",
-          className || (isCard ? "h-[400px] max-h-[600px]" : "h-full"),
+            : cn(
+                "flex flex-col w-full h-full flex-1 min-h-0 bg-background text-foreground transition-all duration-150 overflow-hidden",
+                !isFloating && maxWClass,
+                layoutAlignmentClass,
+              ),
+          className,
         )}
         {...props}
       >
         {title && (
-          <div className="w-full h-12 border-b border-border/40 bg-background/80 backdrop-blur px-6 flex items-center justify-between shrink-0">
+          <div className="w-full h-12 border-b border-border/40 bg-background/80 backdrop-blur px-4 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2.5">
               <div className="size-6 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0">
                 <Bot className="size-3.5" />
               </div>
               <span className="font-semibold text-xs text-foreground">
-                {typeof title === "string" ? title : (title ? String((title as any)?.target?.value ?? title) : "")}
+                {typeof title === "string" ? title : String(title ?? "")}
               </span>
             </div>
             <span className="text-[10px] font-mono text-muted-foreground">
@@ -227,40 +252,40 @@ export const Chat = React.forwardRef<HTMLDivElement, ChatProps>(
         <MessageScrollerProvider autoScroll={autoScroll}>
           <MessageScroller className="flex-1 min-h-0 relative">
             <MessageScrollerViewport className="flex-1 w-full overflow-y-auto">
-              <MessageScrollerContent className={cn("py-6 min-h-full flex flex-col justify-between", innerColumnClass)}>
+              <MessageScrollerContent className="py-6 px-4 min-h-full flex flex-col justify-between w-full">
                 {messages.length === 0 ? (
                   <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-muted-foreground my-auto">
                     <div className="size-12 rounded-2xl bg-primary/10 flex items-center justify-center mb-3 text-primary">
                       <Sparkles className="size-6" />
                     </div>
                     <h4 className="text-base font-semibold text-foreground">
-                      {typeof emptyTitle === "string" ? emptyTitle : (emptyTitle ? String((emptyTitle as any)?.target?.value ?? emptyTitle) : "")}
+                      {typeof emptyTitle === "string" ? emptyTitle : String(emptyTitle ?? "")}
                     </h4>
                     <p className="text-xs text-muted-foreground mt-1 max-w-sm">
-                      {typeof emptyDescription === "string" ? emptyDescription : (emptyDescription ? String((emptyDescription as any)?.target?.value ?? emptyDescription) : "")}
+                      {typeof emptyDescription === "string" ? emptyDescription : String(emptyDescription ?? "")}
                     </p>
                   </div>
                 ) : (
                   <div className="space-y-4 w-full">
-                    {messages.map((msg) => {
-                      const isUser = msg.role === "user";
+                    {messages.map((rawMsg, idx) => {
+                      const msg = normalizeMessage(rawMsg, idx);
                       return (
                         <MessageScrollerItem
                           key={msg.id}
                           messageId={msg.id}
-                          scrollAnchor={isUser}
+                          scrollAnchor={msg.isUser}
                         >
-                          <Message align={isUser ? "end" : "start"}>
-                            <MessageContent align={isUser ? "end" : "start"}>
+                          <Message align={msg.isUser ? "end" : "start"}>
+                            <MessageContent align={msg.isUser ? "end" : "start"}>
                               {showAvatars && (
                                 <MessageAvatar
-                                  fallback={isUser ? "U" : "AI"}
-                                  className={isUser ? "order-last ml-1" : "mr-1"}
+                                  fallback={msg.isUser ? "U" : "AI"}
+                                  className={msg.isUser ? "order-last ml-1" : "mr-1"}
                                 />
                               )}
                               <Bubble
-                                align={isUser ? "end" : "start"}
-                                variant={isUser ? "muted" : "default"}
+                                align={msg.isUser ? "end" : "start"}
+                                variant={msg.isUser ? "muted" : "default"}
                               >
                                 <BubbleContent>{msg.content}</BubbleContent>
                               </Bubble>
@@ -293,11 +318,11 @@ export const Chat = React.forwardRef<HTMLDivElement, ChatProps>(
           </MessageScroller>
         </MessageScrollerProvider>
 
-        {/* Input Bar (ChatGPT / Claude floating capsule) */}
-        <div className="w-full shrink-0 bg-background/80 backdrop-blur p-4 pb-6 pt-2">
+        {/* Input Bar */}
+        <div className="w-full shrink-0 bg-background/80 backdrop-blur p-4 pb-6 pt-2 border-t border-border/30">
           <form
             onSubmit={handleSubmit}
-            className={innerColumnClass}
+            className="w-full"
           >
             <div className="w-full relative flex items-center rounded-2xl border border-border/80 bg-muted/40 shadow-xs focus-within:border-ring focus-within:ring-1 focus-within:ring-ring transition-all px-3.5 py-1.5 gap-2">
               <Input

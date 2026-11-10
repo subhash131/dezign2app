@@ -1,5 +1,5 @@
 "use client";
 
-export * from "../chat";
-export { default } from "../chat";
+export * from "@workspace/ui/components/chat";
+export { default } from "@workspace/ui/components/chat";
 
