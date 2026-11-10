@@ -374,6 +374,26 @@ export function generateZustandStore(
     return `  update${fPascal}: (patch?: Partial<${baseTs}> | Record<string, unknown> | null) => void;`;
   });
 
+  const isMessageField = (f: { name: string; type?: string }) =>
+    f.name.toLowerCase().includes("message") ||
+    f.name.toLowerCase().includes("chat") ||
+    (f.type || "").toLowerCase().includes("message");
+
+  const activeStreamFields = fields.filter((f) => {
+    if (!f.actions?.includes("stream") && !isMessageField(f)) return false;
+    const fPascal = toPascalCase(f.name);
+    const streamName = `stream${fPascal}`;
+    const isOverridden = actionNames.has(toCamelCase(streamName));
+    const isDisabled =
+      disabledManipulators.has(streamName) || disabledManipulators.has(`stream-${f.id}`);
+    return !isOverridden && !isDisabled;
+  });
+
+  const streamLines = activeStreamFields.map((f) => {
+    const fPascal = toPascalCase(f.name);
+    return `  stream${fPascal}: (chunkOrDelta?: { delta?: string; chunk?: string; text?: string; done?: boolean; id?: string; role?: string } | string) => void;`;
+  });
+
   const resetFieldLines = fields
     .filter((f) => {
       if (!f.actions?.includes("reset")) return false;
@@ -718,6 +738,40 @@ ${payloadPrep}
       return `  reset${fPascal}: () => set({ ${fName}: ${defVal} }),`;
     });
 
+  const streamImpls = activeStreamFields.map((f) => {
+    const fName = toCamelCase(f.name);
+    const fPascal = toPascalCase(f.name);
+    if (isArrayField(f)) {
+      return `  stream${fPascal}: (chunkOrDelta) => set((s) => {
+    const src = typeof chunkOrDelta === "object" && chunkOrDelta !== null ? chunkOrDelta : {};
+    const delta = ("delta" in src && typeof src.delta === "string") ? src.delta : ("chunk" in src && typeof src.chunk === "string") ? src.chunk : ("text" in src && typeof src.text === "string") ? src.text : (typeof chunkOrDelta === "string" ? chunkOrDelta : "");
+    const role = ("role" in src && typeof src.role === "string") ? src.role : "assistant";
+    const done = Boolean("done" in src && src.done);
+    const current = Array.isArray(s.${fName}) ? s.${fName} : [];
+    let i = -1;
+    if ("id" in src && src.id !== undefined) {
+      i = current.findIndex((m) => typeof m === "object" && m !== null && "id" in m && m.id === src.id);
+    } else {
+      const last = current[current.length - 1];
+      if (typeof last === "object" && last !== null && "role" in last && last.role === role && "streaming" in last && last.streaming === true) i = current.length - 1;
+    }
+    if (done) {
+      return { ${fName}: i !== -1 ? current.map((m, j) => j === i && typeof m === "object" && m !== null ? { ...m, streaming: false } : m) : current };
+    }
+    if (typeof delta !== "string" || !delta) return { ${fName}: current };
+    if (i === -1) {
+      return { ${fName}: [...current, { id: ("id" in src && typeof src.id === "string") ? src.id : "msg_" + current.length + "_" + Date.now(), role, content: delta, streaming: true }] };
+    }
+    const target = current[i];
+    return { ${fName}: current.map((m, j) => j === i && typeof m === "object" && m !== null ? { ...m, content: ("content" in m && typeof m.content === "string" ? m.content : "") + delta, streaming: true } : m) };
+  }),`;
+    }
+    return `  stream${fPascal}: (chunkOrDelta) => set((s) => {
+    const delta = typeof chunkOrDelta === "object" && chunkOrDelta !== null ? (("delta" in chunkOrDelta && typeof chunkOrDelta.delta === "string") ? chunkOrDelta.delta : ("chunk" in chunkOrDelta && typeof chunkOrDelta.chunk === "string") ? chunkOrDelta.chunk : ("text" in chunkOrDelta && typeof chunkOrDelta.text === "string") ? chunkOrDelta.text : "") : String(chunkOrDelta ?? "");
+    return { ${fName}: (s.${fName} || "") + delta };
+  }),`;
+  });
+
   const descriptionComment = store.description
     ? `/**\n * ${store.description.replace(/\n/g, "\n * ")}\n */\n`
     : "";
@@ -772,6 +826,7 @@ ${payloadPrep}
     ...prependLines,
     ...appendLines,
     ...updateLines,
+    ...streamLines,
     ...popLines,
     ...removeLines,
     ...resetFieldLines,
@@ -787,6 +842,7 @@ ${payloadPrep}
     ...prependImpls,
     ...appendImpls,
     ...updateImpls,
+    ...streamImpls,
     ...popImpls,
     ...removeImpls,
     ...resetFieldImpls,

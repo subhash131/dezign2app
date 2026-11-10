@@ -219,15 +219,19 @@ describe("StateStore Dynamic Reducer Generation", () => {
       expect(getSupportedActionsForType("string[]", true)).toEqual([
         "set",
         "append",
+        "prepend",
         "pop",
         "remove",
+        "update",
         "reset",
       ]);
       expect(getSupportedActionsForType("User[]", true)).toEqual([
         "set",
         "append",
+        "prepend",
         "pop",
         "remove",
+        "update",
         "reset",
       ]);
     });

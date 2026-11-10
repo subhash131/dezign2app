@@ -410,7 +410,8 @@ export type StoreActionType =
   | "reset"
   | "populate"
   | "custom"
-  | "mutate";
+  | "mutate"
+  | "stream";
 
 export interface StoreActionBinding {
   id?: string;

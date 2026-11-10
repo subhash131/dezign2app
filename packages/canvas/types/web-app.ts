@@ -159,7 +159,20 @@ export interface GlobalStoreAction {
   responseMappingMode?: "replace" | "merge" | "custom";
   description?: string;
   prompt?: string;
-  defaultManipulatorType?: "populate" | "reset" | "setter" | "mutate" | "append" | "pop";
+  defaultManipulatorType?:
+    | "populate"
+    | "reset"
+    | "setter"
+    | "mutate"
+    | "append"
+    | "pop"
+    | "prepend"
+    | "remove"
+    | "update"
+    | "stream"
+    | "increment"
+    | "decrement"
+    | "toggle";
 }
 
 export interface StateStoreTestCase {
