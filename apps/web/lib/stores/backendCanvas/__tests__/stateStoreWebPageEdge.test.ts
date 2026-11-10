@@ -295,7 +295,7 @@ describe("StateStore <-> WebPage & TypesNode Connection and Cleanup", () => {
 
       expect(result.edges).toHaveLength(0);
       const updatedStore = result.nodes?.find((n) => n.id === "store-1");
-      expect(updatedStore?.data?.fields?.[0]?.type).toBe("any[]");
+      expect(updatedStore?.data?.fields?.[0]?.type).toBe("string[]");
     });
 
     it("removes section stateObjects referencing a deleted state_store node", () => {

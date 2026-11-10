@@ -419,6 +419,170 @@ describe("stateStoreManipulators", () => {
       });
       expect(popRes.newState.messages).toEqual(["hello"]);
     });
+
+    it("generates full action suite (including stream, prepend, remove, update) for message array and executes custom reducer", () => {
+      const userMessageReducer = `(prev, next) => {
+  const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+  const list = Array.isArray(prev) ? prev : [];
+  const action = Array.isArray(next) ? "set" : (isObj(next) ? next.action : undefined);
+
+  let payload = next;
+  if (isObj(next)) {
+    if ("value" in next) payload = next.value;
+    else if ("action" in next) {
+      const { action: _a, index: _i, ...rest } = next;
+      payload = rest;
+    }
+  }
+
+  const toItems = (v) =>
+    v == null ? [] :
+    Array.isArray(v) ? v :
+    isObj(v) && Object.keys(v).length === 0 ? [] :
+    [v];
+
+  if (action === "reset" || action === "clear") {
+    return list.length === 0 ? list : [];
+  }
+  if (action === "set" || action === "replace") {
+    return toItems(payload);
+  }
+  if (action === "append" || action === "add") {
+    const items = toItems(payload);
+    return items.length ? [...list, ...items] : list;
+  }
+  if (action === "prepend") {
+    const items = toItems(payload);
+    return items.length ? [...items, ...list] : list;
+  }
+  if (action === "pop") {
+    return list.length ? list.slice(0, -1) : list;
+  }
+  if (action === "remove" || action === "filter") {
+    const target = isObj(next) && "id" in next ? next.id : isObj(payload) && "id" in payload ? payload.id : payload;
+    return list.filter((item) => (isObj(item) && "id" in item ? item.id !== target : item !== target));
+  }
+  if (action === "update" || action === "upsert") {
+    const patch = payload;
+    const targetId = isObj(patch) ? patch.id : undefined;
+    if (!isObj(patch) || targetId === undefined) return list;
+    const i = list.findIndex((m) => isObj(m) && m.id === targetId);
+    if (i === -1) return [...list, patch];
+    return list.map((m, j) => (j === i ? { ...m, ...patch } : m));
+  }
+  if (action === "stream" || action === "append_stream" || action === "chunk") {
+    const src = isObj(next) ? next : {};
+    const delta = src.delta ?? src.chunk ?? src.text ?? (typeof src.value === "string" ? src.value : "");
+    const role = src.role ?? "assistant";
+    let i = -1;
+    if (src.id !== undefined) {
+      i = list.findIndex((m) => isObj(m) && m.id === src.id);
+    } else {
+      const last = list[list.length - 1];
+      if (isObj(last) && last.role === role && last.streaming === true) i = list.length - 1;
+    }
+    if (src.done) {
+      if (i === -1 || list[i].streaming === false) return list;
+      return list.map((m, j) => (j === i ? { ...m, streaming: false } : m));
+    }
+    if (typeof delta !== "string" || delta === "") return list;
+    if (i === -1) {
+      return [...list, { id: src.id ?? "msg_1", role, content: delta, streaming: true }];
+    }
+    const target = list[i];
+    return list.map((m, j) => (j === i ? { ...m, content: (m.content || "") + delta, streaming: true } : m));
+  }
+  return list;
+};`;
+
+      const chatStoreFields: GlobalStoreField[] = [
+        { id: "f1", name: "user_message", type: "string", defaultValue: "" },
+        {
+          id: "f2",
+          name: "chatHistory",
+          type: "Message[]",
+          isArray: true,
+          defaultValue: [],
+          customReducerCode: userMessageReducer,
+        },
+      ];
+
+      const manipulators = getStateManipulators(chatStoreFields, []);
+      const names = manipulators.map((m) => m.name);
+
+      // Verify that all expected actions are now generated
+      expect(names).toContain("setUser_message");
+      expect(names).toContain("setChatHistory");
+      expect(names).toContain("appendChatHistory");
+      expect(names).toContain("prependChatHistory");
+      expect(names).toContain("popChatHistory");
+      expect(names).toContain("removeChatHistory");
+      expect(names).toContain("updateChatHistory");
+      expect(names).toContain("streamChatHistory");
+      expect(names).toContain("resetChatHistory");
+
+      // Verify categories
+      const streamManipulator = manipulators.find((m) => m.name === "streamChatHistory");
+      expect(streamManipulator).toBeDefined();
+      expect(streamManipulator?.category).toBe("custom_action");
+
+      // Execute stream chunk 1
+      let currentState: Record<string, any> = { user_message: "", chatHistory: [] };
+      const streamRes1 = applyManipulator({
+        manipulator: streamManipulator!,
+        payload: { id: "a1", delta: "Hel", role: "assistant" },
+        currentState,
+        fields: chatStoreFields,
+      });
+      expect(streamRes1.error).toBeUndefined();
+      expect(streamRes1.newState.chatHistory).toEqual([
+        { id: "a1", role: "assistant", content: "Hel", streaming: true },
+      ]);
+
+      // Execute stream chunk 2
+      const streamRes2 = applyManipulator({
+        manipulator: streamManipulator!,
+        payload: { delta: "lo!" },
+        currentState: streamRes1.newState,
+        fields: chatStoreFields,
+      });
+      expect(streamRes2.newState.chatHistory).toEqual([
+        { id: "a1", role: "assistant", content: "Hello!", streaming: true },
+      ]);
+
+      // Execute stream done
+      const streamRes3 = applyManipulator({
+        manipulator: streamManipulator!,
+        payload: { id: "a1", done: true },
+        currentState: streamRes2.newState,
+        fields: chatStoreFields,
+      });
+      expect(streamRes3.newState.chatHistory).toEqual([
+        { id: "a1", role: "assistant", content: "Hello!", streaming: false },
+      ]);
+
+      // Execute update
+      const updateManipulator = manipulators.find((m) => m.name === "updateChatHistory")!;
+      const updateRes = applyManipulator({
+        manipulator: updateManipulator,
+        payload: { id: "a1", content: "Hello World (Edited)" },
+        currentState: streamRes3.newState,
+        fields: chatStoreFields,
+      });
+      expect(updateRes.newState.chatHistory).toEqual([
+        { id: "a1", role: "assistant", content: "Hello World (Edited)", streaming: false },
+      ]);
+
+      // Execute remove
+      const removeManipulator = manipulators.find((m) => m.name === "removeChatHistory")!;
+      const removeRes = applyManipulator({
+        manipulator: removeManipulator,
+        payload: { id: "a1" },
+        currentState: updateRes.newState,
+        fields: chatStoreFields,
+      });
+      expect(removeRes.newState.chatHistory).toEqual([]);
+    });
   });
 });
 

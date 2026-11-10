@@ -644,6 +644,63 @@ export function generateSchemaAwareArrayReducerCode(
   const fields = extractFieldsFromCustomType(customType);
   const typeLabel = customType.name ? ` for ${customType.name}[]` : "";
   const idField = fields.find((f) => f.name === "id" || f.name === "_id")?.name || "id";
+  const isMsg =
+    customType.name?.toLowerCase().includes("message") ||
+    customType.name?.toLowerCase().includes("chat") ||
+    fields.some((f) => f.name === "content" || f.name === "text" || f.name === "delta");
+
+  const streamBlock = isMsg
+    ? `
+
+  // 9. Action: stream / append_stream / chunk - appends a text delta to a streaming message
+  // e.g. dispatch { action: "stream", id: "a1", delta: "Hel" }   // starts or appends to a1
+  //      dispatch { action: "stream", id: "a1", done: true }     // closes a1
+  //      dispatch { action: "stream", delta: "lo" }              // no id => current streaming msg
+  if (action === "stream" || action === "append_stream" || action === "chunk") {
+    const src = isObj(next) ? next : {};
+    const delta =
+      src.delta ?? src.chunk ?? src.text ??
+      (typeof src.value === "string" ? src.value : "");
+    const role = src.role ?? "assistant";
+
+    // Find target: by id if given, otherwise the last message that is actively streaming
+    let i = -1;
+    if (src.id !== undefined) {
+      i = list.findIndex((m) => isObj(m) && ("${idField}" in m ? m.${idField} === src.id : m.id === src.id));
+    } else {
+      const last = list[list.length - 1];
+      if (isObj(last) && last.role === role && last.streaming === true) i = list.length - 1;
+    }
+
+    // done => mark the target as finished
+    if (src.done) {
+      if (i === -1 || list[i].streaming === false) return list;
+      return list.map((m, j) => (j === i ? { ...m, streaming: false } : m));
+    }
+
+    if (typeof delta !== "string" || delta === "") return list;
+
+    // No target => start a new message (uses the provided id, or generates one)
+    if (i === -1) {
+      return [
+        ...list,
+        {
+          id: src.id ?? \`msg_\${list.length}_\${Date.now()}\`,
+          role,
+          content: delta,
+          streaming: true,
+        },
+      ];
+    }
+
+    // Target found => append the delta
+    const target = list[i];
+    const prevContent = typeof target.content === "string" ? target.content : "";
+    return list.map((m, j) =>
+      j === i ? { ...m, content: prevContent + delta, streaming: true } : m
+    );
+  }`
+    : "";
 
   return `(prev, next) => {
   // Array reducer${typeLabel}
@@ -748,7 +805,7 @@ export function generateSchemaAwareArrayReducerCode(
   if (!action || action === "" || action === "default") {
     const items = toItems(payload);
     return items.length ? [...list, ...items] : list;
-  }
+  }${streamBlock}
 
   return list;
 };`;
