@@ -9,21 +9,21 @@ export const FinalCtaSection: React.FC = () => {
     <section className="w-full py-24 bg-[#050505] border-t border-zinc-900 text-center">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 flex flex-col items-center">
         {/* Tag */}
-        <span className="text-xs font-mono uppercase tracking-wider text-zinc-500 font-semibold mb-3">
-          Instant Developer Productivity
+        <span className="text-xs font-mono uppercase tracking-wider text-emerald-400 font-semibold mb-3">
+          Zero Token Limits &bull; 100% Code Ownership
         </span>
 
         {/* Heading */}
         <h2
           style={{ fontFamily: "var(--font-display)" }}
-          className="text-3xl sm:text-5xl font-bold tracking-tight text-white max-w-2xl leading-tight"
+          className="text-3xl sm:text-5xl font-bold tracking-tight text-white max-w-3xl leading-tight"
         >
-          Ready to Ship Your Next Product in Hours?
+          Turn System Architecture into Production Software.
         </h2>
 
         {/* Subhead */}
         <p className="mt-4 text-base text-zinc-400 max-w-xl leading-relaxed">
-          Skip weeks of boilerplate setup. Model your distributed system visually and download a production-ready monorepo today.
+          Skip weeks of boilerplate and thousands in AI token bills. Model your system visually on CPU in seconds and ship production software today.
         </p>
 
         {/* Dual Actions */}
