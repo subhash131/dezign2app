@@ -213,6 +213,42 @@ ${hasLogsSection ? `${triggerLogsSectionJsx}` : ""}      </div>
   const namedTypeDecl = pageLoadDataTypeDecl ? `${pageLoadDataTypeDecl}\n\n` : "";
   const sidebarSection = sectionsMeta.find((s) => s.hasSidebar);
   const hasSidebar = Boolean(sidebarSection);
+  const hasChat = sectionsMeta.some((s) => s.hasChat);
+
+  if (hasChat) {
+    if (hasSidebar && sidebarSection) {
+      const sidebarJsx = `      <${sidebarSection.componentName}${hasApiActions ? " onTrigger={handleTriggerAction}" : ""} />`;
+      const contentSections = sectionsMeta.filter((s) => !s.hasSidebar);
+      const contentSectionsJsx = contentSections
+        .map((s) => `          <${s.componentName}${hasApiActions ? " onTrigger={handleTriggerAction}" : ""} />`)
+        .join("\n\n");
+
+      return `"use client";
+
+${reactImport}
+${dynamicNavigationImport}${uiImports.join("\n")}${uiImports.length > 0 ? "\n" : ""}${storeImports ? `${storeImports}\n` : ""}${allImports ? `${allImports}\n` : ""}${jsonValueTypeDecl}${namedTypeDecl}export default function ${pageMeta.componentName}() {
+${routeParamsHookJsx}${pageLoadStateJsx}${mediaStateJsx}${triggerLogsStateJsx}${pageLoadEffectJsx}${sseEffectsJsx}${wsEffectsJsx}${webrtcEffectsJsx}${triggerHandlerJsx}  return (
+    <div className="h-screen w-full bg-background text-foreground flex overflow-hidden">
+${sidebarJsx}
+      <main className="flex-1 min-w-0 flex flex-col h-full overflow-hidden relative">
+${pageLoadSectionJsx}${mediaSectionJsx}${contentSectionsJsx ? `        {/* Page Content Sections */}\n        <Suspense fallback={null}>\n${contentSectionsJsx}\n        </Suspense>\n` : ""}${triggerLogsSectionJsx}      </main>
+    </div>
+  );
+}
+`;
+    }
+
+    return `"use client";
+
+${reactImport}
+${dynamicNavigationImport}${uiImports.join("\n")}${uiImports.length > 0 ? "\n" : ""}${storeImports ? `${storeImports}\n` : ""}${allImports ? `${allImports}\n` : ""}${jsonValueTypeDecl}${namedTypeDecl}export default function ${pageMeta.componentName}() {
+${routeParamsHookJsx}${pageLoadStateJsx}${mediaStateJsx}${triggerLogsStateJsx}${pageLoadEffectJsx}${sseEffectsJsx}${wsEffectsJsx}${webrtcEffectsJsx}${triggerHandlerJsx}  return (
+    <main className="h-screen w-full bg-background text-foreground flex flex-col overflow-hidden font-sans relative">
+${pageLoadSectionJsx}${mediaSectionJsx}${sectionsJsx ? `      {/* Page Sections */}\n      <Suspense fallback={null}>\n${sectionsJsx}\n      </Suspense>\n` : ""}${triggerLogsSectionJsx}    </main>
+  );
+}
+`;
+  }
 
   if (hasSidebar && sidebarSection) {
     const sidebarJsx = `      <${sidebarSection.componentName}${hasApiActions ? " onTrigger={handleTriggerAction}" : ""} />`;

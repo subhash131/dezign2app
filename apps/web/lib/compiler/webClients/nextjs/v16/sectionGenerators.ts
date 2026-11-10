@@ -11,6 +11,7 @@ export interface SectionMeta {
   renderMode?: "server" | "client";
   actions?: EventComponentMeta[];
   hasSidebar?: boolean;
+  hasChat?: boolean;
 }
 
 const CLIENT_ONLY_PACKAGES = new Set([
@@ -1507,42 +1508,19 @@ ${authButtonsJsx}
       const messagesProp = valVar ? `\n          messages={Array.isArray(${valVar}) ? ${valVar} : undefined}` : "";
 
       const alignment = item.propMappings?.chatAlignment || "center";
-      const maxWidth = item.propMappings?.chatMaxWidth;
-      const height = item.propMappings?.chatHeight;
+      const maxWidth = item.propMappings?.chatMaxWidth || "xl";
+      const isFloating = alignment === "floating-right" || alignment === "floating-left";
 
-      let heightClass = "h-[calc(100vh-8rem)]";
-      if (height === "sm") heightClass = "h-[360px]";
-      else if (height === "md") heightClass = "h-[480px]";
-      else if (height === "lg") heightClass = "h-[640px]";
-      else if (height === "xl") heightClass = "h-[760px]";
-      else if (height === "full" || !height) heightClass = "h-[calc(100vh-8rem)]";
-
-      if ((alignment === "floating-right" || alignment === "floating-left") && (!height || height === "full")) {
-        heightClass = "h-[520px]";
-      }
-
-      let maxWClass = "max-w-2xl";
-      if (maxWidth === "sm") maxWClass = "max-w-md";
-      else if (maxWidth === "md") maxWClass = "max-w-xl";
-      else if (maxWidth === "lg") maxWClass = "max-w-2xl";
-      else if (maxWidth === "xl") maxWClass = "max-w-3xl";
-      else if (maxWidth === "2xl") maxWClass = "max-w-4xl";
-      else if (maxWidth === "full") maxWClass = "max-w-full";
-
-      let layoutClasses = `w-full ${maxWClass} mx-auto`;
-      if (alignment === "left") {
-        layoutClasses = `w-full ${maxWClass} mr-auto`;
-      } else if (alignment === "right") {
-        layoutClasses = `w-full ${maxWClass} ml-auto`;
-      } else if (alignment === "full") {
-        layoutClasses = "w-full";
-      } else if (alignment === "floating-right") {
-        layoutClasses = "fixed bottom-6 right-6 w-96 max-w-[calc(100vw-2rem)] shadow-2xl z-50 rounded-2xl";
+      let floatingClass = "";
+      if (alignment === "floating-right") {
+        floatingClass = "fixed bottom-6 right-6 w-96 max-w-[calc(100vw-2rem)] shadow-2xl z-50 rounded-2xl h-[520px]";
       } else if (alignment === "floating-left") {
-        layoutClasses = "fixed bottom-6 left-6 w-96 max-w-[calc(100vw-2rem)] shadow-2xl z-50 rounded-2xl";
+        floatingClass = "fixed bottom-6 left-6 w-96 max-w-[calc(100vw-2rem)] shadow-2xl z-50 rounded-2xl h-[520px]";
       }
 
-      const fullChatClassName = `${layoutClasses} ${heightClass}`.trim();
+      const fullChatClassName = isFloating
+        ? floatingClass
+        : "w-full h-full flex-1 min-h-0";
 
       return `<Chat
           key="${item.id}"
@@ -1552,6 +1530,8 @@ ${authButtonsJsx}
           emptyDescription="${emptyDesc}"
           autoScroll={${autoScroll}}
           showAvatars={${showAvatars}}${messagesProp}${onSendProp}
+          alignment="${alignment}"
+          maxWidth="${maxWidth}"
           className="${fullChatClassName}"
         />`;
     }
@@ -1695,6 +1675,9 @@ ${authButtonsJsx}
   const hasSidebarBinding = (section.componentBindings || []).some(
     (cb) => cb.componentType === "sidebar",
   );
+  const hasChatBinding = (section.componentBindings || []).some(
+    (cb) => cb.componentType === "chat",
+  );
   const contentJsx = contentParts.filter(Boolean).join("\n");
 
   return `${isClient ? `"use client";\n\n` : ""}${reactImport}
@@ -1713,7 +1696,7 @@ ${extraComponentImports ? `${extraComponentImports}\n` : ""}${toastImport}${libr
 
 export function ${sectionCompName}({ onTrigger }: ${sectionCompName}Props) {
 ${combinedSetupLines ? `${combinedSetupLines}\n\n` : ""}  return (
-    <div className="${hasSidebarBinding ? "shrink-0" : "w-full space-y-4"}">
+    <div className="${hasSidebarBinding ? "shrink-0" : hasChatBinding ? "w-full h-full flex-1 flex flex-col min-h-0" : "w-full space-y-4"}">
 ${contentJsx}
     </div>
   );
