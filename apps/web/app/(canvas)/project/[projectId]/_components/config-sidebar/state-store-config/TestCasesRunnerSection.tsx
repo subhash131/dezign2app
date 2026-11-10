@@ -171,7 +171,7 @@ export const TestCasesRunnerSection: React.FC<TestCasesRunnerSectionProps> = ({
                     <SelectContent>
                       {manipulators.map((m) => (
                         <SelectItem key={m.id} value={m.name} className="text-xs font-mono">
-                          {m.name}()
+                          {m.name}
                         </SelectItem>
                       ))}
                     </SelectContent>

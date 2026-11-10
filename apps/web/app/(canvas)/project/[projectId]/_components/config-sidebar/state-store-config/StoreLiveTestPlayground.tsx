@@ -7,6 +7,7 @@ import {
   GlobalStoreField,
   StateStoreTestCase,
   JsonValue,
+  CustomTypeItem,
 } from "@workspace/canvas/types";
 import { cn } from "@workspace/ui/lib/utils";
 import { toast } from "sonner";
@@ -31,6 +32,8 @@ export interface StoreLiveTestPlaygroundProps {
   onSaveTestCases?: (testCases: StateStoreTestCase[]) => void;
   disabledDefaultManipulators?: string[];
   deletedDefaultManipulators?: string[];
+  initialSelectedFieldId?: string;
+  availableCustomTypes?: CustomTypeItem[];
 }
 
 export const StoreLiveTestPlayground: React.FC<StoreLiveTestPlaygroundProps> = ({
@@ -40,14 +43,25 @@ export const StoreLiveTestPlayground: React.FC<StoreLiveTestPlaygroundProps> = (
   onSaveTestCases,
   disabledDefaultManipulators = [],
   deletedDefaultManipulators = [],
+  initialSelectedFieldId,
+  availableCustomTypes = [],
 }) => {
   const [sandboxState, setSandboxState] = useState<StoreState>({});
   const [activePlaygroundTab, setActivePlaygroundTab] = useState<"manipulators" | "testcases">("manipulators");
+  const [selectedVariableTab, setSelectedVariableTab] = useState<string>(
+    initialSelectedFieldId || "all",
+  );
+
+  useEffect(() => {
+    if (initialSelectedFieldId) {
+      setSelectedVariableTab(initialSelectedFieldId);
+    }
+  }, [initialSelectedFieldId]);
 
   // All state manipulators available on the store (actions, setters, builtins)
   const manipulators = useMemo(
-    () => getStateManipulators(fields, actions, disabledDefaultManipulators, deletedDefaultManipulators),
-    [fields, actions, disabledDefaultManipulators, deletedDefaultManipulators],
+    () => getStateManipulators(fields, actions, disabledDefaultManipulators, deletedDefaultManipulators, availableCustomTypes),
+    [fields, actions, disabledDefaultManipulators, deletedDefaultManipulators, availableCustomTypes],
   );
 
   const [selectedManipulatorId, setSelectedManipulatorId] = useState<string>("");
@@ -85,12 +99,12 @@ export const StoreLiveTestPlayground: React.FC<StoreLiveTestPlaygroundProps> = (
         const next: StoreState = {};
         fields.forEach((f) => {
           const prevVal = prev[f.name];
-          next[f.name] = prevVal !== undefined ? prevVal : formatInitialFieldValue(f);
+          next[f.name] = prevVal !== undefined ? prevVal : formatInitialFieldValue(f, availableCustomTypes);
         });
         return next;
       });
     }
-  }, [fields]);
+  }, [fields, availableCustomTypes]);
 
   // Set default selected manipulator
   useEffect(() => {
@@ -247,7 +261,7 @@ export const StoreLiveTestPlayground: React.FC<StoreLiveTestPlaygroundProps> = (
   const handleResetSandbox = () => {
     const resetState: StoreState = {};
     fields.forEach((f) => {
-      resetState[f.name] = formatInitialFieldValue(f);
+      resetState[f.name] = formatInitialFieldValue(f, availableCustomTypes);
     });
     setSandboxState(resetState);
     toast.info("Store state reset to defaults");
@@ -293,13 +307,13 @@ export const StoreLiveTestPlayground: React.FC<StoreLiveTestPlaygroundProps> = (
     setLastExecutionResult(result);
 
     if (error) {
-      toast.error(`"${selectedManipulator.name}()" failed: ${error}`);
+      toast.error(`"${selectedManipulator.name}" failed: ${error}`);
     } else {
       setSandboxState(newState);
       if (changedKeys.length > 0) {
-        toast.success(`"${selectedManipulator.name}()" updated: ${changedKeys.join(", ")}`);
+        toast.success(`"${selectedManipulator.name}" updated: ${changedKeys.join(", ")}`);
       } else {
-        toast.info(`"${selectedManipulator.name}()" executed`);
+        toast.info(`"${selectedManipulator.name}" executed`);
       }
     }
 
@@ -358,13 +372,13 @@ export const StoreLiveTestPlayground: React.FC<StoreLiveTestPlaygroundProps> = (
     setLastExecutionResult(result);
 
     if (error) {
-      toast.error(`"${targetM.name}()" failed: ${error}`);
+      toast.error(`"${targetM.name}" failed: ${error}`);
     } else {
       setSandboxState(newState);
       if (changedKeys.length > 0) {
-        toast.success(`"${targetM.name}()" updated: ${changedKeys.join(", ")}`);
+        toast.success(`"${targetM.name}" updated: ${changedKeys.join(", ")}`);
       } else {
-        toast.info(`"${targetM.name}()" executed`);
+        toast.info(`"${targetM.name}" executed`);
       }
     }
 
@@ -519,6 +533,19 @@ export const StoreLiveTestPlayground: React.FC<StoreLiveTestPlaygroundProps> = (
         sandboxState={sandboxState}
         onResetDefaults={handleResetSandbox}
         onUpdateSandboxState={setSandboxState}
+        activeField={
+          fields.find(
+            (f) =>
+              f.id === selectedVariableTab ||
+              f.name.toLowerCase() === selectedVariableTab.toLowerCase(),
+          )?.name
+        }
+        onSelectField={(fieldName) => {
+          const matched = fields.find((f) => f.name.toLowerCase() === fieldName.toLowerCase());
+          if (matched) {
+            setSelectedVariableTab(matched.id);
+          }
+        }}
       />
 
       {/* Mode Switcher: Run Manipulators vs Generated Test Cases */}
@@ -554,6 +581,8 @@ export const StoreLiveTestPlayground: React.FC<StoreLiveTestPlaygroundProps> = (
       {/* SECTION 1: Run State Manipulator */}
       {activePlaygroundTab === "manipulators" && (
         <ManipulatorRunnerSection
+          fields={fields}
+          sandboxState={sandboxState}
           manipulators={manipulators}
           selectedManipulator={selectedManipulator}
           selectedManipulatorId={selectedManipulatorId}
@@ -565,6 +594,9 @@ export const StoreLiveTestPlayground: React.FC<StoreLiveTestPlaygroundProps> = (
           onRunManipulator={handleRunManipulator}
           onQuickRunManipulator={handleQuickRunManipulator}
           lastExecutionResult={lastExecutionResult}
+          selectedVariableTab={selectedVariableTab}
+          onSelectVariableTab={setSelectedVariableTab}
+          availableCustomTypes={availableCustomTypes}
         />
       )}
 

@@ -14,12 +14,16 @@ export interface LiveStateInspectorProps {
   sandboxState: StoreState;
   onResetDefaults: () => void;
   onUpdateSandboxState?: (newState: StoreState) => void;
+  activeField?: string;
+  onSelectField?: (fieldName: string) => void;
 }
 
 export const LiveStateInspector: React.FC<LiveStateInspectorProps> = ({
   sandboxState,
   onResetDefaults,
   onUpdateSandboxState,
+  activeField,
+  onSelectField,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState("");
@@ -140,17 +144,42 @@ export const LiveStateInspector: React.FC<LiveStateInspectorProps> = ({
             entries.map(([key, val]) => {
               const isArray = Array.isArray(val);
               const isNull = val === null;
+              const isSelected = activeField?.toLowerCase() === key.toLowerCase();
 
               return (
                 <div
                   key={key}
-                  className="flex items-start justify-between gap-2 py-1 border-b border-border last:border-0"
+                  onClick={() => onSelectField?.(key)}
+                  className={cn(
+                    "flex items-center gap-2 py-1 px-1.5 rounded transition-all border-b border-border last:border-0",
+                    onSelectField && "cursor-pointer hover:bg-background/60",
+                    isSelected && "bg-accent border-border text-foreground shadow-2xs font-medium",
+                  )}
+                  title={
+                    onSelectField
+                      ? `Click to filter actions and payload for "${key}"`
+                      : undefined
+                  }
                 >
-                  <span className="text-foreground font-semibold">{key}:</span>
-                  <span
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span
+                      className={cn(
+                        "font-semibold",
+                        isSelected ? "text-foreground font-bold" : "text-foreground",
+                      )}
+                    >
+                      {key}:
+                    </span>
+                    {isSelected && (
+                      <span className="text-[7.5px] px-1 py-0 rounded font-bold uppercase tracking-wider bg-primary text-primary-foreground">
+                        active
+                      </span>
+                    )}
+                  </div>
+                  <code
                     className={cn(
-                      "truncate max-w-[200px] text-right font-medium",
-                      isNull ? "text-muted-foreground italic" : "text-foreground",
+                      "truncate flex-1 font-mono text-left font-normal text-[10.5px]",
+                      isNull ? "text-muted-foreground italic" : isSelected ? "text-foreground font-semibold" : "text-foreground/90",
                     )}
                     title={
                       typeof val === "object" && val !== null
@@ -162,8 +191,10 @@ export const LiveStateInspector: React.FC<LiveStateInspectorProps> = ({
                       ? `Array(${val.length}) ${JSON.stringify(val)}`
                       : typeof val === "object" && val !== null
                       ? JSON.stringify(val)
+                      : val === ""
+                      ? '""'
                       : String(val ?? "null")}
-                  </span>
+                  </code>
                 </div>
               );
             })

@@ -3,14 +3,19 @@ import {
   getStateManipulators,
   applyManipulator,
   StateManipulator,
+  isManipulatorForField,
   isJsonObject,
   generateActionCodePreview,
   getDefaultTemplateForAction,
   validateStoreAction,
+  inferSampleValueForField,
+  inferSamplePatchForField,
+  formatInitialFieldValue,
 } from "../types";
 import type {
   GlobalStoreField,
   GlobalStoreAction,
+  CustomTypeItem,
 } from "@workspace/canvas/types";
 
 describe("stateStoreManipulators", () => {
@@ -25,8 +30,7 @@ describe("stateStoreManipulators", () => {
     const names = manipulators.map((m) => m.name);
     expect(names).toContain("reset");
     expect(names).toContain("populate");
-    expect(names).toContain("setCount");
-    expect(names).toContain("setUser");
+    expect(names).toContain("set | replace");
 
     const populate = manipulators.find((m) => m.name === "populate");
     expect(populate?.category).toBe("builtin");
@@ -36,9 +40,11 @@ describe("stateStoreManipulators", () => {
     expect(reset?.category).toBe("builtin");
     expect(reset?.isCustomized).toBe(false);
 
-    const setCount = manipulators.find((m) => m.name === "setCount");
-    expect(setCount?.category).toBe("auto_setter");
-    expect(setCount?.isCustomized).toBe(false);
+    const countSetter = manipulators.find((m) => m.targetFieldName === "count" && m.actionType === "set");
+    expect(countSetter).toBeDefined();
+    expect(countSetter?.name).toBe("set | replace");
+    expect(countSetter?.category).toBe("auto_setter");
+    expect(countSetter?.code).toBeDefined();
   });
 
   it("handles customized populate and reset without duplicating them", () => {
@@ -82,30 +88,29 @@ describe("stateStoreManipulators", () => {
     expect(setCountManipulators.length).toBe(1);
     expect(setCountManipulators[0]?.isCustomized).toBe(true);
 
-    // setUser should still appear as default auto_setter
-    const setUser = manipulators.find((m) => m.name === "setUser");
-    expect(setUser).toBeDefined();
-    expect(setUser?.isCustomized).toBe(false);
+    // setUser setter should still appear as default auto_setter
+    const userSetter = manipulators.find((m) => m.targetFieldName === "user" && m.actionType === "set");
+    expect(userSetter).toBeDefined();
+    expect(userSetter?.name).toBe("set | replace");
+    expect(userSetter?.isCustomized).toBe(false);
   });
 
   it("respects disabledDefaultManipulators", () => {
-    const manipulators = getStateManipulators(sampleFields, [], ["reset", "setCount"]);
+    const manipulators = getStateManipulators(sampleFields, [], ["reset", "setCount", "set"]);
 
     const names = manipulators.map((m) => m.name);
     expect(names).not.toContain("reset");
-    expect(names).not.toContain("setCount");
+    expect(manipulators.some((m) => m.targetFieldName === "count" && m.actionType === "set")).toBe(false);
     expect(names).toContain("populate");
-    expect(names).toContain("setUser");
   });
 
   it("respects deletedDefaultManipulators (omitted completely)", () => {
-    const manipulators = getStateManipulators(sampleFields, [], [], ["populate", "reset", "setCount"]);
+    const manipulators = getStateManipulators(sampleFields, [], [], ["populate", "reset", "setCount", "set"]);
 
     const names = manipulators.map((m) => m.name);
     expect(names).not.toContain("populate");
     expect(names).not.toContain("reset");
-    expect(names).not.toContain("setCount");
-    expect(names).toContain("setUser");
+    expect(manipulators.some((m) => m.targetFieldName === "count" && m.actionType === "set")).toBe(false);
   });
 
   it("executes custom code in applyManipulator", () => {
@@ -130,7 +135,7 @@ describe("stateStoreManipulators", () => {
     expect(res.newState.user).toEqual({ name: "Alice" });
   });
 
-  it("does not suppress or replace default set<Field> when a custom action targets that field", () => {
+  it("does not suppress or replace default setter when a custom action targets that field", () => {
     const customActions: GlobalStoreAction[] = [
       {
         id: "act-append-conversations",
@@ -143,13 +148,12 @@ describe("stateStoreManipulators", () => {
     const manipulators = getStateManipulators(sampleFields, customActions);
     const names = manipulators.map((m) => m.name);
 
-    // Both appendConversations AND setCount must exist!
+    // Both appendConversations AND setter must exist!
     expect(names).toContain("appendConversations");
-    expect(names).toContain("setCount");
-
-    const setCountManipulator = manipulators.find((m) => m.name === "setCount");
-    expect(setCountManipulator?.category).toBe("auto_setter");
-    expect(setCountManipulator?.isCustomized).toBe(false);
+    const countSetter = manipulators.find((m) => m.targetFieldName === "count" && m.actionType === "set");
+    expect(countSetter).toBeDefined();
+    expect(countSetter?.name).toBe("set | replace");
+    expect(countSetter?.category).toBe("auto_setter");
 
     const appendManipulator = manipulators.find((m) => m.name === "appendConversations");
     expect(appendManipulator?.category).toBe("standard_action");
@@ -270,8 +274,8 @@ describe("stateStoreManipulators", () => {
   it("executes increment action typesafely", () => {
     const incManipulator: StateManipulator = {
       id: "act-inc",
-      name: "incrementCount",
-      label: "incrementCount()",
+      name: "increment | add",
+      label: "increment | add",
       category: "standard_action",
       actionType: "increment",
       targetFieldId: "f1",
@@ -386,19 +390,21 @@ describe("stateStoreManipulators", () => {
       const manipulators = getStateManipulators(fieldsWithArray, []);
       const names = manipulators.map((m) => m.name);
 
-      expect(names).toContain("setMessages");
-      expect(names).toContain("appendMessages");
-      expect(names).toContain("popMessages");
+      expect(names).toContain("set | replace");
+      expect(names).toContain("append | add");
+      expect(names).toContain("pop");
 
-      const appendManipulator = manipulators.find((m) => m.name === "appendMessages");
+      const appendManipulator = manipulators.find((m) => m.targetFieldName === "messages" && m.actionType === "append");
+      expect(appendManipulator?.name).toBe("append | add");
       expect(appendManipulator?.actionType).toBe("append");
       expect(appendManipulator?.defaultManipulatorType).toBe("append");
-      expect(appendManipulator?.isCustomized).toBe(false);
+      expect(appendManipulator?.code).toBeDefined();
 
-      const popManipulator = manipulators.find((m) => m.name === "popMessages");
+      const popManipulator = manipulators.find((m) => m.targetFieldName === "messages" && m.defaultManipulatorType === "pop");
+      expect(popManipulator?.name).toBe("pop");
       expect(popManipulator?.actionType).toBe("remove");
       expect(popManipulator?.defaultManipulatorType).toBe("pop");
-      expect(popManipulator?.isCustomized).toBe(false);
+      expect(popManipulator?.code).toBeDefined();
 
       // Test execution with applyManipulator
       let state: Record<string, any> = { count: 0, messages: ["hello"] };
@@ -508,23 +514,24 @@ describe("stateStoreManipulators", () => {
       ];
 
       const manipulators = getStateManipulators(chatStoreFields, []);
-      const names = manipulators.map((m) => m.name);
+      const chatActions = manipulators.filter((m) => m.targetFieldName === "chatHistory");
+      const chatActionNames = chatActions.map((m) => m.name);
 
-      // Verify that all expected actions are now generated
-      expect(names).toContain("setUser_message");
-      expect(names).toContain("setChatHistory");
-      expect(names).toContain("appendChatHistory");
-      expect(names).toContain("prependChatHistory");
-      expect(names).toContain("popChatHistory");
-      expect(names).toContain("removeChatHistory");
-      expect(names).toContain("updateChatHistory");
-      expect(names).toContain("streamChatHistory");
-      expect(names).toContain("resetChatHistory");
+      // Verify that actions represent the reducer branches
+      expect(chatActionNames).toContain("set | replace");
+      expect(chatActionNames).toContain("append | add");
+      expect(chatActionNames).toContain("prepend");
+      expect(chatActionNames).toContain("pop");
+      expect(chatActionNames).toContain("remove | filter");
+      expect(chatActionNames).toContain("update | upsert");
+      expect(chatActionNames).toContain("stream | chunk");
+      expect(chatActionNames).toContain("reset | clear");
 
-      // Verify categories
-      const streamManipulator = manipulators.find((m) => m.name === "streamChatHistory");
+      // Verify each action contains its reducer code block
+      const streamManipulator = chatActions.find((m) => m.actionType === "stream");
       expect(streamManipulator).toBeDefined();
-      expect(streamManipulator?.category).toBe("custom_action");
+      expect(streamManipulator?.name).toBe("stream | chunk");
+      expect(streamManipulator?.code).toContain('action === "stream"');
 
       // Execute stream chunk 1
       let currentState: Record<string, any> = { user_message: "", chatHistory: [] };
@@ -562,7 +569,7 @@ describe("stateStoreManipulators", () => {
       ]);
 
       // Execute update
-      const updateManipulator = manipulators.find((m) => m.name === "updateChatHistory")!;
+      const updateManipulator = manipulators.find((m) => m.targetFieldName === "chatHistory" && m.actionType === "update")!;
       const updateRes = applyManipulator({
         manipulator: updateManipulator,
         payload: { id: "a1", content: "Hello World (Edited)" },
@@ -574,7 +581,7 @@ describe("stateStoreManipulators", () => {
       ]);
 
       // Execute remove
-      const removeManipulator = manipulators.find((m) => m.name === "removeChatHistory")!;
+      const removeManipulator = manipulators.find((m) => m.targetFieldName === "chatHistory" && m.actionType === "remove")!;
       const removeRes = applyManipulator({
         manipulator: removeManipulator,
         payload: { id: "a1" },
@@ -584,5 +591,231 @@ describe("stateStoreManipulators", () => {
       expect(removeRes.newState.chatHistory).toEqual([]);
     });
   });
+
+  describe("isManipulatorForField and state variable filtering", () => {
+    const multiFields: GlobalStoreField[] = [
+      { id: "f-msg", name: "message", type: "string" },
+      { id: "f-status", name: "statusText", type: "string" },
+      { id: "f-msgs", name: "messages", type: "ChatMessage[]", isArray: true },
+      { id: "f-input", name: "chatInput", type: "string" },
+    ];
+
+    it("correctly matches manipulators to their respective state variables without cross-matching", () => {
+      const manipulators = getStateManipulators(multiFields, []);
+
+      // Filter actions for 'message'
+      const messageField = multiFields.find((f) => f.name === "message")!;
+      const messageActions = manipulators.filter((m) => isManipulatorForField(m, messageField));
+      const messageActionNames = messageActions.map((m) => m.name);
+
+      expect(messageActionNames).toContain("set | replace");
+      expect(messageActionNames).toContain("append | concat");
+      expect(messageActionNames).toContain("prepend");
+      expect(messageActionNames).toContain("reset | clear");
+      // Must NOT contain array-only actions like stream or pop
+      expect(messageActionNames).not.toContain("stream | chunk");
+      expect(messageActionNames).not.toContain("pop");
+
+      // Filter actions for 'messages' (array)
+      const messagesField = multiFields.find((f) => f.name === "messages")!;
+      const messagesActions = manipulators.filter((m) => isManipulatorForField(m, messagesField));
+      const messagesActionNames = messagesActions.map((m) => m.name);
+
+      expect(messagesActionNames).toContain("set | replace");
+      expect(messagesActionNames).toContain("append | add");
+      expect(messagesActionNames).toContain("prepend");
+      expect(messagesActionNames).toContain("pop");
+      expect(messagesActionNames).toContain("remove | filter");
+      expect(messagesActionNames).toContain("update | upsert");
+      expect(messagesActionNames).toContain("stream | chunk");
+      expect(messagesActionNames).toContain("reset | clear");
+
+      // Filter actions for 'chatInput'
+      const chatInputField = multiFields.find((f) => f.name === "chatInput")!;
+      const chatInputActions = manipulators.filter((m) => isManipulatorForField(m, chatInputField));
+      const chatInputActionNames = chatInputActions.map((m) => m.name);
+
+      expect(chatInputActionNames).toContain("set | replace");
+      expect(chatInputActionNames).toContain("append | concat");
+      expect(chatInputActionNames).toContain("reset | clear");
+
+      // Verify store-wide built-ins (reset, populate) do not falsely attach to any specific variable
+      const resetManipulator = manipulators.find((m) => m.name === "reset")!;
+      expect(isManipulatorForField(resetManipulator, messageField)).toBe(false);
+      expect(isManipulatorForField(resetManipulator, messagesField)).toBe(false);
+
+      const populateManipulator = manipulators.find((m) => m.name === "populate")!;
+      expect(isManipulatorForField(populateManipulator, messageField)).toBe(false);
+      expect(isManipulatorForField(populateManipulator, messagesField)).toBe(false);
+    });
+
+    it("successfully mutates state when setMessages is executed with array payload", () => {
+      const manipulators = getStateManipulators(multiFields, []);
+      const setMessagesManipulator = manipulators.find((m) => m.targetFieldName === "messages" && m.actionType === "set")!;
+      expect(setMessagesManipulator).toBeDefined();
+
+      const payload = [{ id: "msg_1", role: "user", content: "Hello" }];
+      const res = applyManipulator({
+        manipulator: setMessagesManipulator,
+        payload,
+        currentState: { message: "", statusText: "", messages: [], chatInput: "" },
+        fields: multiFields,
+      });
+
+      expect(res.error).toBeUndefined();
+      expect(res.newState.messages).toEqual(payload);
+      expect(res.newState.messages).toHaveLength(1);
+    });
+
+    it("infers default payload structure from custom type fields instead of 'Updated string'", () => {
+      const customMessageType: CustomTypeItem = {
+        id: "type-msg",
+        name: "Message",
+        kind: "interface",
+        fields: [
+          { id: "f-id", name: "id", type: "string" },
+          { id: "f-role", name: "role", type: "string", enumValues: ["user", "assistant", "system"] },
+          { id: "f-content", name: "content", type: "string" },
+        ],
+      };
+
+      const messageField: GlobalStoreField = {
+        id: "f-msg-single",
+        name: "message",
+        type: "Message",
+        customTypeId: "type-msg",
+      };
+
+      const manipulators = getStateManipulators([messageField], [], [], [], [customMessageType]);
+      const setMessage = manipulators.find((m) => m.targetFieldName === "message" && m.actionType === "set")!;
+      expect(setMessage).toBeDefined();
+
+      // defaultPayload must be an object with the inferred type schema fields
+      expect(setMessage.defaultPayload).toBeTypeOf("object");
+      expect(setMessage.defaultPayload).not.toBe("Updated string");
+      expect(isJsonObject(setMessage.defaultPayload)).toBe(true);
+      if (isJsonObject(setMessage.defaultPayload)) {
+        expect(setMessage.defaultPayload).toHaveProperty("id");
+        expect(setMessage.defaultPayload).toHaveProperty("role");
+        expect(setMessage.defaultPayload).toHaveProperty("content");
+        expect(setMessage.defaultPayload.role).toBe("user");
+      }
+
+      // Verify updateMessage infers patch object
+      const updateMessage = manipulators.find((m) => m.targetFieldName === "message" && m.actionType === "update");
+      if (updateMessage) {
+        expect(updateMessage.defaultPayload).toBeTypeOf("object");
+      }
+
+      // Verify execution mutates the variable with the inferred typed payload
+      const initialSandbox = formatInitialFieldValue(messageField, [customMessageType]);
+      expect(initialSandbox).toEqual({ id: "", role: "user", content: "" });
+
+      const res = applyManipulator({
+        manipulator: setMessage,
+        payload: setMessage.defaultPayload,
+        currentState: { message: initialSandbox },
+        fields: [messageField],
+      });
+      expect(res.error).toBeUndefined();
+      expect(res.newState.message).toEqual(setMessage.defaultPayload);
+    });
+
+    it("infers sample payload from customReducerCode when availableCustomTypes is not provided", () => {
+      const fieldWithReducer: GlobalStoreField = {
+        id: "f-custom-item",
+        name: "userProfile",
+        type: "UserProfile",
+        customReducerCode: `(prev, next) => {
+          const initial = {
+            id: "",
+            username: "",
+            email: "",
+            isActive: false,
+          };
+          return { ...initial, ...next };
+        }`,
+      };
+
+      const sample = inferSampleValueForField(fieldWithReducer, [], false);
+      expect(isJsonObject(sample)).toBe(true);
+      if (isJsonObject(sample)) {
+        expect(sample).toHaveProperty("id");
+        expect(sample).toHaveProperty("username");
+        expect(sample).toHaveProperty("email");
+        expect(sample).toHaveProperty("isActive");
+        expect(sample.isActive).toBe(true); // sample boolean is true
+      }
+    });
+  });
+    it("dynamically removes an action from the testing tab when it is removed from the variable reducer", () => {
+      const reducerWithPopAndStream = `(prev, next) => {
+        const action = next?.action;
+        if (action === "set" || action === "replace") return next.value;
+        if (action === "append" || action === "add") return [...prev, next.value];
+        if (action === "pop") return prev.slice(0, -1);
+        if (action === "stream" || action === "chunk") return prev;
+        return prev;
+      };`;
+
+      const field: GlobalStoreField = {
+        id: "f-dyn",
+        name: "messages",
+        type: "Message[]",
+        isArray: true,
+        customReducerCode: reducerWithPopAndStream,
+      };
+
+      // 1. Initially has pop and stream
+      const initialManipulators = getStateManipulators([field], []);
+      const initialNames = initialManipulators.filter((m) => m.targetFieldName === "messages").map((m) => m.name);
+      expect(initialNames).toContain("pop");
+      expect(initialNames).toContain("stream | chunk");
+      expect(initialNames).toContain("set | replace");
+      expect(initialNames).toContain("append | add");
+
+      // 2. Remove 'pop' and 'stream' from the reducer code
+      const reducerWithoutPopOrStream = `(prev, next) => {
+        const action = next?.action;
+        if (action === "set" || action === "replace") return next.value;
+        if (action === "append" || action === "add") return [...prev, next.value];
+        return prev;
+      };`;
+
+      const updatedField: GlobalStoreField = {
+        ...field,
+        customReducerCode: reducerWithoutPopOrStream,
+      };
+
+      const updatedManipulators = getStateManipulators([updatedField], []);
+      const updatedNames = updatedManipulators.filter((m) => m.targetFieldName === "messages").map((m) => m.name);
+
+      // 'pop' and 'stream | chunk' are IMMEDIATELY GONE from testing tab!
+      expect(updatedNames).not.toContain("pop");
+      expect(updatedNames).not.toContain("stream | chunk");
+      expect(updatedNames).toContain("set | replace");
+      expect(updatedNames).toContain("append | add");
+
+      // 3. Add a custom action 'archive | soft_delete' to the reducer
+      const reducerWithCustomAction = `(prev, next) => {
+        const action = next?.action;
+        if (action === "set" || action === "replace") return next.value;
+        if (action === "archive" || action === "soft_delete") return [];
+        return prev;
+      };`;
+
+      const fieldWithCustom: GlobalStoreField = {
+        ...field,
+        customReducerCode: reducerWithCustomAction,
+      };
+
+      const customManipulators = getStateManipulators([fieldWithCustom], []);
+      const customNames = customManipulators.filter((m) => m.targetFieldName === "messages").map((m) => m.name);
+      expect(customNames).toContain("archive | soft_delete");
+
+      const archiveAction = customManipulators.find((m) => m.name === "archive | soft_delete");
+      expect(archiveAction?.code).toContain('action === "archive"');
+    });
+
 });
 

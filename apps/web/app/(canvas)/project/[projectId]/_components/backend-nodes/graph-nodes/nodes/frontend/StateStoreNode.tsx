@@ -18,6 +18,7 @@ import {
   Copy,
   MoreVertical,
   Settings2,
+  Zap,
 } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { CustomTypeItem, GlobalStoreField } from "@workspace/canvas/types";
@@ -641,6 +642,24 @@ export const StateStoreNode = ({
             <Button
               variant="outline"
               size="sm"
+              className="h-5 px-1.5 text-[9px] uppercase font-mono font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border-amber-500/30 cursor-pointer flex items-center gap-1"
+              onClick={(e) => {
+                e.stopPropagation();
+                setActiveConfigItem({
+                  id,
+                  nodeId: id,
+                  type: "state_store",
+                  initialTab: "playground",
+                });
+              }}
+              title="Open Live Test Area"
+            >
+              <Zap size={9} className="fill-current text-amber-400" />
+              <span>Test</span>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               className="h-5 px-1.5 text-[9px] uppercase font-mono font-extrabold bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border-indigo-500/20 cursor-pointer"
               onClick={handleOpenConfig}
               title="Open State Store Configuration"
@@ -1052,6 +1071,20 @@ export const StateStoreNode = ({
                         >
                           <Brackets className="w-3.5 h-3.5 text-cyan-400" />
                           {isFieldArray ? "Convert to single" : "Convert to array []"}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setActiveConfigItem({
+                              id,
+                              nodeId: id,
+                              type: "state_store",
+                              initialTab: "playground",
+                              sectionId: f.id,
+                            });
+                          }}
+                          className="gap-2 text-xs cursor-pointer text-amber-400 focus:text-amber-300"
+                        >
+                          <Zap className="w-3.5 h-3.5 fill-current" /> Test actions for {f.name}
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => handleOpenConfig()}
