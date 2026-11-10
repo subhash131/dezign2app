@@ -906,6 +906,7 @@ export function getSuggestedReducerCodeForChannelType(
     const synthMessageSchema: CustomTypeItem = {
       id: "Message",
       name: "Message",
+      kind: "interface",
       fields: [
         { id: "id", name: "id", type: "string" },
         { id: "sender", name: "sender", type: '"AI" | "USER" | "SYSTEM"', enumValues: ["AI", "USER", "SYSTEM"] },
