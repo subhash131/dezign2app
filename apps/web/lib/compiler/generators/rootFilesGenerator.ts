@@ -75,10 +75,23 @@ onlyBuiltDependencies:
     {
       $schema: "https://turbo.build/schema.json",
       ui: "tui",
+      globalPassThroughEnv: [
+        "LOCALAPPDATA",
+        "APPDATA",
+        "GOCACHE",
+        "GOPATH",
+        "GOROOT",
+        "HOME",
+        "HOMEDRIVE",
+        "HOMEPATH",
+        "USERPROFILE",
+        "PATH",
+        "PATHEXT",
+      ],
       tasks: {
         build: {
           dependsOn: ["^build"],
-          outputs: [".next/**", "dist/**"],
+          outputs: [".next/**", "dist/**", "bin/**"],
         },
         dev: {
           cache: false,
@@ -102,6 +115,10 @@ onlyBuiltDependencies:
 
   const rootGitignore = `node_modules
 dist
+bin
+tmp
+server
+*.exe
 .turbo
 .next
 .env
