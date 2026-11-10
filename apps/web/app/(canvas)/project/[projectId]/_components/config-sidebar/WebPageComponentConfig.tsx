@@ -501,6 +501,9 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
           propMappings: {
             chatTitle: "AI Assistant",
             chatPlaceholder: "Type a message...",
+            chatAlignment: "center",
+            chatMaxWidth: "lg",
+            chatHeight: "full",
             chatMessagesBinding: "messages",
             chatInputBinding: "chatInput",
             chatAutoScroll: true,

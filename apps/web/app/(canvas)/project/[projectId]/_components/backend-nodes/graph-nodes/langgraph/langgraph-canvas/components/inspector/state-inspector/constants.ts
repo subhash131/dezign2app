@@ -697,6 +697,32 @@ export function generateSchemaAwareArrayReducerCode(
     customType.name?.toLowerCase().includes("chat") ||
     fields.some((f) => f.name === "content" || f.name === "text" || f.name === "delta");
 
+  const hasSender = fields.some((f) => f.name === "sender") || customType.name === "Message";
+  const hasRole = fields.some((f) => f.name === "role") || (!hasSender && customType.name === "ChatMessage");
+  const hasStreaming = fields.some((f) => f.name === "streaming");
+  const contentProp = fields.find((f) => f.name === "content" || f.name === "text" || f.name === "delta")?.name || "content";
+
+  const senderCode = hasSender
+    ? `          sender: (isObj(src) && "sender" in src && (src.sender === "AI" || src.sender === "USER" || src.sender === "SYSTEM"))
+            ? src.sender
+            : (isObj(src) && typeof src.role === "string" && src.role.toLowerCase() === "user" ? "USER" : "AI"),\n`
+    : "";
+  const roleCode = hasRole
+    ? `          role: isObj(src) && typeof src.role === "string" ? src.role : "assistant",\n`
+    : "";
+  const streamingCode = hasStreaming
+    ? `          streaming: true,\n`
+    : "";
+  const updateStreamingCode = hasStreaming
+    ? `, streaming: true`
+    : "";
+
+  const targetLastCheck = hasRole
+    ? `isObj(last) && last.role === role${hasStreaming ? ` && last.streaming === true` : ""}`
+    : hasSender
+    ? `isObj(last) && last.sender === (isObj(src) && "sender" in src ? src.sender : "AI")${hasStreaming ? ` && last.streaming === true` : ""}`
+    : `${hasStreaming ? `isObj(last) && last.streaming === true` : `isObj(last)`}`;
+
   const streamBlock = isMsg
     ? `
 
@@ -717,13 +743,13 @@ export function generateSchemaAwareArrayReducerCode(
       i = list.findIndex((m) => isObj(m) && ("${idField}" in m ? m.${idField} === src.id : m.id === src.id));
     } else {
       const last = list[list.length - 1];
-      if (isObj(last) && last.role === role && last.streaming === true) i = list.length - 1;
+      if (${targetLastCheck}) i = list.length - 1;
     }
 
     // done => mark the target as finished
     if (src.done) {
-      if (i === -1 || list[i].streaming === false) return list;
-      return list.map((m, j) => (j === i ? { ...m, streaming: false } : m));
+      if (i === -1${hasStreaming ? ` || list[i].streaming === false` : ""}) return list;
+      return list.map((m, j) => (j === i ? { ...m${hasStreaming ? ", streaming: false" : ""} } : m));
     }
 
     if (typeof delta !== "string" || delta === "") return list;
@@ -733,19 +759,17 @@ export function generateSchemaAwareArrayReducerCode(
       return [
         ...list,
         {
-          id: src.id ?? \`msg_\${list.length}_\${Date.now()}\`,
-          role,
-          content: delta,
-          streaming: true,
-        },
+          ${idField}: src.id ?? \`msg_\${list.length}_\${Date.now()}\`,
+${senderCode}${roleCode}          ${contentProp}: delta,
+${streamingCode}        },
       ];
     }
 
     // Target found => append the delta
     const target = list[i];
-    const prevContent = typeof target.content === "string" ? target.content : "";
+    const prevContent = typeof target.${contentProp} === "string" ? target.${contentProp} : "";
     return list.map((m, j) =>
-      j === i ? { ...m, content: prevContent + delta, streaming: true } : m
+      j === i ? { ...m, ${contentProp}: prevContent + delta${updateStreamingCode} } : m
     );
   }`
     : "";
@@ -875,6 +899,20 @@ export function getSuggestedReducerCodeForChannelType(
   // 1. Array of custom type schema
   if (isTargetArray && customTypeSchema) {
     return generateSchemaAwareArrayReducerCode(customTypeSchema);
+  }
+
+  // 1b. Synthesize Message[] schema if type is Message/Message[] and no schema was explicitly passed
+  if (isTargetArray && (cleanType === "Message" || cleanType === "Message[]")) {
+    const synthMessageSchema: CustomTypeItem = {
+      id: "Message",
+      name: "Message",
+      fields: [
+        { id: "id", name: "id", type: "string" },
+        { id: "sender", name: "sender", type: '"AI" | "USER" | "SYSTEM"', enumValues: ["AI", "USER", "SYSTEM"] },
+        { id: "content", name: "content", type: "string" },
+      ],
+    };
+    return generateSchemaAwareArrayReducerCode(synthMessageSchema);
   }
 
   // 2. Single object of custom type schema

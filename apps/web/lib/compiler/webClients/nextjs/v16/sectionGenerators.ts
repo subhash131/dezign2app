@@ -1506,6 +1506,44 @@ ${authButtonsJsx}
 
       const messagesProp = valVar ? `\n          messages={Array.isArray(${valVar}) ? ${valVar} : undefined}` : "";
 
+      const alignment = item.propMappings?.chatAlignment || "center";
+      const maxWidth = item.propMappings?.chatMaxWidth;
+      const height = item.propMappings?.chatHeight;
+
+      let heightClass = "h-[calc(100vh-8rem)]";
+      if (height === "sm") heightClass = "h-[360px]";
+      else if (height === "md") heightClass = "h-[480px]";
+      else if (height === "lg") heightClass = "h-[640px]";
+      else if (height === "xl") heightClass = "h-[760px]";
+      else if (height === "full" || !height) heightClass = "h-[calc(100vh-8rem)]";
+
+      if ((alignment === "floating-right" || alignment === "floating-left") && (!height || height === "full")) {
+        heightClass = "h-[520px]";
+      }
+
+      let maxWClass = "max-w-2xl";
+      if (maxWidth === "sm") maxWClass = "max-w-md";
+      else if (maxWidth === "md") maxWClass = "max-w-xl";
+      else if (maxWidth === "lg") maxWClass = "max-w-2xl";
+      else if (maxWidth === "xl") maxWClass = "max-w-3xl";
+      else if (maxWidth === "2xl") maxWClass = "max-w-4xl";
+      else if (maxWidth === "full") maxWClass = "max-w-full";
+
+      let layoutClasses = `w-full ${maxWClass} mx-auto`;
+      if (alignment === "left") {
+        layoutClasses = `w-full ${maxWClass} mr-auto`;
+      } else if (alignment === "right") {
+        layoutClasses = `w-full ${maxWClass} ml-auto`;
+      } else if (alignment === "full") {
+        layoutClasses = "w-full";
+      } else if (alignment === "floating-right") {
+        layoutClasses = "fixed bottom-6 right-6 w-96 max-w-[calc(100vw-2rem)] shadow-2xl z-50 rounded-2xl";
+      } else if (alignment === "floating-left") {
+        layoutClasses = "fixed bottom-6 left-6 w-96 max-w-[calc(100vw-2rem)] shadow-2xl z-50 rounded-2xl";
+      }
+
+      const fullChatClassName = `${layoutClasses} ${heightClass}`.trim();
+
       return `<Chat
           key="${item.id}"
           title="${chatTitle}"
@@ -1514,7 +1552,7 @@ ${authButtonsJsx}
           emptyDescription="${emptyDesc}"
           autoScroll={${autoScroll}}
           showAvatars={${showAvatars}}${messagesProp}${onSendProp}
-          className="w-full max-w-2xl h-[420px]"
+          className="${fullChatClassName}"
         />`;
     }
 

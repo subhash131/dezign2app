@@ -840,6 +840,24 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React
           const emptyDescription = propMappings.chatEmptyDescription || "Start a conversation to see messages here";
           const autoScroll = propMappings.chatAutoScroll ?? true;
           const showAvatars = propMappings.chatShowAvatars ?? true;
+          const alignment = propMappings.chatAlignment || "center";
+          const maxWidth = propMappings.chatMaxWidth;
+          const height = propMappings.chatHeight;
+
+          let maxWClass = "max-w-sm";
+          if (maxWidth === "sm") maxWClass = "max-w-xs";
+          else if (maxWidth === "md") maxWClass = "max-w-sm";
+          else if (maxWidth === "lg") maxWClass = "max-w-md";
+          else if (maxWidth === "xl" || maxWidth === "2xl" || maxWidth === "full" || alignment === "full") maxWClass = "w-full";
+
+          let alignClass = "justify-center";
+          if (alignment === "left" || alignment === "floating-left") alignClass = "justify-start";
+          else if (alignment === "right" || alignment === "floating-right") alignClass = "justify-end";
+          else if (alignment === "full") alignClass = "w-full";
+
+          let heightClass = "h-[300px]";
+          if (height === "sm") heightClass = "h-[240px]";
+          else if (height === "lg" || height === "xl" || height === "full") heightClass = "h-[340px]";
 
           const sampleMessages: ChatMessage[] = Array.isArray(sampleValue)
             ? (sampleValue as any[]).map((m, idx) => ({
@@ -861,20 +879,22 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React
               ];
 
           return (
-            <div className="w-full max-w-sm">
-              <Chat
-                title={title}
-                placeholder={placeholder}
-                emptyTitle={emptyTitle}
-                emptyDescription={emptyDescription}
-                autoScroll={autoScroll}
-                showAvatars={showAvatars}
-                messages={sampleMessages}
-                className="h-[300px]"
-                onSendMessage={(text) => {
-                  toast.info(`Simulated prompt: "${text}"`);
-                }}
-              />
+            <div className={cn("w-full flex transition-all duration-200", alignClass)}>
+              <div className={cn("w-full transition-all duration-200", maxWClass)}>
+                <Chat
+                  title={title}
+                  placeholder={placeholder}
+                  emptyTitle={emptyTitle}
+                  emptyDescription={emptyDescription}
+                  autoScroll={autoScroll}
+                  showAvatars={showAvatars}
+                  messages={sampleMessages}
+                  className={heightClass}
+                  onSendMessage={(text) => {
+                    toast.info(`Simulated prompt: "${text}"`);
+                  }}
+                />
+              </div>
             </div>
           );
         })()}
