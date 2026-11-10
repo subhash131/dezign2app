@@ -47,7 +47,7 @@ export function generatePageCode(
 
   const allActions = sectionsMeta.flatMap((s) => s.actions || []);
   const hasApiActions = allActions.some(
-    (a) => a.eventType !== "navigateToPage" && ((a.url && a.url !== "#") || Boolean(a.eventName)),
+    (a) => a.eventType !== "navigateToPage" && Boolean(a.url && a.url !== "#"),
   );
   // Only generate streaming plumbing when at least one action uses SSE / WebSocket / WebRTC.
   // Plain REST actions do not need it.
