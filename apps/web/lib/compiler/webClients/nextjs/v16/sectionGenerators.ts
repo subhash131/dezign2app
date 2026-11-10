@@ -1508,7 +1508,7 @@ ${authButtonsJsx}
       const messagesProp = valVar ? `\n          messages={Array.isArray(${valVar}) ? ${valVar} : undefined}` : "";
 
       const alignment = item.propMappings?.chatAlignment || "center";
-      const maxWidth = item.propMappings?.chatMaxWidth || "xl";
+      const maxWidth = alignment === "full" ? "full" : (item.propMappings?.chatMaxWidth || "xl");
       const isFloating = alignment === "floating-right" || alignment === "floating-left";
 
       let floatingClass = "";

@@ -223,6 +223,7 @@ export const Chat = React.forwardRef<HTMLDivElement, ChatProps>(
 
     const isFloating = alignment === "floating-right" || alignment === "floating-left";
     const isCard = variant === "card" || isFloating;
+    const isFull = alignment === "full" || maxWidth === "full";
 
     // Chat panel max width
     let maxWClass = "max-w-3xl";
@@ -231,20 +232,19 @@ export const Chat = React.forwardRef<HTMLDivElement, ChatProps>(
     else if (maxWidth === "lg") maxWClass = "max-w-2xl";
     else if (maxWidth === "xl") maxWClass = "max-w-3xl";
     else if (maxWidth === "2xl") maxWClass = "max-w-4xl";
-    else if (maxWidth === "full") maxWClass = "max-w-full";
 
     // Alignment and boundary border styles:
+    // - Full-width: stretches 100% edge-to-edge with no side borders
     // - Right-aligned: border-l (left border dividing from content) and pinned to the right
     // - Left-aligned: border-r (right border dividing from content) and pinned to the left
     // - Center-aligned: border-x (framed center column)
-    // - Full-width: border-x-0 stretching edge-to-edge
     let layoutAlignmentClass = "self-center mx-auto border-x border-border/40";
-    if (alignment === "left") {
+    if (isFull) {
+      layoutAlignmentClass = "self-stretch w-full max-w-full border-x-0";
+    } else if (alignment === "left") {
       layoutAlignmentClass = "self-start mr-auto border-r border-border/60";
     } else if (alignment === "right") {
       layoutAlignmentClass = "self-end ml-auto border-l border-border/60";
-    } else if (alignment === "full" || maxWidth === "full") {
-      layoutAlignmentClass = "self-stretch w-full border-x-0";
     } else if (isFloating) {
       layoutAlignmentClass = alignment === "floating-right"
         ? "fixed bottom-6 right-6 w-96 max-w-[calc(100vw-2rem)] shadow-2xl z-50 rounded-2xl border border-border/80 h-[520px]"
@@ -260,7 +260,7 @@ export const Chat = React.forwardRef<HTMLDivElement, ChatProps>(
             ? "flex flex-col w-full rounded-xl border border-border/70 bg-card text-card-foreground shadow-xs overflow-hidden"
             : cn(
                 "flex flex-col w-full h-full flex-1 min-h-0 bg-background text-foreground transition-all duration-150 overflow-hidden",
-                !isFloating && maxWClass,
+                !isFloating && !isFull && maxWClass,
                 layoutAlignmentClass,
               ),
           className,
