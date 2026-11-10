@@ -65,7 +65,7 @@ export const TestActivityLog: React.FC<TestActivityLogProps> = ({
                     ) : (
                       <CheckCircle2 size={12} className="text-foreground shrink-0" />
                     )}
-                    <span className="font-bold text-foreground">{item.manipulatorName}()</span>
+                    <span className="font-bold text-foreground">{item.manipulatorName}</span>
                     <Badge variant="outline" className="text-[8px] py-0 px-1 font-mono bg-muted text-muted-foreground border-border">
                       {item.category.replace("_", " ")}
                     </Badge>

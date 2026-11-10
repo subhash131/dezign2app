@@ -54,8 +54,17 @@ const StateStoreConfigContent: React.FC<
   const allNodes = useBackendCanvasStore((s) => s.nodes);
   const allEdges = useBackendCanvasStore((s) => s.edges);
   const deleteEdge = useBackendCanvasStore((s) => s.deleteEdge);
+  const activeConfigItem = useBackendCanvasStore((s) => s.activeConfigItem);
 
-  const [activeTab, setActiveTab] = useState<"schema" | "playground">("schema");
+  const [activeTab, setActiveTab] = useState<"schema" | "playground">(() => {
+    if (activeConfigItem?.initialTab === "playground" || activeConfigItem?.initialTab === "test") {
+      return "playground";
+    }
+    return "schema";
+  });
+  const [selectedFieldForTest, setSelectedFieldForTest] = useState<string | null>(
+    activeConfigItem?.sectionId || null,
+  );
 
   const fields: GlobalStoreField[] = useMemo(() => node.data.fields || [], [node.data.fields]);
   const actions: GlobalStoreAction[] = useMemo(() => node.data.actions || [], [node.data.actions]);
@@ -68,6 +77,7 @@ const StateStoreConfigContent: React.FC<
     () => node.data.deletedDefaultManipulators || [],
     [node.data.deletedDefaultManipulators],
   );
+  const availableCustomTypes = useMemo(() => getAvailableCustomTypes(allNodes), [allNodes]);
 
   const connectedPages = useMemo(() => {
     if (!targetNodeId) return [];
@@ -1017,7 +1027,7 @@ const StateStoreConfigContent: React.FC<
       {/* Header */}
       <div className="flex items-center justify-between pb-3 border-b border-border/60">
         <div className="flex items-center gap-2">
-          <div className="p-1.5 rounded-lg bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border border-indigo-500/30">
+          <div className="p-1.5 rounded-lg bg-muted text-foreground border border-border">
             <Database size={16} />
           </div>
           <div>
@@ -1081,7 +1091,7 @@ const StateStoreConfigContent: React.FC<
             value="schema"
             className="text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
           >
-            <Database size={13} className="text-indigo-500 dark:text-indigo-400" />
+            <Database size={13} className="text-foreground" />
             <span>Variables &amp; Reducers</span>
             <Badge
               variant="secondary"
@@ -1123,7 +1133,10 @@ const StateStoreConfigContent: React.FC<
             onUpdateField={handleUpdateField}
             onRemoveField={handleRemoveField}
             onSelectFieldAction={handleSelectFieldAction}
-            onOpenTestForField={() => setActiveTab("playground")}
+            onOpenTestForField={(field) => {
+              setSelectedFieldForTest(field.id);
+              setActiveTab("playground");
+            }}
           />
         </TabsContent>
 
@@ -1136,6 +1149,8 @@ const StateStoreConfigContent: React.FC<
             onSaveTestCases={handleSaveTestCases}
             disabledDefaultManipulators={disabledDefaultManipulators}
             deletedDefaultManipulators={deletedDefaultManipulators}
+            initialSelectedFieldId={selectedFieldForTest || activeConfigItem?.sectionId}
+            availableCustomTypes={availableCustomTypes}
           />
         </TabsContent>
       </Tabs>

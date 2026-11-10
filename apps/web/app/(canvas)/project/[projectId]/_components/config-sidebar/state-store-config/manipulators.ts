@@ -3,26 +3,341 @@ import {
   GlobalStoreAction,
   Parameter,
   JsonValue,
+  CustomTypeItem,
+  CustomTypeField,
 } from "@workspace/canvas/types";
 import { StoreState, isJsonObject, RuntimeScopeValue } from "./core";
+import {
+  resolveCustomType,
+  extractFieldsFromCustomType,
+  getSuggestedReducerCodeForChannelType,
+} from "../../backend-nodes/graph-nodes/langgraph/langgraph-canvas/components/inspector/state-inspector/constants";
 
-export function formatInitialFieldValue(field: GlobalStoreField): JsonValue {
+/**
+ * Extracts the `const initial = { ... }` object shape from generated reducer code if present.
+ */
+export function parseInitialFromReducerCode(code?: string): Record<string, JsonValue> | null {
+  if (!code || typeof code !== "string") return null;
+  const match = /const\s+initial\s*=\s*\{([^}]+)\}/s.exec(code);
+  if (!match || !match[1]) return null;
+
+  const body = match[1];
+  const obj: Record<string, JsonValue> = {};
+  const lineRegex = /([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:\s*([^,\n}]+)/g;
+  let m: RegExpExecArray | null;
+  while ((m = lineRegex.exec(body)) !== null) {
+    const key = m[1]?.trim();
+    const rawVal = m[2]?.trim();
+    if (!key || !rawVal) continue;
+    let parsedVal: JsonValue = rawVal;
+    if (rawVal === '""' || rawVal === "''") {
+      parsedVal = "";
+    } else if (rawVal === "true") {
+      parsedVal = true;
+    } else if (rawVal === "false") {
+      parsedVal = false;
+    } else if (rawVal === "0" || !Number.isNaN(Number(rawVal))) {
+      parsedVal = Number(rawVal);
+    } else if (rawVal === "[]") {
+      parsedVal = [];
+    } else if (rawVal === "{}") {
+      parsedVal = {};
+    } else if (
+      (rawVal.startsWith('"') && rawVal.endsWith('"')) ||
+      (rawVal.startsWith("'") && rawVal.endsWith("'"))
+    ) {
+      parsedVal = rawVal.slice(1, -1);
+    }
+    obj[key] = parsedVal;
+  }
+  return Object.keys(obj).length > 0 ? obj : null;
+}
+
+/**
+ * Infers the initial default value for a store variable according to its type and schema.
+ */
+export function inferInitialValueForField(
+  field: GlobalStoreField,
+  availableCustomTypes: CustomTypeItem[] = [],
+): JsonValue {
   if (field.defaultValue !== undefined) {
     return field.defaultValue;
   }
-  switch (field.type) {
+  const isArr = Boolean(field.isArray || field.type === "array" || field.type?.endsWith("[]"));
+  if (isArr) {
+    return [];
+  }
+  const cleanType = (field.type || "string").replace(/\[\]$/, "").trim();
+  switch (cleanType.toLowerCase()) {
     case "number":
+    case "int":
+    case "float":
       return 0;
     case "boolean":
+    case "bool":
       return false;
-    case "array":
-      return [];
+    case "string":
+    case "text":
+      return "";
     case "object":
       return {};
-    case "string":
-    default:
+    default: {
+      // 1. Try finding custom type from availableCustomTypes
+      const matched = resolveCustomType({
+        availableTypes: availableCustomTypes,
+        typeId: field.customTypeId,
+        typeName: cleanType,
+      });
+      if (matched) {
+        const fields = extractFieldsFromCustomType(matched);
+        if (fields.length > 0) {
+          const initObj: Record<string, JsonValue> = {};
+          fields.forEach((f) => {
+            if (f.defaultValue !== undefined && f.defaultValue !== "") {
+              initObj[f.name] = f.defaultValue;
+            } else if (f.isArray || f.type.endsWith("[]")) {
+              initObj[f.name] = [];
+            } else if (f.type === "number") {
+              initObj[f.name] = 0;
+            } else if (f.type === "boolean") {
+              initObj[f.name] = false;
+            } else if (f.name.toLowerCase() === "role") {
+              initObj[f.name] = "user";
+            } else {
+              initObj[f.name] = "";
+            }
+          });
+          return initObj;
+        }
+      }
+
+      // 2. Try parsing initial object from reducer code
+      const parsedInitial = parseInitialFromReducerCode(field.customReducerCode);
+      if (parsedInitial) {
+        return parsedInitial;
+      }
+
+      // 3. Fallback heuristics for known schema names
+      if (cleanType.toLowerCase().includes("message") || field.name.toLowerCase().includes("message")) {
+        return { id: "", role: "user", content: "" };
+      }
+
       return "";
+    }
   }
+}
+
+export function formatInitialFieldValue(
+  field: GlobalStoreField,
+  availableCustomTypes: CustomTypeItem[] = [],
+): JsonValue {
+  return inferInitialValueForField(field, availableCustomTypes);
+}
+
+function inferSampleSingleItem(
+  field: GlobalStoreField,
+  cleanType: string,
+  availableCustomTypes: CustomTypeItem[] = [],
+): JsonValue {
+  // 1. Primitive types
+  switch (cleanType.toLowerCase()) {
+    case "number":
+    case "int":
+    case "float":
+      return 100;
+    case "boolean":
+    case "bool":
+      return true;
+    case "string":
+    case "text": {
+      const n = field.name.toLowerCase();
+      if (n.includes("status")) return "active";
+      if (n.includes("input") || n.includes("query") || n.includes("search")) return "What is the status?";
+      if (n.includes("email")) return "alex@example.com";
+      if (n.includes("title")) return "Sample Title";
+      if (n.includes("content")) return "Sample message content";
+      return `Sample ${field.name}`;
+    }
+    case "object":
+      return { active: true };
+  }
+
+  // 2. Custom Type resolution via availableCustomTypes
+  const matchedType = resolveCustomType({
+    availableTypes: availableCustomTypes,
+    typeId: field.customTypeId,
+    typeName: cleanType,
+  });
+
+  if (matchedType) {
+    const fields = extractFieldsFromCustomType(matchedType);
+    if (fields.length > 0) {
+      const obj: Record<string, JsonValue> = {};
+      fields.forEach((f) => {
+        const fName = f.name.toLowerCase();
+        const fType = (f.type || "string").toLowerCase().trim();
+
+        if (f.defaultValue !== undefined && f.defaultValue !== "") {
+          try {
+            obj[f.name] =
+              typeof f.defaultValue === "string" && (f.defaultValue.startsWith("{") || f.defaultValue.startsWith("["))
+                ? JSON.parse(f.defaultValue)
+                : f.defaultValue;
+            return;
+          } catch {
+            obj[f.name] = f.defaultValue;
+            return;
+          }
+        }
+
+        if (Array.isArray(f.enumValues) && f.enumValues.length > 0) {
+          const firstVal = f.enumValues[0] ?? "";
+          if (fName === "role") {
+            obj[f.name] = f.enumValues.includes("user") ? "user" : firstVal;
+          } else {
+            obj[f.name] = firstVal;
+          }
+          return;
+        }
+
+        if (f.isArray || fType.endsWith("[]") || fType === "array") {
+          obj[f.name] = [];
+          return;
+        }
+
+        if (fName === "id" || fName === "_id") {
+          if (cleanType.toLowerCase().includes("message") || field.name.toLowerCase().includes("message")) {
+            obj[f.name] = "msg_1";
+          } else if (cleanType.toLowerCase().includes("user")) {
+            obj[f.name] = "usr_1";
+          } else {
+            obj[f.name] = "1";
+          }
+        } else if (fName === "role") {
+          obj[f.name] = "user";
+        } else if (fName === "content" || fName === "text" || fName === "message") {
+          obj[f.name] = "Hello";
+        } else if (fName === "delta" || fName === "chunk") {
+          obj[f.name] = "Hello chunk";
+        } else if (fName === "streaming" || fName === "done" || fName === "isstreaming") {
+          obj[f.name] = false;
+        } else if (fName === "name" || fName === "title") {
+          obj[f.name] = "Sample " + f.name.charAt(0).toUpperCase() + f.name.slice(1);
+        } else if (fName === "email") {
+          obj[f.name] = "user@example.com";
+        } else if (fName === "price" || fName === "amount" || fName === "cost") {
+          obj[f.name] = 29.99;
+        } else if (fName === "status") {
+          obj[f.name] = "active";
+        } else if (fName === "active" || fName === "enabled" || fName === "success") {
+          obj[f.name] = true;
+        } else if (fName === "count" || fName === "quantity" || fName === "index") {
+          obj[f.name] = 1;
+        } else if (fType === "number" || fType === "int" || fType === "float") {
+          obj[f.name] = 1;
+        } else if (fType === "boolean" || fType === "bool") {
+          obj[f.name] = true;
+        } else if (fType === "object") {
+          obj[f.name] = {};
+        } else {
+          obj[f.name] = `Sample ${f.name}`;
+        }
+      });
+      return obj;
+    }
+  }
+
+  // 3. Parse initial from customReducerCode if available
+  const parsedInitial = parseInitialFromReducerCode(field.customReducerCode);
+  if (parsedInitial) {
+    const obj: Record<string, JsonValue> = {};
+    for (const [k, initVal] of Object.entries(parsedInitial)) {
+      const kLower = k.toLowerCase();
+      if (kLower === "id" || kLower === "_id") {
+        obj[k] = cleanType.toLowerCase().includes("message") || field.name.toLowerCase().includes("message")
+          ? "msg_1"
+          : "1";
+      } else if (kLower === "role") {
+        obj[k] = "user";
+      } else if (kLower === "content" || kLower === "text") {
+        obj[k] = "Hello";
+      } else if (typeof initVal === "string" && initVal === "") {
+        obj[k] = `Sample ${k}`;
+      } else if (typeof initVal === "number" && initVal === 0) {
+        obj[k] = 1;
+      } else if (typeof initVal === "boolean" && initVal === false) {
+        obj[k] = true;
+      } else {
+        obj[k] = initVal;
+      }
+    }
+    return obj;
+  }
+
+  // 4. Well-known type name heuristics
+  if (cleanType.toLowerCase().includes("message") || field.name.toLowerCase().includes("message")) {
+    return { id: "msg_1", role: "user", content: "Hello" };
+  }
+  if (cleanType.toLowerCase().includes("user")) {
+    return { id: "usr_1", name: "Alex Doe", email: "alex@example.com", role: "user" };
+  }
+  if (cleanType.toLowerCase().includes("item") || cleanType.toLowerCase().includes("product")) {
+    return { id: "1", title: "Sample Item", price: 29.99 };
+  }
+
+  // 5. Generic object fallback
+  return { id: "1", [field.name]: `Sample ${field.name}` };
+}
+
+/**
+ * Infers a realistic sample payload object or value based on the type schema of a state variable.
+ */
+export function inferSampleValueForField(
+  field: GlobalStoreField,
+  availableCustomTypes: CustomTypeItem[] = [],
+  allowArray = true,
+): JsonValue {
+  const isArr = Boolean(field.isArray || field.type === "array" || field.type?.endsWith("[]"));
+  const cleanType = (field.type || "string").replace(/\[\]$/, "").trim();
+
+  const singleItem = inferSampleSingleItem(field, cleanType, availableCustomTypes);
+
+  if (isArr && allowArray) {
+    return [singleItem];
+  }
+  return singleItem;
+}
+
+/**
+ * Infers a realistic patch object for update reducer actions.
+ */
+export function inferSamplePatchForField(
+  field: GlobalStoreField,
+  availableCustomTypes: CustomTypeItem[] = [],
+): Record<string, JsonValue> {
+  const isArr = Boolean(field.isArray || field.type === "array" || field.type?.endsWith("[]"));
+  const sample = inferSampleSingleItem(
+    field,
+    (field.type || "string").replace(/\[\]$/, "").trim(),
+    availableCustomTypes,
+  );
+
+  if (isJsonObject(sample)) {
+    const copy: Record<string, JsonValue> = { ...sample };
+    if ("content" in copy) {
+      copy.content = "Updated message content";
+    } else if ("title" in copy) {
+      copy.title = "Updated Title";
+    } else if ("status" in copy) {
+      copy.status = "updated";
+    }
+    if (isArr && !("id" in copy)) {
+      copy.id = "1";
+    }
+    return copy;
+  }
+
+  return { id: "1", value: "updated" };
 }
 
 export interface StateManipulator {
@@ -55,27 +370,63 @@ export interface StateManipulator {
 }
 
 /**
+ * Checks whether a state manipulator belongs to a specific state variable/field.
+ */
+export function isManipulatorForField(
+  manipulator: StateManipulator,
+  field: GlobalStoreField,
+): boolean {
+  // If targetFieldId is set, it is the authoritative source of truth
+  if (manipulator.targetFieldId) {
+    return manipulator.targetFieldId === field.id;
+  }
+  // If id has the field id suffix (e.g. setter-f1 or stream-f1)
+  if (manipulator.id && manipulator.id.endsWith(`-${field.id}`)) {
+    return true;
+  }
+  // If targetFieldName is set
+  if (manipulator.targetFieldName) {
+    return (
+      manipulator.targetFieldName.trim().toLowerCase() === field.name.trim().toLowerCase()
+    );
+  }
+  // Otherwise check if the action name ends with the field name
+  const nameLower = manipulator.name.trim().toLowerCase();
+  const fieldLower = field.name.trim().toLowerCase();
+  return nameLower.endsWith(fieldLower);
+}
+
+/**
  * Normalizes an action name or alias into its canonical action type.
  */
 export function toCanonicalStoreAction(action: string): string {
-  const norm = action.toLowerCase().trim();
+  if (!action || typeof action !== "string") return "set";
+  const rawFirst = action.includes("|") ? action.split("|")[0]?.trim() || action : action;
+  const norm = rawFirst.toLowerCase().trim();
   switch (norm) {
     case "set":
+    case "setter":
+    case "mutate":
     case "replace":
       return "set";
     case "append":
     case "add":
+    case "push":
+    case "concat":
       return "append";
     case "prepend":
+    case "unshift":
       return "prepend";
     case "pop":
       return "pop";
     case "remove":
+    case "delete":
     case "filter":
       return "remove";
     case "update":
     case "upsert":
     case "patch":
+    case "modify":
       return "update";
     case "stream":
     case "append_stream":
@@ -94,6 +445,196 @@ export function toCanonicalStoreAction(action: string): string {
     default:
       return norm;
   }
+}
+
+export interface ParsedReducerActionBranch {
+  displayName: string;
+  canonicalAction: string;
+  actionAliases: string[];
+  code: string;
+}
+
+const INTERNAL_SYNONYMS = new Set([
+  "setter",
+  "mutate",
+  "append_stream",
+  "default",
+]);
+
+export const STANDARD_ACTION_DISPLAY_NAMES: Record<string, string> = {
+  set: "set | replace",
+  append: "append | add",
+  prepend: "prepend",
+  pop: "pop",
+  remove: "remove | filter",
+  update: "update | upsert",
+  stream: "stream | chunk",
+  reset: "reset | clear",
+  increment: "increment | add",
+  decrement: "decrement | subtract",
+  toggle: "toggle",
+};
+
+/**
+ * Extracts action branches and their corresponding code blocks directly from reducer code.
+ * Formats multiple OR aliases as "ACTION 1 | ACTION 2" (e.g. "set | replace", "append | add").
+ */
+export function extractActionBranchesFromReducerCode(
+  code?: string,
+): ParsedReducerActionBranch[] {
+  if (!code || typeof code !== "string" || !code.trim()) return [];
+
+  const branches: ParsedReducerActionBranch[] = [];
+  const seenCanonical = new Set<string>();
+
+  // Pattern 1: if statements checking action (supports both { ... } and single-statement without braces)
+  const ifRegex =
+    /(?:((?:[ \t]*\/\/[^\n]*\n)+))?[ \t]*if\s*\(([^)]*(?:action|\.action)[^)]*)\)(\s*\{|\s*[^\n;]+;?)/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = ifRegex.exec(code)) !== null) {
+    const fullMatchStart = match.index;
+    const condition = match[2] || "";
+    const bodyStarter = match[3] || "";
+
+    // Ignore property checks like '"action" in next' or pure '!action'
+    if (/["']action["']\s+in\s+/i.test(condition)) continue;
+    if (/!action\b/.test(condition) && !/===|==|\.includes/i.test(condition)) continue;
+
+    let fullBlock = "";
+    if (bodyStarter.trim().startsWith("{")) {
+      const openBraceIndex = match.index + match[0].indexOf("{");
+      let depth = 1;
+      let i = openBraceIndex + 1;
+      while (i < code.length && depth > 0) {
+        if (code[i] === "{") depth++;
+        else if (code[i] === "}") depth--;
+        i++;
+      }
+      fullBlock = code.slice(fullMatchStart, i).trim();
+    } else {
+      fullBlock = code.slice(fullMatchStart, match.index + match[0].length).trim();
+    }
+
+    // Extract string literals from condition
+    const strRegex = /"([^"\\]*(?:\\.[^"\\]*)*)"|'([^'\\]*(?:\\.[^'\\]*)*)'/g;
+    const literals: string[] = [];
+    let sm: RegExpExecArray | null;
+    while ((sm = strRegex.exec(condition)) !== null) {
+      const act = (sm[1] ?? sm[2] ?? "").trim();
+      if (act && act !== "default" && act !== "" && act !== "action" && !literals.includes(act)) {
+        literals.push(act);
+      }
+    }
+
+    if (literals.length > 0) {
+      const publicLiterals = literals.filter((l) => !INTERNAL_SYNONYMS.has(l));
+      let finalLiterals = publicLiterals.length > 0 ? publicLiterals : literals;
+
+      // Prefer canonical verbs first in alias pairs
+      if (finalLiterals.includes("set") && finalLiterals.includes("replace")) {
+        const others = finalLiterals.filter((l) => l !== "set" && l !== "replace");
+        finalLiterals = ["set", "replace", ...others];
+      } else if (finalLiterals.includes("append") && finalLiterals.includes("add")) {
+        const others = finalLiterals.filter((l) => l !== "append" && l !== "add");
+        finalLiterals = ["append", "add", ...others];
+      } else if (finalLiterals.includes("remove") && finalLiterals.includes("filter")) {
+        const others = finalLiterals.filter((l) => l !== "remove" && l !== "filter");
+        finalLiterals = ["remove", "filter", ...others];
+      } else if (finalLiterals.includes("update") && finalLiterals.includes("upsert")) {
+        const others = finalLiterals.filter((l) => l !== "update" && l !== "upsert");
+        finalLiterals = ["update", "upsert", ...others];
+      } else if (finalLiterals.includes("stream") && finalLiterals.includes("chunk")) {
+        const others = finalLiterals.filter((l) => l !== "stream" && l !== "chunk");
+        finalLiterals = ["stream", "chunk", ...others];
+      } else if (finalLiterals.includes("reset") && finalLiterals.includes("clear")) {
+        const others = finalLiterals.filter((l) => l !== "reset" && l !== "clear");
+        finalLiterals = ["reset", "clear", ...others];
+      }
+
+      const displayName = finalLiterals.join(" | ");
+      const canonicalAction = toCanonicalStoreAction(finalLiterals[0] || "set");
+
+      branches.push({
+        displayName,
+        canonicalAction,
+        actionAliases: finalLiterals,
+        code: fullBlock,
+      });
+      seenCanonical.add(canonicalAction);
+    }
+  }
+
+  // Pattern 2: switch (action) statements
+  const switchRegex = /switch\s*\([^)]*(?:action|\.action)[^)]*\)\s*\{/g;
+  let switchMatch: RegExpExecArray | null;
+  while ((switchMatch = switchRegex.exec(code)) !== null) {
+    const switchStart = switchMatch.index + switchMatch[0].length;
+    let depth = 1;
+    let i = switchStart;
+    while (i < code.length && depth > 0) {
+      if (code[i] === "{") depth++;
+      else if (code[i] === "}") depth--;
+      i++;
+    }
+    const switchBody = code.slice(switchStart, i - 1);
+
+    const caseGroupRegex =
+      /(?:case\s*["']([^"']+)["']\s*:\s*)+([\s\S]*?)(?=(?:case\s*["']|default\s*:|\}))/g;
+    let cMatch: RegExpExecArray | null;
+    while ((cMatch = caseGroupRegex.exec(switchBody)) !== null) {
+      const fullCaseBlock = cMatch[0].trim();
+      const strRegex = /case\s*["']([^"']+)["']/g;
+      const caseLiterals: string[] = [];
+      let csm: RegExpExecArray | null;
+      while ((csm = strRegex.exec(fullCaseBlock)) !== null) {
+        const act = csm[1]?.trim();
+        if (act && !caseLiterals.includes(act)) {
+          caseLiterals.push(act);
+        }
+      }
+      if (caseLiterals.length > 0) {
+        const publicLiterals = caseLiterals.filter((l) => !INTERNAL_SYNONYMS.has(l));
+        const finalLiterals = publicLiterals.length > 0 ? publicLiterals : caseLiterals;
+        const displayName = finalLiterals.join(" | ");
+        const canonicalAction = toCanonicalStoreAction(finalLiterals[0] || "set");
+
+        if (!seenCanonical.has(canonicalAction)) {
+          branches.push({
+            displayName,
+            canonicalAction,
+            actionAliases: finalLiterals,
+            code: fullCaseBlock,
+          });
+          seenCanonical.add(canonicalAction);
+        }
+      }
+    }
+  }
+
+  const actionOrder = [
+    "set",
+    "append",
+    "prepend",
+    "pop",
+    "remove",
+    "update",
+    "stream",
+    "increment",
+    "decrement",
+    "toggle",
+    "reset",
+  ];
+
+  branches.sort((a, b) => {
+    const idxA = actionOrder.indexOf(a.canonicalAction);
+    const idxB = actionOrder.indexOf(b.canonicalAction);
+    const orderA = idxA === -1 ? 999 : idxA;
+    const orderB = idxB === -1 ? 999 : idxB;
+    return orderA - orderB;
+  });
+
+  return branches;
 }
 
 /**
@@ -184,6 +725,7 @@ export function getStateManipulators(
   actions: GlobalStoreAction[],
   disabledDefaultManipulators: string[] = [],
   deletedDefaultManipulators: string[] = [],
+  availableCustomTypes: CustomTypeItem[] = [],
 ): StateManipulator[] {
   const list: StateManipulator[] = [];
   const disabledSet = new Set([
@@ -193,7 +735,12 @@ export function getStateManipulators(
 
   // 1. Check customized / user declared actions
   actions.forEach((act) => {
-    const targetField = fields.find((f) => f.id === act.targetFieldId);
+    const targetField = fields.find(
+      (f) =>
+        f.id === act.targetFieldId ||
+        (Boolean(act.targetFieldName) && f.name.toLowerCase() === act.targetFieldName!.toLowerCase()) ||
+        (Boolean(act.name) && act.name.toLowerCase().endsWith(f.name.toLowerCase())),
+    );
     let defaultPayload: JsonValue | undefined = "";
 
     if (act.parameters && act.parameters.length > 0) {
@@ -208,7 +755,7 @@ export function getStateManipulators(
       defaultPayload = mockObj;
     } else if (act.actionType === "populate" || act.name.toLowerCase() === "populate" || act.name.toLowerCase() === "load") {
       defaultPayload = fields.reduce<StoreState>(
-        (acc, f) => ({ ...acc, [f.name]: formatInitialFieldValue(f) }),
+        (acc, f) => ({ ...acc, [f.name]: formatInitialFieldValue(f, availableCustomTypes) }),
         {},
       );
     } else if (act.actionType === "reset" || act.name.toLowerCase() === "reset") {
@@ -218,7 +765,9 @@ export function getStateManipulators(
       else if (targetField.type === "boolean") defaultPayload = true;
       else if (targetField.type === "array") defaultPayload = [{ id: "item_1", title: "New Item", price: 19.99 }];
       else if (targetField.type === "object") defaultPayload = { key: "value" };
-      else defaultPayload = "Sample Value";
+      else {
+        defaultPayload = inferSampleValueForField(targetField, availableCustomTypes);
+      }
     }
 
     const isPopulateOverride =
@@ -272,7 +821,7 @@ export function getStateManipulators(
     list.push({
       id: act.id,
       name: act.name,
-      label: `${act.name}()`,
+      label: act.name,
       category: defaultManipulatorType
         ? defaultManipulatorType === "setter"
           ? "auto_setter"
@@ -280,8 +829,8 @@ export function getStateManipulators(
         : act.actionType === "custom"
         ? "custom_action"
         : "standard_action",
-      targetFieldId: act.targetFieldId,
-      targetFieldName: targetField?.name,
+      targetFieldId: act.targetFieldId || targetField?.id,
+      targetFieldName: targetField?.name || act.targetFieldName,
       parameters: act.parameters,
       code: act.code,
       actionType: act.actionType,
@@ -303,10 +852,11 @@ export function getStateManipulators(
     list.push({
       id: "builtin-reset",
       name: "reset",
-      label: "reset()",
+      label: "reset",
       category: "builtin",
       actionType: "reset",
       defaultManipulatorType: "reset",
+      code: "set(initialState);",
       defaultPayload: undefined,
       isCustomized: false,
     });
@@ -316,21 +866,21 @@ export function getStateManipulators(
     list.push({
       id: "builtin-populate",
       name: "populate",
-      label: "populate(data)",
+      label: "populate",
       category: "builtin",
       actionType: "populate",
       defaultManipulatorType: "populate",
+      code: "set(payload);",
       defaultPayload: fields.reduce<StoreState>(
-        (acc, f) => ({ ...acc, [f.name]: formatInitialFieldValue(f) }),
+        (acc, f) => ({ ...acc, [f.name]: formatInitialFieldValue(f, availableCustomTypes) }),
         {},
       ),
       isCustomized: false,
     });
   }
 
-  // 3. Field manipulators: Auto-generate full action suites for each state variable
+  // 3. Field manipulators: Directly represent the actions of the reducers and the code within them
   fields.forEach((f) => {
-    const capitalized = f.name.charAt(0).toUpperCase() + f.name.slice(1);
     const isArr = Boolean(f.isArray || f.type === "array" || f.type?.endsWith("[]"));
     const isMsg = Boolean(
       f.type?.toLowerCase().includes("message") ||
@@ -339,121 +889,86 @@ export function getStateManipulators(
       f.name.toLowerCase().includes("chat"),
     );
 
-    const standardActions = getSupportedActionsForType(f.type, isArr, f.name);
-    const fromCode = f.customReducerCode ? extractActionsFromReducerCode(f.customReducerCode) : [];
-    const declaredActions = f.actions || [];
-
-    const rawCandidates = [...standardActions, ...declaredActions, ...fromCode];
-    const availableCanonicals = new Set<string>();
-    rawCandidates.forEach((raw) => {
-      if (raw && raw !== "default" && raw !== "") {
-        availableCanonicals.add(toCanonicalStoreAction(raw));
-      }
+    const cleanBase = (f.type || "string").replace(/\[\]$/, "").trim();
+    const matchedCustom = resolveCustomType({
+      availableTypes: availableCustomTypes,
+      typeName: cleanBase,
+      typeId: f.customTypeId,
     });
 
-    // Ensure array variables always have base array operations available
-    if (isArr) {
-      availableCanonicals.add("set");
-      availableCanonicals.add("append");
-      availableCanonicals.add("prepend");
-      availableCanonicals.add("pop");
-      availableCanonicals.add("remove");
-      availableCanonicals.add("update");
-      availableCanonicals.add("reset");
-      if (isMsg) availableCanonicals.add("stream");
+    const effectiveCode =
+      f.customReducerCode && f.customReducerCode.trim()
+        ? f.customReducerCode
+        : getSuggestedReducerCodeForChannelType(f.type, matchedCustom, isArr);
+
+    let parsedBranches = extractActionBranchesFromReducerCode(effectiveCode);
+
+    // If no branches were found (e.g. shorthand expression reducer without action branches)
+    if (parsedBranches.length === 0) {
+      const standardActions = getSupportedActionsForType(f.type, isArr, f.name);
+      parsedBranches = standardActions.map((act) => ({
+        displayName: STANDARD_ACTION_DISPLAY_NAMES[act] || act,
+        canonicalAction: act,
+        actionAliases: [act],
+        code: effectiveCode,
+      }));
     }
 
-    const actionOrder = [
-      "set",
-      "append",
-      "prepend",
-      "pop",
-      "remove",
-      "update",
-      "stream",
-      "increment",
-      "decrement",
-      "toggle",
-      "reset",
-    ];
-
-    const sortedCanonicals: string[] = [];
-    actionOrder.forEach((act) => {
-      if (availableCanonicals.has(act)) {
-        sortedCanonicals.push(act);
-        availableCanonicals.delete(act);
-      }
-    });
-    availableCanonicals.forEach((customAct) => {
-      sortedCanonicals.push(customAct);
-    });
-
-    sortedCanonicals.forEach((act) => {
-      let actionName = `${act}${capitalized}`;
-      let label = `${actionName}()`;
+    parsedBranches.forEach((branch) => {
+      const act = branch.canonicalAction;
+      const displayName = branch.displayName;
       let actionType: StateManipulator["actionType"] = "custom";
       let defaultManipulatorType: StateManipulator["defaultManipulatorType"] = act;
       let defaultPayload: JsonValue | undefined = undefined;
 
       switch (act) {
         case "set": {
-          actionName = `set${capitalized}`;
-          label = `${actionName}(value)`;
           actionType = "set";
           defaultManipulatorType = "setter";
-          if (f.type === "number") defaultPayload = 100;
-          else if (f.type === "boolean") defaultPayload = true;
-          else if (isArr) {
-            defaultPayload = isMsg
-              ? [{ id: "msg_1", role: "user", content: "Hello" }]
-              : [{ id: "1", title: "Example" }];
-          } else if (f.type === "object") defaultPayload = { active: true };
-          else defaultPayload = "Updated string";
+          if (isArr) {
+            const single = inferSampleValueForField(f, availableCustomTypes, false);
+            defaultPayload = Array.isArray(single) ? single : [single];
+          } else {
+            defaultPayload = inferSampleValueForField(f, availableCustomTypes, false);
+          }
           break;
         }
         case "append": {
-          actionName = `append${capitalized}`;
-          label = `${actionName}(item)`;
           actionType = "append";
           defaultManipulatorType = "append";
-          if (isMsg) {
-            defaultPayload = { id: `msg_${Date.now()}`, role: "user", content: "Hello world" };
-          } else if (isArr) {
-            defaultPayload = { id: "item_new", title: "New Item" };
+          if (isArr) {
+            defaultPayload = inferSampleValueForField(f, availableCustomTypes, false);
           } else if (f.type === "string") {
             defaultPayload = " (appended)";
           } else {
-            defaultPayload = "new_item";
+            defaultPayload = inferSampleValueForField(f, availableCustomTypes, false);
           }
           break;
         }
         case "prepend": {
-          actionName = `prepend${capitalized}`;
-          label = `${actionName}(item)`;
           actionType = "prepend";
           defaultManipulatorType = "prepend";
-          if (isMsg) {
-            defaultPayload = { id: "msg_0", role: "system", content: "You are a helpful assistant." };
-          } else if (isArr) {
-            defaultPayload = { id: "item_first", title: "First Item" };
+          if (isArr) {
+            const item = inferSampleValueForField(f, availableCustomTypes, false);
+            if (isMsg && typeof item === "object" && item !== null && !Array.isArray(item)) {
+              defaultPayload = { ...item, id: "msg_0", role: "system", content: "You are a helpful assistant." };
+            } else {
+              defaultPayload = item;
+            }
           } else if (f.type === "string") {
             defaultPayload = "[PRE] ";
           } else {
-            defaultPayload = "first_item";
+            defaultPayload = inferSampleValueForField(f, availableCustomTypes, false);
           }
           break;
         }
         case "pop": {
-          actionName = `pop${capitalized}`;
-          label = `${actionName}()`;
           actionType = "remove";
           defaultManipulatorType = "pop";
           defaultPayload = undefined;
           break;
         }
         case "remove": {
-          actionName = `remove${capitalized}`;
-          label = `${actionName}(idOrIndex)`;
           actionType = "remove";
           defaultManipulatorType = "remove";
           if (isMsg) {
@@ -466,64 +981,42 @@ export function getStateManipulators(
           break;
         }
         case "update": {
-          actionName = `update${capitalized}`;
-          label = `${actionName}(patch)`;
           actionType = "update";
           defaultManipulatorType = "update";
-          if (isMsg) {
-            defaultPayload = { id: "msg_1", content: "Updated message content" };
-          } else if (isArr) {
-            defaultPayload = { id: "1", title: "Updated Item Title" };
-          } else if (f.type === "object") {
-            defaultPayload = { status: "updated" };
-          } else {
-            defaultPayload = { value: "updated" };
-          }
+          defaultPayload = inferSamplePatchForField(f, availableCustomTypes);
           break;
         }
         case "stream": {
-          actionName = `stream${capitalized}`;
-          label = `${actionName}(delta)`;
           actionType = "stream";
           defaultManipulatorType = "stream";
           defaultPayload = { delta: "Hello streaming message chunk!", role: "assistant" };
           break;
         }
         case "increment": {
-          actionName = `increment${capitalized}`;
-          label = `${actionName}(amount)`;
           actionType = "increment";
           defaultManipulatorType = "increment";
           defaultPayload = { amount: 1 };
           break;
         }
         case "decrement": {
-          actionName = `decrement${capitalized}`;
-          label = `${actionName}(amount)`;
           actionType = "decrement";
           defaultManipulatorType = "decrement";
           defaultPayload = { amount: 1 };
           break;
         }
         case "toggle": {
-          actionName = `toggle${capitalized}`;
-          label = `${actionName}()`;
           actionType = "toggle";
           defaultManipulatorType = "toggle";
           defaultPayload = undefined;
           break;
         }
         case "reset": {
-          actionName = `reset${capitalized}`;
-          label = `${actionName}()`;
           actionType = "reset";
           defaultManipulatorType = "reset";
           defaultPayload = undefined;
           break;
         }
         default: {
-          actionName = `${act}${capitalized}`;
-          label = `${actionName}(payload)`;
           actionType = "custom";
           defaultManipulatorType = act;
           defaultPayload = { action: act };
@@ -532,34 +1025,33 @@ export function getStateManipulators(
       }
 
       const isActDisabled =
-        disabledSet.has(actionName) ||
+        disabledSet.has(act) ||
+        disabledSet.has(displayName) ||
         disabledSet.has(`${act}-${f.id}`) ||
-        (act === "set" && disabledSet.has(`setter-${f.id}`));
+        (act === "set" && (disabledSet.has(`setter-${f.id}`) || disabledSet.has(`set${f.name.charAt(0).toUpperCase() + f.name.slice(1)}`)));
 
       const isActCustomized = list.some(
         (m) =>
-          (m.targetFieldId === f.id &&
-            (m.defaultManipulatorType === act || (act === "set" && m.defaultManipulatorType === "setter"))) ||
-          m.name.toLowerCase() === actionName.toLowerCase(),
+          m.targetFieldId === f.id &&
+          (m.defaultManipulatorType === act ||
+            (act === "set" && m.defaultManipulatorType === "setter") ||
+            m.name.toLowerCase() === displayName.toLowerCase()),
       );
 
       if (!isActDisabled && !isActCustomized) {
-        const isCustomAction =
-          act !== "set" &&
-          (Boolean(f.customReducerCode && f.customReducerCode.trim()) || fromCode.includes(act));
-
         list.push({
           id: `${act === "set" ? "setter" : act}-${f.id}`,
-          name: actionName,
-          label,
+          name: displayName,
+          label: displayName,
           category:
             act === "set"
               ? "auto_setter"
-              : isCustomAction
-              ? "custom_action"
+              : act === "reset"
+              ? "builtin"
               : "standard_action",
           targetFieldId: f.id,
           targetFieldName: f.name,
+          code: branch.code,
           actionType,
           defaultManipulatorType,
           defaultPayload,
@@ -592,9 +1084,16 @@ export function applyManipulator({
       initialState[f.name] = formatInitialFieldValue(f);
     });
 
-    // If custom code is provided on ANY manipulator, execute it directly in a rich runtime scope
-    if (manipulator.code && manipulator.code.trim()) {
-      let trimmedCode = manipulator.code.trim();
+    // If custom code is provided on a store-level action (Zustand action), execute it in Zustand runtime scope
+    const manipCode = manipulator.code;
+    const isStoreLevelZustandAction =
+      !manipulator.targetFieldId &&
+      typeof manipCode === "string" &&
+      manipCode.trim().length > 0 &&
+      (manipCode.includes("set(") || manipCode.includes("get()") || manipulator.category === "custom_action");
+
+    if (isStoreLevelZustandAction && typeof manipCode === "string") {
+      let trimmedCode = manipCode.trim();
 
       // If code starts with an action property label e.g. "login: ...", strip the leading "actionName:"
       const labelMatch = trimmedCode.match(/^[a-zA-Z_$][a-zA-Z0-9_$]*\s*:\s*([\s\S]+)$/);
@@ -713,7 +1212,10 @@ export function applyManipulator({
     ) || (manipulator.targetFieldId ? undefined : fields[0]);
     const targetName = targetField?.name || manipulator.targetFieldName || fields[0]?.name || "value";
 
-    const rawActionType = manipulator.defaultManipulatorType || manipulator.actionType || manipulator.name || "set";
+    const rawActionType =
+      manipulator.defaultManipulatorType === "pop" || manipulator.name === "pop"
+        ? "pop"
+        : manipulator.actionType || manipulator.defaultManipulatorType || manipulator.name || "set";
     const actType = toCanonicalStoreAction(typeof rawActionType === "string" ? rawActionType : "set");
 
     // Build the action payload `nextArg` for custom reducer invocation: (prev, next) => ...
@@ -759,20 +1261,34 @@ export function applyManipulator({
             nextArg = { action: "stream", delta: String(payload ?? "") };
           }
           break;
-        case "increment":
+        case "increment": {
+          const amt =
+            typeof payload === "number"
+              ? payload
+              : isJsonObject(payload) && typeof payload.amount === "number"
+              ? payload.amount
+              : 1;
           nextArg = {
             action: "increment",
-            amount: typeof payload === "number" ? payload : 1,
-            value: payload,
+            amount: amt,
+            value: amt,
           };
           break;
-        case "decrement":
+        }
+        case "decrement": {
+          const amt =
+            typeof payload === "number"
+              ? payload
+              : isJsonObject(payload) && typeof payload.amount === "number"
+              ? payload.amount
+              : 1;
           nextArg = {
             action: "decrement",
-            amount: typeof payload === "number" ? payload : 1,
-            value: payload,
+            amount: amt,
+            value: amt,
           };
           break;
+        }
         case "toggle":
           nextArg = { action: "toggle" };
           break;
@@ -791,11 +1307,27 @@ export function applyManipulator({
 
     // Try executing field custom reducer if present
     let executedCustomReducer = false;
-    if (targetField?.customReducerCode && targetField.customReducerCode.trim()) {
+    const targetCleanType = (targetField?.type || "string").replace(/\[\]$/, "").trim();
+    const matchedTargetCustom = resolveCustomType({
+      availableTypes: [],
+      typeName: targetCleanType,
+      typeId: targetField?.customTypeId,
+    });
+    const isTargetArr = Boolean(
+      targetField?.isArray || targetField?.type === "array" || targetField?.type?.endsWith("[]"),
+    );
+    const codeToRun =
+      targetField?.customReducerCode && targetField.customReducerCode.trim()
+        ? targetField.customReducerCode
+        : targetField
+        ? getSuggestedReducerCodeForChannelType(targetField.type, matchedTargetCustom, isTargetArr)
+        : undefined;
+
+    if (codeToRun && codeToRun.trim()) {
       try {
         const prevVal = currentState[targetName];
         let reducerResult: JsonValue | undefined = undefined;
-        const codeTrimmed = targetField.customReducerCode.trim();
+        const codeTrimmed = codeToRun.trim();
 
         const cleanFnCode = codeTrimmed.replace(/;+\s*$/, "");
         if (/^(\([^\)]*\)|[a-zA-Z0-9_$]+)\s*=>/.test(codeTrimmed) || /^function\b/.test(codeTrimmed)) {
@@ -809,7 +1341,13 @@ export function applyManipulator({
         }
 
         if (reducerResult !== undefined) {
-          nextState[targetName] = reducerResult;
+          // If the custom reducer returned the exact same untouched prev reference for a set action with a new payload,
+          // ensure the new value is applied
+          if (actType === "set" && reducerResult === prevVal && payload !== undefined && prevVal !== payload) {
+            nextState[targetName] = payload;
+          } else {
+            nextState[targetName] = reducerResult;
+          }
           executedCustomReducer = true;
         }
       } catch (err) {

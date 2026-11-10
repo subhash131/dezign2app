@@ -106,7 +106,7 @@ export const REDUCER_CODE_PRESETS = {
   }
 
   // 2. Action: replace / set - overwrites entire message history
-  if (action === "replace" || action === "set") {
+  if (action === "replace" || action === "set" || action === "setter" || action === "mutate") {
     const items = toItems(payload);
     return sameItems(items, list) ? list : items;
   }
@@ -117,12 +117,18 @@ export const REDUCER_CODE_PRESETS = {
     return items.length ? [...list, ...items] : list;
   }
 
-  // 4. Action: pop - removes last message
+  // 4. Action: prepend - adds messages to start
+  if (action === "prepend") {
+    const items = toItems(payload);
+    return items.length ? [...items, ...list] : list;
+  }
+
+  // 5. Action: pop - removes last message
   if (action === "pop") {
     return list.length ? list.slice(0, -1) : list;
   }
 
-  // 5. Action: remove / filter - removes message by id or index
+  // 6. Action: remove / filter - removes message by id or index
   if (action === "remove" || action === "filter") {
     const index = isObj(next) && typeof next.index === "number"
       ? next.index
@@ -143,7 +149,7 @@ export const REDUCER_CODE_PRESETS = {
     return out.length === list.length ? list : out;
   }
 
-  // 6. Action: update / upsert - in-place streaming message update by id (keeps other messages stable)
+  // 7. Action: update / upsert - in-place streaming message update by id (keeps other messages stable)
   if (action === "update" || action === "upsert") {
     const patch = payload;
     if (!isObj(patch) || patch.id === undefined) return list;
@@ -153,6 +159,48 @@ export const REDUCER_CODE_PRESETS = {
     return Object.keys(merged).every((k) => Object.is(merged[k], list[i][k]))
       ? list
       : list.map((m, j) => (j === i ? merged : m));
+  }
+
+  // 8. Action: stream / append_stream / chunk - appends a text delta to a streaming message
+  if (action === "stream" || action === "append_stream" || action === "chunk") {
+    const src = isObj(next) ? next : {};
+    const delta =
+      src.delta ?? src.chunk ?? src.text ??
+      (typeof src.value === "string" ? src.value : "");
+    const role = src.role ?? "assistant";
+
+    let i = -1;
+    if (src.id !== undefined) {
+      i = list.findIndex((m) => isObj(m) && m.id === src.id);
+    } else {
+      const last = list[list.length - 1];
+      if (isObj(last) && last.role === role && last.streaming === true) i = list.length - 1;
+    }
+
+    if (src.done) {
+      if (i === -1 || list[i].streaming === false) return list;
+      return list.map((m, j) => (j === i ? { ...m, streaming: false } : m));
+    }
+
+    if (typeof delta !== "string" || delta === "") return list;
+
+    if (i === -1) {
+      return [
+        ...list,
+        {
+          id: src.id ?? ("msg_" + list.length + "_" + Date.now()),
+          role,
+          content: delta,
+          streaming: true,
+        },
+      ];
+    }
+
+    const target = list[i];
+    const prevContent = typeof target.content === "string" ? target.content : "";
+    return list.map((m, j) =>
+      j === i ? { ...m, content: prevContent + delta, streaming: true } : m
+    );
   }
 
   // 7. Default update: appends incoming messages or replaces if bare array is passed
@@ -197,7 +245,7 @@ export const REDUCER_CODE_PRESETS = {
 
   // 2. Action: replace / set - overwrites entire array
   // e.g. dispatch { items: { action: "replace", value: [1, 2, 3] } }
-  if (action === "replace" || action === "set") {
+  if (action === "replace" || action === "set" || action === "setter" || action === "mutate") {
     const items = toItems(payload);
     return sameItems(items, list) ? list : items;
   }
@@ -737,7 +785,7 @@ export function generateSchemaAwareArrayReducerCode(
 
   // 2. Action: set / replace - overwrites entire array
   // e.g. dispatch { action: "set", value: [...] }
-  if (action === "set" || action === "replace") {
+  if (action === "set" || action === "setter" || action === "replace" || action === "mutate") {
     const items = toItems(payload);
     return sameItems(items, list) ? list : items;
   }
@@ -835,17 +883,13 @@ export function getSuggestedReducerCodeForChannelType(
     if (schemaCode) return schemaCode;
   }
 
-  // 3. Messages / Chat
+  // 3. Messages / Chat (array only)
+  const cleanLower = cleanType.toLowerCase();
   if (
-    cleanType === "messages" ||
-    cleanType === "BaseMessage" ||
-    cleanType === "BaseMessage[]" ||
-    cleanType === "HumanMessage" ||
-    cleanType === "HumanMessage[]" ||
-    cleanType === "AIMessage" ||
-    cleanType === "AIMessage[]" ||
-    cleanType === "SystemMessage" ||
-    cleanType === "SystemMessage[]"
+    isTargetArray &&
+    (cleanLower.includes("message") ||
+      cleanLower.includes("chat") ||
+      cleanType === "messages")
   ) {
     return REDUCER_CODE_PRESETS.chat;
   }
