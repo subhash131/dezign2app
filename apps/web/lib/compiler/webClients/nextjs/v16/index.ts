@@ -221,18 +221,11 @@ export function compileNextjsV16WebClient(
     };
   });
 
-  // Extract custom types from types / customTypes nodes across canvas
+  // Extract custom types from types nodes across canvas
   const canvasCustomTypes: CustomTypeItem[] = [];
   (allNodes || []).forEach((n) => {
-    if (n.type === "types" || n.type === "customTypes") {
-      const typesList = n.data?.types || n.data?.customTypes;
-      if (Array.isArray(typesList)) {
-        typesList.forEach((t: unknown) => {
-          if (typeof t === "object" && t !== null && "name" in t && typeof t.name === "string") {
-            canvasCustomTypes.push(t as CustomTypeItem);
-          }
-        });
-      }
+    if (n.type === "types" && Array.isArray(n.data?.types)) {
+      canvasCustomTypes.push(...n.data.types);
     }
   });
 
