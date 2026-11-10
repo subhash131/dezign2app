@@ -9,6 +9,7 @@ import {
 } from "@workspace/canvas";
 import { compileExpressV4Service } from "./services/express/v4";
 import { compileFastAPIService } from "./services/fastapi/v0";
+import { compileGoV1Service } from "./services/go/v1";
 import { compileNextjsV16Service } from "./services/nextjs/v16";
 import { compileDatabaseNodes } from "./compileDatabaseNodes";
 import { compileKafkaNodes, isServiceConnectedToKafka } from "./compileKafkaNodes";
@@ -501,6 +502,22 @@ export function compileServiceNode(
         testCases,
         dbFunctions,
         kafkaFunctions,
+      );
+      break;
+    case "go":
+      result = compileGoV1Service(
+        effectiveNode,
+        nodeEndpoints,
+        nodeEvents,
+        effectiveAllNodes,
+        allEdges,
+        testCases,
+        dbFunctions,
+        kafkaFunctions,
+        folderName,
+        endpoints.length > 0 ? endpoints : nodeEndpoints,
+        redisFunctions,
+        storageFunctions,
       );
       break;
     case "express":

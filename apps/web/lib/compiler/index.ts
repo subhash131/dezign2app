@@ -20,6 +20,7 @@ export * from "./types/testPersona";
 export * from "./auth/better-auth/v1.6";
 export * from "./services/express/v4";
 export * from "./services/fastapi/v0";
+export * from "./services/go/v1";
 export * from "./webClients/nextjs/v16";
 export * from "./databases/sqlite/raw";
 export * from "./langgraph/typescript/v1";

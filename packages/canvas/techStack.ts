@@ -30,6 +30,12 @@ export const SERVICE_TECH_OPTIONS = [
     versions: [{ value: "16.x", label: "16.x" }],
     defaultVersion: "16.x",
   },
+  {
+    value: "go",
+    label: "Go (Gin)",
+    versions: [{ value: "1.23", label: "1.23" }],
+    defaultVersion: "1.23",
+  },
 ] as const;
 
 export const WEB_CLIENT_TECH_OPTIONS = [

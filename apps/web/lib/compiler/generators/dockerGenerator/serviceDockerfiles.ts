@@ -34,6 +34,39 @@ CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port \${PORT}"]
 `;
   }
 
+  if (techStack === "go") {
+    return `# ==============================================================================
+# Go (Golang / Gin) Microservice Dockerfile (Multi-Stage Build)
+# ==============================================================================
+FROM golang:1.23-alpine AS builder
+
+WORKDIR /app
+
+RUN apk add --no-cache git
+
+COPY apps/${folderName}/go.mod apps/${folderName}/go.sum* ./
+RUN go mod download
+
+COPY apps/${folderName}/ .
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /bin/server .
+
+FROM alpine:3.20 AS runner
+WORKDIR /app
+RUN apk --no-cache add curl ca-certificates
+
+ENV PORT=${port}
+
+COPY --from=builder /bin/server /bin/server
+
+EXPOSE ${port}
+
+HEALTHCHECK --interval=10s --timeout=5s --start-period=5s --retries=3 \\
+  CMD curl -f http://localhost:${port}/health || exit 1
+
+CMD ["/bin/server"]
+`;
+  }
+
   if (techStack === "nextjs") {
     return generateNextjsDockerfile(folderName, port);
   }
@@ -119,6 +152,16 @@ CMD ["pnpm", "--filter", "@workspace/${folderName}", "start"]
  * .dockerignore generator for apps
  */
 export function generateAppDockerignore(techStack: string): string {
+  if (techStack === "go") {
+    return `bin/
+tmp/
+server
+*.exe
+.env
+.air.toml
+`;
+  }
+
   if (techStack === "fastapi") {
     return `__pycache__/
 *.py[cod]
