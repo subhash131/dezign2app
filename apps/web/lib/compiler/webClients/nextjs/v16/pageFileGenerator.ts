@@ -1030,6 +1030,9 @@ export function generatePageAndComponentFiles({
         hasSidebar: (sec.componentBindings || []).some(
           (cb) => cb.componentType === "sidebar",
         ),
+        hasChat: (sec.componentBindings || []).some(
+          (cb) => cb.componentType === "chat",
+        ),
       });
     });
 

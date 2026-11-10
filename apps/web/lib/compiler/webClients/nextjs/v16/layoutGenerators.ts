@@ -335,8 +335,8 @@ ${staticItemsJsx}
           <SidebarTrigger className="absolute -right-3.5 top-3.5 z-20 h-6 w-6 rounded-full border border-sidebar-border bg-background shadow-xs hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex items-center justify-center text-sidebar-foreground cursor-pointer transition-all duration-200 group-data-[side=right]:-left-3.5 group-data-[side=right]:right-auto hover:scale-105" />
           <SidebarRail />
         </Sidebar>
-        <div className="flex-1 flex flex-col min-w-0">
-${sidebarTopBarJsx}          <main className="flex-1 p-6 overflow-auto">
+        <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
+${sidebarTopBarJsx}          <main className="flex-1 min-w-0 flex flex-col min-h-0 overflow-auto">
             {children}
           </main>${hasEventsDrawer ? `\n          <LayoutEventsDrawer />` : ""}
         </div>

@@ -126,7 +126,7 @@ export const ChatPropsConfig: React.FC<ChatPropsConfigProps> = React.memo(({
           {/* Left Alignment */}
           <button
             type="button"
-            onClick={() => onUpdatePropMapping({ chatAlignment: "left" })}
+            onClick={() => onUpdatePropMapping({ chatAlignment: "left", ...(currentMaxWidth === "full" ? { chatMaxWidth: "lg" } : {}) })}
             className={cn(
               "flex flex-col items-center justify-center py-1.5 px-1 rounded-md text-[10px] font-medium transition-all cursor-pointer select-none",
               currentAlignment === "left"
@@ -142,7 +142,7 @@ export const ChatPropsConfig: React.FC<ChatPropsConfigProps> = React.memo(({
           {/* Center Alignment (Default) */}
           <button
             type="button"
-            onClick={() => onUpdatePropMapping({ chatAlignment: "center" })}
+            onClick={() => onUpdatePropMapping({ chatAlignment: "center", ...(currentMaxWidth === "full" ? { chatMaxWidth: "lg" } : {}) })}
             className={cn(
               "flex flex-col items-center justify-center py-1.5 px-1 rounded-md text-[10px] font-medium transition-all cursor-pointer select-none",
               currentAlignment === "center"
@@ -158,7 +158,7 @@ export const ChatPropsConfig: React.FC<ChatPropsConfigProps> = React.memo(({
           {/* Right Alignment */}
           <button
             type="button"
-            onClick={() => onUpdatePropMapping({ chatAlignment: "right" })}
+            onClick={() => onUpdatePropMapping({ chatAlignment: "right", ...(currentMaxWidth === "full" ? { chatMaxWidth: "lg" } : {}) })}
             className={cn(
               "flex flex-col items-center justify-center py-1.5 px-1 rounded-md text-[10px] font-medium transition-all cursor-pointer select-none",
               currentAlignment === "right"
@@ -174,7 +174,7 @@ export const ChatPropsConfig: React.FC<ChatPropsConfigProps> = React.memo(({
           {/* Full Width */}
           <button
             type="button"
-            onClick={() => onUpdatePropMapping({ chatAlignment: "full" })}
+            onClick={() => onUpdatePropMapping({ chatAlignment: "full", chatMaxWidth: "full" })}
             className={cn(
               "flex flex-col items-center justify-center py-1.5 px-1 rounded-md text-[10px] font-medium transition-all cursor-pointer select-none",
               currentAlignment === "full"

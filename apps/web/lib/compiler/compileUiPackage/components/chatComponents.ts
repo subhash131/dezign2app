@@ -32,7 +32,361 @@ export function compileChatComponents(): CompiledFile[] {
   });
 
   // 4. src/components/chat.tsx
-  const chatCode = "\"use client\";\n\nimport * as React from \"react\";\nimport { Send, Bot, User, Sparkles } from \"lucide-react\";\nimport { cn } from \"@workspace/ui/lib/utils\";\nimport { Button } from \"@workspace/ui/components/button\";\nimport { Input } from \"@workspace/ui/components/input\";\nimport {\n  MessageScrollerProvider,\n  MessageScroller,\n  MessageScrollerViewport,\n  MessageScrollerContent,\n  MessageScrollerItem,\n  MessageScrollerButton,\n  useMessageScroller,\n} from \"./message-scroller\";\nimport { Message, MessageContent, MessageAvatar } from \"./message\";\nimport { Bubble, BubbleContent } from \"./bubble\";\n\n// Re-export all primitives\nexport * from \"./message-scroller\";\nexport * from \"./message\";\nexport * from \"./bubble\";\n\nexport interface ScriptedTurn {\n  role: \"user\" | \"assistant\";\n  content: string;\n  reasoning?: string;\n  tools?: Array<{ name: string; input: Record<string, unknown>; output?: Record<string, unknown> }>;\n}\n\nexport function createChat() {\n  const turns: ScriptedTurn[] = [];\n  const api = {\n    user(content: string) {\n      turns.push({ role: \"user\", content });\n      return api;\n    },\n    assistant(\n      builder: (writer: {\n        reasoning: (r: string) => unknown;\n        tool: (name: string, input: Record<string, unknown>) => { output: (o: Record<string, unknown>) => unknown };\n        text: (t: string) => unknown;\n      }) => void,\n    ) {\n      let content = \"\";\n      let reasoning = \"\";\n      const tools: Array<{ name: string; input: Record<string, unknown>; output?: Record<string, unknown> }> = [];\n      const writer = {\n        reasoning(r: string) {\n          reasoning += r;\n          return writer;\n        },\n        tool(name: string, input: Record<string, unknown>) {\n          const t: { name: string; input: Record<string, unknown>; output?: Record<string, unknown> } = {\n            name,\n            input,\n          };\n          tools.push(t);\n          return {\n            output(o: Record<string, unknown>) {\n              t.output = o;\n              return writer;\n            },\n          };\n        },\n        text(t: string) {\n          content += t;\n          return writer;\n        },\n      };\n      builder(writer);\n      turns.push({ role: \"assistant\", content, reasoning, tools });\n      return api;\n    },\n    getTurns() {\n      return turns;\n    },\n    transport(options?: { fallback?: string }) {\n      return {\n        turns,\n        fallback: options?.fallback,\n      };\n    },\n    next(currentMessages: Array<{ role: string; content: string }>) {\n      const idx = currentMessages.length;\n      return turns[idx] || null;\n    },\n  };\n  return api;\n}\n\nexport interface ChatMessage {\n  id: string;\n  role?: \"user\" | \"assistant\" | \"system\";\n  sender?: \"AI\" | \"USER\" | \"SYSTEM\" | \"user\" | \"assistant\" | \"system\" | string;\n  content: string;\n  createdAt?: string;\n}\n\nexport interface ChatProps extends React.HTMLAttributes<HTMLDivElement> {\n  messages?: ChatMessage[];\n  onSendMessage?: (content: string) => void | Promise<void>;\n  placeholder?: string;\n  isLoading?: boolean;\n  autoScroll?: boolean;\n  emptyTitle?: string;\n  emptyDescription?: string;\n  title?: string;\n  showAvatars?: boolean;\n}\n\nexport const Chat = React.forwardRef<HTMLDivElement, ChatProps>(\n  (\n    {\n      messages: propMessages,\n      onSendMessage,\n      placeholder = \"Type a message...\",\n      isLoading = false,\n      autoScroll = true,\n      emptyTitle = \"No messages yet\",\n      emptyDescription = \"Start a conversation to see messages here\",\n      title,\n      showAvatars = true,\n      className,\n      ...props\n    },\n    ref,\n  ) => {\n    const [localMessages, setLocalMessages] = React.useState<ChatMessage[]>(\n      propMessages || [\n        {\n          id: \"m-1\",\n          role: \"assistant\",\n          content: \"Hello! How can I help you today?\",\n        },\n      ],\n    );\n\n    const isControlled = Boolean(propMessages);\n    const messages = isControlled ? propMessages! : localMessages;\n\n    const [inputValue, setInputValue] = React.useState(\"\");\n\n    const handleSubmit = async (e: React.FormEvent) => {\n      e.preventDefault();\n      const text = inputValue.trim();\n      if (!text || isLoading) return;\n\n      setInputValue(\"\");\n\n      if (onSendMessage) {\n        await onSendMessage(text);\n      } else {\n        const userMsg: ChatMessage = {\n          id: `msg-${Date.now()}`,\n          role: \"user\",\n          content: text,\n        };\n        const assistantMsg: ChatMessage = {\n          id: `msg-${Date.now() + 1}`,\n          role: \"assistant\",\n          content: `Echo: \"${text}\"`,\n        };\n        setLocalMessages((prev) => [...prev, userMsg, assistantMsg]);\n      }\n    };\n\n    return (\n      <div\n        ref={ref}\n        data-slot=\"chat-container\"\n        className={cn(\n          \"flex flex-col w-full h-[400px] max-h-[600px] rounded-xl border border-border/70 bg-card text-card-foreground shadow-xs overflow-hidden\",\n          className,\n        )}\n        {...props}\n      >\n        {title && (\n          <div className=\"px-4 py-2.5 border-b border-border/40 bg-muted/20 flex items-center justify-between\">\n            <div className=\"flex items-center gap-2\">\n              <Bot className=\"size-4 text-primary\" />\n              <span className=\"font-semibold text-xs text-foreground\">{typeof title === \"string\" ? title : (title ? String(title) : \"\")}</span>\n            </div>\n            <span className=\"text-[10px] font-mono text-muted-foreground\">\n              {messages.length} {messages.length === 1 ? \"message\" : \"messages\"}\n            </span>\n          </div>\n        )}\n\n        <MessageScrollerProvider autoScroll={autoScroll}>\n          <MessageScroller className=\"flex-1 min-h-0 relative\">\n            <MessageScrollerViewport>\n              <MessageScrollerContent>\n                {messages.length === 0 ? (\n                  <div className=\"flex flex-col items-center justify-center p-8 text-center text-muted-foreground my-auto\">\n                    <Sparkles className=\"size-8 text-primary/40 mb-2\" />\n                    <h4 className=\"text-xs font-semibold text-foreground\">{typeof emptyTitle === \"string\" ? emptyTitle : (emptyTitle ? String(emptyTitle) : \"\")}</h4>\n                    <p className=\"text-[11px] text-muted-foreground mt-0.5\">{typeof emptyDescription === \"string\" ? emptyDescription : (emptyDescription ? String(emptyDescription) : \"\")}</p>\n                  </div>\n                ) : (\n                  messages.map((msg) => {\n                    const isUser = msg.role === \"user\" || msg.sender === \"USER\" || msg.sender === \"user\";\n                    return (\n                      <MessageScrollerItem\n                        key={msg.id}\n                        messageId={msg.id}\n                        scrollAnchor={isUser}\n                      >\n                        <Message align={isUser ? \"end\" : \"start\"}>\n                          <MessageContent align={isUser ? \"end\" : \"start\"}>\n                            {showAvatars && (\n                              <MessageAvatar\n                                fallback={isUser ? \"U\" : \"AI\"}\n                                className={isUser ? \"order-last ml-1\" : \"mr-1\"}\n                              />\n                            )}\n                            <Bubble\n                              align={isUser ? \"end\" : \"start\"}\n                              variant={isUser ? \"muted\" : \"default\"}\n                            >\n                              <BubbleContent>{msg.content}</BubbleContent>\n                            </Bubble>\n                          </MessageContent>\n                        </Message>\n                      </MessageScrollerItem>\n                    );\n                  })\n                )}\n                {isLoading && (\n                  <Message align=\"start\">\n                    <MessageContent>\n                      {showAvatars && <MessageAvatar fallback=\"AI\" className=\"mr-1\" />}\n                      <Bubble align=\"start\" variant=\"default\">\n                        <BubbleContent className=\"flex items-center gap-1.5 py-2\">\n                          <span className=\"size-1.5 rounded-full bg-muted-foreground/60 animate-bounce\" />\n                          <span className=\"size-1.5 rounded-full bg-muted-foreground/60 animate-bounce [animation-delay:0.2s]\" />\n                          <span className=\"size-1.5 rounded-full bg-muted-foreground/60 animate-bounce [animation-delay:0.4s]\" />\n                        </BubbleContent>\n                      </Bubble>\n                    </MessageContent>\n                  </Message>\n                )}\n              </MessageScrollerContent>\n            </MessageScrollerViewport>\n            <MessageScrollerButton />\n          </MessageScroller>\n        </MessageScrollerProvider>\n\n        {/* Input Bar */}\n        <form\n          onSubmit={handleSubmit}\n          className=\"p-3 border-t border-border/40 bg-background/50 flex items-center gap-2\"\n        >\n          <Input\n            value={inputValue}\n            onChange={(e) => setInputValue(e.target.value)}\n            placeholder={placeholder}\n            disabled={isLoading}\n            className=\"flex-1 h-9 text-xs\"\n          />\n          <Button\n            type=\"submit\"\n            size=\"sm\"\n            disabled={!inputValue.trim() || isLoading}\n            className=\"h-9 px-3 gap-1.5 text-xs shrink-0 cursor-pointer\"\n          >\n            <Send className=\"size-3.5\" />\n            <span>Send</span>\n          </Button>\n        </form>\n      </div>\n    );\n  },\n);\nChat.displayName = \"Chat\";\n\nexport const ChatThread = Chat;\nexport default Chat;\n\n";
+  const chatCode = `"use client";
+
+import * as React from "react";
+import { Send, Bot, User, Sparkles } from "lucide-react";
+import { cn } from "@workspace/ui/lib/utils";
+import { Button } from "@workspace/ui/components/button";
+import { Input } from "@workspace/ui/components/input";
+import {
+  MessageScrollerProvider,
+  MessageScroller,
+  MessageScrollerViewport,
+  MessageScrollerContent,
+  MessageScrollerItem,
+  MessageScrollerButton,
+  useMessageScroller,
+} from "@workspace/ui/components/message-scroller";
+import { Message, MessageContent, MessageAvatar } from "@workspace/ui/components/message";
+import { Bubble, BubbleContent } from "@workspace/ui/components/bubble";
+
+// Re-export all primitives
+export * from "@workspace/ui/components/message-scroller";
+export * from "@workspace/ui/components/message";
+export * from "@workspace/ui/components/bubble";
+
+export interface ScriptedTurn {
+  role: "user" | "assistant";
+  content: string;
+  reasoning?: string;
+  tools?: Array<{ name: string; input: Record<string, unknown>; output?: Record<string, unknown> }>;
+}
+
+export function createChat() {
+  const turns: ScriptedTurn[] = [];
+  const api = {
+    user(content: string) {
+      turns.push({ role: "user", content });
+      return api;
+    },
+    assistant(
+      builder: (writer: {
+        reasoning: (r: string) => unknown;
+        tool: (name: string, input: Record<string, unknown>) => { output: (o: Record<string, unknown>) => unknown };
+        text: (t: string) => unknown;
+      }) => void,
+    ) {
+      let content = "";
+      let reasoning = "";
+      const tools: Array<{ name: string; input: Record<string, unknown>; output?: Record<string, unknown> }> = [];
+      const writer = {
+        reasoning(r: string) {
+          reasoning += r;
+          return writer;
+        },
+        tool(name: string, input: Record<string, unknown>) {
+          const t: { name: string; input: Record<string, unknown>; output?: Record<string, unknown> } = {
+            name,
+            input,
+          };
+          tools.push(t);
+          return {
+            output(o: Record<string, unknown>) {
+              t.output = o;
+              return writer;
+            },
+          };
+        },
+        text(t: string) {
+          content += t;
+          return writer;
+        },
+      };
+      builder(writer);
+      turns.push({ role: "assistant", content, reasoning, tools });
+      return api;
+    },
+    getTurns() {
+      return turns;
+    },
+    transport(options?: { fallback?: string }) {
+      return {
+        turns,
+        fallback: options?.fallback,
+      };
+    },
+    next(currentMessages: Array<{ role: string; content: string }>) {
+      const idx = currentMessages.length;
+      return turns[idx] || null;
+    },
+  };
+  return api;
+}
+
+export interface ChatMessage {
+  id?: string;
+  role?: "user" | "assistant" | "system" | string;
+  sender?: "AI" | "USER" | "SYSTEM" | "user" | "assistant" | "system" | string;
+  content?: string;
+  text?: string;
+  createdAt?: string;
+}
+
+export interface ChatProps extends React.HTMLAttributes<HTMLDivElement> {
+  messages?: ChatMessage[];
+  onSendMessage?: (content: string) => void | Promise<void>;
+  placeholder?: string;
+  isLoading?: boolean;
+  autoScroll?: boolean;
+  emptyTitle?: string;
+  emptyDescription?: string;
+  title?: string;
+  showAvatars?: boolean;
+  alignment?: "center" | "left" | "right" | "full" | "floating-right" | "floating-left" | string;
+  maxWidth?: "sm" | "md" | "lg" | "xl" | "2xl" | "full" | string;
+  variant?: "default" | "fullscreen" | "card" | "embedded" | string;
+}
+
+interface NormalizedChatMessage {
+  id: string;
+  isUser: boolean;
+  content: string;
+}
+
+function normalizeMessage(msg: ChatMessage, idx: number): NormalizedChatMessage {
+  const roleVal = msg.role || msg.sender || "";
+  const isUser = roleVal.toLowerCase() === "user";
+  const idVal = msg.id || \`msg-\${idx}\`;
+  const contentVal = msg.content ?? msg.text ?? "";
+  return { id: idVal, isUser, content: contentVal };
+}
+
+export const Chat = React.forwardRef<HTMLDivElement, ChatProps>(
+  (
+    {
+      messages: propMessages,
+      onSendMessage,
+      placeholder = "Type a message...",
+      isLoading = false,
+      autoScroll = true,
+      emptyTitle = "No messages yet",
+      emptyDescription = "Start a conversation to see messages here",
+      title,
+      showAvatars = true,
+      alignment = "center",
+      maxWidth = "xl",
+      variant = "default",
+      className,
+      ...props
+    },
+    ref,
+  ) => {
+    const [localMessages, setLocalMessages] = React.useState<ChatMessage[]>(
+      propMessages || [
+        {
+          id: "m-1",
+          role: "assistant",
+          content: "Hello! How can I help you today?",
+        },
+      ],
+    );
+
+    const isControlled = Boolean(propMessages);
+    const messages = isControlled ? propMessages! : localMessages;
+
+    const [inputValue, setInputValue] = React.useState("");
+
+    const handleSubmit = async (e: React.FormEvent) => {
+      e.preventDefault();
+      const text = inputValue.trim();
+      if (!text || isLoading) return;
+
+      setInputValue("");
+
+      if (onSendMessage) {
+        await onSendMessage(text);
+      } else {
+        const userMsg: ChatMessage = {
+          id: \`msg-\${Date.now()}\`,
+          role: "user",
+          content: text,
+        };
+        const assistantMsg: ChatMessage = {
+          id: \`msg-\${Date.now() + 1}\`,
+          role: "assistant",
+          content: \`Echo: "\${text}"\`,
+        };
+        setLocalMessages((prev) => [...prev, userMsg, assistantMsg]);
+      }
+    };
+
+    const isFloating = alignment === "floating-right" || alignment === "floating-left";
+    const isCard = variant === "card" || isFloating;
+    const isFull = alignment === "full" || maxWidth === "full";
+
+    // Chat panel max width
+    let maxWClass = "max-w-3xl";
+    if (maxWidth === "sm") maxWClass = "max-w-md";
+    else if (maxWidth === "md") maxWClass = "max-w-xl";
+    else if (maxWidth === "lg") maxWClass = "max-w-2xl";
+    else if (maxWidth === "xl") maxWClass = "max-w-3xl";
+    else if (maxWidth === "2xl") maxWClass = "max-w-4xl";
+
+    // Alignment and boundary border styles:
+    // - Full-width: stretches 100% edge-to-edge with no side borders
+    // - Right-aligned: border-l (left border dividing from content) and pinned to the right
+    // - Left-aligned: border-r (right border dividing from content) and pinned to the left
+    // - Center-aligned: border-x (framed center column)
+    let layoutAlignmentClass = "self-center mx-auto border-x border-border/40";
+    if (isFull) {
+      layoutAlignmentClass = "self-stretch w-full max-w-full border-x-0";
+    } else if (alignment === "left") {
+      layoutAlignmentClass = "self-start mr-auto border-r border-border/60";
+    } else if (alignment === "right") {
+      layoutAlignmentClass = "self-end ml-auto border-l border-border/60";
+    } else if (isFloating) {
+      layoutAlignmentClass = alignment === "floating-right"
+        ? "fixed bottom-6 right-6 w-96 max-w-[calc(100vw-2rem)] shadow-2xl z-50 rounded-2xl border border-border/80 h-[520px]"
+        : "fixed bottom-6 left-6 w-96 max-w-[calc(100vw-2rem)] shadow-2xl z-50 rounded-2xl border border-border/80 h-[520px]";
+    }
+
+    return (
+      <div
+        ref={ref}
+        data-slot="chat-container"
+        className={cn(
+          isCard
+            ? "flex flex-col w-full rounded-xl border border-border/70 bg-card text-card-foreground shadow-xs overflow-hidden"
+            : cn(
+                "flex flex-col w-full h-full flex-1 min-h-0 bg-background text-foreground transition-all duration-150 overflow-hidden",
+                !isFloating && !isFull && maxWClass,
+                layoutAlignmentClass,
+              ),
+          className,
+        )}
+        {...props}
+      >
+        {title && (
+          <div className="w-full h-12 border-b border-border/40 bg-background/80 backdrop-blur px-4 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-2.5">
+              <div className="size-6 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                <Bot className="size-3.5" />
+              </div>
+              <span className="font-semibold text-xs text-foreground">
+                {typeof title === "string" ? title : String(title ?? "")}
+              </span>
+            </div>
+            <span className="text-[10px] font-mono text-muted-foreground">
+              {messages.length} {messages.length === 1 ? "message" : "messages"}
+            </span>
+          </div>
+        )}
+
+        <MessageScrollerProvider autoScroll={autoScroll}>
+          <MessageScroller className="flex-1 min-h-0 relative">
+            <MessageScrollerViewport className="flex-1 w-full overflow-y-auto">
+              <MessageScrollerContent className="py-6 px-4 min-h-full flex flex-col justify-between w-full">
+                {messages.length === 0 ? (
+                  <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-muted-foreground my-auto">
+                    <div className="size-12 rounded-2xl bg-primary/10 flex items-center justify-center mb-3 text-primary">
+                      <Sparkles className="size-6" />
+                    </div>
+                    <h4 className="text-base font-semibold text-foreground">
+                      {typeof emptyTitle === "string" ? emptyTitle : String(emptyTitle ?? "")}
+                    </h4>
+                    <p className="text-xs text-muted-foreground mt-1 max-w-sm">
+                      {typeof emptyDescription === "string" ? emptyDescription : String(emptyDescription ?? "")}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4 w-full">
+                    {messages.map((rawMsg, idx) => {
+                      const msg = normalizeMessage(rawMsg, idx);
+                      return (
+                        <MessageScrollerItem
+                          key={msg.id}
+                          messageId={msg.id}
+                          scrollAnchor={msg.isUser}
+                        >
+                          <Message align={msg.isUser ? "end" : "start"}>
+                            <MessageContent align={msg.isUser ? "end" : "start"}>
+                              {showAvatars && (
+                                <MessageAvatar
+                                  fallback={msg.isUser ? "U" : "AI"}
+                                  className={msg.isUser ? "order-last ml-1" : "mr-1"}
+                                />
+                              )}
+                              <Bubble
+                                align={msg.isUser ? "end" : "start"}
+                                variant={msg.isUser ? "muted" : "default"}
+                              >
+                                <BubbleContent>{msg.content}</BubbleContent>
+                              </Bubble>
+                            </MessageContent>
+                          </Message>
+                        </MessageScrollerItem>
+                      );
+                    })}
+                  </div>
+                )}
+                {isLoading && (
+                  <div className="pt-2 w-full">
+                    <Message align="start">
+                      <MessageContent>
+                        {showAvatars && <MessageAvatar fallback="AI" className="mr-1" />}
+                        <Bubble align="start" variant="default">
+                          <BubbleContent className="flex items-center gap-1.5 py-2">
+                            <span className="size-1.5 rounded-full bg-muted-foreground/60 animate-bounce" />
+                            <span className="size-1.5 rounded-full bg-muted-foreground/60 animate-bounce [animation-delay:0.2s]" />
+                            <span className="size-1.5 rounded-full bg-muted-foreground/60 animate-bounce [animation-delay:0.4s]" />
+                          </BubbleContent>
+                        </Bubble>
+                      </MessageContent>
+                    </Message>
+                  </div>
+                )}
+              </MessageScrollerContent>
+            </MessageScrollerViewport>
+            <MessageScrollerButton />
+          </MessageScroller>
+        </MessageScrollerProvider>
+
+        {/* Input Bar */}
+        <div className="w-full shrink-0 bg-background/80 backdrop-blur p-4 pb-6 pt-2 border-t border-border/30">
+          <form
+            onSubmit={handleSubmit}
+            className="w-full"
+          >
+            <div className="w-full relative flex items-center rounded-2xl border border-border/80 bg-muted/40 shadow-xs focus-within:border-ring focus-within:ring-1 focus-within:ring-ring transition-all px-3.5 py-1.5 gap-2">
+              <Input
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                placeholder={placeholder}
+                disabled={isLoading}
+                className="flex-1 bg-transparent border-0 shadow-none focus-visible:ring-0 text-xs h-8 p-0 placeholder:text-muted-foreground/70"
+              />
+              <Button
+                type="submit"
+                size="sm"
+                disabled={!inputValue.trim() || isLoading}
+                className="h-7 px-3 gap-1.5 text-xs rounded-xl shrink-0 cursor-pointer shadow-xs"
+              >
+                <Send className="size-3" />
+                <span>Send</span>
+              </Button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  },
+);
+Chat.displayName = "Chat";
+
+export const ChatThread = Chat;
+export default Chat;
+`;
   files.push({
     filename: "src/components/chat.tsx",
     language: "typescript",
