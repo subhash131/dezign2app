@@ -1135,10 +1135,11 @@ describe("compileNextjsV16StateStoreNode", () => {
       fractionalIndex: "a1",
       data: {
         label: "Types",
-        customTypes: [
+        types: [
           {
             id: "type-msg",
             name: "Message",
+            kind: "interface",
             rawCode: `export interface Message {
   id: string;
   sender: "AI" | "USER" | "SYSTEM";
