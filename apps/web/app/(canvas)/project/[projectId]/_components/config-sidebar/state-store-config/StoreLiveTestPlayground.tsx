@@ -132,6 +132,63 @@ export const StoreLiveTestPlayground: React.FC<StoreLiveTestPlaygroundProps> = (
         f.name === selectedManipulator.targetFieldName,
     );
 
+    const actType = selectedManipulator.actionType || selectedManipulator.defaultManipulatorType;
+
+    if (actType === "stream") {
+      return {
+        label: "Stream Delta / Chunk (string or { delta, id, done })",
+        placeholder: 'e.g. { "delta": "Hello world" } or "Hello world"',
+      };
+    }
+    if (actType === "remove") {
+      return {
+        label: "Item ID or Index to remove",
+        placeholder: 'e.g. { "id": "123" } or "123" or 0',
+      };
+    }
+    if (actType === "update") {
+      return {
+        label: "Patch Object (in-place update by id)",
+        placeholder: 'e.g. { "id": "123", "content": "Updated content" }',
+      };
+    }
+    if (actType === "prepend") {
+      return {
+        label: "Item to prepend (front of array)",
+        placeholder: 'e.g. { "id": "msg_0", "role": "system", "content": "Hello" }',
+      };
+    }
+    if (actType === "append") {
+      return {
+        label: "Item to append (end of array)",
+        placeholder: 'e.g. { "id": "msg_1", "role": "user", "content": "Hello" }',
+      };
+    }
+    if (actType === "pop") {
+      return {
+        label: "No arguments required (removes last element)",
+        placeholder: "(leave blank or null)",
+      };
+    }
+    if (actType === "reset") {
+      return {
+        label: "No arguments required (resets to initial value)",
+        placeholder: "(leave blank or null)",
+      };
+    }
+    if (actType === "toggle") {
+      return {
+        label: "No arguments required (toggles boolean flag)",
+        placeholder: "(leave blank or null)",
+      };
+    }
+    if (actType === "increment" || actType === "decrement") {
+      return {
+        label: "Amount (number)",
+        placeholder: "e.g. 1 or { amount: 5 }",
+      };
+    }
+
     if (targetField) {
       switch (targetField.type) {
         case "number":

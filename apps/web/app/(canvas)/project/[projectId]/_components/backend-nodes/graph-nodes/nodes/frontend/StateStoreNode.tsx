@@ -63,10 +63,19 @@ import {
  * Returns supported action types handled by the single reducer of a state variable.
  * Matches the reducer patterns used in LangGraph and modern reactive state stores.
  */
-export function getSupportedActionsForType(type?: string, isArray?: boolean): string[] {
+export function getSupportedActionsForType(type?: string, isArray?: boolean, name?: string): string[] {
   const clean = (type || "string").toLowerCase().trim();
+  const isMessage =
+    clean.includes("message") ||
+    clean.includes("chat") ||
+    clean === "messages" ||
+    clean === "chatmessage" ||
+    Boolean(name && (name.toLowerCase().includes("message") || name.toLowerCase().includes("chat")));
+
   if (isArray || clean.endsWith("[]") || clean === "array") {
-    return ["set", "append", "prepend", "pop", "remove", "update", "reset"];
+    const base = ["set", "append", "prepend", "pop", "remove", "update", "reset"];
+    if (isMessage) return [...base, "stream"];
+    return base;
   }
   switch (clean) {
     case "number":
@@ -261,7 +270,7 @@ export const StateStoreNode = ({
       });
 
       if ((patch.type !== undefined || patch.isArray !== undefined) && !patch.actions) {
-        updated.actions = getSupportedActionsForType(updated.type, isArray);
+        updated.actions = getSupportedActionsForType(updated.type, isArray, updated.name);
       }
       if (
         (patch.type !== undefined || patch.isArray !== undefined) &&
@@ -304,7 +313,7 @@ export const StateStoreNode = ({
     if (currentIsArray) {
       const nextType = cleanBase === "array" ? "string" : cleanBase;
       const isNextCustom = Boolean(matchedCustom && cleanBase !== "array");
-      const nextActions = getSupportedActionsForType(isNextCustom ? "object" : nextType, false);
+      const nextActions = getSupportedActionsForType(isNextCustom ? "object" : nextType, false, field.name);
       const nextReducerCode = getSuggestedReducerCodeForChannelType(
         nextType,
         isNextCustom ? matchedCustom : null,
@@ -320,7 +329,7 @@ export const StateStoreNode = ({
       });
     } else {
       const nextType = cleanBase === "array" ? "array" : `${cleanBase}[]`;
-      const nextActions = getSupportedActionsForType(nextType, true);
+      const nextActions = getSupportedActionsForType(nextType, true, field.name);
       const nextReducerCode = getSuggestedReducerCodeForChannelType(
         nextType,
         matchedCustom,
@@ -509,7 +518,7 @@ export const StateStoreNode = ({
         return {
           ...f,
           customReducerCode: generated,
-          actions: getSupportedActionsForType(f.type, isArray),
+          actions: getSupportedActionsForType(f.type, isArray, f.name),
           defaultValue: isArray && (f.defaultValue === "" || f.defaultValue === null || f.defaultValue === undefined) ? [] : f.defaultValue,
           customTypeId: matchedCustom?.id || f.customTypeId,
         };
@@ -720,7 +729,7 @@ export const StateStoreNode = ({
               const supportedActions =
                 f.actions && f.actions.length > 0 && !(isFieldArray && !f.actions.includes("append"))
                   ? f.actions
-                  : getSupportedActionsForType(f.type, isFieldArray);
+                  : getSupportedActionsForType(f.type, isFieldArray, f.name);
               const reducerName = f.reducer || `${f.name || "state"}_reducer`;
 
               const isOutputConnected = edges.some(
@@ -871,6 +880,7 @@ export const StateStoreNode = ({
                           const targetActions = getSupportedActionsForType(
                             isCustom && !isTargetArray ? "object" : targetType,
                             isTargetArray,
+                            f.name,
                           );
                           const generatedReducerCode = getSuggestedReducerCodeForChannelType(
                             targetType,

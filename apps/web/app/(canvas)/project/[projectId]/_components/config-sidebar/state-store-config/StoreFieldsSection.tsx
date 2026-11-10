@@ -257,7 +257,7 @@ const StoreVariableCard = React.memo(function StoreVariableCard({
         matchedCustomType,
         isArray,
       );
-      const standardActions = getSupportedActionsForType(field.type, isArray);
+      const standardActions = getSupportedActionsForType(field.type, isArray, field.name);
       onUpdateField(field.id, {
         customReducerCode: suggested,
         actions: standardActions,
@@ -265,12 +265,12 @@ const StoreVariableCard = React.memo(function StoreVariableCard({
         customTypeId: matchedCustomType?.id || field.customTypeId,
       });
     }
-  }, [field.id, field.type, isArray, field.customReducerCode, matchedCustomType, onUpdateField]);
+  }, [field.id, field.name, field.type, isArray, field.customReducerCode, matchedCustomType, onUpdateField]);
 
   // Auto-detect action types from reducer code + type defaults
   const detectedActions = useMemo(() => {
     const fromCode = extractActionsFromReducerCode(currentCode);
-    const standard = getSupportedActionsForType(field.type, isArray);
+    const standard = getSupportedActionsForType(field.type, isArray, field.name);
     const set = new Set([...standard, ...fromCode]);
     return Array.from(set);
   }, [currentCode, field.type, isArray]);
@@ -299,7 +299,7 @@ const StoreVariableCard = React.memo(function StoreVariableCard({
           typeName: cleanBase,
           typeId: field.customTypeId,
         });
-      const newActions = getSupportedActionsForType(newType, targetIsArray);
+      const newActions = getSupportedActionsForType(newType, targetIsArray, field.name);
       const newSuggestedCode = getSuggestedReducerCodeForChannelType(
         newType,
         customMatch,
@@ -323,7 +323,7 @@ const StoreVariableCard = React.memo(function StoreVariableCard({
 
       onUpdateField(field.id, patch);
     },
-    [field.id, field.defaultValue, field.customTypeId, isArray, availableCustomTypes, onUpdateField],
+    [field.id, field.name, field.defaultValue, field.customTypeId, isArray, availableCustomTypes, onUpdateField],
   );
 
   const handleToggleArray = useCallback(() => {
@@ -334,7 +334,7 @@ const StoreVariableCard = React.memo(function StoreVariableCard({
         typeName: newType,
         typeId: field.customTypeId,
       });
-      const newActions = getSupportedActionsForType(newType, false);
+      const newActions = getSupportedActionsForType(newType, false, field.name);
       const newSuggestedCode = getSuggestedReducerCodeForChannelType(newType, customMatch, false);
       onUpdateField(field.id, {
         type: newType,
@@ -351,7 +351,7 @@ const StoreVariableCard = React.memo(function StoreVariableCard({
         typeName: baseType,
         typeId: field.customTypeId,
       });
-      const newActions = getSupportedActionsForType(newType, true);
+      const newActions = getSupportedActionsForType(newType, true, field.name);
       const newSuggestedCode = getSuggestedReducerCodeForChannelType(newType, customMatch, true);
       onUpdateField(field.id, {
         type: newType,
@@ -444,35 +444,35 @@ const StoreVariableCard = React.memo(function StoreVariableCard({
   const handleApplyPreset = useCallback(
     (code: string) => {
       const extracted = extractActionsFromReducerCode(code);
-      const standard = getSupportedActionsForType(field.type, isArray);
+      const standard = getSupportedActionsForType(field.type, isArray, field.name);
       const mergedActions = Array.from(new Set([...standard, ...extracted]));
       onUpdateField(field.id, {
         customReducerCode: code,
         actions: mergedActions,
       });
     },
-    [field.id, field.type, isArray, onUpdateField],
+    [field.id, field.name, field.type, isArray, onUpdateField],
   );
 
   const handleCodeChange = useCallback(
     (newCode: string) => {
       const extracted = extractActionsFromReducerCode(newCode);
-      const standard = getSupportedActionsForType(field.type, isArray);
+      const standard = getSupportedActionsForType(field.type, isArray, field.name);
       const mergedActions = Array.from(new Set([...standard, ...extracted]));
       onUpdateField(field.id, {
         customReducerCode: newCode,
         actions: mergedActions,
       });
     },
-    [field.id, field.type, isArray, onUpdateField],
+    [field.id, field.name, field.type, isArray, onUpdateField],
   );
 
   const handleResetToSuggested = useCallback(() => {
     onUpdateField(field.id, {
       customReducerCode: recommendedCode,
-      actions: getSupportedActionsForType(field.type, isArray),
+      actions: getSupportedActionsForType(field.type, isArray, field.name),
     });
-  }, [field.id, field.type, isArray, recommendedCode, onUpdateField]);
+  }, [field.id, field.name, field.type, isArray, recommendedCode, onUpdateField]);
 
   return (
     <div
