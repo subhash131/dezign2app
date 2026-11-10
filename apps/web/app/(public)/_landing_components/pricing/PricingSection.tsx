@@ -2,7 +2,7 @@
 
 import React from "react";
 import Pricing from "../pricing";
-import { Check, ShieldCheck, Zap, Lock } from "lucide-react";
+import { Check, ShieldCheck, Zap, Lock, Coins } from "lucide-react";
 
 export const PricingSection: React.FC = () => {
   return (
@@ -19,8 +19,11 @@ export const PricingSection: React.FC = () => {
           >
             Pays for Itself on Day One.
           </h2>
-          <p className="text-zinc-400 text-sm sm:text-base leading-relaxed">
-            A single senior development sprint costs over $5,000. Dezign2App saves you weeks of engineering time by generating your production-grade architecture in seconds.
+          <p className="text-zinc-300 text-sm sm:text-base font-medium leading-relaxed">
+            Generate the 70% that&apos;s predictable with algorithms. Use AI only for the 30% that needs thinking.
+          </p>
+          <p className="text-zinc-400 text-xs sm:text-sm leading-relaxed max-w-xl">
+            Coding agents charge $20/mo with strict rate limits, burning millions of tokens in endless retry loops just to piece together a single full-stack app. Dezign2App gives you a full month with <strong>zero token limits</strong>—compiling complete production monorepos instantly on your CPU at $0 token cost.
           </p>
         </div>
 
@@ -34,6 +37,10 @@ export const PricingSection: React.FC = () => {
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-zinc-400" />
             <span>100% Code Ownership</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Coins className="w-4 h-4 text-emerald-400" />
+            <span>Zero Token Limits (Runs on CPU)</span>
           </div>
           <div className="flex items-center gap-2">
             <Lock className="w-4 h-4 text-zinc-400" />

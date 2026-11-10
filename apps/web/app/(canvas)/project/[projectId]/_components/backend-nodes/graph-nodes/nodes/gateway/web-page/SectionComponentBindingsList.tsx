@@ -515,8 +515,20 @@ export const SectionComponentBindingsList: React.FC<SectionComponentBindingsList
                 </div>
 
                 {/* Bottom Row: State & Action Mapping Badges (wrapping cleanly without overflowing) */}
-                {(comp.actionId || comp.propMappings?.chatOnFetchActionId || comp.propMappings?.chatStreamConnectionId || comp.valueStateName || comp.disabledStateName || comp.propMappings?.sidebarNavBinding || comp.propMappings?.topbarNavBinding || comp.propMappings?.sidebarNavMode || comp.propMappings?.topbarNavMode) && (
+                {(comp.actionId || comp.propMappings?.chatOnFetchActionId || comp.propMappings?.chatStreamConnectionId || comp.componentType === "chat" || comp.valueStateName || comp.disabledStateName || comp.propMappings?.sidebarNavBinding || comp.propMappings?.topbarNavBinding || comp.propMappings?.sidebarNavMode || comp.propMappings?.topbarNavMode) && (
                   <div className="flex items-center gap-1 text-[8.5px] font-mono flex-wrap pl-4 w-full">
+                    {/* Chat Alignment Preset Pill */}
+                    {comp.componentType === "chat" && (
+                      <span
+                        onClick={(e) => handleOpenConfig(comp.id, e)}
+                        title={`Alignment preset: ${comp.propMappings?.chatAlignment || "center"} (Click to customize)`}
+                        className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30 transition-colors cursor-pointer shrink-0"
+                      >
+                        <span className="text-[7.5px] text-muted-foreground">align:</span>
+                        <span className="font-semibold">{comp.propMappings?.chatAlignment || "center"}</span>
+                      </span>
+                    )}
+
                     {/* Bound History Hydration Action for Chat */}
                     {comp.componentType === "chat" && comp.propMappings?.chatOnFetchActionId && (
                       <span

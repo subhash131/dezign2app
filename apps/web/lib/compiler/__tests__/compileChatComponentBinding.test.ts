@@ -187,4 +187,76 @@ describe("Chat component binding compilation (shadcn AI Elements)", () => {
     expect(content).not.toContain("role: unknown");
     expect(content).not.toContain("role: string;");
   });
+
+  it("compiles Chat component with alignment presets (center, left, right, full, floating)", () => {
+    const createPageWithChatAlignment = (alignment: string, maxWidth?: string, height?: string): BackendNode => ({
+      id: `node-page-chat-${alignment}`,
+      type: "webPage",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: `/chat-${alignment}`,
+        path: `/chat-${alignment}`,
+        appSlug: "web",
+        sections: [
+          {
+            id: `sec-${alignment}`,
+            name: `${alignment} Thread`,
+            renderMode: "client",
+            loadStrategy: "eager",
+            actions: [],
+            componentBindings: [
+              {
+                id: `comp-chat-${alignment}`,
+                name: "AIChat",
+                componentType: "chat",
+                label: "AI Chat",
+                propMappings: {
+                  chatAlignment: alignment as any,
+                  ...(maxWidth ? { chatMaxWidth: maxWidth as any } : {}),
+                  ...(height ? { chatHeight: height as any } : {}),
+                },
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    // 1. Center alignment (Default takes full viewport height)
+    const centerNode = createPageWithChatAlignment("center");
+    const centerRes = compileWebPageNodes([centerNode], [], [], [centerNode], []);
+    const centerSection = centerRes.files.find((f) => f.filename.includes("Thread"));
+    expect(centerSection?.content).toContain('className="w-full max-w-2xl mx-auto h-[calc(100vh-8rem)]"');
+
+    // 2. Left alignment
+    const leftNode = createPageWithChatAlignment("left");
+    const leftRes = compileWebPageNodes([leftNode], [], [], [leftNode], []);
+    const leftSection = leftRes.files.find((f) => f.filename.includes("Thread"));
+    expect(leftSection?.content).toContain('className="w-full max-w-2xl mr-auto h-[calc(100vh-8rem)]"');
+
+    // 3. Right alignment
+    const rightNode = createPageWithChatAlignment("right");
+    const rightRes = compileWebPageNodes([rightNode], [], [], [rightNode], []);
+    const rightSection = rightRes.files.find((f) => f.filename.includes("Thread"));
+    expect(rightSection?.content).toContain('className="w-full max-w-2xl ml-auto h-[calc(100vh-8rem)]"');
+
+    // 4. Full width alignment
+    const fullNode = createPageWithChatAlignment("full");
+    const fullRes = compileWebPageNodes([fullNode], [], [], [fullNode], []);
+    const fullSection = fullRes.files.find((f) => f.filename.includes("Thread"));
+    expect(fullSection?.content).toContain('className="w-full h-[calc(100vh-8rem)]"');
+
+    // 5. Floating bottom-right preset (defaults to 520px height)
+    const floatingNode = createPageWithChatAlignment("floating-right");
+    const floatingRes = compileWebPageNodes([floatingNode], [], [], [floatingNode], []);
+    const floatingSection = floatingRes.files.find((f) => f.filename.includes("Thread"));
+    expect(floatingSection?.content).toContain('className="fixed bottom-6 right-6 w-96 max-w-[calc(100vw-2rem)] shadow-2xl z-50 rounded-2xl h-[520px]"');
+
+    // 6. Custom width and height
+    const customNode = createPageWithChatAlignment("center", "2xl", "lg");
+    const customRes = compileWebPageNodes([customNode], [], [], [customNode], []);
+    const customSection = customRes.files.find((f) => f.filename.includes("Thread"));
+    expect(customSection?.content).toContain('className="w-full max-w-4xl mx-auto h-[640px]"');
+  });
 });

@@ -18,6 +18,7 @@ import type { WebAppZone, ProtectionRule, PaymentsPlanConfig } from "./auth";
 import type { ClientDeliveryProtocol } from "./messaging";
 import type { RealtimeProtocol, JsonValue } from "./realtime";
 import type { NodeDependencyItem } from "./services";
+import type { CustomTypeItem } from "./custom-types";
 
 export type { StoreActionType, StoreActionBinding, SectionComponentBinding, ComponentElementBinding, ComponentBindingType };
 
@@ -199,6 +200,7 @@ export interface GlobalStoreDefinition {
   targetPageId?: string;
   disabledDefaultManipulators?: string[];
   deletedDefaultManipulators?: string[];
+  customTypes?: CustomTypeItem[];
 }
 
 /** WebApp node fields (canvas type). */
@@ -337,6 +339,7 @@ export interface CanvasStateStoreNodeData {
   testCases?: StateStoreTestCase[];
   disabledDefaultManipulators?: string[];
   deletedDefaultManipulators?: string[];
+  customTypes?: CustomTypeItem[];
 }
 
 export type BrowserStorageEngine = "localStorage" | "sessionStorage";

@@ -19,14 +19,14 @@ export const HeroSection: React.FC = () => {
       {/* High-Converting Sales Headline - Pure White, Zero Gradients */}
       <h1
         style={{ fontFamily: "var(--font-display)" }}
-        className="text-4xl sm:text-6xl md:text-7xl font-bold tracking-tight text-white max-w-4xl leading-[1.08]"
+        className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-white max-w-5xl leading-[1.08]"
       >
-        Turn System Architecture into Production Software.
+        Stop Paying AI to Write the Same CRUD for the 1000th Time.
       </h1>
 
       {/* Benefit-Driven Subhead */}
       <p className="mt-6 text-base sm:text-lg md:text-xl text-zinc-400 max-w-2xl font-normal leading-relaxed">
-        Stop spending weeks configuring microservices, wiring authentication, setting up databases, and wrestling with boilerplate. Visually map your distributed system and get a production-ready full-stack codebase in seconds.
+        Cheaper, faster, and consistent: AI where it matters, not everywhere. Visually map your distributed system and compile a production-ready full-stack codebase in seconds.
       </p>
 
       {/* Primary CTAs for Conversion */}

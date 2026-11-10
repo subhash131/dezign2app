@@ -1,4 +1,11 @@
-import { CompiledFile, GlobalStoreDefinition, GlobalStoreField, StateVariableType } from "@workspace/canvas/types";
+import {
+  CompiledFile,
+  CustomTypeField,
+  CustomTypeItem,
+  GlobalStoreDefinition,
+  GlobalStoreField,
+  StateVariableType,
+} from "@workspace/canvas/types";
 import { toSingular, toPlural } from "../../../utils";
 
 export function toPascalCase(str: string): string {
@@ -72,6 +79,91 @@ function mapFieldTypeToTs(type: StateVariableType | string): string {
     default:
       return type || "unknown";
   }
+}
+
+function extractFieldsFromCustomType(customType?: CustomTypeItem | null): CustomTypeField[] {
+  if (!customType) return [];
+  if (Array.isArray(customType.fields) && customType.fields.length > 0) {
+    return customType.fields.filter((f) => !f.isOmitted);
+  }
+  const codeToParse = customType.rawCode || customType.typeAliasValue || "";
+  if (!codeToParse) return [];
+  let targetBlock = codeToParse;
+  if (customType.name) {
+    const blockRegex = new RegExp(`(?:interface|type)\\s+${customType.name}\\b[^{=]*[={]([^}]+)\\}?`, "s");
+    const blockMatch = blockRegex.exec(codeToParse);
+    if (blockMatch && blockMatch[1]) {
+      targetBlock = blockMatch[1];
+    }
+  }
+  const fields: CustomTypeField[] = [];
+  const fieldRegex = /([a-zA-Z_$][a-zA-Z0-9_$]*)\s*(\??)\s*:\s*([^;,\n}]+)/g;
+  let match: RegExpExecArray | null;
+  while ((match = fieldRegex.exec(targetBlock)) !== null) {
+    const fieldName = match[1]?.trim();
+    if (!fieldName || fieldName === "interface" || fieldName === "type" || fieldName === "export") {
+      continue;
+    }
+    const isOpt = match[2] === "?";
+    const rawType = match[3]?.trim() || "string";
+    fields.push({
+      id: fieldName,
+      name: fieldName,
+      type: rawType,
+      required: !isOpt,
+    });
+  }
+  return fields;
+}
+
+function getDefaultValueForCustomField(field: CustomTypeField): string {
+  if (field.defaultValue !== undefined && field.defaultValue !== "") {
+    const raw = String(field.defaultValue);
+    if (
+      (raw.startsWith('"') && raw.endsWith('"')) ||
+      (raw.startsWith("'") && raw.endsWith("'")) ||
+      raw === "true" ||
+      raw === "false" ||
+      !Number.isNaN(Number(raw)) ||
+      raw.startsWith("{") ||
+      raw.startsWith("[")
+    ) {
+      return raw;
+    }
+    return JSON.stringify(raw);
+  }
+  if (field.required === false) {
+    return "undefined";
+  }
+  if (Array.isArray(field.enumValues) && field.enumValues.length > 0) {
+    return JSON.stringify(field.enumValues[0]);
+  }
+  const t = (field.type || "string").toLowerCase().trim();
+  if (field.isArray || t.endsWith("[]") || t.startsWith("array<") || t === "array") {
+    return "[]";
+  }
+  if (t === "number" || t === "float" || t === "int" || t === "integer") {
+    return "0";
+  }
+  if (t === "boolean" || t === "bool") {
+    return "false";
+  }
+  if (t === "string" || t === "text") {
+    return '""';
+  }
+  if (t === "object" || t.startsWith("{") || t.startsWith("record<")) {
+    return "{}";
+  }
+  if (field.type && field.type.includes("|")) {
+    const parts = field.type.split("|").map((p) => p.trim());
+    const firstLiteral = parts.find(
+      (p) => (p.startsWith('"') && p.endsWith('"')) || (p.startsWith("'") && p.endsWith("'")),
+    );
+    if (firstLiteral) {
+      return firstLiteral;
+    }
+  }
+  return '""';
 }
 
 function formatDefaultValue(field: GlobalStoreField): string {
@@ -152,7 +244,7 @@ function toKebabCase(str: string): string {
 
 export function generateZustandStore(
   store: GlobalStoreDefinition,
-  options?: { filePath?: string }
+  options?: { filePath?: string; customTypes?: CustomTypeItem[] }
 ): CompiledFile {
   const baseName = toPascalCase(store.name || "App");
   const storeCompName = baseName.endsWith("Store") ? baseName : `${baseName}Store`;
@@ -370,6 +462,10 @@ export function generateZustandStore(
 
   const updateLines = activeUpdateFields.map((f) => {
     const fPascal = toPascalCase(f.name);
+    if (isArrayField(f)) {
+      const itemTs = f.type.endsWith("[]") ? f.type.slice(0, -2) : "Record<string, unknown>";
+      return `  update${fPascal}: (patch?: Partial<${itemTs}> | Record<string, unknown> | null) => void;`;
+    }
     const baseTs = mapFieldTypeToTs(f.type);
     return `  update${fPascal}: (patch?: Partial<${baseTs}> | Record<string, unknown> | null) => void;`;
   });
@@ -380,6 +476,8 @@ export function generateZustandStore(
     (f.type || "").toLowerCase().includes("message");
 
   const activeStreamFields = fields.filter((f) => {
+    const isStreamableType = isArrayField(f) || isStringField(f);
+    if (!isStreamableType) return false;
     if (!f.actions?.includes("stream") && !isMessageField(f)) return false;
     const fPascal = toPascalCase(f.name);
     const streamName = `stream${fPascal}`;
@@ -391,7 +489,7 @@ export function generateZustandStore(
 
   const streamLines = activeStreamFields.map((f) => {
     const fPascal = toPascalCase(f.name);
-    return `  stream${fPascal}: (chunkOrDelta?: { delta?: string; chunk?: string; text?: string; done?: boolean; id?: string; role?: string } | string) => void;`;
+    return `  stream${fPascal}: (chunkOrDelta?: { delta?: string; chunk?: string; text?: string; done?: boolean; id?: string; role?: string; sender?: string } | string) => void;`;
   });
 
   const resetFieldLines = fields
@@ -720,8 +818,10 @@ ${payloadPrep}
   const updateImpls = activeUpdateFields.map((f) => {
     const fName = toCamelCase(f.name);
     const fPascal = toPascalCase(f.name);
-    const fullTs = resolveFieldType(f);
-    return `  update${fPascal}: (patch) => set((s) => ({ ${fName}: (patch ? ({ ...(typeof s.${fName} === "object" && s.${fName} !== null ? s.${fName} : {}), ...patch } as unknown as ${fullTs}) : s.${fName}) })),`;
+    if (isArrayField(f)) {
+      return `  update${fPascal}: (patch) => set((s) => ({ ${fName}: (patch && typeof patch === "object" && "id" in patch && Array.isArray(s.${fName})) ? s.${fName}.map((it) => (typeof it === "object" && it !== null && "id" in it && it.id === patch.id ? { ...it, ...patch } : it)) : s.${fName} })),`;
+    }
+    return `  update${fPascal}: (patch) => set((s) => ({ ${fName}: (patch && s.${fName} && typeof s.${fName} === "object") ? { ...s.${fName}, ...patch } : s.${fName} })),`;
   });
 
   const resetFieldImpls = fields
@@ -742,6 +842,46 @@ ${payloadPrep}
     const fName = toCamelCase(f.name);
     const fPascal = toPascalCase(f.name);
     if (isArrayField(f)) {
+      const cleanBase = (f.type || "string").replace(/\[\]$/, "").trim();
+      const matchedCustom = (options?.customTypes || store.customTypes || []).find(
+        (ct) => ct.id === f.customTypeId || ct.name.toLowerCase() === cleanBase.toLowerCase(),
+      );
+      const schemaFields = matchedCustom ? extractFieldsFromCustomType(matchedCustom) : [];
+      const hasSender = schemaFields.some((sf) => sf.name === "sender") || cleanBase === "Message";
+      const hasRole = schemaFields.some((sf) => sf.name === "role") || (!hasSender && (cleanBase === "ChatMessage" || !matchedCustom));
+      const hasStreaming = schemaFields.some((sf) => sf.name === "streaming");
+      const contentProp = schemaFields.find((sf) => sf.name === "content" || sf.name === "text" || sf.name === "delta")?.name || "content";
+      const idProp = schemaFields.find((sf) => sf.name === "id" || sf.name === "_id")?.name || "id";
+
+      const extraFields = schemaFields.filter(
+        (sf) =>
+          sf.name !== idProp &&
+          sf.name !== "sender" &&
+          sf.name !== "role" &&
+          sf.name !== contentProp &&
+          sf.name !== "streaming" &&
+          sf.required !== false,
+      );
+
+      const extraPropsCode = extraFields
+        .map((sf) => `            ${sf.name}: ("${sf.name}" in src && src.${sf.name} !== undefined) ? src.${sf.name} : ${getDefaultValueForCustomField(sf)},`)
+        .join("\n");
+
+      const senderCode = hasSender
+        ? `            sender: ("sender" in src && (src.sender === "AI" || src.sender === "USER" || src.sender === "SYSTEM")) ? src.sender : ("role" in src && typeof src.role === "string" && src.role.toLowerCase() === "user" ? "USER" : "AI"),\n`
+        : "";
+      const roleCode = hasRole
+        ? `            role: ("role" in src && typeof src.role === "string") ? src.role : "assistant",\n`
+        : "";
+      const streamingCode = hasStreaming ? `            streaming: true,\n` : "";
+      const updateStreamingCode = hasStreaming ? `, streaming: true` : "";
+
+      const targetFinderCondition = hasRole
+        ? `typeof last === "object" && last !== null && "role" in last && last.role === role${hasStreaming ? ` && "streaming" in last && last.streaming === true` : ""}`
+        : hasSender
+        ? `typeof last === "object" && last !== null && "sender" in last && last.sender === ("sender" in src ? src.sender : "AI")${hasStreaming ? ` && "streaming" in last && last.streaming === true` : ""}`
+        : `${hasStreaming ? `typeof last === "object" && last !== null && "streaming" in last && last.streaming === true` : `typeof last === "object" && last !== null`}`;
+
       return `  stream${fPascal}: (chunkOrDelta) => set((s) => {
     const src = typeof chunkOrDelta === "object" && chunkOrDelta !== null ? chunkOrDelta : {};
     const delta = ("delta" in src && typeof src.delta === "string") ? src.delta : ("chunk" in src && typeof src.chunk === "string") ? src.chunk : ("text" in src && typeof src.text === "string") ? src.text : (typeof chunkOrDelta === "string" ? chunkOrDelta : "");
@@ -750,20 +890,33 @@ ${payloadPrep}
     const current = Array.isArray(s.${fName}) ? s.${fName} : [];
     let i = -1;
     if ("id" in src && src.id !== undefined) {
-      i = current.findIndex((m) => typeof m === "object" && m !== null && "id" in m && m.id === src.id);
+      i = current.findIndex((m) => typeof m === "object" && m !== null && "${idProp}" in m && m.${idProp} === src.id);
     } else {
       const last = current[current.length - 1];
-      if (typeof last === "object" && last !== null && "role" in last && last.role === role && "streaming" in last && last.streaming === true) i = current.length - 1;
+      if (${targetFinderCondition}) i = current.length - 1;
     }
     if (done) {
-      return { ${fName}: i !== -1 ? current.map((m, j) => j === i && typeof m === "object" && m !== null ? { ...m, streaming: false } : m) : current };
+      return { ${fName}: i !== -1 ? current.map((m, j) => j === i && typeof m === "object" && m !== null ? { ...m${hasStreaming ? ", streaming: false" : ""} } : m) : current };
     }
     if (typeof delta !== "string" || !delta) return { ${fName}: current };
     if (i === -1) {
-      return { ${fName}: [...current, { id: ("id" in src && typeof src.id === "string") ? src.id : "msg_" + current.length + "_" + Date.now(), role, content: delta, streaming: true }] };
+      return {
+        ${fName}: [
+          ...current,
+          {
+            ${idProp}: ("id" in src && typeof src.id === "string") ? src.id : "msg_" + current.length + "_" + Date.now(),
+${senderCode}${roleCode}            ${contentProp}: delta,
+${streamingCode}${extraPropsCode ? extraPropsCode + "\n" : ""}          },
+        ],
+      };
     }
-    const target = current[i];
-    return { ${fName}: current.map((m, j) => j === i && typeof m === "object" && m !== null ? { ...m, content: ("content" in m && typeof m.content === "string" ? m.content : "") + delta, streaming: true } : m) };
+    return {
+      ${fName}: current.map((m, j) =>
+        j === i && typeof m === "object" && m !== null
+          ? { ...m, ${contentProp}: ("${contentProp}" in m && typeof m.${contentProp} === "string" ? m.${contentProp} : "") + delta${updateStreamingCode} }
+          : m
+      ),
+    };
   }),`;
     }
     return `  stream${fPascal}: (chunkOrDelta) => set((s) => {
@@ -913,7 +1066,10 @@ export default ${hookName};
 
 export function generateZustandStores(
   stores: GlobalStoreDefinition[],
-  options?: { localStorePaths?: Record<string, string> }
+  options?: {
+    localStorePaths?: Record<string, string>;
+    customTypes?: CustomTypeItem[];
+  }
 ): CompiledFile[] {
   if (!stores || stores.length === 0) return [];
 
@@ -928,7 +1084,10 @@ export function generateZustandStores(
       ? options.localStorePaths[st.id]
       : undefined;
 
-    const file = generateZustandStore(st, { filePath: customPath });
+    const file = generateZustandStore(st, {
+      filePath: customPath,
+      customTypes: options?.customTypes ?? st.customTypes,
+    });
     files.push(file);
 
     if (!isLocal || !customPath) {

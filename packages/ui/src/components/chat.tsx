@@ -170,8 +170,8 @@ export const Chat = React.forwardRef<HTMLDivElement, ChatProps>(
         ref={ref}
         data-slot="chat-container"
         className={cn(
-          "flex flex-col w-full h-[400px] max-h-[600px] rounded-xl border border-border/70 bg-card text-card-foreground shadow-xs overflow-hidden",
-          className,
+          "flex flex-col w-full rounded-xl border border-border/70 bg-card text-card-foreground shadow-xs overflow-hidden",
+          className || "h-[400px] max-h-[600px]",
         )}
         {...props}
       >

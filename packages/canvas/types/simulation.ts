@@ -245,6 +245,9 @@ export interface ComponentPropMappings {
   chatEmptyTitle?: string;
   chatEmptyDescription?: string;
   chatShowAvatars?: boolean;
+  chatAlignment?: "center" | "left" | "right" | "full" | "floating-right" | "floating-left";
+  chatMaxWidth?: "sm" | "md" | "lg" | "xl" | "2xl" | "3xl" | "4xl" | "full";
+  chatHeight?: "sm" | "md" | "lg" | "xl" | "full";
   chatMessagesBinding?: string;
   chatMessagesStoreId?: string;
   chatMessagesStoreName?: string;

@@ -270,9 +270,8 @@ const StoreVariableCard = React.memo(function StoreVariableCard({
   // Auto-detect action types from reducer code + type defaults
   const detectedActions = useMemo(() => {
     const fromCode = extractActionsFromReducerCode(currentCode);
-    const standard = getSupportedActionsForType(field.type, isArray, field.name);
-    const set = new Set([...standard, ...fromCode]);
-    return Array.from(set);
+    if (fromCode.length > 0) return fromCode;
+    return getSupportedActionsForType(field.type, isArray, field.name);
   }, [currentCode, field.type, isArray]);
 
   const handleNameChange = useCallback(

@@ -37,7 +37,7 @@ import { generateBrowserStorageHelper } from "./browserStorageGenerator";
 import { resolveAppProviders } from "./providerGenerators";
 import { isServiceAssociatedWithWebApp } from "./serviceResolver";
 import { generateNextjsRoutes } from "../../../services/nextjs/v16/routeGenerator";
-import { GlobalStoreDefinition, NodeDependencyItem } from "@workspace/canvas/types";
+import { CustomTypeItem, GlobalStoreDefinition, NodeDependencyItem } from "@workspace/canvas/types";
 import { resolveStoreActionBindings } from "./storeActionResolver";
 
 export type {
@@ -217,12 +217,33 @@ export function compileNextjsV16WebClient(
       targetPageId: targetPage?.id || d.targetPageId,
       disabledDefaultManipulators: d.disabledDefaultManipulators,
       deletedDefaultManipulators: d.deletedDefaultManipulators,
+      customTypes: d.customTypes,
     };
+  });
+
+  // Extract custom types from types / customTypes nodes across canvas
+  const canvasCustomTypes: CustomTypeItem[] = [];
+  (allNodes || []).forEach((n) => {
+    if (n.type === "types" || n.type === "customTypes") {
+      const typesList = n.data?.types || n.data?.customTypes;
+      if (Array.isArray(typesList)) {
+        typesList.forEach((t: unknown) => {
+          if (typeof t === "object" && t !== null && "name" in t && typeof t.name === "string") {
+            canvasCustomTypes.push(t as CustomTypeItem);
+          }
+        });
+      }
+    }
   });
 
   const allStores = [...appGlobalStores, ...pageStores, ...graphStateStores];
   if (allStores.length > 0) {
-    files.push(...generateZustandStores(allStores, { localStorePaths }));
+    allStores.forEach((s) => {
+      if (!s.customTypes || s.customTypes.length === 0) {
+        s.customTypes = canvasCustomTypes;
+      }
+    });
+    files.push(...generateZustandStores(allStores, { localStorePaths, customTypes: canvasCustomTypes }));
   }
 
   // 2.6 Resolve Browser Storage Nodes (localStorage / sessionStorage)

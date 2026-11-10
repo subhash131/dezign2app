@@ -4,6 +4,8 @@ export function generateTriggerLogsState(hasLogsSection: boolean, hasStreamingAc
   return `  const showDebugLogs =
     process.env.NEXT_PUBLIC_ENABLE_DEBUG_LOGS?.trim().toLowerCase() === "true" ||
     process.env.NEXT_PUBLIC_ENABLE_DEBUG_UI?.trim().toLowerCase() === "true";
+  const [isLogsOpen, setIsLogsOpen] = useState(false);
+  const [hasLayoutDrawer, setHasLayoutDrawer] = useState(false);
   const [triggerLogs, setTriggerLogs] = useState<Array<{
     id: string;
     eventName: string;
@@ -16,6 +18,17 @@ export function generateTriggerLogsState(hasLogsSection: boolean, hasStreamingAc
     data: unknown;
     error?: string;${streamingField}
   }>>([]);
+
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      const check = () => {
+        setHasLayoutDrawer(Boolean(document.querySelector('aside[aria-label="Layout Output Log"]')));
+      };
+      check();
+      const timer = setTimeout(check, 200);
+      return () => clearTimeout(timer);
+    }
+  }, []);
 
   // Bridge layout-level stream and action events into page Output Log
   useEffect(() => {
@@ -339,47 +352,75 @@ export function generateTriggerLogsSection(options: {
                           : JSON.stringify(log.data, null, 2)}`
     : `{typeof log.data === "string" ? log.data : JSON.stringify(log.data, null, 2)}`;
 
-  return `        {/* Section: Trigger Output Logs */}
+  return `        {/* Page Output Log Drawer */}
         {showDebugLogs && (
-        <Card className="border-border shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-            <div className="flex items-center gap-3">
-              <CardTitle className="text-lg font-bold text-card-foreground">Output Log</CardTitle>
-              ${hasSse ? `<Badge variant="outline" className="text-xs flex items-center gap-1.5 font-mono text-emerald-600 dark:text-emerald-400 border-emerald-500/30 bg-emerald-500/10">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live Stream Active
-              </Badge>` : ""}
-              ${hasWs ? `<Badge variant="outline" className="text-xs flex items-center gap-1.5 font-mono text-cyan-600 dark:text-cyan-400 border-cyan-500/30 bg-cyan-500/10">
-                <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse" /> WebSocket Connected
-              </Badge>` : ""}
-              ${hasWebRtc ? `<Badge variant="outline" className="text-xs flex items-center gap-1.5 font-mono text-purple-600 dark:text-purple-400 border-purple-500/30 bg-purple-500/10">
-                <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" /> WebRTC Connected
-              </Badge>` : ""}
-            </div>
-            {triggerLogs.length > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={(e) => {
-                  e.preventDefault();
-                  setTriggerLogs([]);
-                }}
-                className="text-xs text-muted-foreground hover:text-foreground"
-              >
-                Clear logs
-              </Button>
-            )}
-          </CardHeader>
-          <CardContent>
-            {triggerLogs.length === 0 ? (
-              <div className="text-muted-foreground text-sm italic py-6 text-center border border-dashed border-border rounded-lg">
-                ${hasRealtime ? "Listening for real-time events..." : "No activity logged yet."}
+        <aside
+          aria-label="Page Output Log"
+          className={\`fixed bottom-3 z-50 pointer-events-auto flex flex-col items-end transition-all duration-200 \${
+            hasLayoutDrawer ? "right-[230px]" : "right-4"
+          }\`}
+        >
+          {/* Drawer Panel */}
+          <div
+            className={
+              "w-[520px] max-w-[calc(100vw-2rem)] shadow-2xl rounded-xl border border-border bg-card/95 backdrop-blur overflow-hidden flex flex-col transition-all duration-150 ease-out origin-bottom-right mb-2 " +
+              (isLogsOpen
+                ? "opacity-100 scale-100 translate-y-0 max-h-[420px] pointer-events-auto"
+                : "opacity-0 scale-95 translate-y-1 max-h-0 pointer-events-none border-transparent p-0 m-0")
+            }
+          >
+            <div className="flex items-center justify-between px-4 py-2.5 bg-muted/40 border-b border-border shrink-0">
+              <div className="flex items-center gap-2">
+                <Terminal className="w-4 h-4 text-primary shrink-0" />
+                <span className="font-bold text-xs text-foreground">Output Log</span>
+                ${hasSse ? `<Badge variant="outline" className="text-[9px] font-mono text-emerald-600 dark:text-emerald-400 border-emerald-500/30 bg-emerald-500/10 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live Stream Active
+                </Badge>` : ""}
+                ${hasWs ? `<Badge variant="outline" className="text-[9px] font-mono text-cyan-600 dark:text-cyan-400 border-cyan-500/30 bg-cyan-500/10 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse" /> WebSocket Connected
+                </Badge>` : ""}
+                ${hasWebRtc ? `<Badge variant="outline" className="text-[9px] font-mono text-purple-600 dark:text-purple-400 border-purple-500/30 bg-purple-500/10 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" /> WebRTC Connected
+                </Badge>` : ""}
               </div>
-            ) : (
-              <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
-                {triggerLogs.map((log) => (
-                  <div key={log.id} className="bg-muted/40 border border-border rounded-lg p-4 font-mono text-xs space-y-2">
-                    <div className="flex items-center justify-between text-muted-foreground border-b border-border pb-2">
-                      <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1">
+                {triggerLogs.length > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setTriggerLogs([]);
+                    }}
+                    className="h-6 px-2 text-[10px] text-muted-foreground hover:text-destructive cursor-pointer"
+                    title="Clear logs"
+                  >
+                    <Trash2 className="w-3 h-3 mr-1" />
+                    Clear
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsLogsOpen(false)}
+                  className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground cursor-pointer"
+                  title="Collapse"
+                >
+                  <ChevronDown className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            </div>
+
+            <div className="p-3 overflow-y-auto max-h-[350px] space-y-2 font-mono text-xs">
+              {triggerLogs.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground text-xs italic border border-dashed border-border/60 rounded-lg">
+                  ${hasRealtime ? "Listening for real-time events..." : "No activity logged yet."}
+                </div>
+              ) : (
+                triggerLogs.map((log) => (
+                  <div key={log.id} className="bg-background/80 border border-border/60 rounded-lg p-2.5 space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px] text-muted-foreground border-b border-border/40 pb-1">
+                      <div className="flex items-center gap-1.5">
                         <span className="font-semibold text-foreground">{log.eventName}</span>
                         ${logEntryBadge}
                         {log.status && (
@@ -388,23 +429,45 @@ export function generateTriggerLogsSection(options: {
                           </span>
                         )}
                       </div>
-                      <span>{log.timestamp}</span>
+                      <span className="text-[10px]">{log.timestamp}</span>
                     </div>
                     {log.error ? (
-                      <div className="text-destructive bg-destructive/10 p-2 rounded border border-destructive/20 font-mono">
+                      <div className="text-destructive bg-destructive/10 p-2 rounded text-[11px]">
                         Error: {log.error}
                       </div>
                     ) : (
-                      <pre className="text-foreground/90 bg-background/80 p-3 rounded border border-border/50 overflow-x-auto whitespace-pre-wrap font-mono text-xs">
+                      <pre className="text-foreground/90 bg-muted/40 p-2 rounded overflow-x-auto whitespace-pre-wrap text-[11px] max-h-40">
                         ${dataDisplay}${streamingCursor}
                       </pre>
                     )}
                   </div>
-                ))}
-              </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Persistent Dock Toggle Pill */}
+          <button
+            type="button"
+            onClick={() => setIsLogsOpen((prev) => !prev)}
+            className="flex items-center gap-2 bg-card/95 border border-border shadow-xl rounded-full px-3 py-1.5 text-xs backdrop-blur font-mono text-foreground hover:bg-muted/40 transition-colors cursor-pointer select-none"
+            title={isLogsOpen ? "Collapse Output Log" : "Open Output Log"}
+          >
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+            <span className="font-semibold text-foreground">Output Log</span>
+            ${hasRealtime ? `<span className="text-[10px] bg-primary/10 text-primary border border-primary/20 px-1.5 py-0.2 rounded-full font-mono">LIVE</span>` : ""}
+            {triggerLogs.length > 0 && (
+              <span className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.2 rounded-full font-bold">
+                {triggerLogs.length}
+              </span>
             )}
-          </CardContent>
-        </Card>
+            {isLogsOpen ? (
+              <ChevronDown className="w-3.5 h-3.5 text-muted-foreground ml-0.5" />
+            ) : (
+              <ChevronUp className="w-3.5 h-3.5 text-muted-foreground ml-0.5" />
+            )}
+          </button>
+        </aside>
         )}
 `;
 }

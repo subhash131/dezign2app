@@ -288,6 +288,7 @@ export const StoreLiveTestPlayground: React.FC<StoreLiveTestPlaygroundProps> = (
       payload: parsedPayload,
       currentState: sandboxState,
       fields,
+      availableCustomTypes,
     });
 
     const changedKeys = fields
@@ -353,6 +354,7 @@ export const StoreLiveTestPlayground: React.FC<StoreLiveTestPlaygroundProps> = (
       payload,
       currentState: sandboxState,
       fields,
+      availableCustomTypes,
     });
 
     const changedKeys = fields
@@ -411,6 +413,7 @@ export const StoreLiveTestPlayground: React.FC<StoreLiveTestPlaygroundProps> = (
       payload: tc.payload,
       currentState: sandboxState,
       fields,
+      availableCustomTypes,
     });
 
     const elapsed = Math.round(performance.now() - startTime);
@@ -471,6 +474,7 @@ export const StoreLiveTestPlayground: React.FC<StoreLiveTestPlaygroundProps> = (
         payload: tc.payload,
         currentState: currentLiveState,
         fields,
+        availableCustomTypes,
       });
       const elapsed = Math.round(performance.now() - startTime);
 
