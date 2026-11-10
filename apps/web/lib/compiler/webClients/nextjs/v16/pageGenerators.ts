@@ -157,10 +157,13 @@ export function generatePageCode(
     ? `  const routeParams = useParams();\n  const routeSearchParams = useSearchParams();\n\n`
     : "";
 
-  const cardComponentsNeeded = hasPageLoad || hasLogsSection || mediaCaps.hasMediaStream;
+  const cardComponentsNeeded = hasPageLoad || mediaCaps.hasMediaStream;
   const uiImports: string[] = [];
   if (hasLogsSection || mediaCaps.hasMediaStream) {
     uiImports.push(`import { Button } from "@workspace/ui/components/button";`);
+  }
+  if (hasLogsSection) {
+    uiImports.push(`import { ChevronDown, ChevronUp, Trash2, Terminal } from "lucide-react";`);
   }
   if (hasApiActions) {
     uiImports.push(`import { executeApiAction } from "@/lib/api-client";`);
@@ -168,7 +171,7 @@ export function generatePageCode(
   if (cardComponentsNeeded) {
     uiImports.push(`import { Card, CardHeader, CardTitle, CardContent } from "@workspace/ui/components/card";`);
   }
-  if (hasRealtime) {
+  if (hasRealtime || hasLogsSection) {
     uiImports.push(`import { Badge } from "@workspace/ui/components/badge";`);
   }
   if (hasAuth && (hasPageLoad || hasWs || hasWebRtc)) {

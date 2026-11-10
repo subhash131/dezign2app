@@ -1115,6 +1115,99 @@ describe("compileNextjsV16StateStoreNode", () => {
     expect(pageFile).toBeDefined();
     expect(pageFile!.content).toContain("useConversationStore.getState().populate({ conversations: data?.data?.items, messages: data?.data?.recentMessages });");
   });
+
+  it("compiles schema-aware store methods for custom types without type assertions or invalid field shapes", () => {
+    const webAppNode: BackendNode = {
+      id: "node-webapp-chat",
+      type: "webApp",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "ChatApp",
+        appSlug: "web",
+      },
+    };
+
+    const typesNode: BackendNode = {
+      id: "node-types-1",
+      type: "types",
+      position: { x: 0, y: 100 },
+      fractionalIndex: "a1",
+      data: {
+        label: "Types",
+        customTypes: [
+          {
+            id: "type-msg",
+            name: "Message",
+            rawCode: `export interface Message {
+  id: string;
+  sender: "AI" | "USER" | "SYSTEM";
+  content: string;
+}`,
+            fields: [
+              { id: "f-id", name: "id", type: "string", required: true },
+              { id: "f-sender", name: "sender", type: '"AI" | "USER" | "SYSTEM"', required: true, enumValues: ["AI", "USER", "SYSTEM"] },
+              { id: "f-content", name: "content", type: "string", required: true },
+            ],
+          },
+        ],
+      },
+    };
+
+    const stateStoreNode: BackendNode = {
+      id: "node-store-app",
+      type: "state_store",
+      position: { x: 200, y: 0 },
+      fractionalIndex: "a2",
+      data: {
+        label: "AppStore",
+        storeName: "App",
+        scope: "global",
+        storage: "memory",
+        targetWebAppId: "node-webapp-chat",
+        fields: [
+          { id: "f-msg", name: "message", type: "Message", defaultValue: null },
+          { id: "f-status", name: "statusText", type: "string", defaultValue: "" },
+          { id: "f-content", name: "content", type: "string", defaultValue: "" },
+          { id: "f-msgs", name: "messages", type: "Message[]", defaultValue: [], isArray: true, actions: ["update"] },
+          { id: "f-input", name: "chatInput", type: "string", defaultValue: "" },
+        ],
+      },
+    };
+
+    const result = compileNextjsV16WebClient(
+      [],
+      [],
+      [],
+      [webAppNode, typesNode, stateStoreNode],
+      [],
+      "ChatApp",
+      [],
+      "web",
+      webAppNode,
+    );
+
+    const storeFile = result.files.find((f) => f.filename === "lib/stores/useAppStore.ts");
+    expect(storeFile).toBeDefined();
+    const content = storeFile!.content;
+
+    // 1. streamMessage should NOT exist for single non-string Message
+    expect(content).not.toContain("streamMessage:");
+
+    // 2. streamMessages should exist for Message[]
+    expect(content).toContain("streamMessages:");
+
+    // 3. streamMessages must use sender conforming to Message schema
+    expect(content).toContain("sender:");
+    expect(content).toContain('"AI"');
+
+    // 4. No 'as unknown as' type assertions
+    expect(content).not.toContain("as unknown as");
+
+    // 5. updateMessages must safely map items without casting to an object
+    expect(content).toContain("updateMessages:");
+    expect(content).toContain("Array.isArray(s.messages)");
+  });
 });
 
 

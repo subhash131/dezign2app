@@ -275,6 +275,9 @@ function inferSampleSingleItem(
   }
 
   // 4. Well-known type name heuristics
+  if (cleanType === "Message" || cleanType === "Message[]") {
+    return { id: "msg_1", sender: "AI", content: "Hello" };
+  }
   if (cleanType.toLowerCase().includes("message") || field.name.toLowerCase().includes("message")) {
     return { id: "msg_1", role: "user", content: "Hello" };
   }
@@ -951,7 +954,10 @@ export function getStateManipulators(
           if (isArr) {
             const item = inferSampleValueForField(f, availableCustomTypes, false);
             if (isMsg && typeof item === "object" && item !== null && !Array.isArray(item)) {
-              defaultPayload = { ...item, id: "msg_0", role: "system", content: "You are a helpful assistant." };
+              const hasSender = matchedCustom?.fields?.some((cf) => cf.name === "sender") || cleanBase === "Message";
+              defaultPayload = hasSender
+                ? { ...item, id: "msg_0", sender: "SYSTEM", content: "You are a helpful assistant." }
+                : { ...item, id: "msg_0", role: "system", content: "You are a helpful assistant." };
             } else {
               defaultPayload = item;
             }
@@ -989,7 +995,10 @@ export function getStateManipulators(
         case "stream": {
           actionType = "stream";
           defaultManipulatorType = "stream";
-          defaultPayload = { delta: "Hello streaming message chunk!", role: "assistant" };
+          const hasSender = matchedCustom?.fields?.some((cf) => cf.name === "sender") || cleanBase === "Message";
+          defaultPayload = hasSender
+            ? { delta: "Hello streaming message chunk!", sender: "AI" }
+            : { delta: "Hello streaming message chunk!", role: "assistant" };
           break;
         }
         case "increment": {
@@ -1069,11 +1078,13 @@ export function applyManipulator({
   payload,
   currentState,
   fields,
+  availableCustomTypes,
 }: {
   manipulator: StateManipulator;
   payload: JsonValue | undefined;
   currentState: StoreState;
   fields: GlobalStoreField[];
+  availableCustomTypes?: CustomTypeItem[];
 }): { newState: StoreState; error?: string } {
   try {
     let nextState: StoreState = { ...currentState };
@@ -1309,7 +1320,7 @@ export function applyManipulator({
     let executedCustomReducer = false;
     const targetCleanType = (targetField?.type || "string").replace(/\[\]$/, "").trim();
     const matchedTargetCustom = resolveCustomType({
-      availableTypes: [],
+      availableTypes: availableCustomTypes || [],
       typeName: targetCleanType,
       typeId: targetField?.customTypeId,
     });
