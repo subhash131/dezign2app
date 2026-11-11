@@ -31,6 +31,8 @@ export default function robots(): MetadataRoute.Robots {
           "/partners",
           "/changelog",
           "/integrations",
+          "/llms.txt",
+          "/llms-full.txt",
         ],
         disallow: [
           "/api/",

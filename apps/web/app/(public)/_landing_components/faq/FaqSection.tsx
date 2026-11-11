@@ -45,6 +45,24 @@ export const FaqSection: React.FC = () => {
 
   return (
     <section className="w-full py-24 bg-[#08080a] border-t border-zinc-900">
+      {/* Schema.org FAQPage JSON-LD for AI crawlers & search agents */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "FAQPage",
+            mainEntity: FAQS.map((faq) => ({
+              "@type": "Question",
+              name: faq.question,
+              acceptedAnswer: {
+                "@type": "Answer",
+                text: faq.answer,
+              },
+            })),
+          }),
+        }}
+      />
       <div className="max-w-3xl mx-auto px-4 sm:px-6 flex flex-col items-center">
         {/* Header */}
         <div className="flex flex-col items-center text-center gap-3 mb-12">
@@ -62,7 +80,7 @@ export const FaqSection: React.FC = () => {
           </p>
         </div>
 
-        {/* FAQ Accordion List */}
+        {/* FAQ Accordion List - Always keep answers in DOM so AI scrapers & crawlers can read full text */}
         <div className="w-full flex flex-col gap-2.5">
           {FAQS.map((faq, idx) => {
             const isOpen = openIndex === idx;
@@ -73,6 +91,7 @@ export const FaqSection: React.FC = () => {
               >
                 <button
                   onClick={() => toggleFaq(idx)}
+                  aria-expanded={isOpen}
                   className="w-full p-4 sm:p-5 flex items-center justify-between text-left gap-4 hover:bg-zinc-900/50 transition-colors"
                 >
                   <span className="text-sm font-semibold text-white">
@@ -84,11 +103,16 @@ export const FaqSection: React.FC = () => {
                     }`}
                   />
                 </button>
-                {isOpen && (
-                  <div className="px-4 pb-4 sm:px-5 sm:pb-5 pt-0 text-xs sm:text-sm text-zinc-400 leading-relaxed border-t border-zinc-850">
-                    {faq.answer}
-                  </div>
-                )}
+                <div
+                  className={`px-4 sm:px-5 text-xs sm:text-sm text-zinc-400 leading-relaxed transition-all duration-200 overflow-hidden ${
+                    isOpen
+                      ? "max-h-[500px] pb-4 sm:pb-5 pt-0 opacity-100 border-t border-zinc-800/80"
+                      : "max-h-0 opacity-0 pointer-events-none"
+                  }`}
+                  aria-hidden={!isOpen}
+                >
+                  {faq.answer}
+                </div>
               </div>
             );
           })}

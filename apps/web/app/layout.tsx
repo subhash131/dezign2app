@@ -142,14 +142,17 @@ const jsonLd = {
     {
       "@type": "SoftwareApplication",
       name: "Dezign 2 App",
-      operatingSystem: "Web",
+      operatingSystem: "Web, macOS, Windows",
       applicationCategory: "DeveloperApplication",
       description:
-        "An AI platform that treats system design as a programming language, compiling specifications, topologies, and schemas into full-stack code, load tests, and cloud deployments.",
+        "Deterministic visual architecture compiler turning system topologies into production-ready Turborepo monorepos (Next.js 16, Express/FastAPI, Drizzle ORM, Docker Compose) with zero scaffolding token limits.",
       offers: {
         "@type": "Offer",
-        price: "0",
+        name: "Beta Access",
+        price: "100",
         priceCurrency: "USD",
+        priceValidUntil: "2027-12-31",
+        availability: "https://schema.org/InStock",
       },
     },
     {
@@ -157,26 +160,42 @@ const jsonLd = {
       mainEntity: [
         {
           "@type": "Question",
-          name: "What is Dezign 2 App?",
+          name: "Is the generated code actually production-ready?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "Dezign 2 App is an AI-powered software engineering platform that treats system design as a programming language. It transforms product requirements (PRDs), architecture topologies, and data schemas into production-ready full-stack monorepo code, microservices, automated load tests, and cloud infrastructure.",
+            text: "Yes. Dezign2App generates clean, standard TypeScript structured as a Turborepo + pnpm monorepo. It includes Next.js 16 App Router for the frontend, typed Express or FastAPI microservices, Better Auth authentication with RBAC guards, and Docker Compose with database migrations. It is the exact architecture senior engineering teams build by hand.",
           },
         },
         {
           "@type": "Question",
-          name: "How does Dezign 2 App turn system design into full-stack code?",
+          name: "Do I own the code, or is there vendor lock-in?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "Dezign 2 App compiles visually designed software architecture graphs and PRD specifications into executable monorepos. Autonomous AI agents write frontends (Next.js, React), backend APIs (FastAPI, Node.js), message queues (Kafka), caching layers (Redis), database schemas (PostgreSQL), and infrastructure manifests (Docker, Kubernetes, Terraform).",
+            text: "You own 100% of the code. There are zero runtime fees, no proprietary SDKs, and zero vendor lock-in. You can download the project as a ZIP, push it to GitHub, and deploy to AWS, GCP, Vercel, Railway, or your own self-hosted servers. Your code is yours forever.",
           },
         },
         {
           "@type": "Question",
-          name: "What technologies does Dezign 2 App compile?",
+          name: "How is Dezign2App different from pure AI code generators (Cursor, Claude, or 'vibe coding')?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "Dezign 2 App compiles Next.js, React, Node.js, Python FastAPI, Apache Kafka event streaming, Redis in-memory caching, PostgreSQL, Docker containers, and Kubernetes manifests.",
+            text: "Pure AI means you describe what you want and accept what comes out—which quickly breaks down in full-stack apps when database schemas, API contracts, auth flows, and frontend state drift out of sync. Dezign2App uses an 'Algorithm + AI' approach: we use deterministic algorithms for predictable scaffolding (instant AST compilation of schemas, Turborepo packages, typed routes, and Docker bridges with 0 hallucinations and $0 token burn), and AI for custom domain logic. You decide the architecture first; AI implements a verified spec rather than a guess.",
+          },
+        },
+        {
+          "@type": "Question",
+          name: "Can I customize the code? What happens to my custom edits on the next canvas sync?",
+          acceptedAnswer: {
+            "@type": "Answer",
+            text: "Your custom code is never deleted. Dezign2App separates generated infrastructure contracts (shared schemas, types, and wire protocols) from user business logic (controllers, custom routes, and UI components). When you update your visual canvas, the compiler performs non-destructive incremental updates or emits clean Git PR diffs—ensuring your custom business logic, third-party packages, and manual edits remain 100% intact.",
+          },
+        },
+        {
+          "@type": "Question",
+          name: "Can I run Dezign2App offline on my local machine?",
+          acceptedAnswer: {
+            "@type": "Answer",
+            text: "Yes. With our native Electron 34 Desktop Studio, you get embedded local database runners (PostgreSQL, SQLite, Redis) and an integrated native PTY terminal. You can design, simulate, and compile complete systems offline with zero cloud setup.",
           },
         },
       ],

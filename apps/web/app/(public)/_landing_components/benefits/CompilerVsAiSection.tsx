@@ -44,7 +44,7 @@ const COMPARISON_ROWS: ComparisonRow[] = [
     pureAi: {
       status: "no",
       title: "Cloud GPUs & Heavy Reasoning",
-      detail: "Slow, costly reasoning models (o1 / Sonnet 3.7) churning entire codebases",
+      detail: "Costly cloud reasoning models churning millions of tokens on repetitive boilerplate",
     },
     algorithmAi: {
       status: "yes",
