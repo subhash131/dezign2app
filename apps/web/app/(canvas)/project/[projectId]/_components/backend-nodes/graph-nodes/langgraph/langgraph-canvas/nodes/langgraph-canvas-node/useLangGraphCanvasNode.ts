@@ -34,7 +34,6 @@ import {
   DEFAULT_LLM_MODEL,
   DEFAULT_LLM_TEMPERATURE,
   DEFAULT_LLM_BASE_URL,
-  DEFAULT_LLM_API_KEY_ENV,
   DEFAULT_MIDDLEWARE_TYPE,
   LLM_PROVIDER_PRESETS,
   LLM_PROVIDERS,
@@ -267,9 +266,16 @@ export function useLangGraphCanvasNode({
           provider: DEFAULT_LLM_PROVIDER,
           baseUrl: defaultPreset?.defaultUrl ?? DEFAULT_LLM_BASE_URL,
           model: defaultPreset?.defaultModel ?? DEFAULT_LLM_MODEL,
-          apiKeyHeader:
-            defaultPreset?.defaultApiKeyEnv ?? DEFAULT_LLM_API_KEY_ENV,
+          apiKeyHeader: "",
           temperature: DEFAULT_LLM_TEMPERATURE,
+          onDeleteLLM: () => {
+            setNodes((nodes) => nodes.filter((node) => node.id !== masterId));
+            setEdges((edges) =>
+              edges.filter(
+                (edge) => edge.source !== masterId && edge.target !== masterId,
+              ),
+            );
+          },
         },
       };
       newNodesToAdd.push(masterLLM);

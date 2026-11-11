@@ -32,7 +32,6 @@ import {
   DEFAULT_LLM_PROVIDER,
   DEFAULT_LLM_MODEL,
   DEFAULT_LLM_BASE_URL,
-  DEFAULT_LLM_API_KEY_ENV,
   DEFAULT_LLM_TEMPERATURE,
   LLM_PROVIDERS,
   LLM_PROVIDER_PRESETS,
@@ -251,8 +250,7 @@ export const LangGraphCanvasLLMRefNode = ({
         provider: DEFAULT_LLM_PROVIDER,
         baseUrl: defaultPreset?.defaultUrl ?? DEFAULT_LLM_BASE_URL,
         model: defaultPreset?.defaultModel ?? DEFAULT_LLM_MODEL,
-        apiKeyHeader:
-          defaultPreset?.defaultApiKeyEnv ?? DEFAULT_LLM_API_KEY_ENV,
+        apiKeyHeader: "",
         temperature: DEFAULT_LLM_TEMPERATURE,
         onDeleteLLM: () => {
           setNodes((nodes) => nodes.filter((node) => node.id !== llmId));

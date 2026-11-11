@@ -35,16 +35,13 @@ import {
 import type { LangGraphLLMNode, LangGraphCanvasNode } from "@workspace/canvas";
 import {
   LANGGRAPH_CANVAS_NODE_LLM,
+  LANGGRAPH_CANVAS_NODE_LLM_REF,
   HANDLE_LLM_IN,
   HANDLE_LLM_OUT,
 } from "../constants";
 import { LLM_PROVIDER_PRESETS } from "../components/inspector/constants";
 import { LocalInput, LocalTextarea } from "../../../common";
-import {
-  saveLocalEnvVariable,
-  getLocalEnvVariable,
-  fetchLocalEnvVariable,
-} from "@/lib/utils/localEnvSync";
+import { saveLocalEnvVariable } from "@/lib/utils/localEnvSync";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { toast } from "sonner";
 
@@ -53,13 +50,41 @@ export const LangGraphCanvasLLMNode = ({
   data,
   selected,
 }: NodeProps<LangGraphLLMNode>) => {
-  const { setNodes } = useReactFlow<LangGraphCanvasNode>();
+  const { setNodes, setEdges } = useReactFlow<LangGraphCanvasNode>();
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameValue, setNameValue] = useState(data.label || "LLM");
 
   useEffect(() => {
     setNameValue(data.label || "LLM");
   }, [data.label]);
+
+  const handleDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (data.onDeleteLLM) {
+      data.onDeleteLLM();
+    }
+    setNodes((nds) =>
+      nds
+        .filter((n) => n.id !== id)
+        .map((n) => {
+          if (
+            n.type === LANGGRAPH_CANVAS_NODE_LLM_REF &&
+            (n.data as any)?.llmRef === id
+          ) {
+            return {
+              ...n,
+              data: {
+                ...n.data,
+                llmRef: undefined,
+                label: "LLM Ref",
+              },
+            };
+          }
+          return n;
+        }),
+    );
+    setEdges((eds) => eds.filter((e) => e.source !== id && e.target !== id));
+  };
 
   const updateLLMData = (changes: Partial<typeof data>) => {
     setNodes((nds) =>
@@ -71,31 +96,6 @@ export const LangGraphCanvasLLMNode = ({
     );
   };
 
-  // Auto-populate API key from localStorage or .env if empty on mount
-  useEffect(() => {
-    if (!data.apiKeyHeader) {
-      const provider = (data.provider || "openai").toLowerCase();
-      const envVarName =
-        LLM_PROVIDER_PRESETS[provider]?.defaultApiKeyEnv ||
-        (provider === "groq" ? "GROQ_API_KEY" : `${provider.toUpperCase()}_API_KEY`);
-
-      const cached =
-        (typeof window !== "undefined"
-          ? localStorage.getItem(`dezign2app_lg_key_${provider}`) ||
-            localStorage.getItem(`dezign2app_env_${envVarName}`)
-          : "") || "";
-
-      if (cached) {
-        updateLLMData({ apiKeyHeader: cached });
-      } else {
-        fetchLocalEnvVariable(envVarName).then((val) => {
-          if (val) {
-            updateLLMData({ apiKeyHeader: val });
-          }
-        });
-      }
-    }
-  }, [data.provider]);
 
   const handleApiKeyChange = (val: string) => {
     updateLLMData({ apiKeyHeader: val });
@@ -307,19 +307,14 @@ export const LangGraphCanvasLLMNode = ({
           <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-400 font-mono border border-sky-500/20">
             {activeProviderKey.toUpperCase()}
           </span>
-          {data.onDeleteLLM && (
-            <button
-              type="button"
-              className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all opacity-0 group-hover:opacity-100 nodrag"
-              onClick={(e) => {
-                e.stopPropagation();
-                data.onDeleteLLM?.();
-              }}
-              title="Delete LLM"
-            >
-              <Trash className="w-3.5 h-3.5" />
-            </button>
-          )}
+          <button
+            type="button"
+            className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all opacity-0 group-hover:opacity-100 nodrag cursor-pointer"
+            onClick={handleDelete}
+            title="Delete LLM"
+          >
+            <Trash className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
 

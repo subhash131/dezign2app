@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 
 const mockSetNodes = vi.fn();
+const mockSetEdges = vi.fn();
 vi.mock("@xyflow/react", () => ({
   Handle: ({ id, className }: { id?: string; className?: string }) => (
     <div data-testid={`handle-${id}`} className={className} />
@@ -10,6 +11,7 @@ vi.mock("@xyflow/react", () => ({
   Position: { Right: "right" },
   useReactFlow: () => ({
     setNodes: mockSetNodes,
+    setEdges: mockSetEdges,
   }),
 }));
 
@@ -75,7 +77,10 @@ vi.mock("sonner", () => ({
 
 import { LangGraphCanvasLLMNode } from "../LangGraphCanvasLLMNode";
 import { LLMNodeInspector } from "../../components/inspector/LLMNodeInspector";
-import { LANGGRAPH_CANVAS_NODE_LLM } from "../../constants";
+import {
+  LANGGRAPH_CANVAS_NODE_LLM,
+  LANGGRAPH_CANVAS_NODE_LLM_REF,
+} from "../../constants";
 import type { LangGraphLLMNodeData } from "@workspace/canvas";
 
 describe("LangGraphCanvasLLMNode - Custom LLM Model Configuration", () => {
@@ -106,6 +111,13 @@ describe("LangGraphCanvasLLMNode - Custom LLM Model Configuration", () => {
     expect(screen.getByText("Model Identifier")).toBeInTheDocument();
     expect(screen.getByText("Custom")).toBeInTheDocument();
     expect(screen.getAllByTitle("Configure custom model").length).toBeGreaterThan(0);
+  });
+
+  it("keeps API key password input blank by default", () => {
+    render(<LangGraphCanvasLLMNode {...createProps()} />);
+
+    const passwordInput = screen.getByPlaceholderText(/Bearer sk-... or secret token/i);
+    expect(passwordInput).toHaveValue("");
   });
 
   it("switches to custom model input when clicking the Custom button", () => {
@@ -169,6 +181,54 @@ describe("LangGraphCanvasLLMNode - Custom LLM Model Configuration", () => {
       { id: "llm_1", type: LANGGRAPH_CANVAS_NODE_LLM, data: { model: "deepseek-r1-distill-llama-70b" } },
     ]);
     expect(updated?.[0]?.data.model).toBe("openai/gpt-oss-120b");
+  });
+
+  it("renders delete button even when onDeleteLLM is undefined and deletes node on click", () => {
+    render(<LangGraphCanvasLLMNode {...createProps({ onDeleteLLM: undefined })} />);
+
+    const deleteBtn = screen.getByTitle("Delete LLM");
+    expect(deleteBtn).toBeInTheDocument();
+
+    fireEvent.click(deleteBtn);
+
+    expect(mockSetNodes).toHaveBeenCalled();
+    const nodeUpdater = mockSetNodes.mock.calls[mockSetNodes.mock.calls.length - 1]?.[0];
+    const initialNodes = [
+      { id: "llm_1", type: LANGGRAPH_CANVAS_NODE_LLM, data: {} },
+      {
+        id: "ref_1",
+        type: LANGGRAPH_CANVAS_NODE_LLM_REF,
+        data: { llmRef: "llm_1", label: "LLM (Ref)" },
+      },
+      { id: "other_node", type: "other", data: {} },
+    ];
+    const remainingNodes = nodeUpdater?.(initialNodes);
+    expect(remainingNodes).toHaveLength(2);
+    expect(remainingNodes?.find((n: any) => n.id === "llm_1")).toBeUndefined();
+    // Verify llmRef on referencing ref node is cleared
+    const updatedRefNode = remainingNodes?.find((n: any) => n.id === "ref_1");
+    expect(updatedRefNode?.data.llmRef).toBeUndefined();
+
+    expect(mockSetEdges).toHaveBeenCalled();
+    const edgeUpdater = mockSetEdges.mock.calls[mockSetEdges.mock.calls.length - 1]?.[0];
+    const initialEdges = [
+      { id: "e1", source: "llm_1", target: "ref_1" },
+      { id: "e2", source: "start", target: "step_1" },
+    ];
+    const remainingEdges = edgeUpdater?.(initialEdges);
+    expect(remainingEdges).toEqual([{ id: "e2", source: "start", target: "step_1" }]);
+  });
+
+  it("calls data.onDeleteLLM callback if provided when delete button is clicked", () => {
+    const onDeleteLLM = vi.fn();
+    render(<LangGraphCanvasLLMNode {...createProps({ onDeleteLLM })} />);
+
+    const deleteBtn = screen.getByTitle("Delete LLM");
+    fireEvent.click(deleteBtn);
+
+    expect(onDeleteLLM).toHaveBeenCalledTimes(1);
+    expect(mockSetNodes).toHaveBeenCalled();
+    expect(mockSetEdges).toHaveBeenCalled();
   });
 });
 
