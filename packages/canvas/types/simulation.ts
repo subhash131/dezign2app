@@ -688,6 +688,23 @@ export type UIEventItem = {
     stopOnError?: boolean;
     maxRounds?: number;
   };
+  // Lifecycle & Effect configs
+  intervalConfig?: {
+    intervalMs: number;
+    runImmediately?: boolean;
+  };
+  paramChangeConfig?: {
+    watchPathParams?: string[];
+    watchQueryParams?: string[];
+  };
+  effectConfig?: {
+    dependencies?: string[];
+    debounceMs?: number;
+  };
+  unmountConfig?: {
+    resetStoreNodeIds?: string[];
+    triggerEndpointId?: string;
+  };
   // Item-scoped event for array state fields
   scope?: "section" | "item";
   itemSourceStateId?: string;

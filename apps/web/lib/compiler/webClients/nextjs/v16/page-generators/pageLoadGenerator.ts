@@ -1,4 +1,117 @@
 import type { PageInfo } from "../types";
+import type { UIEventItem } from "@workspace/canvas/types";
+
+export interface LifecycleActionMeta {
+  action: UIEventItem;
+  actName: string;
+  actUrl: string;
+  actMethod: string;
+}
+
+export function generateIntervalEffects(intervalActions: LifecycleActionMeta[]): string {
+  if (!intervalActions || intervalActions.length === 0) return "";
+  return intervalActions
+    .map(({ action, actName, actUrl, actMethod }) => {
+      const ms = action.intervalConfig?.intervalMs || 5000;
+      const runImmediately = action.intervalConfig?.runImmediately !== false;
+      const triggerCall = `handleTriggerAction("${actName}", "interval", ${actUrl ? `"${actUrl}"` : '""'}, "${actMethod || "GET"}");`;
+      return `  // Periodic timer interval (${actName}, every ${ms}ms)
+  useEffect(() => {
+    ${runImmediately ? `${triggerCall}\n    ` : ""}const timer = setInterval(() => {
+      ${triggerCall}
+    }, ${ms});
+    return () => clearInterval(timer);
+  }, []);
+`;
+    })
+    .join("\n");
+}
+
+export function generateParamChangeEffects(paramChangeActions: LifecycleActionMeta[]): string {
+  if (!paramChangeActions || paramChangeActions.length === 0) return "";
+  return paramChangeActions
+    .map(({ action, actName, actUrl, actMethod }) => {
+      const watchPaths = action.paramChangeConfig?.watchPathParams || [];
+      const watchQueries = action.paramChangeConfig?.watchQueryParams || [];
+      const deps: string[] = [];
+      watchPaths.forEach((p) => deps.push(`routeParams?.${p}`));
+      watchQueries.forEach((q) => deps.push(`routeSearchParams?.get("${q}")`));
+      const depStr = deps.length > 0 ? deps.join(", ") : "routeParams, routeSearchParams";
+      const triggerCall = `handleTriggerAction("${actName}", "paramChange", ${actUrl ? `"${actUrl}"` : '""'}, "${actMethod || "GET"}");`;
+      return `  // Route parameter change watcher (${actName})
+  useEffect(() => {
+    ${triggerCall}
+  }, [${depStr}]);
+`;
+    })
+    .join("\n");
+}
+
+export function generateStateWatcherEffects(effectActions: LifecycleActionMeta[]): string {
+  if (!effectActions || effectActions.length === 0) return "";
+  return effectActions
+    .map(({ action, actName, actUrl, actMethod }) => {
+      const deps = action.effectConfig?.dependencies || [];
+      const debounceMs = action.effectConfig?.debounceMs || 0;
+      const depStr = deps.length > 0 ? deps.join(", ") : "";
+      const triggerCall = `handleTriggerAction("${actName}", "effect", ${actUrl ? `"${actUrl}"` : '""'}, "${actMethod || "POST"}");`;
+
+      if (debounceMs > 0) {
+        return `  // Reactive state watcher with ${debounceMs}ms debounce (${actName})
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      ${triggerCall}
+    }, ${debounceMs});
+    return () => clearTimeout(handler);
+  }, [${depStr}]);
+`;
+      }
+      return `  // Reactive state watcher (${actName})
+  useEffect(() => {
+    ${triggerCall}
+  }, [${depStr}]);
+`;
+    })
+    .join("\n");
+}
+
+export function generateVisibilityEffects(visibilityActions: LifecycleActionMeta[]): string {
+  if (!visibilityActions || visibilityActions.length === 0) return "";
+  return visibilityActions
+    .map(({ actName, actUrl, actMethod }) => {
+      const triggerCall = `handleTriggerAction("${actName}", "visibilityChange", ${actUrl ? `"${actUrl}"` : '""'}, "${actMethod || "GET"}");`;
+      return `  // Tab visibility change (${actName})
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        ${triggerCall}
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, []);
+`;
+    })
+    .join("\n");
+}
+
+export function generateBeforeUnloadEffects(beforeUnloadActions: LifecycleActionMeta[]): string {
+  if (!beforeUnloadActions || beforeUnloadActions.length === 0) return "";
+  return beforeUnloadActions
+    .map(({ actName }) => {
+      return `  // Before unload confirmation guard (${actName})
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      return (e.returnValue = "");
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, []);
+`;
+    })
+    .join("\n");
+}
 
 export function generatePageLoadState(hasPageLoad: boolean, pageLoadDataType: string = "JSONValue"): string {
   if (!hasPageLoad) return "";

@@ -260,7 +260,11 @@ export const SectionBlock = ({
             {section.actions.map((act) => {
               const evtStr = act.event || "";
               const evtLower = evtStr.toLowerCase();
-              const isPageLoad = evtStr === "pageLoad";
+              const isMount = evtStr === "mount" || evtStr === "pageLoad" || evtStr === "onMount";
+              const isPageLoad = isMount;
+              const isUnmount = evtStr === "unmount";
+              const isInterval = evtStr === "interval";
+              const isEffect = evtStr === "effect" || evtStr === "paramChange" || evtStr === "visibilityChange" || evtStr === "beforeUnload";
               const isSse =
                 evtStr === "sse" || evtStr === "sseMessage" || evtLower === "sse";
               const isWebsocket =
@@ -292,6 +296,33 @@ export const SectionBlock = ({
                       style={{ top: "50%" }}
                     />
                   )}
+                  {isUnmount && (
+                    <Handle
+                      type="target"
+                      position={Position.Left}
+                      id={`unmount-in-${act.id}`}
+                      className={cn(CANVAS_ROW_HANDLE_CLASS, CANVAS_ROW_HANDLE_LEFT_OFFSET_CLASS, "!bg-rose-500")}
+                      style={{ top: "50%" }}
+                    />
+                  )}
+                  {isInterval && (
+                    <Handle
+                      type="target"
+                      position={Position.Left}
+                      id={`interval-in-${act.id}`}
+                      className={cn(CANVAS_ROW_HANDLE_CLASS, CANVAS_ROW_HANDLE_LEFT_OFFSET_CLASS, "!bg-amber-500")}
+                      style={{ top: "50%" }}
+                    />
+                  )}
+                  {isEffect && (
+                    <Handle
+                      type="target"
+                      position={Position.Left}
+                      id={`effect-in-${act.id}`}
+                      className={cn(CANVAS_ROW_HANDLE_CLASS, CANVAS_ROW_HANDLE_LEFT_OFFSET_CLASS, "!bg-violet-500")}
+                      style={{ top: "50%" }}
+                    />
+                  )}
                   {isSse && (
                     <Handle
                       type="target"
@@ -319,7 +350,7 @@ export const SectionBlock = ({
                       style={{ top: "50%" }}
                     />
                   )}
-                  {!isPageLoad && !isSse && !isWebsocket && !isWebrtc && (
+                  {!isPageLoad && !isUnmount && !isInterval && !isEffect && !isSse && !isWebsocket && !isWebrtc && (
                     <Handle
                       type="target"
                       position={Position.Left}

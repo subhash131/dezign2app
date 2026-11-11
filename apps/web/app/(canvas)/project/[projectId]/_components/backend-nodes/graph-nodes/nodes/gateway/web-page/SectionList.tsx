@@ -74,8 +74,18 @@ export const SectionList = ({
       const stepNumber = edge.data?.sequenceOrder ?? idx + 1;
       const stepLabel = edge.data?.label ?? String(stepNumber);
 
-      if (edge.targetHandle.startsWith("pageload-in-")) {
-        const targetEventId = edge.targetHandle.replace(/^pageload-in-/, "");
+      if (
+        edge.targetHandle.startsWith("pageload-in-") ||
+        edge.targetHandle.startsWith("mount-in-") ||
+        edge.targetHandle.startsWith("onmount-in-") ||
+        edge.targetHandle.startsWith("unmount-in-") ||
+        edge.targetHandle.startsWith("interval-in-") ||
+        edge.targetHandle.startsWith("effect-in-")
+      ) {
+        const targetEventId = edge.targetHandle.replace(
+          /^(?:pageload-in-|mount-in-|onmount-in-|unmount-in-|interval-in-|effect-in-)/,
+          "",
+        );
         const nestedLinks = getLinkedEndpoints(
           targetEventId,
           edge.target,

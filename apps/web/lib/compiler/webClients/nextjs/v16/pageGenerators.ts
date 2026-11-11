@@ -32,6 +32,10 @@ export function generatePageCode(
   unmountCleanups: string = "",
   /** Optional store imports (e.g. import { useCartStore } from "@/lib/stores") */
   storeImports: string = "",
+  /** Optional reactive & timer lifecycle effects JSX (interval, paramChange, effect, visibilityChange, beforeUnload) */
+  lifecycleEffectsJsx: string = "",
+  /** Whether the page has route or query parameter watchers */
+  hasParamWatcher: boolean = false,
 ): string {
   const isAuth = isAuthPage(pageMeta, authNodeData);
 
@@ -63,6 +67,7 @@ export function generatePageCode(
 
   const hasPageLoad = Boolean(pageLoadFetchStatements);
   const hasAuth = Boolean(authNodeData);
+  const hasLifecycleEffects = Boolean(lifecycleEffectsJsx && lifecycleEffectsJsx.trim());
 
   const sseConnections = (pageMeta.realtimeConnections || []).filter(
     (c) => c.protocol === "SSE" && c.streamUrl,
@@ -81,12 +86,12 @@ export function generatePageCode(
 
   const mediaCaps = resolveWebRtcMediaCapabilities(webrtcConnections);
   const hasRealtime = hasSse || hasWs || hasWebRtc;
-  const hasLogsSection = hasApiActions || hasRealtime || hasPageLoad;
+  const hasLogsSection = hasApiActions || hasRealtime || hasPageLoad || hasLifecycleEffects;
   const hasUnmount = Boolean(unmountCleanups && unmountCleanups.trim());
 
   const hooksList: string[] = [];
-  if (hasPageLoad || hasRealtime || hasUnmount) {
-    if (hasPageLoad || hasRealtime) {
+  if (hasPageLoad || hasRealtime || hasUnmount || hasLifecycleEffects) {
+    if (hasPageLoad || hasRealtime || hasLifecycleEffects) {
       hooksList.push("useState");
     }
     hooksList.push("useEffect");
@@ -138,6 +143,7 @@ export function generatePageCode(
 
   // Assemble UI Imports
   const hasDynamicRoute = Boolean(
+    hasParamWatcher ||
     pageMeta.isDynamic ||
     (pageMeta.routePath && /(?:\/|^):[a-zA-Z0-9_-]+|\[[a-zA-Z0-9_.-]+\]/.test(pageMeta.routePath)) ||
     (pageMeta.realtimeConnections || []).some(
@@ -227,7 +233,7 @@ ${hasLogsSection ? `${triggerLogsSectionJsx}` : ""}      </div>
 
 ${reactImport}
 ${dynamicNavigationImport}${uiImports.join("\n")}${uiImports.length > 0 ? "\n" : ""}${storeImports ? `${storeImports}\n` : ""}${allImports ? `${allImports}\n` : ""}${jsonValueTypeDecl}${namedTypeDecl}export default function ${pageMeta.componentName}() {
-${routeParamsHookJsx}${pageLoadStateJsx}${mediaStateJsx}${triggerLogsStateJsx}${pageLoadEffectJsx}${sseEffectsJsx}${wsEffectsJsx}${webrtcEffectsJsx}${triggerHandlerJsx}  return (
+${routeParamsHookJsx}${pageLoadStateJsx}${mediaStateJsx}${triggerLogsStateJsx}${pageLoadEffectJsx}${lifecycleEffectsJsx ? `${lifecycleEffectsJsx}\n` : ""}${sseEffectsJsx}${wsEffectsJsx}${webrtcEffectsJsx}${triggerHandlerJsx}  return (
     <div className="h-screen w-full bg-background text-foreground flex overflow-hidden">
 ${sidebarJsx}
       <main className="flex-1 min-w-0 flex flex-col h-full overflow-hidden relative">
@@ -242,7 +248,7 @@ ${pageLoadSectionJsx}${mediaSectionJsx}${contentSectionsJsx ? `        {/* Page 
 
 ${reactImport}
 ${dynamicNavigationImport}${uiImports.join("\n")}${uiImports.length > 0 ? "\n" : ""}${storeImports ? `${storeImports}\n` : ""}${allImports ? `${allImports}\n` : ""}${jsonValueTypeDecl}${namedTypeDecl}export default function ${pageMeta.componentName}() {
-${routeParamsHookJsx}${pageLoadStateJsx}${mediaStateJsx}${triggerLogsStateJsx}${pageLoadEffectJsx}${sseEffectsJsx}${wsEffectsJsx}${webrtcEffectsJsx}${triggerHandlerJsx}  return (
+${routeParamsHookJsx}${pageLoadStateJsx}${mediaStateJsx}${triggerLogsStateJsx}${pageLoadEffectJsx}${lifecycleEffectsJsx ? `${lifecycleEffectsJsx}\n` : ""}${sseEffectsJsx}${wsEffectsJsx}${webrtcEffectsJsx}${triggerHandlerJsx}  return (
     <main className="h-screen w-full bg-background text-foreground flex flex-col overflow-hidden font-sans relative">
 ${pageLoadSectionJsx}${mediaSectionJsx}${sectionsJsx ? `      {/* Page Sections */}\n      <Suspense fallback={null}>\n${sectionsJsx}\n      </Suspense>\n` : ""}${triggerLogsSectionJsx}    </main>
   );
@@ -261,7 +267,7 @@ ${pageLoadSectionJsx}${mediaSectionJsx}${sectionsJsx ? `      {/* Page Sections 
 
 ${reactImport}
 ${dynamicNavigationImport}${uiImports.join("\n")}${uiImports.length > 0 ? "\n" : ""}${storeImports ? `${storeImports}\n` : ""}${allImports ? `${allImports}\n` : ""}${jsonValueTypeDecl}${namedTypeDecl}export default function ${pageMeta.componentName}() {
-${routeParamsHookJsx}${pageLoadStateJsx}${mediaStateJsx}${triggerLogsStateJsx}${pageLoadEffectJsx}${sseEffectsJsx}${wsEffectsJsx}${webrtcEffectsJsx}${triggerHandlerJsx}  return (
+${routeParamsHookJsx}${pageLoadStateJsx}${mediaStateJsx}${triggerLogsStateJsx}${pageLoadEffectJsx}${lifecycleEffectsJsx ? `${lifecycleEffectsJsx}\n` : ""}${sseEffectsJsx}${wsEffectsJsx}${webrtcEffectsJsx}${triggerHandlerJsx}  return (
     <div className="min-h-screen bg-background text-foreground flex w-full">
 ${sidebarJsx}
       <main className="flex-1 min-w-0 p-6 md:p-10 space-y-8">
@@ -279,7 +285,7 @@ ${pageLoadSectionJsx}${mediaSectionJsx}${contentSectionsJsx ? `          {/* Pag
 
 ${reactImport}
 ${dynamicNavigationImport}${uiImports.join("\n")}${uiImports.length > 0 ? "\n" : ""}${storeImports ? `${storeImports}\n` : ""}${allImports ? `${allImports}\n` : ""}${jsonValueTypeDecl}${namedTypeDecl}export default function ${pageMeta.componentName}() {
-${routeParamsHookJsx}${pageLoadStateJsx}${mediaStateJsx}${triggerLogsStateJsx}${pageLoadEffectJsx}${sseEffectsJsx}${wsEffectsJsx}${webrtcEffectsJsx}${triggerHandlerJsx}  return (
+${routeParamsHookJsx}${pageLoadStateJsx}${mediaStateJsx}${triggerLogsStateJsx}${pageLoadEffectJsx}${lifecycleEffectsJsx ? `${lifecycleEffectsJsx}\n` : ""}${sseEffectsJsx}${wsEffectsJsx}${webrtcEffectsJsx}${triggerHandlerJsx}  return (
     <main className="min-h-screen bg-background text-foreground p-6 md:p-10 font-sans">
       <div className="max-w-5xl mx-auto space-y-8">
 ${pageLoadSectionJsx}${mediaSectionJsx}${sectionsJsx ? `        {/* Page Sections */}\n        <Suspense fallback={null}>\n${sectionsJsx}\n        </Suspense>\n` : ""}${triggerLogsSectionJsx}      </div>

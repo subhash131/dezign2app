@@ -434,7 +434,14 @@ function resolveStoreBindingFromHandle(
   }
 
   // 5. Generic fallback based on pageAction event
-  if (pageAction.event === "pageLoad" || pageAction.name === "pageLoad") {
+  if (
+    pageAction.event === "pageLoad" ||
+    pageAction.event === "mount" ||
+    pageAction.event === "onMount" ||
+    pageAction.name === "pageLoad" ||
+    pageAction.name === "mount" ||
+    pageAction.name === "onMount"
+  ) {
     return {
       actionId: "builtin-populate",
       actionName: "populate",
@@ -526,7 +533,13 @@ function findAllMatchingEdgesForAction(
   }
 
   // Second pass: page-level lifecycle matching (fallback)
-  const isPageLoad = action.event === "pageLoad" || action.name === "pageLoad";
+  const isPageLoad =
+    action.event === "pageLoad" ||
+    action.event === "mount" ||
+    action.event === "onMount" ||
+    action.name === "pageLoad" ||
+    action.name === "mount" ||
+    action.name === "onMount";
   const isUnmount = action.event === "unmount" || action.name === "unmount";
 
   if (isPageLoad || isUnmount) {

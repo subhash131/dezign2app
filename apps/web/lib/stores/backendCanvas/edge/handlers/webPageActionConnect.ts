@@ -49,6 +49,11 @@ export function handleWebPageActionConnect({
     webHandle.startsWith("events-") ||
     webHandle.startsWith("event-in-") ||
     webHandle.startsWith("pageload-in-") ||
+    webHandle.startsWith("mount-in-") ||
+    webHandle.startsWith("onmount-in-") ||
+    webHandle.startsWith("unmount-in-") ||
+    webHandle.startsWith("interval-in-") ||
+    webHandle.startsWith("effect-in-") ||
     webHandle.startsWith("action-in-") ||
     webHandle.startsWith("rtc-out-") ||
     webHandle.startsWith("rtc-in-");
@@ -56,7 +61,7 @@ export function handleWebPageActionConnect({
   if (!isActionHandle) return false;
 
   const actionId = webHandle.replace(
-    /^(?:events-|event-in-|pageload-in-|action-in-|rtc-out-|rtc-in-)/,
+    /^(?:events-|event-in-|pageload-in-|mount-in-|onmount-in-|unmount-in-|interval-in-|effect-in-|action-in-|rtc-out-|rtc-in-)/,
     "",
   );
 

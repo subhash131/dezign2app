@@ -268,20 +268,39 @@ export const EDGE_TYPE_MAP: Record<string, string> = {
 // NOTE: "sse", "websocket", "webrtc", "polling" have been moved to the
 // dedicated "Real-Time Connections" section on WebPageNode and are no longer
 // valid section action event types.
-export const WEB_PAGE_EVENTS = [
+export const PAGE_LIFECYCLE_EVENTS = [
+  "onMount",
+  "mount",
   "pageLoad",
-  "click",
   "unmount",
+] as const;
+export const PAGE_EFFECT_EVENTS = [
+  "paramChange",
+  "effect",
+  "interval",
+  "visibilityChange",
+  "beforeUnload",
+] as const;
+export const UI_INTERACTION_EVENTS = [
+  "click",
+  "submit",
+  "change",
+  "focus",
+  "blur",
   "hover",
   "drag",
   "dblclick",
   "keydown",
   "keyup",
-  "submit",
-  "change",
-  "focus",
-  "blur",
   "mouseenter",
   "mouseleave",
   "navigateToPage",
 ] as const;
+
+export const WEB_PAGE_EVENTS = [
+  ...PAGE_LIFECYCLE_EVENTS,
+  ...PAGE_EFFECT_EVENTS,
+  ...UI_INTERACTION_EVENTS,
+] as const;
+
+export type WebPageEventType = (typeof WEB_PAGE_EVENTS)[number];

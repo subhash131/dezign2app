@@ -13,6 +13,14 @@ import {
   hasTransformerActionSteps,
 } from "./componentTemplates";
 import { resolveBaseUrlInfo, type StorageUploadConfig } from "./event-generators";
+import {
+  generateIntervalEffects,
+  generateParamChangeEffects,
+  generateStateWatcherEffects,
+  generateVisibilityEffects,
+  generateBeforeUnloadEffects,
+  type LifecycleActionMeta,
+} from "./page-generators";
 import { isAuthPage, isAuthLoginPage, isAuthRegisterPage } from "../../../compileAuth";
 import { typeStrToTsAndZod } from "../../../generators/schemaToTypeScript";
 import { generateApiClientFile } from "./apiClientTemplate";
@@ -259,7 +267,13 @@ export function generatePageAndComponentFiles({
 
     const allActions: UIEventItem[] = normalizedSections.flatMap((s) => s.actions || []);
     const pageLoadEvents = allActions.filter(
-      (e) => e.event === "pageLoad" || e.name === "pageLoad",
+      (e) =>
+        e.event === "pageLoad" ||
+        e.event === "mount" ||
+        e.event === "onMount" ||
+        e.name === "pageLoad" ||
+        e.name === "mount" ||
+        e.name === "onMount",
     );
 
     let pageLoadFetchStatements = "";
@@ -602,8 +616,21 @@ export function generatePageAndComponentFiles({
       const sectionDir = `${baseComponentsDir}/${secFolder}`;
 
       const secActionMetas: EventComponentMeta[] = [];
+      const PAGE_LEVEL_LIFECYCLE_EVENTS = new Set([
+        "onMount",
+        "mount",
+        "pageLoad",
+        "unmount",
+        "interval",
+        "paramChange",
+        "effect",
+        "visibilityChange",
+        "beforeUnload",
+      ]);
       const nonPageLoadActions = (sec.actions || []).filter(
-        (e) => e.event !== "pageLoad" && e.name !== "pageLoad",
+        (e) =>
+          !PAGE_LEVEL_LIFECYCLE_EVENTS.has(e.event || "") &&
+          !PAGE_LEVEL_LIFECYCLE_EVENTS.has(e.name || ""),
       );
 
       nonPageLoadActions.forEach((evt, evtIdx) => {
@@ -1051,6 +1078,38 @@ export function generatePageAndComponentFiles({
       });
     }
 
+    const resolveLifecycleMeta = (act: UIEventItem): LifecycleActionMeta => {
+      const link = resolveLinkedEndpoint(
+        node.id,
+        act.id,
+        allNodes,
+        allEdges,
+        endpoints,
+      );
+      const actUrl = link?.path || link?.fullUrl || link?.endpoint?.name || act.url || "";
+      const actMethod = link?.method || link?.endpoint?.type || act.method || "GET";
+      const actName = act.name || act.event || "action";
+      return { action: act, actName, actUrl, actMethod };
+    };
+
+    const intervalActions = allActions.filter((a) => a.event === "interval");
+    const paramChangeActions = allActions.filter((a) => a.event === "paramChange");
+    const effectActions = allActions.filter((a) => a.event === "effect");
+    const visibilityActions = allActions.filter((a) => a.event === "visibilityChange");
+    const beforeUnloadActions = allActions.filter((a) => a.event === "beforeUnload");
+
+    const lifecycleEffectsJsx = [
+      generateIntervalEffects(intervalActions.map(resolveLifecycleMeta)),
+      generateParamChangeEffects(paramChangeActions.map(resolveLifecycleMeta)),
+      generateStateWatcherEffects(effectActions.map(resolveLifecycleMeta)),
+      generateVisibilityEffects(visibilityActions.map(resolveLifecycleMeta)),
+      generateBeforeUnloadEffects(beforeUnloadActions.map(resolveLifecycleMeta)),
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    const hasParamWatcher = paramChangeActions.length > 0;
+
     const pageCode = generatePageCode(
       pageMeta,
       pageLoadFetchStatements,
@@ -1060,6 +1119,8 @@ export function generatePageAndComponentFiles({
       pageLoadDataTypeDecl,
       unmountCleanupsList.join("\n      "),
       pageStoreImports,
+      lifecycleEffectsJsx,
+      hasParamWatcher,
     );
 
     const targetFilePath = pageMeta.isRoot

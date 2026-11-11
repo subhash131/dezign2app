@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { cn } from "@workspace/ui/lib/utils";
 import {
   Accordion,
   AccordionContent,
@@ -7,7 +8,13 @@ import {
   AccordionTrigger,
 } from "@workspace/ui/components/accordion";
 import { BackendNode, UIEventItem, PageSection } from "@/types/canvas";
-import { Endpoint, WEB_PAGE_EVENTS } from "@workspace/canvas";
+import {
+  Endpoint,
+  WEB_PAGE_EVENTS,
+  PAGE_LIFECYCLE_EVENTS,
+  PAGE_EFFECT_EVENTS,
+  UI_INTERACTION_EVENTS,
+} from "@workspace/canvas";
 import {
   EventNavigationSection,
   ActionFlowEditor,
@@ -28,11 +35,25 @@ import { Checkbox } from "@workspace/ui/components/checkbox";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
-import { Radio, Wifi, Video, RefreshCw, Layers, Zap, Play } from "lucide-react";
+import {
+  Radio,
+  Wifi,
+  Video,
+  RefreshCw,
+  Layers,
+  Zap,
+  Play,
+  Timer,
+  Route,
+  Sparkles,
+  LogOut,
+} from "lucide-react";
 
 const EVENT_OPTIONS = [...WEB_PAGE_EVENTS];
 
@@ -102,11 +123,15 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
   });
 
   const initialEvent = item?.event || "click";
-  const isStandard = EVENT_OPTIONS.some((opt) => opt === initialEvent);
+  const normalizedInitialEvent =
+    initialEvent === "mount" || initialEvent === "pageLoad"
+      ? "onMount"
+      : initialEvent;
+  const isStandard = EVENT_OPTIONS.some((opt) => opt === normalizedInitialEvent);
 
   const [eventName, setEventName] = useState(item?.name || "");
   const [eventType, setEventType] = useState(
-    isStandard ? initialEvent : "click",
+    isStandard ? normalizedInitialEvent : "click",
   );
   const [navType, setNavType] = useState<"link" | "router">(
     item?.navigationType || "link",
@@ -120,6 +145,18 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
   const [wsConfig, setWsConfig] = useState(item?.wsConfig || {});
   const [webRtcConfig, setWebRtcConfig] = useState(item?.webRtcConfig || {});
   const [pollingConfig, setPollingConfig] = useState(item?.pollingConfig || {});
+  const [intervalConfig, setIntervalConfig] = useState(
+    item?.intervalConfig || { intervalMs: 5000, runImmediately: true },
+  );
+  const [paramChangeConfig, setParamChangeConfig] = useState(
+    item?.paramChangeConfig || { watchPathParams: [], watchQueryParams: [] },
+  );
+  const [effectConfig, setEffectConfig] = useState(
+    item?.effectConfig || { dependencies: [], debounceMs: 0 },
+  );
+  const [unmountConfig, setUnmountConfig] = useState(
+    item?.unmountConfig || { resetStoreNodeIds: [] },
+  );
   const [itemKeyField, setItemKeyField] = useState(
     item?.itemContextFields?.[0] || "id",
   );
@@ -141,6 +178,10 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
       setWsConfig(item.wsConfig || {});
       setWebRtcConfig(item.webRtcConfig || {});
       setPollingConfig(item.pollingConfig || {});
+      setIntervalConfig(item.intervalConfig || { intervalMs: 5000, runImmediately: true });
+      setParamChangeConfig(item.paramChangeConfig || { watchPathParams: [], watchQueryParams: [] });
+      setEffectConfig(item.effectConfig || { dependencies: [], debounceMs: 0 });
+      setUnmountConfig(item.unmountConfig || { resetStoreNodeIds: [] });
       setItemKeyField(item.itemContextFields?.[0] || "id");
       setSelectedStateId(item.itemSourceStateId || "");
     }
@@ -337,6 +378,13 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
   const isWebsocket = eventType === "websocket";
   const isWebrtc = eventType === "webrtc";
   const isPolling = eventType === "polling";
+  const isMount = eventType === "mount" || eventType === "pageLoad" || eventType === "onMount";
+  const isUnmount = eventType === "unmount";
+  const isInterval = eventType === "interval";
+  const isParamChange = eventType === "paramChange";
+  const isEffect = eventType === "effect";
+  const isVisibilityChange = eventType === "visibilityChange";
+  const isBeforeUnload = eventType === "beforeUnload";
   const sourceState = item?.itemSourceStateId
     ? parentSection?.stateObjects?.find(
         (st) => st.id === item.itemSourceStateId || st.name === item.itemSourceStateId,
@@ -423,7 +471,7 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold text-foreground">Action Event</span>
               <Badge variant="outline" className="text-[10px] font-mono px-1.5 py-0 uppercase">
-                {eventType}
+                {isMount ? "onMount" : eventType}
               </Badge>
               {isItemScoped && (
                 <Badge variant="secondary" className="text-[10px] font-mono px-1.5 py-0 bg-violet-500/15 text-violet-400 border border-violet-500/30">
@@ -454,12 +502,56 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
               <SelectTrigger className="h-8 text-xs bg-background font-mono focus:ring-1 focus:ring-ring focus:ring-offset-0">
                 <SelectValue placeholder="Select trigger event" />
               </SelectTrigger>
-              <SelectContent>
-                {EVENT_OPTIONS.map((opt) => (
-                  <SelectItem key={opt} value={opt} className="text-xs font-mono">
-                    {opt}
+              <SelectContent className="max-h-72">
+                <SelectGroup>
+                  <SelectLabel className="text-[10px] font-bold text-muted-foreground uppercase px-2 py-1">
+                    ⚡ Page Lifecycle
+                  </SelectLabel>
+                  <SelectItem value="onMount" className="text-xs font-mono">
+                    onMount
                   </SelectItem>
-                ))}
+                  {eventType === "mount" && (
+                    <SelectItem value="mount" className="text-xs font-mono">
+                      onMount (mount)
+                    </SelectItem>
+                  )}
+                  {eventType === "pageLoad" && (
+                    <SelectItem value="pageLoad" className="text-xs font-mono">
+                      onMount (pageLoad)
+                    </SelectItem>
+                  )}
+                  <SelectItem value="unmount" className="text-xs font-mono">
+                    unmount
+                  </SelectItem>
+                </SelectGroup>
+                <SelectGroup>
+                  <SelectLabel className="text-[10px] font-bold text-muted-foreground uppercase px-2 py-1">
+                    🔄 Reactive Effects
+                  </SelectLabel>
+                  {PAGE_EFFECT_EVENTS.map((opt) => (
+                    <SelectItem key={opt} value={opt} className="text-xs font-mono">
+                      {opt}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+                <SelectGroup>
+                  <SelectLabel className="text-[10px] font-bold text-muted-foreground uppercase px-2 py-1">
+                    👆 User Interactions
+                  </SelectLabel>
+                  {UI_INTERACTION_EVENTS.filter((e) => e !== "navigateToPage").map((opt) => (
+                    <SelectItem key={opt} value={opt} className="text-xs font-mono">
+                      {opt}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+                <SelectGroup>
+                  <SelectLabel className="text-[10px] font-bold text-muted-foreground uppercase px-2 py-1">
+                    🧭 Navigation
+                  </SelectLabel>
+                  <SelectItem value="navigateToPage" className="text-xs font-mono">
+                    navigateToPage
+                  </SelectItem>
+                </SelectGroup>
               </SelectContent>
             </Select>
           </div>
@@ -598,7 +690,18 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
         defaultValue={
           isNavigateToPage
             ? ["navigation"]
-            : ["connection", "simulator", "sse_config", "ws_config", "webrtc_config", "polling_config"]
+            : [
+                "connection",
+                "simulator",
+                "sse_config",
+                "ws_config",
+                "webrtc_config",
+                "polling_config",
+                "interval_config",
+                "param_change_config",
+                "effect_config",
+                "unmount_config",
+              ]
         }
         className="w-full flex flex-col gap-3 border-none"
       >
@@ -724,6 +827,301 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
             </AccordionTrigger>
             <AccordionContent className="px-4 pb-4 pt-1 space-y-3">
               <div className="space-y-1"><Label className="text-xs">Interval (ms)</Label><Input type="number" value={pollingConfig.intervalMs ?? 5000} onChange={(e) => { const next = { ...pollingConfig, intervalMs: parseInt(e.target.value, 10) }; setPollingConfig(next); updateEventFields({ pollingConfig: next }); }} className="h-8 text-xs bg-background" /></div>
+            </AccordionContent>
+          </AccordionItem>
+        )}
+
+        {isInterval && (
+          <AccordionItem
+            value="interval_config"
+            className="border border-amber-500/30 rounded-xl bg-amber-500/5 overflow-hidden"
+          >
+            <AccordionTrigger className="px-4 py-3 text-xs font-semibold hover:no-underline flex items-center justify-between text-amber-600 dark:text-amber-400">
+              <span className="flex items-center gap-2">
+                <Timer size={14} /> Timer Interval Configuration
+              </span>
+            </AccordionTrigger>
+            <AccordionContent className="px-4 pb-4 pt-1 space-y-3.5">
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs">Interval Duration (ms)</Label>
+                  <span className="text-[10px] font-mono text-muted-foreground">
+                    {(intervalConfig.intervalMs ?? 5000) >= 1000
+                      ? `${(intervalConfig.intervalMs ?? 5000) / 1000}s`
+                      : `${intervalConfig.intervalMs ?? 5000}ms`}
+                  </span>
+                </div>
+                <Input
+                  type="number"
+                  min={100}
+                  step={500}
+                  value={intervalConfig.intervalMs ?? 5000}
+                  onChange={(e) => {
+                    const next = {
+                      ...intervalConfig,
+                      intervalMs: Math.max(100, parseInt(e.target.value, 10) || 1000),
+                    };
+                    setIntervalConfig(next);
+                    updateEventFields({ intervalConfig: next });
+                  }}
+                  className="h-8 text-xs bg-background font-mono"
+                />
+              </div>
+
+              {/* Quick Preset Buttons */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {[
+                  { label: "1s", ms: 1000 },
+                  { label: "5s", ms: 5000 },
+                  { label: "10s", ms: 10000 },
+                  { label: "30s", ms: 30000 },
+                  { label: "1m", ms: 60000 },
+                ].map((preset) => (
+                  <button
+                    key={preset.ms}
+                    type="button"
+                    onClick={() => {
+                      const next = { ...intervalConfig, intervalMs: preset.ms };
+                      setIntervalConfig(next);
+                      updateEventFields({ intervalConfig: next });
+                    }}
+                    className={cn(
+                      "px-2 py-0.5 rounded text-[10px] font-mono font-medium border transition-colors cursor-pointer",
+                      intervalConfig.intervalMs === preset.ms
+                        ? "bg-amber-500 text-amber-950 border-amber-500 font-bold"
+                        : "bg-background hover:bg-secondary border-border text-muted-foreground",
+                    )}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Run immediately checkbox */}
+              <div className="flex items-center gap-2 pt-1 border-t border-amber-500/20">
+                <Checkbox
+                  id="interval-run-immediately"
+                  checked={intervalConfig.runImmediately ?? true}
+                  onCheckedChange={(checked) => {
+                    const next = { ...intervalConfig, runImmediately: Boolean(checked) };
+                    setIntervalConfig(next);
+                    updateEventFields({ intervalConfig: next });
+                  }}
+                />
+                <label
+                  htmlFor="interval-run-immediately"
+                  className="text-xs font-medium cursor-pointer select-none text-foreground flex flex-col"
+                >
+                  <span>Execute immediately on mount</span>
+                  <span className="text-[10px] text-muted-foreground font-normal">
+                    Fires the action immediately when the page loads, then repeatedly every interval.
+                  </span>
+                </label>
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        )}
+
+        {isParamChange && (
+          <AccordionItem
+            value="param_change_config"
+            className="border border-sky-500/30 rounded-xl bg-sky-500/5 overflow-hidden"
+          >
+            <AccordionTrigger className="px-4 py-3 text-xs font-semibold hover:no-underline flex items-center justify-between text-sky-600 dark:text-sky-400">
+              <span className="flex items-center gap-2">
+                <Route size={14} /> Route &amp; Query Param Watcher
+              </span>
+            </AccordionTrigger>
+            <AccordionContent className="px-4 pb-4 pt-1 space-y-3">
+              <div className="text-[11px] text-muted-foreground leading-relaxed">
+                Re-executes this action when the selected Next.js App Router dynamic parameters (<code className="text-sky-400 font-mono">useParams()</code>) or query search parameters (<code className="text-sky-400 font-mono">useSearchParams()</code>) update.
+              </div>
+
+              {/* Path params checkboxes */}
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-medium text-foreground">
+                  Dynamic Route Parameters
+                </Label>
+                {(parentNode?.data?.pathParams || []).length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {(parentNode?.data?.pathParams || []).map((p: any) => {
+                      const isChecked = (paramChangeConfig.watchPathParams || []).includes(p.name);
+                      return (
+                        <label
+                          key={p.name}
+                          className="flex items-center gap-1.5 px-2 py-1 rounded bg-background border text-xs font-mono cursor-pointer hover:bg-secondary transition-colors"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              const curr = paramChangeConfig.watchPathParams || [];
+                              const nextParams = e.target.checked
+                                ? [...curr, p.name]
+                                : curr.filter((name) => name !== p.name);
+                              const next = { ...paramChangeConfig, watchPathParams: nextParams };
+                              setParamChangeConfig(next);
+                              updateEventFields({ paramChangeConfig: next });
+                            }}
+                            className="rounded"
+                          />
+                          <span>:{p.name}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-[10px] text-muted-foreground italic">
+                    No dynamic path parameters on this page (e.g. [id]).
+                  </div>
+                )}
+              </div>
+
+              {/* Query params checkboxes */}
+              <div className="space-y-1.5 pt-2 border-t border-sky-500/20">
+                <Label className="text-[11px] font-medium text-foreground">
+                  Query Search Parameters
+                </Label>
+                {(parentNode?.data?.queryParams || []).length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {(parentNode?.data?.queryParams || []).map((q: any) => {
+                      const keyName = q.key || q.name;
+                      const isChecked = (paramChangeConfig.watchQueryParams || []).includes(keyName);
+                      return (
+                        <label
+                          key={keyName}
+                          className="flex items-center gap-1.5 px-2 py-1 rounded bg-background border text-xs font-mono cursor-pointer hover:bg-secondary transition-colors"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              const curr = paramChangeConfig.watchQueryParams || [];
+                              const nextParams = e.target.checked
+                                ? [...curr, keyName]
+                                : curr.filter((name) => name !== keyName);
+                              const next = { ...paramChangeConfig, watchQueryParams: nextParams };
+                              setParamChangeConfig(next);
+                              updateEventFields({ paramChangeConfig: next });
+                            }}
+                            className="rounded"
+                          />
+                          <span>?{keyName}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-[10px] text-muted-foreground italic">
+                    No query parameters configured on this page (e.g. ?page=1).
+                  </div>
+                )}
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        )}
+
+        {isEffect && (
+          <AccordionItem
+            value="effect_config"
+            className="border border-violet-500/30 rounded-xl bg-violet-500/5 overflow-hidden"
+          >
+            <AccordionTrigger className="px-4 py-3 text-xs font-semibold hover:no-underline flex items-center justify-between text-violet-600 dark:text-violet-400">
+              <span className="flex items-center gap-2">
+                <Sparkles size={14} /> State Watcher Dependencies
+              </span>
+            </AccordionTrigger>
+            <AccordionContent className="px-4 pb-4 pt-1 space-y-3.5">
+              <div className="text-[11px] text-muted-foreground leading-relaxed">
+                Runs as a React <code className="text-violet-400 font-mono">useEffect()</code> watching the selected state variables in its dependency array.
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-medium text-foreground">
+                  Watched State Objects
+                </Label>
+                {sectionStateObjects.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {sectionStateObjects.map((st) => {
+                      const keyName = st.name || st.id;
+                      const isChecked = (effectConfig.dependencies || []).includes(keyName);
+                      return (
+                        <label
+                          key={st.id}
+                          className="flex items-center gap-1.5 px-2 py-1 rounded bg-background border text-xs font-mono cursor-pointer hover:bg-secondary transition-colors"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              const curr = effectConfig.dependencies || [];
+                              const nextDeps = e.target.checked
+                                ? [...curr, keyName]
+                                : curr.filter((name) => name !== keyName);
+                              const next = { ...effectConfig, dependencies: nextDeps };
+                              setEffectConfig(next);
+                              updateEventFields({ effectConfig: next });
+                            }}
+                            className="rounded"
+                          />
+                          <span>{keyName}</span>
+                          <span className="text-[9px] text-muted-foreground">({st.type})</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-[10px] text-muted-foreground italic">
+                    No state variables declared in this section.
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-1 pt-1 border-t border-violet-500/20">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs">Debounce Delay (ms)</Label>
+                  <span className="text-[10px] font-mono text-muted-foreground">
+                    {effectConfig.debounceMs ? `${effectConfig.debounceMs}ms` : "0ms (immediate)"}
+                  </span>
+                </div>
+                <Input
+                  type="number"
+                  min={0}
+                  step={50}
+                  value={effectConfig.debounceMs ?? 0}
+                  onChange={(e) => {
+                    const next = {
+                      ...effectConfig,
+                      debounceMs: Math.max(0, parseInt(e.target.value, 10) || 0),
+                    };
+                    setEffectConfig(next);
+                    updateEventFields({ effectConfig: next });
+                  }}
+                  className="h-8 text-xs bg-background font-mono"
+                  placeholder="e.g. 300 for debounced search"
+                />
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        )}
+
+        {isUnmount && (
+          <AccordionItem
+            value="unmount_config"
+            className="border border-rose-500/30 rounded-xl bg-rose-500/5 overflow-hidden"
+          >
+            <AccordionTrigger className="px-4 py-3 text-xs font-semibold hover:no-underline flex items-center justify-between text-rose-600 dark:text-rose-400">
+              <span className="flex items-center gap-2">
+                <LogOut size={14} /> Unmount &amp; Teardown Cleanup
+              </span>
+            </AccordionTrigger>
+            <AccordionContent className="px-4 pb-4 pt-1 space-y-3">
+              <div className="text-[11px] text-muted-foreground leading-relaxed">
+                Executes inside the cleanup return function of the page <code className="text-rose-400 font-mono">useEffect()</code> when the user navigates away or the page unmounts.
+              </div>
+              <div className="p-2.5 rounded-lg border border-rose-500/20 bg-background text-[11px] text-muted-foreground leading-relaxed">
+                Connect this action to State Stores to automatically invoke <code className="font-mono text-rose-400">useStore.getState().reset()</code> on unmount.
+              </div>
             </AccordionContent>
           </AccordionItem>
         )}
