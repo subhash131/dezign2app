@@ -72,8 +72,9 @@ const Pricing = ({
   hideToggle = false,
   externalBilling,
 }: PricingProps) => {
-  const [plans, setPlans] = useState<Plan[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Pre-seed with DEFAULT_BETA_PLAN so SSR, web crawlers, and AI agents always see real pricing immediately
+  const [plans, setPlans] = useState<Plan[]>([DEFAULT_BETA_PLAN]);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     async function fetchPlans() {

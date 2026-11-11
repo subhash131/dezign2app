@@ -88,18 +88,18 @@ export const FutureRoadmapSection: React.FC = () => {
         <div className="flex flex-col items-center text-center gap-3 mb-16 max-w-3xl">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-zinc-800 bg-zinc-900/60 text-xs font-mono text-zinc-400">
             <Radio className="w-3.5 h-3.5 text-zinc-300 animate-pulse" />
-            <span>ROADMAP &amp; FUTURE ECOSYSTEM</span>
+            <span>PHASED ROADMAP &amp; ECOSYSTEM</span>
           </div>
 
           <h2
             style={{ fontFamily: "var(--font-display)" }}
             className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-white mt-2"
           >
-            The Future of Autonomous Cloud Engineering
+            Compiler First. Cloud Control Plane Next.
           </h2>
 
           <p className="text-zinc-400 text-sm sm:text-base md:text-lg leading-relaxed max-w-2xl">
-            We are extending Dezign2App beyond code compilation into an end-to-end visual cloud control plane with real-time telemetry and autonomous AI agents.
+            Our deterministic monorepo compiler is live in Beta today. We are methodically extending the core engine with modular cloud provisioning and live telemetry extensions.
           </p>
         </div>
 
@@ -113,7 +113,7 @@ export const FutureRoadmapSection: React.FC = () => {
                   <Cloud className="w-5 h-5" />
                 </div>
                 <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 px-2.5 py-1 rounded border border-zinc-800 bg-zinc-900/60">
-                  Tool 1 &bull; Q3 Roadmap
+                  Phase 2 &bull; Cloud Infra Sync
                 </span>
               </div>
 
@@ -166,7 +166,7 @@ export const FutureRoadmapSection: React.FC = () => {
                   <Activity className="w-5 h-5" />
                 </div>
                 <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 px-2.5 py-1 rounded border border-zinc-800 bg-zinc-900/60">
-                  Tool 2 &bull; Q4 Roadmap
+                  Phase 3 &bull; Live Telemetry
                 </span>
               </div>
 
