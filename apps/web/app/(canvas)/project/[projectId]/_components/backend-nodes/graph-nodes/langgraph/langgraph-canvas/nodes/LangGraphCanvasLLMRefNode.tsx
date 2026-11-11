@@ -11,6 +11,7 @@ import {
   Link2,
   AlertCircle,
   Cpu,
+  Plus,
 } from "lucide-react";
 import {
   Select,
@@ -30,8 +31,14 @@ import {
   HANDLE_LLM_OUT,
   DEFAULT_LLM_PROVIDER,
   DEFAULT_LLM_MODEL,
+  DEFAULT_LLM_BASE_URL,
+  DEFAULT_LLM_API_KEY_ENV,
+  DEFAULT_LLM_TEMPERATURE,
+  LLM_PROVIDERS,
+  LLM_PROVIDER_PRESETS,
 } from "../constants";
 import { LocalInput } from "../../../common";
+import { toast } from "sonner";
 
 export const LangGraphCanvasLLMRefNode = ({
   id,
@@ -221,6 +228,54 @@ export const LangGraphCanvasLLMRefNode = ({
     }
   };
 
+  const handleAddMasterLLM = () => {
+    const llmId = `llm_${Date.now().toString(36).slice(-4)}`;
+    const defaultPreset =
+      LLM_PROVIDER_PRESETS[DEFAULT_LLM_PROVIDER] ??
+      LLM_PROVIDER_PRESETS[LLM_PROVIDERS.CUSTOM];
+
+    const currentRefNode = getNodes().find((n) => n.id === id);
+    const refX = currentRefNode?.position?.x ?? 200;
+    const refY = currentRefNode?.position?.y ?? 100;
+
+    const newX = Math.max(40, refX - 340);
+    const newY = Math.max(40, refY - 40);
+
+    const newLLMNode: LangGraphLLMNode = {
+      id: llmId,
+      type: LANGGRAPH_CANVAS_NODE_LLM,
+      position: { x: newX, y: newY },
+      data: {
+        label: "LLM",
+        llmId,
+        provider: DEFAULT_LLM_PROVIDER,
+        baseUrl: defaultPreset?.defaultUrl ?? DEFAULT_LLM_BASE_URL,
+        model: defaultPreset?.defaultModel ?? DEFAULT_LLM_MODEL,
+        apiKeyHeader:
+          defaultPreset?.defaultApiKeyEnv ?? DEFAULT_LLM_API_KEY_ENV,
+        temperature: DEFAULT_LLM_TEMPERATURE,
+        onDeleteLLM: () => {
+          setNodes((nodes) => nodes.filter((node) => node.id !== llmId));
+          setEdges((edges) =>
+            edges.filter(
+              (edge) => edge.source !== llmId && edge.target !== llmId,
+            ),
+          );
+        },
+      },
+    };
+
+    setNodes((nds) => [...nds, newLLMNode]);
+
+    updateLLMRefData({
+      llmRef: llmId,
+      label: "LLM (Ref)",
+    });
+    setNameValue("LLM (Ref)");
+
+    toast.success("Added LLM config node and linked reference");
+  };
+
   const activeProvider = selectedMaster?.data?.provider || "unconfigured";
 
   return (
@@ -374,11 +429,21 @@ export const LangGraphCanvasLLMRefNode = ({
             </SelectContent>
           </Select>
         ) : (
-          <div className="flex items-start gap-1.5 p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-500 text-[10px]">
-            <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-            <span>
-              No master LLM on canvas. Add an <strong>LLM config</strong> node first.
-            </span>
+          <div className="flex flex-col gap-2 p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-500 text-[10px]">
+            <div className="flex items-start gap-1.5">
+              <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              <span>
+                No master LLM on canvas. Add an <strong>LLM config</strong> node first.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleAddMasterLLM}
+              className="nodrag flex items-center justify-center gap-1.5 w-full py-1 px-2 rounded-md bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 hover:text-amber-300 border border-amber-500/30 hover:border-amber-500/50 text-[10px] font-semibold transition-all cursor-pointer shadow-sm active:scale-[0.98]"
+            >
+              <Plus className="w-3 h-3" />
+              <span>Add LLM Node</span>
+            </button>
           </div>
         )}
       </div>
