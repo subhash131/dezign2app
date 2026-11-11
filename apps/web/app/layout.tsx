@@ -149,7 +149,7 @@ const jsonLd = {
       offers: {
         "@type": "Offer",
         name: "Beta Access",
-        price: "100",
+        price: "20",
         priceCurrency: "USD",
         priceValidUntil: "2027-12-31",
         availability: "https://schema.org/InStock",
