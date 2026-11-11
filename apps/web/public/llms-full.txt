@@ -16,12 +16,18 @@ Dezign2App is a visual software architecture compiler and code generation platfo
 Pure AI code generators (e.g., Cursor, Claude Code, Lovable, Bolt) rely on probabilistic large language models (LLMs) to write both high-level system architecture and low-level boilerplate. In full-stack applications with multiple services, this produces compounding failure modes:
 - **Contract Drift**: Schemas in the database diverge from TypeScript backend types, OpenAPI contracts, and frontend state stores.
 - **Token Inflation**: Teams pay cloud LLMs to regenerate standard CRUD, ORM boilerplate, and Docker bridges repeatedly ($20-$50/month with strict rate limits and retry loops).
+- **Code Review Fatigue**: Engineers drown in reviewing thousands of lines of messy, AI-generated boilerplate trying to catch subtle bugs, broken imports, and hallucinated relationships.
 - **Destructive Sync**: Editing generated files manually causes future AI generations to hallucinate or overwrite custom business logic.
 
-### The Dezign2App Solution: Algorithm + AI
-Dezign2App splits full-stack application development into two distinct layers:
-1. **The 70% Deterministic Scaffolding (Handled by Compiler Algorithms)**: Monorepo configuration, Drizzle ORM schemas, database migrations, typed API routes, Kafka topic bindings, Docker Compose networks, and Better Auth RBAC guards are compiled using Abstract Syntax Tree (AST) algorithms in memory. This runs locally on CPU with **0 token tax** and **0 hallucinations**.
-2. **The 30% Domain Business Logic (Handled by Scoped AI)**: High-speed, cost-effective LLMs are scoped strictly to generating bespoke controller algorithms and custom UI components within verified type boundaries.
+### The Dezign2App Solution: Algorithm + AI Generated Code Architecture
+Dezign2App splits full-stack engineering into two specialized layers:
+1. **Deterministic Algorithms (Higher-Level Design & Predictable Infrastructure Codes)**:
+   - Compiles higher-level architecture topology, monorepo configuration, inter-service communication contracts, database schema imports, Drizzle ORM migrations, Redis cache layers, Kafka message queue configurations, Docker Compose networks, and Better Auth RBAC guards.
+   - Executes deterministically on the developer's local CPU via AST compiler passes in <800ms with **0 hallucinations** and **$0 token burn**.
+2. **AI-Generated Code (Unpredictable & Custom Domain Logic)**:
+   - Scoped strictly to bespoke business logic, unique controller algorithms, proprietary mathematical formulas, and custom UI interactions.
+   - **Dramatic Token Cost Reduction**: Eliminates the need to burn expensive cloud reasoning models on predictable boilerplate. Developers use fast, low-cost models only where creative thinking is genuinely required, with all custom code safely bounded by deterministic type contracts.
+   - **Eliminates Reading 1,000s of Lines of AI Code**: Because 70% of the monorepo is deterministically compiled and type-locked by algorithm, developers are relieved from the cognitive burden of auditing thousands of lines of AI-generated boilerplate. Review is focused entirely on the small, high-impact custom business logic.
 
 ---
 
@@ -67,7 +73,15 @@ One of the primary objections to code generators is that updating the canvas wil
 
 ---
 
-## 4. Native Desktop Studio (Electron 34)
+## 4. Visual Data Flow Simulation & Integrated Unit Testing Suite
+
+Dezign2App provides deep visual understanding and quality verification before code generation:
+- **Interactive Data Flow Simulation**: Visually track how data, HTTP requests, Kafka event streams, and database transactions flow through the distributed topology. Developers can load test architecture models, trace bottlenecks, and verify connection semantics right on the visual canvas.
+- **Dedicated Testing Tab for Unit Tests**: Built directly into the studio inspector. Write, execute, and verify unit tests, mock request payloads, assert schema contracts, and test state reducer mutations in real time without leaving the canvas.
+
+---
+
+## 5. Native Desktop Studio (Electron 34)
 
 For enterprise security and offline productivity, Dezign2App provides a native desktop studio:
 - **Offline Runtimes**: Bundles embedded local binaries for PostgreSQL, Redis, and SQLite.
@@ -76,16 +90,19 @@ For enterprise security and offline productivity, Dezign2App provides a native d
 
 ---
 
-## 5. Dynamic Package Manager (dpm)
+## 6. Dynamic Package Manager (dpm)
 
-Dezign2App incorporates `dpm` (Dezign Package Manager), allowing teams to swap fundamental architecture building blocks without manual refactoring:
-- **Backend Framework**: Switch from Node.js Express to Python FastAPI with one click; the compiler transforms routes while preserving OpenAPI specs and schema definitions.
-- **Database Engine**: Switch from PostgreSQL to SQLite (or vice versa); Drizzle ORM schemas and drivers are automatically remapped.
-- **Authentication**: Switch between Better Auth, Clerk, Supabase Auth, or Auth0 with pre-configured session middlewares.
+Specification & Manifesto: https://www.dezign2app.com/dpm
+
+Just as TypeScript brought static typing to JavaScript via DefinitelyTyped (`@types/*`), **dpm** (Dezign Package Manager) brings visual architecture contracts, syntax-free composition, and deterministic Agentic development to npm packages (`@dpm/*`):
+- **Visual Contracts for npm**: Maps complex packages (e.g., `@dpm/express`, `@dpm/stripe`, `@dpm/prisma`, `@dpm/langgraph`, `@dpm/auth`) into typed, draggable canvas components with verified input/output bindings.
+- **Framework & Backend Swapping**: Switch from Node.js Express to Python FastAPI with one click; the compiler transforms routes while preserving OpenAPI specs and schema definitions.
+- **Database Engine Swapping**: Switch between PostgreSQL and SQLite; Drizzle ORM schemas and drivers are automatically remapped.
+- **Authentication Swapping**: Switch between Better Auth, Clerk, Supabase Auth, or Auth0 with pre-configured session middlewares and RBAC guards.
 
 ---
 
-## 6. Competitive Comparison Matrix
+## 7. Competitive Comparison Matrix
 
 | Dimension | Pure AI / Vibe Coding (Cursor, Lovable, Bolt) | Model-Driven Backends (Amplication, Wasp) | Dezign2App |
 | :--- | :--- | :--- | :--- |
@@ -99,7 +116,7 @@ Dezign2App incorporates `dpm` (Dezign Package Manager), allowing teams to swap f
 
 ---
 
-## 7. Verified Benchmarks & Quantitative Proof
+## 8. Verified Benchmarks & Quantitative Proof
 
 - **Compilation Latency**: <800ms for a 4-service, 2-database, 1-Kafka-topic Turborepo monorepo on a standard 8-core CPU.
 - **Scaffolding Hallucination Rate**: 0% (deterministic syntax trees, not probabilistic token guesses).
@@ -108,7 +125,7 @@ Dezign2App incorporates `dpm` (Dezign Package Manager), allowing teams to swap f
 
 ---
 
-## 8. Phased Roadmap & Execution Discipline
+## 9. Phased Roadmap & Execution Discipline
 
 To ensure rigorous focus and avoid scope creep:
 - **Phase 1 (Live Today — Beta)**: Deterministic Architecture Compiler, Turborepo Monorepo Scaffolder, Next.js 16 + FastAPI/Express, Drizzle ORM, Docker Compose, Native Desktop Studio.
@@ -118,9 +135,9 @@ To ensure rigorous focus and avoid scope creep:
 
 ---
 
-## 9. Pricing & Commercial Structure
+## 10. Pricing & Commercial Structure
 
-- **Beta Access Plan**: $100 / year.
+- **Beta Access Plan**: $20 / month.
   - Unlimited full-stack monorepo code generation.
   - Full source code ownership with zero runtime fees.
   - Offline Desktop Studio (Windows & macOS).
@@ -129,7 +146,7 @@ To ensure rigorous focus and avoid scope creep:
 
 ---
 
-## 10. Frequently Asked Questions
+## 11. Frequently Asked Questions
 
 **Q: Do I own the generated code?**  
 A: Yes. You own 100% of the code under standard open licenses (MIT / Apache 2.0). There are zero runtime dependencies, no proprietary SDKs, and no telemetry gates.

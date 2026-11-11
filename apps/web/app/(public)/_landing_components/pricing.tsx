@@ -14,6 +14,8 @@ interface CreemProductItem {
   name: string;
   description?: string;
   price?: number;
+  billing_type?: string;
+  billingType?: string;
   billing_period?: string;
   billingPeriod?: string;
   billing_cycle?: string;
@@ -50,7 +52,7 @@ function normalizeBillingPeriod(
 }
 
 const TARGET_PRODUCT_ID =
-  process.env.NEXT_PUBLIC_BETA_PRODUCT_ID || "prod_46nPBCY2wuGTn9mVhoYwWe";
+  process.env.NEXT_PUBLIC_BETA_PRODUCT_ID || "prod_3SqZz0dwcsNP45v1pDXguW";
 
 const DEFAULT_BETA_PLAN: Plan = {
   id: TARGET_PRODUCT_ID,
@@ -83,17 +85,41 @@ const Pricing = ({
         if (!res.ok) throw new Error("Failed to load products");
         const data = await res.json();
         const rawItems: CreemProductItem[] = data.items || [];
-        const targetItem = rawItems.find(
-          (item: CreemProductItem) => item.id === TARGET_PRODUCT_ID,
-        );
+
+        // Match designated production product ID, fallback to beta or first recurring plan
+        const targetItem =
+          rawItems.find((item: CreemProductItem) => item.id === TARGET_PRODUCT_ID) ||
+          rawItems.find((item: CreemProductItem) => item.id === "prod_3SqZz0dwcsNP45v1pDXguW") ||
+          rawItems.find((item: CreemProductItem) => item.id === "prod_46nPBCY2wuGTn9mVhoYwWe") ||
+          rawItems.find((item: CreemProductItem) =>
+            String(item.name || "").toLowerCase().includes("beta")
+          ) ||
+          rawItems.find((item: CreemProductItem) =>
+            String(item.billing_type || item.billingType || "").toLowerCase() === "recurring"
+          ) ||
+          rawItems[0];
 
         if (targetItem) {
+          // 1. Parse features from Creem metadata OR markdown bullets in description
           let featuresList: string[] = targetItem.metadata?.features
             ? targetItem.metadata.features
                 .split(",")
                 .map((s) => s.trim())
                 .filter(Boolean)
             : [];
+
+          if (featuresList.length === 0 && targetItem.description) {
+            const bulletMatches = targetItem.description
+              .split("\n")
+              .map((line) => line.trim())
+              .filter((line) => line.startsWith("*") || line.startsWith("-"))
+              .map((line) => line.replace(/^[\*\-]\s+/, "").replace(/\*\*/g, "").trim())
+              .filter(Boolean);
+
+            if (bulletMatches.length > 0) {
+              featuresList = bulletMatches;
+            }
+          }
 
           if (featuresList.length === 0) {
             featuresList = [
@@ -104,17 +130,33 @@ const Pricing = ({
             ];
           }
 
-          const cleanDesc =
+          // 2. Parse clean description from Creem, discarding raw markdown headers
+          let cleanDesc =
             "Everything you need to compile system architecture into production code.";
+          if (
+            targetItem.description &&
+            !targetItem.description.startsWith("#") &&
+            !targetItem.description.toLowerCase().includes("basic pack")
+          ) {
+            const firstLine = targetItem.description.split("\n")[0]?.trim();
+            if (firstLine && firstLine.length > 10) {
+              cleanDesc = firstLine;
+            }
+          }
 
-          const planName = "Beta Access";
+          // 3. Use actual product name from Creem (or "Beta Access" if raw name is generic)
+          const rawName = (targetItem.name || "").trim();
+          const planName =
+            !rawName || rawName.toLowerCase() === "basic pack" || rawName.toLowerCase() === "basic"
+              ? "Beta Access"
+              : rawName;
 
           setPlans([
             {
               id: targetItem.id,
               name: planName,
               desc: cleanDesc,
-              price: targetItem.price ? targetItem.price / 100 : 0,
+              price: targetItem.price !== undefined ? targetItem.price / 100 : 0,
               billingPeriod: normalizeBillingPeriod(targetItem),
               featured: true,
               features: featuresList,
