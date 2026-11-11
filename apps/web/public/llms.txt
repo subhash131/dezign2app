@@ -1,0 +1,30 @@
+# Dezign2App
+
+> Visual software architecture compiler turning system topologies into production-ready full-stack monorepos with zero token tax on boilerplate.
+
+Dezign2App transforms visual system design graphs (services, PostgreSQL/SQLite databases, Kafka event streams, Redis cache, and auth boundaries) into clean, standard Turborepo monorepos with Next.js 16, Express/FastAPI microservices, Drizzle ORM schemas, and Docker Compose orchestration. It uses deterministic Abstract Syntax Tree (AST) compilation on the local CPU for 100% predictable scaffolding, reserving AI strictly for bespoke business logic.
+
+## Core Capabilities
+- **Deterministic Monorepo Compiler**: Compiles architecture topology graphs into fully configured Turborepo monorepos in <800ms on local CPU with zero hallucinations and $0 token cost.
+- **Non-Destructive AST Sync**: Cleanly separates generated infrastructure contracts (schemas, wire protocols, shared types) from user business logic (controllers, routes, UI). Syncs do not overwrite custom code.
+- **Offline Desktop Studio**: Native Electron 34 desktop application with embedded PostgreSQL, Redis, and SQLite runners, plus a native PTY terminal for 100% offline development.
+- **Dynamic Package Manager (dpm)**: Swap frameworks (e.g., Express to FastAPI, Postgres to SQLite, Clerk to Better Auth) from a single architecture spec without manual rewrites.
+- **100% Code Ownership**: Standard TypeScript monorepo with zero proprietary runtime SDKs and zero vendor lock-in.
+
+## Default Generated Stack
+- Frontend: Next.js 16 (App Router, Server Actions, TypeScript, Tailwind CSS)
+- Backend: Typed Express or Python FastAPI microservices with OpenAPI contract generation
+- Database & ORM: PostgreSQL / SQLite with Drizzle ORM schemas and migration scripts
+- Event Streaming & Caching: Apache Kafka topologies & Redis pub/sub
+- Authentication: Better Auth with RBAC role guards and session verification
+- Orchestration: Turborepo, pnpm workspaces, and Docker Compose
+
+## Pricing
+- **Beta Access**: $100 / year (unlimited monorepo code generation, local CPU compilation, full source code ownership, zero token limits on scaffolding).
+
+## Links
+- Full Technical Specification: https://www.dezign2app.com/llms-full.txt
+- Pricing: https://www.dezign2app.com/pricing
+- Documentation: https://www.dezign2app.com/docs
+- GitHub Releases: https://github.com/dezign2app/dezign2app/releases
+

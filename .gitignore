@@ -19,6 +19,7 @@ test-results
 blob-report
 playwright/.cache
 *.txt
+!apps/web/public/*.txt
 *.log
 e2e_results.json
 
