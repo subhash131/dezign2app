@@ -314,6 +314,70 @@ export const REDUCER_CODE_PRESETS = {
 
   return list;
 }`,
+  primitiveArray: `(prev, next) => {
+  const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+  const list = Array.isArray(prev) ? prev : [];
+
+  // Bare array dispatch = replace
+  const action = Array.isArray(next) ? "set" : (isObj(next) ? next.action : undefined);
+
+  let payload = next;
+  if (isObj(next)) {
+    if ("value" in next) payload = next.value;
+    else if ("action" in next) {
+      const { action: _a, index: _i, ...rest } = next;
+      payload = rest;
+    }
+  }
+
+  const toItems = (v) =>
+    v == null ? [] :
+    Array.isArray(v) ? v :
+    [v];
+
+  // 1. Action: reset / clear - empties array
+  if (action === "reset" || action === "clear") {
+    return list.length === 0 ? list : [];
+  }
+
+  // 2. Action: replace / set - overwrites entire array
+  if (action === "replace" || action === "set" || action === "setter" || action === "mutate") {
+    const items = toItems(payload);
+    return list.length === items.length && list.every((x, i) => Object.is(x, items[i])) ? list : items;
+  }
+
+  // 3. Action: append / add - appends items
+  if (action === "append" || action === "add") {
+    const items = toItems(payload);
+    return items.length ? [...list, ...items] : list;
+  }
+
+  // 4. Action: prepend - adds items to front
+  if (action === "prepend") {
+    const items = toItems(payload);
+    return items.length ? [...items, ...list] : list;
+  }
+
+  // 5. Action: pop - removes last element
+  if (action === "pop") {
+    return list.length ? list.slice(0, -1) : list;
+  }
+
+  // 6. Action: remove / filter - removes by index or by value
+  if (action === "remove" || action === "filter") {
+    const target = isObj(next) && "value" in next ? next.value : payload;
+    const index = isObj(next) && typeof next.index === "number" ? next.index : (typeof payload === "number" ? payload : undefined);
+    return list.filter((it, idx) => idx !== index && !Object.is(it, target));
+  }
+
+  // 7. Default: append or replace if array
+  if (!action || action === "" || action === "default") {
+    const items = toItems(payload);
+    return items.length ? [...list, ...items] : list;
+  }
+
+  return list;
+}`,
   object: `(prev, next) => {
   const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
   if (!isObj(next)) return prev;
@@ -568,6 +632,89 @@ export function extractFieldsFromCustomType(
 }
 
 /**
+ * Extracts allowed string literal values from enumValues or union string types (e.g. '"AI" | "HUMAN" | "SYSTEM"').
+ */
+export function getAllowedEnumValues(field?: CustomTypeField | null): string[] {
+  if (!field) return [];
+  if (Array.isArray(field.enumValues) && field.enumValues.length > 0) {
+    return field.enumValues;
+  }
+  if (field.type && field.type.includes("|")) {
+    const parts = field.type.split("|").map((p) => p.trim());
+    const literals = parts
+      .map((p) => {
+        const match = p.match(/^["']([^"']+)["']$/);
+        return match ? match[1] : null;
+      })
+      .filter((v): v is string => Boolean(v));
+    if (literals.length > 0) {
+      return literals;
+    }
+  }
+  return [];
+}
+
+/**
+ * Algorithmically checks whether a given field configuration represents an array of chat/message objects
+ * or a streamable string.
+ * Primitive arrays (string[], number[], boolean[], any[]) and non-message object arrays (User[], Product[], {id, name}[])
+ * are NEVER streamable message streams.
+ */
+export function isFieldStreamable(
+  type?: string,
+  isArray?: boolean,
+  name?: string,
+  customTypeSchema?: CustomTypeItem | null,
+): boolean {
+  const isArr = Boolean(isArray || type?.endsWith("[]") || type === "array");
+
+  if (!isArr) {
+    const cleanType = (type || "string").toLowerCase().trim();
+    return cleanType === "string";
+  }
+
+  const cleanBase = (type || "").replace(/\[\]$/, "").toLowerCase().trim();
+
+  // Primitive arrays are never streaming message streams
+  if (["string", "number", "boolean", "any", "unknown"].includes(cleanBase)) {
+    return false;
+  }
+
+  // If a custom schema is provided, inspect its structure algorithmically
+  if (customTypeSchema) {
+    const typeName = (customTypeSchema.name || "").toLowerCase();
+    const isNamedMessage = typeName.includes("message") || typeName.includes("chat");
+    const fields = extractFieldsFromCustomType(customTypeSchema);
+    const hasContent = fields.some((sf) =>
+      ["content", "text", "delta", "chunk", "body"].includes(sf.name.toLowerCase()),
+    );
+    const hasSenderOrRole = fields.some((sf) =>
+      ["sender", "role", "author", "speaker"].includes(sf.name.toLowerCase()),
+    );
+    const hasStreaming = fields.some((sf) =>
+      ["streaming", "isstreaming"].includes(sf.name.toLowerCase()),
+    );
+
+    if (isNamedMessage && hasContent) return true;
+    if (hasContent && (hasSenderOrRole || hasStreaming)) return true;
+    return false;
+  }
+
+  // If no schema loaded yet, check type name (must explicitly be Message / Chat related)
+  if (cleanBase.includes("message") || cleanBase.includes("chat")) {
+    return true;
+  }
+
+  // Generic "array" or "object" with explicit chat/message field name
+  if ((cleanBase === "array" || cleanBase === "object" || !cleanBase) && name) {
+    const cleanName = name.toLowerCase();
+    return cleanName.includes("message") || cleanName.includes("chat");
+  }
+
+  return false;
+}
+
+/**
  * Returns a safe default value literal string for a field based on its type.
  */
 export function getDefaultValueForField(field: CustomTypeField): string {
@@ -692,24 +839,57 @@ export function generateSchemaAwareArrayReducerCode(
   const fields = extractFieldsFromCustomType(customType);
   const typeLabel = customType.name ? ` for ${customType.name}[]` : "";
   const idField = fields.find((f) => f.name === "id" || f.name === "_id")?.name || "id";
-  const isMsg =
-    customType.name?.toLowerCase().includes("message") ||
-    customType.name?.toLowerCase().includes("chat") ||
-    fields.some((f) => f.name === "content" || f.name === "text" || f.name === "delta");
+  const typeNameLower = (customType.name || "").toLowerCase();
+  const isNamedMessage = typeNameLower.includes("message") || typeNameLower.includes("chat");
+  const hasContentField = fields.some((f) => f.name === "content" || f.name === "text" || f.name === "delta");
+  const hasSenderOrRoleField = fields.some((f) => f.name === "sender" || f.name === "role");
+
+  // Only message/chat types should have a streaming action block
+  const isMsg = isNamedMessage || (hasContentField && hasSenderOrRoleField);
 
   const hasSender = fields.some((f) => f.name === "sender") || customType.name === "Message";
   const hasRole = fields.some((f) => f.name === "role") || (!hasSender && customType.name === "ChatMessage");
   const hasStreaming = fields.some((f) => f.name === "streaming");
   const contentProp = fields.find((f) => f.name === "content" || f.name === "text" || f.name === "delta")?.name || "content";
 
-  const senderCode = hasSender
-    ? `          sender: (isObj(src) && "sender" in src && (src.sender === "AI" || src.sender === "USER" || src.sender === "SYSTEM"))
-            ? src.sender
-            : (isObj(src) && typeof src.role === "string" && src.role.toLowerCase() === "user" ? "USER" : "AI"),\n`
-    : "";
-  const roleCode = hasRole
-    ? `          role: isObj(src) && typeof src.role === "string" ? src.role : "assistant",\n`
-    : "";
+  const senderField = fields.find((f) => f.name === "sender");
+  const senderEnumValues = getAllowedEnumValues(senderField);
+  const userSenderVal =
+    senderEnumValues.find((v) => /user|human/i.test(v)) ||
+    (senderEnumValues.length > 1 ? senderEnumValues[1] : senderEnumValues[0]) ||
+    "USER";
+  const aiSenderVal =
+    senderEnumValues.find((v) => /ai|assistant|bot|model/i.test(v)) ||
+    senderEnumValues[0] ||
+    "AI";
+  let senderReducerExpr = `(isObj(src) && typeof src.role === "string" && src.role.toLowerCase() === "user" ? ${JSON.stringify(userSenderVal)} : ${JSON.stringify(aiSenderVal)})`;
+  if (senderEnumValues.length > 0) {
+    const branches = senderEnumValues
+      .map((v) => `(isObj(src) && "sender" in src && src.sender === ${JSON.stringify(v)}) ? ${JSON.stringify(v)} : `)
+      .join("");
+    senderReducerExpr = `${branches}${senderReducerExpr}`;
+  } else {
+    senderReducerExpr = `(isObj(src) && "sender" in src && typeof src.sender === "string") ? src.sender : ${senderReducerExpr}`;
+  }
+  const senderCode = hasSender ? `          sender: ${senderReducerExpr},\n` : "";
+
+  const roleField = fields.find((f) => f.name === "role");
+  const roleEnumValues = getAllowedEnumValues(roleField);
+  const assistantRoleVal =
+    roleEnumValues.find((v) => /assistant|ai|bot|model/i.test(v)) ||
+    roleEnumValues[0] ||
+    "assistant";
+
+  let roleReducerExpr = `${JSON.stringify(assistantRoleVal)}`;
+  if (roleEnumValues.length > 0) {
+    const branches = roleEnumValues
+      .map((v) => `(isObj(src) && "role" in src && src.role === ${JSON.stringify(v)}) ? ${JSON.stringify(v)} : `)
+      .join("");
+    roleReducerExpr = `${branches}${roleReducerExpr}`;
+  } else {
+    roleReducerExpr = `(isObj(src) && "role" in src && typeof src.role === "string") ? src.role : ${roleReducerExpr}`;
+  }
+  const roleCode = hasRole ? `          role: ${roleReducerExpr},\n` : "";
   const streamingCode = hasStreaming
     ? `          streaming: true,\n`
     : "";
@@ -720,7 +900,7 @@ export function generateSchemaAwareArrayReducerCode(
   const targetLastCheck = hasRole
     ? `isObj(last) && last.role === role${hasStreaming ? ` && last.streaming === true` : ""}`
     : hasSender
-    ? `isObj(last) && last.sender === (isObj(src) && "sender" in src ? src.sender : "AI")${hasStreaming ? ` && last.streaming === true` : ""}`
+    ? `isObj(last) && last.sender === (isObj(src) && "sender" in src ? src.sender : ${JSON.stringify(aiSenderVal)})${hasStreaming ? ` && last.streaming === true` : ""}`
     : `${hasStreaming ? `isObj(last) && last.streaming === true` : `isObj(last)`}`;
 
   const streamBlock = isMsg
@@ -933,7 +1113,14 @@ export function getSuggestedReducerCodeForChannelType(
     return REDUCER_CODE_PRESETS.chat;
   }
 
-  // 4. Array (generic or primitive[])
+  // 4a. Primitive array (string[], number[], boolean[])
+  const cleanBase = cleanType.replace(/\[\]$/, "").toLowerCase().trim();
+  const isPrimitiveBase = ["string", "number", "boolean", "any", "unknown"].includes(cleanBase);
+  if (isTargetArray && isPrimitiveBase && !customTypeSchema) {
+    return REDUCER_CODE_PRESETS.primitiveArray;
+  }
+
+  // 4b. Array (generic object[] or custom type[])
   if (isTargetArray) {
     return REDUCER_CODE_PRESETS.array;
   }

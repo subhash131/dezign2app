@@ -1209,6 +1209,107 @@ describe("compileNextjsV16StateStoreNode", () => {
     expect(content).toContain("updateMessages:");
     expect(content).toContain("Array.isArray(s.messages)");
   });
+
+  it("algorithmically generates stream for Message[] with custom sender enum ('AI' | 'HUMAN' | 'SYSTEM') without hardcoding or 'as' assertions, and avoids streams for string[] and User[]", () => {
+    const webAppNode: BackendNode = {
+      id: "node-webapp-chat",
+      type: "webApp",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "ChatApp",
+        appSlug: "web",
+      },
+    };
+
+    const typesNode: BackendNode = {
+      id: "node-types-1",
+      type: "types",
+      position: { x: 100, y: 0 },
+      fractionalIndex: "a1.5",
+      data: {
+        label: "Types",
+        types: [
+          {
+            id: "type-msg",
+            name: "Message",
+            kind: "interface",
+            rawCode: `export interface Message {
+  id: string;
+  sender: "AI" | "HUMAN" | "SYSTEM";
+  content: string;
+}`,
+            fields: [
+              { id: "f-id", name: "id", type: "string", required: true },
+              { id: "f-sender", name: "sender", type: '"AI" | "HUMAN" | "SYSTEM"', required: true, enumValues: ["AI", "HUMAN", "SYSTEM"] },
+              { id: "f-content", name: "content", type: "string", required: true },
+            ],
+          },
+          {
+            id: "type-user",
+            name: "User",
+            kind: "interface",
+            fields: [
+              { id: "u-id", name: "id", type: "string", required: true },
+              { id: "u-name", name: "name", type: "string", required: true },
+            ],
+          },
+        ],
+      },
+    };
+
+    const stateStoreNode: BackendNode = {
+      id: "node-store-app",
+      type: "state_store",
+      position: { x: 200, y: 0 },
+      fractionalIndex: "a2",
+      data: {
+        label: "AppStore",
+        storeName: "App",
+        scope: "global",
+        storage: "memory",
+        targetWebAppId: "node-webapp-chat",
+        fields: [
+          { id: "f-chat", name: "chatHistory", type: "Message[]", defaultValue: [], isArray: true },
+          { id: "f-tags", name: "tags", type: "string[]", defaultValue: [], isArray: true },
+          { id: "f-users", name: "users", type: "User[]", defaultValue: [], isArray: true },
+        ],
+      },
+    };
+
+    const result = compileNextjsV16WebClient(
+      [],
+      [],
+      [],
+      [webAppNode, typesNode, stateStoreNode],
+      [],
+      "ChatApp",
+      [],
+      "web",
+      webAppNode,
+    );
+
+    const storeFile = result.files.find((f) => f.filename === "lib/stores/useAppStore.ts");
+    expect(storeFile).toBeDefined();
+    const content = storeFile!.content;
+
+    // 1. streamChatHistory exists for Message[]
+    expect(content).toContain("streamChatHistory:");
+
+    // 2. streamChatHistory uses "HUMAN" algorithmically from schema, NOT "USER"
+    expect(content).toContain('"HUMAN"');
+    expect(content).not.toContain('"USER"');
+    expect(content).toContain('src.sender === "HUMAN"');
+
+    // 3. No stream actions for string[] or User[]
+    expect(content).not.toContain("streamTags:");
+    expect(content).not.toContain("streamUsers:");
+
+    // 4. No 'as Message' or 'as any' type assertion hacks
+    expect(content).not.toContain("as Message");
+    expect(content).not.toContain("as any");
+    expect(content).not.toContain("as unknown");
+  });
 });
 
 

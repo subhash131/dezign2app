@@ -194,7 +194,7 @@ const StateStoreConfigContent: React.FC<
         });
 
         if ((patch.type !== undefined || patch.isArray !== undefined) && !patch.actions) {
-          res.actions = getSupportedActionsForType(res.type, isArray);
+          res.actions = getSupportedActionsForType(res.type, isArray, res.name, matchedCustom);
         }
         if (
           (patch.type !== undefined || patch.isArray !== undefined) &&

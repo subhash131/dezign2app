@@ -90,9 +90,9 @@ describe("StateStore Dynamic Reducer Generation", () => {
       const code2 = getSuggestedReducerCodeForChannelType("array", null, true);
       const code3 = getSuggestedReducerCodeForChannelType("number", null, true);
 
-      expect(code1).toBe(REDUCER_CODE_PRESETS.array);
+      expect(code1).toBe(REDUCER_CODE_PRESETS.primitiveArray);
       expect(code2).toBe(REDUCER_CODE_PRESETS.array);
-      expect(code3).toBe(REDUCER_CODE_PRESETS.array);
+      expect(code3).toBe(REDUCER_CODE_PRESETS.primitiveArray);
 
       const actions = extractActionsFromReducerCode(code1);
       expect(actions).toContain("set");
@@ -222,7 +222,15 @@ describe("StateStore Dynamic Reducer Generation", () => {
         "prepend",
         "pop",
         "remove",
-        "update",
+        "reset",
+      ]);
+      // Even if field name contains "chat" or "message", string[] is a primitive array and must not have "stream" or "update"
+      expect(getSupportedActionsForType("string[]", true, "chatHistory")).toEqual([
+        "set",
+        "append",
+        "prepend",
+        "pop",
+        "remove",
         "reset",
       ]);
       expect(getSupportedActionsForType("User[]", true)).toEqual([
@@ -233,6 +241,46 @@ describe("StateStore Dynamic Reducer Generation", () => {
         "remove",
         "update",
         "reset",
+      ]);
+      // User[] with { id, name } has no message text content, so it must not have "stream"
+      const userType: CustomTypeItem = {
+        id: "type-user",
+        name: "User",
+        kind: "interface",
+        fields: [
+          { id: "u-id", name: "id", type: "string" },
+          { id: "u-name", name: "name", type: "string" },
+        ],
+      };
+      expect(getSupportedActionsForType("User[]", true, "users", userType)).toEqual([
+        "set",
+        "append",
+        "prepend",
+        "pop",
+        "remove",
+        "update",
+        "reset",
+      ]);
+      // Message[] with { id, sender, content } must have "stream"
+      const messageType: CustomTypeItem = {
+        id: "type-msg",
+        name: "Message",
+        kind: "interface",
+        fields: [
+          { id: "m-id", name: "id", type: "string" },
+          { id: "m-sender", name: "sender", type: '"AI" | "HUMAN" | "SYSTEM"' },
+          { id: "m-content", name: "content", type: "string" },
+        ],
+      };
+      expect(getSupportedActionsForType("Message[]", true, "chatHistory", messageType)).toEqual([
+        "set",
+        "append",
+        "prepend",
+        "pop",
+        "remove",
+        "update",
+        "reset",
+        "stream",
       ]);
     });
   });
@@ -343,6 +391,30 @@ describe("StateStore Dynamic Reducer Generation", () => {
       // Reset
       const reset = fn(replaced, { action: "reset" });
       expect(reset).toEqual({ id: "", sender: "AI", content: "" });
+    });
+
+    it("generates correct array reducer reflecting user Message[] schema with 'HUMAN' sender enum", () => {
+      const humanMessageType: CustomTypeItem = {
+        id: "type-human-message",
+        name: "Message",
+        kind: "interface",
+        fields: [
+          { id: "f1", name: "id", type: "string", required: true },
+          { id: "f2", name: "sender", type: '"AI" | "HUMAN" | "SYSTEM"', enumValues: ["AI", "HUMAN", "SYSTEM"], required: true },
+          { id: "f3", name: "content", type: "string", required: true },
+        ],
+      };
+      const code = getSuggestedReducerCodeForChannelType("Message[]", humanMessageType, true);
+      expect(code).toContain("Array reducer for Message[]");
+      expect(code).toContain('src.sender === "HUMAN"');
+      expect(code).toContain('"HUMAN"');
+      expect(code).not.toContain('"USER"');
+
+      const fn = new Function("return " + code)();
+      // Stream action appends delta and maps user role to "HUMAN"
+      const streamed = fn([], { action: "stream", delta: "Hello there!", role: "user" });
+      expect(streamed[0].sender).toBe("HUMAN");
+      expect(streamed[0].content).toBe("Hello there!");
     });
   });
 });
