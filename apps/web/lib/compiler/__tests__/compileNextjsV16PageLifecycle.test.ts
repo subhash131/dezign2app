@@ -79,6 +79,21 @@ describe("compileNextjsV16WebClient - Page Lifecycle and Reactive Effects", () =
                 event: "effect",
                 effectConfig: {
                   dependencies: ["searchQuery"],
+                  variableMappings: [
+                    {
+                      id: "vm-1",
+                      variableName: "searchQuery",
+                      source: "section_state",
+                      varType: "string",
+                    },
+                    {
+                      id: "vm-2",
+                      variableName: "totalCount",
+                      storeName: "MetricsStore",
+                      source: "store",
+                      varType: "number",
+                    },
+                  ],
                   debounceMs: 300,
                 },
               },
@@ -181,10 +196,13 @@ describe("compileNextjsV16WebClient - Page Lifecycle and Reactive Effects", () =
     expect(content).toContain("routeParams?.userId");
     expect(content).toContain('routeSearchParams?.get("filter")');
 
-    // 3. Verifies reactive state watcher with debounce
+    // 3. Verifies reactive state watcher with debounce and variable mappings
     expect(content).toContain("setTimeout");
     expect(content).toContain("clearTimeout(handler)");
     expect(content).toContain("300");
+    expect(content).toContain("useMetricsStore((s) => s.totalCount)");
+    expect(content).toContain("metricsTotalCount");
+    expect(content).toContain("searchQuery");
 
     // 4. Verifies tab visibility listener & cleanup
     expect(content).toContain("visibilitychange");

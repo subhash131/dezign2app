@@ -576,29 +576,40 @@ export function generatePageAndComponentFiles({
       });
     });
 
-    const pageStoreNames = new Set<string>();
+    const pageStoreCleanNames = new Set<string>();
+    const addStoreName = (name?: string) => {
+      if (!name) return;
+      const clean = name.replace(/Store$/i, "");
+      if (clean) {
+        pageStoreCleanNames.add(clean.charAt(0).toUpperCase() + clean.slice(1));
+      }
+    };
+
     pageLoadEvents.forEach((evt) => {
       (evt.storeActionBindings || (evt.storeActionBinding ? [evt.storeActionBinding] : [])).forEach((b) => {
-        if (b?.storeName) pageStoreNames.add(b.storeName);
+        addStoreName(b?.storeName);
       });
     });
     unmountActions.forEach((evt) => {
       (evt.storeActionBindings || (evt.storeActionBinding ? [evt.storeActionBinding] : [])).forEach((b) => {
-        if (b?.storeName) pageStoreNames.add(b.storeName);
+        addStoreName(b?.storeName);
       });
     });
     (pageMeta.realtimeConnections || []).forEach((c) => {
       (c.storeActionBindings || (c.storeActionBinding ? [c.storeActionBinding] : [])).forEach((b) => {
-        if (b?.storeName) pageStoreNames.add(b.storeName);
+        addStoreName(b?.storeName);
+      });
+    });
+    allActions.forEach((evt) => {
+      evt.effectConfig?.variableMappings?.forEach((m) => {
+        if (m.source === "store" && m.storeName) {
+          addStoreName(m.storeName);
+        }
       });
     });
 
-    const pageStoreImports = Array.from(pageStoreNames)
-      .map((sName) => {
-        const clean = sName.replace(/Store$/i, "");
-        const hookName = `use${clean.charAt(0).toUpperCase() + clean.slice(1)}Store`;
-        return `import { ${hookName} } from "@/lib/stores";`;
-      })
+    const pageStoreImports = Array.from(pageStoreCleanNames)
+      .map((clean) => `import { use${clean}Store } from "@/lib/stores";`)
       .join("\n");
 
     const groupFolder = pageMeta.routeGroupPath || (pageMeta.routeGroup ? `(${pageMeta.routeGroup})` : "(public)");

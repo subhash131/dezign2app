@@ -51,13 +51,40 @@ export function generateStateWatcherEffects(effectActions: LifecycleActionMeta[]
   if (!effectActions || effectActions.length === 0) return "";
   return effectActions
     .map(({ action, actName, actUrl, actMethod }) => {
-      const deps = action.effectConfig?.dependencies || [];
+      const mappings = action.effectConfig?.variableMappings;
+      const deps: string[] = [];
+      const storeSelectors: string[] = [];
+
+      if (mappings && mappings.length > 0) {
+        mappings.forEach((m) => {
+          if (m.source === "store" && m.storeName) {
+            const clean = m.storeName.replace(/Store$/i, "");
+            const hookName = `use${clean.charAt(0).toUpperCase() + clean.slice(1)}Store`;
+            const varIdentifier = `${clean.toLowerCase()}${m.variableName.charAt(0).toUpperCase() + m.variableName.slice(1)}`;
+            storeSelectors.push(`  const ${varIdentifier} = ${hookName}((s) => s.${m.variableName});`);
+            deps.push(varIdentifier);
+          } else if (m.source === "param") {
+            if (m.variableName.startsWith("routeParams") || m.variableName.startsWith("routeSearchParams")) {
+              deps.push(m.variableName);
+            } else {
+              deps.push(`routeParams?.${m.variableName}`);
+            }
+          } else {
+            deps.push(m.variableName);
+          }
+        });
+      } else {
+        (action.effectConfig?.dependencies || []).forEach((d) => deps.push(d));
+      }
+
       const debounceMs = action.effectConfig?.debounceMs || 0;
       const depStr = deps.length > 0 ? deps.join(", ") : "";
       const triggerCall = `handleTriggerAction("${actName}", "effect", ${actUrl ? `"${actUrl}"` : '""'}, "${actMethod || "POST"}");`;
 
+      const storePrefix = storeSelectors.length > 0 ? `${storeSelectors.join("\n")}\n\n` : "";
+
       if (debounceMs > 0) {
-        return `  // Reactive state watcher with ${debounceMs}ms debounce (${actName})
+        return `${storePrefix}  // Reactive state watcher with ${debounceMs}ms debounce (${actName})
   useEffect(() => {
     const handler = setTimeout(() => {
       ${triggerCall}
@@ -66,7 +93,7 @@ export function generateStateWatcherEffects(effectActions: LifecycleActionMeta[]
   }, [${depStr}]);
 `;
       }
-      return `  // Reactive state watcher (${actName})
+      return `${storePrefix}  // Reactive state watcher (${actName})
   useEffect(() => {
     ${triggerCall}
   }, [${depStr}]);

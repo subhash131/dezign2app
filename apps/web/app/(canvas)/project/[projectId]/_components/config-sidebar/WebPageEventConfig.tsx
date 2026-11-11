@@ -19,6 +19,7 @@ import {
   EventNavigationSection,
   ActionFlowEditor,
   ActionSimulator,
+  EffectVariableMappingSection,
 } from "./web-page-event-config";
 import {
   ActionFlowCombobox,
@@ -407,6 +408,20 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
       eligibleStates[0]
     );
   }, [selectedStateId, item?.itemSourceStateId, eligibleStates, sectionStateObjects]);
+
+  const stateStores = React.useMemo(() => {
+    return nodes
+      .filter((n) => n.type === "state_store")
+      .map((n) => ({
+        id: n.id,
+        name: n.data?.label || n.data?.storeName || "Store",
+        fields: (n.data?.fields || []).map((f: any) => ({
+          id: f.id || f.name,
+          name: f.name,
+          type: f.type || "any",
+        })),
+      }));
+  }, [nodes]);
 
   const itemPropSuggestions = React.useMemo(() => {
     return resolveItemPropsFromState(activeTargetState, nodes, itemKeyField);
@@ -1028,79 +1043,33 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
           >
             <AccordionTrigger className="px-4 py-3 text-xs font-semibold hover:no-underline flex items-center justify-between text-violet-600 dark:text-violet-400">
               <span className="flex items-center gap-2">
-                <Sparkles size={14} /> State Watcher Dependencies
+                <Sparkles size={14} /> Variable Change Trigger Mapping
               </span>
+              <Badge
+                variant="outline"
+                className="text-[10px] font-mono border-violet-500/30 text-violet-600 dark:text-violet-400"
+              >
+                {(effectConfig.variableMappings?.length ?? effectConfig.dependencies?.length ?? 0)}{" "}
+                {(effectConfig.variableMappings?.length ?? effectConfig.dependencies?.length ?? 0) === 1
+                  ? "var"
+                  : "vars"}{" "}
+                mapped
+              </Badge>
             </AccordionTrigger>
-            <AccordionContent className="px-4 pb-4 pt-1 space-y-3.5">
-              <div className="text-[11px] text-muted-foreground leading-relaxed">
-                Runs as a React <code className="text-violet-400 font-mono">useEffect()</code> watching the selected state variables in its dependency array.
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-[11px] font-medium text-foreground">
-                  Watched State Objects
-                </Label>
-                {sectionStateObjects.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {sectionStateObjects.map((st) => {
-                      const keyName = st.name || st.id;
-                      const isChecked = (effectConfig.dependencies || []).includes(keyName);
-                      return (
-                        <label
-                          key={st.id}
-                          className="flex items-center gap-1.5 px-2 py-1 rounded bg-background border text-xs font-mono cursor-pointer hover:bg-secondary transition-colors"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={(e) => {
-                              const curr = effectConfig.dependencies || [];
-                              const nextDeps = e.target.checked
-                                ? [...curr, keyName]
-                                : curr.filter((name) => name !== keyName);
-                              const next = { ...effectConfig, dependencies: nextDeps };
-                              setEffectConfig(next);
-                              updateEventFields({ effectConfig: next });
-                            }}
-                            className="rounded"
-                          />
-                          <span>{keyName}</span>
-                          <span className="text-[9px] text-muted-foreground">({st.type})</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="text-[10px] text-muted-foreground italic">
-                    No state variables declared in this section.
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-1 pt-1 border-t border-violet-500/20">
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs">Debounce Delay (ms)</Label>
-                  <span className="text-[10px] font-mono text-muted-foreground">
-                    {effectConfig.debounceMs ? `${effectConfig.debounceMs}ms` : "0ms (immediate)"}
-                  </span>
-                </div>
-                <Input
-                  type="number"
-                  min={0}
-                  step={50}
-                  value={effectConfig.debounceMs ?? 0}
-                  onChange={(e) => {
-                    const next = {
-                      ...effectConfig,
-                      debounceMs: Math.max(0, parseInt(e.target.value, 10) || 0),
-                    };
-                    setEffectConfig(next);
-                    updateEventFields({ effectConfig: next });
-                  }}
-                  className="h-8 text-xs bg-background font-mono"
-                  placeholder="e.g. 300 for debounced search"
-                />
-              </div>
+            <AccordionContent className="px-4 pb-4 pt-1">
+              <EffectVariableMappingSection
+                effectConfig={effectConfig}
+                onChange={(next) => {
+                  setEffectConfig(next);
+                  updateEventFields({ effectConfig: next });
+                }}
+                currentSectionStateObjects={sectionStateObjects}
+                allPageSections={sections}
+                stateStores={stateStores}
+                pathParams={parentNode?.data?.pathParams || []}
+                queryParams={parentNode?.data?.queryParams || []}
+                actionName={eventName || item?.name || "onEffect"}
+              />
             </AccordionContent>
           </AccordionItem>
         )}
