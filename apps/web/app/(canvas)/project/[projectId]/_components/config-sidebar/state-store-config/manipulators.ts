@@ -11,6 +11,8 @@ import {
   resolveCustomType,
   extractFieldsFromCustomType,
   getSuggestedReducerCodeForChannelType,
+  getAllowedEnumValues,
+  isFieldStreamable,
 } from "../../backend-nodes/graph-nodes/langgraph/langgraph-canvas/components/inspector/state-inspector/constants";
 
 /**
@@ -696,18 +698,24 @@ export function extractActionsFromReducerCode(code?: string): string[] {
 /**
  * Returns supported action types handled by the single reducer of a state variable.
  */
-export function getSupportedActionsForType(type?: string, isArray?: boolean, name?: string): string[] {
+export function getSupportedActionsForType(
+  type?: string,
+  isArray?: boolean,
+  name?: string,
+  customTypeSchema?: CustomTypeItem | null,
+): string[] {
   const clean = (type || "string").toLowerCase().trim();
-  const isMessage =
-    clean.includes("message") ||
-    clean.includes("chat") ||
-    clean === "messages" ||
-    clean === "chatmessage" ||
-    Boolean(name && (name.toLowerCase().includes("message") || name.toLowerCase().includes("chat")));
+  const isArr = Boolean(isArray || clean.endsWith("[]") || clean === "array");
 
-  if (isArray || clean.endsWith("[]") || clean === "array") {
-    const base = ["set", "append", "prepend", "pop", "remove", "update", "reset"];
-    if (isMessage) return [...base, "stream"];
+  if (isArr) {
+    const cleanBase = clean.replace(/\[\]$/, "").trim();
+    const isPrimitive = ["string", "number", "boolean", "any", "unknown"].includes(cleanBase);
+    const base = isPrimitive
+      ? ["set", "append", "prepend", "pop", "remove", "reset"]
+      : ["set", "append", "prepend", "pop", "remove", "update", "reset"];
+    if (isFieldStreamable(type, isArray, name, customTypeSchema)) {
+      return [...base, "stream"];
+    }
     return base;
   }
   switch (clean) {
@@ -908,7 +916,7 @@ export function getStateManipulators(
 
     // If no branches were found (e.g. shorthand expression reducer without action branches)
     if (parsedBranches.length === 0) {
-      const standardActions = getSupportedActionsForType(f.type, isArr, f.name);
+      const standardActions = getSupportedActionsForType(f.type, isArr, f.name, matchedCustom);
       parsedBranches = standardActions.map((act) => ({
         displayName: STANDARD_ACTION_DISPLAY_NAMES[act] || act,
         canonicalAction: act,
@@ -995,10 +1003,16 @@ export function getStateManipulators(
         case "stream": {
           actionType = "stream";
           defaultManipulatorType = "stream";
-          const hasSender = matchedCustom?.fields?.some((cf) => cf.name === "sender") || cleanBase === "Message";
+          const senderField = matchedCustom?.fields?.find((cf) => cf.name === "sender");
+          const senderEnumVals = getAllowedEnumValues(senderField);
+          const aiSender = senderEnumVals.find((v) => /ai|assistant|bot|model/i.test(v)) || senderEnumVals[0] || "AI";
+          const roleField = matchedCustom?.fields?.find((cf) => cf.name === "role");
+          const roleEnumVals = getAllowedEnumValues(roleField);
+          const assistantRole = roleEnumVals.find((v) => /assistant|ai|bot|model/i.test(v)) || roleEnumVals[0] || "assistant";
+          const hasSender = Boolean(senderField) || (!roleField && cleanBase === "Message");
           defaultPayload = hasSender
-            ? { delta: "Hello streaming message chunk!", sender: "AI" }
-            : { delta: "Hello streaming message chunk!", role: "assistant" };
+            ? { delta: "Hello streaming message chunk!", [senderField ? senderField.name : "sender"]: aiSender }
+            : { delta: "Hello streaming message chunk!", [roleField ? roleField.name : "role"]: assistantRole };
           break;
         }
         case "increment": {

@@ -116,6 +116,31 @@ function extractFieldsFromCustomType(customType?: CustomTypeItem | null): Custom
   return fields;
 }
 
+function getAllowedEnumValues(field?: CustomTypeField | null): string[] {
+  if (!field) return [];
+  if (Array.isArray(field.enumValues) && field.enumValues.length > 0) {
+    return field.enumValues;
+  }
+  if (field.type && field.type.includes("|")) {
+    const parts = field.type.split("|").map((p) => p.trim());
+    const literals = parts
+      .map((p) => {
+        const match = p.match(/^["']([^"']+)["']$/);
+        return match ? match[1] : null;
+      })
+      .filter((v): v is string => Boolean(v));
+    if (literals.length > 0) {
+      return literals;
+    }
+  }
+  return [];
+}
+
+function isPrimitiveType(type?: string): boolean {
+  const clean = (type || "").replace(/\[\]$/, "").toLowerCase().trim();
+  return ["string", "number", "boolean", "any", "unknown"].includes(clean);
+}
+
 function getDefaultValueForCustomField(field: CustomTypeField): string {
   if (field.defaultValue !== undefined && field.defaultValue !== "") {
     const raw = String(field.defaultValue);
@@ -451,7 +476,12 @@ export function generateZustandStore(
   });
 
   const activeUpdateFields = fields.filter((f) => {
-    if (!isObjectField(f) && !f.actions?.includes("update")) return false;
+    if (isArrayField(f)) {
+      if (isPrimitiveType(f.type)) return false;
+      if (!f.actions?.includes("update")) return false;
+    } else {
+      if (!isObjectField(f) && !f.actions?.includes("update")) return false;
+    }
     const fPascal = toPascalCase(f.name);
     const updateName = `update${fPascal}`;
     const isOverridden = actionNames.has(toCamelCase(updateName));
@@ -475,10 +505,38 @@ export function generateZustandStore(
     f.name.toLowerCase().includes("chat") ||
     (f.type || "").toLowerCase().includes("message");
 
+  const isStreamableField = (f: GlobalStoreField) => {
+    const isArr = isArrayField(f);
+    if (!isArr) {
+      return isStringField(f) && Boolean(f.actions?.includes("stream"));
+    }
+    const cleanBase = (f.type || "").replace(/\[\]$/, "").trim().toLowerCase();
+    if (["string", "number", "boolean", "any", "unknown"].includes(cleanBase)) {
+      return false;
+    }
+    const matchedCustom = (options?.customTypes || store.customTypes || []).find(
+      (ct) => ct.id === f.customTypeId || ct.name.toLowerCase() === cleanBase,
+    );
+    if (matchedCustom) {
+      const typeName = (matchedCustom.name || "").toLowerCase();
+      const isNamedMsg = typeName.includes("message") || typeName.includes("chat");
+      const schemaFields = extractFieldsFromCustomType(matchedCustom);
+      const hasContent = schemaFields.some((sf) =>
+        ["content", "text", "delta", "chunk", "body"].includes(sf.name.toLowerCase()),
+      );
+      const hasSenderOrRole = schemaFields.some((sf) =>
+        ["sender", "role", "author", "speaker"].includes(sf.name.toLowerCase()),
+      );
+      const hasStreaming = schemaFields.some((sf) =>
+        ["streaming", "isstreaming"].includes(sf.name.toLowerCase()),
+      );
+      return (isNamedMsg && hasContent) || (hasContent && (hasSenderOrRole || hasStreaming));
+    }
+    return cleanBase.includes("message") || cleanBase.includes("chat");
+  };
+
   const activeStreamFields = fields.filter((f) => {
-    const isStreamableType = isArrayField(f) || isStringField(f);
-    if (!isStreamableType) return false;
-    if (!f.actions?.includes("stream") && !isMessageField(f)) return false;
+    if (!isStreamableField(f)) return false;
     const fPascal = toPascalCase(f.name);
     const streamName = `stream${fPascal}`;
     const isOverridden = actionNames.has(toCamelCase(streamName));
@@ -601,7 +659,12 @@ export function generateZustandStore(
           const payloadAlias = hasParams ? "" : "    const payload = indexOrId;\n";
           customActionImpls.push(`  ${actName}: (${paramArgs}) => {\n${payloadAlias}${bodyLines}\n  },`);
         } else {
-          customActionImpls.push(`  ${actName}: (indexOrId) => set((s) => ({ ${targetName}: Array.isArray(s.${targetName}) ? s.${targetName}.filter((it, idx) => idx !== indexOrId && !(typeof it === "object" && it !== null && "id" in it && it.id === indexOrId)) : [] })),`);
+          const targetCleanBase = (targetField.type || "").replace(/\[\]$/, "").trim();
+          const isTargetPrimitive = isPrimitiveType(targetCleanBase);
+          const removeFilter = isTargetPrimitive
+            ? `idx !== indexOrId && it !== indexOrId`
+            : `idx !== indexOrId && !(typeof it === "object" && it !== null && "id" in it && it.id === indexOrId)`;
+          customActionImpls.push(`  ${actName}: (indexOrId) => set((s) => ({ ${targetName}: Array.isArray(s.${targetName}) ? s.${targetName}.filter((it, idx) => ${removeFilter}) : [] })),`);
         }
         break;
       }
@@ -785,7 +848,21 @@ ${payloadPrep}
   const removeImpls = activeRemoveFields.map((f) => {
     const fName = toCamelCase(f.name);
     const fPascal = toPascalCase(f.name);
-    return `  remove${fPascal}: (indexOrId) => set((s) => ({ ${fName}: Array.isArray(s.${fName}) ? s.${fName}.filter((it, idx) => idx !== indexOrId && !(typeof it === "object" && it !== null && "id" in it && it.id === indexOrId)) : [] })),`;
+    if (isArrayField(f)) {
+      if (isPrimitiveType(f.type)) {
+        return `  remove${fPascal}: (indexOrId) => set((s) => ({ ${fName}: Array.isArray(s.${fName}) ? s.${fName}.filter((it, idx) => idx !== indexOrId && it !== indexOrId) : [] })),`;
+      }
+      const cleanBase = (f.type || "string").replace(/\[\]$/, "").trim();
+      const availableTypes = options?.customTypes || store.customTypes || [];
+      const matchedCustom =
+        (f.customTypeId ? availableTypes.find((ct) => ct.id === f.customTypeId) : undefined) ||
+        availableTypes.find((ct) => ct.name.toLowerCase() === cleanBase.toLowerCase());
+      const schemaFields = matchedCustom ? extractFieldsFromCustomType(matchedCustom) : [];
+      const idField = schemaFields.find((sf) => ["id", "_id", "key"].includes(sf.name.toLowerCase()));
+      const idProp = idField ? idField.name : "id";
+      return `  remove${fPascal}: (indexOrId) => set((s) => ({ ${fName}: Array.isArray(s.${fName}) ? s.${fName}.filter((it, idx) => idx !== indexOrId && !(typeof it === "object" && it !== null && "${idProp}" in it && it.${idProp} === indexOrId)) : [] })),`;
+    }
+    return `  remove${fPascal}: (indexOrId) => set((s) => ({ ${fName}: Array.isArray(s.${fName}) ? s.${fName}.filter((it, idx) => idx !== indexOrId && it !== indexOrId) : [] })),`;
   });
 
   const toggleImpls = activeToggleFields.map((f) => {
@@ -819,7 +896,15 @@ ${payloadPrep}
     const fName = toCamelCase(f.name);
     const fPascal = toPascalCase(f.name);
     if (isArrayField(f)) {
-      return `  update${fPascal}: (patch) => set((s) => ({ ${fName}: (patch && typeof patch === "object" && "id" in patch && Array.isArray(s.${fName})) ? s.${fName}.map((it) => (typeof it === "object" && it !== null && "id" in it && it.id === patch.id ? { ...it, ...patch } : it)) : s.${fName} })),`;
+      const cleanBase = (f.type || "string").replace(/\[\]$/, "").trim();
+      const availableTypes = options?.customTypes || store.customTypes || [];
+      const matchedCustom =
+        (f.customTypeId ? availableTypes.find((ct) => ct.id === f.customTypeId) : undefined) ||
+        availableTypes.find((ct) => ct.name.toLowerCase() === cleanBase.toLowerCase());
+      const schemaFields = matchedCustom ? extractFieldsFromCustomType(matchedCustom) : [];
+      const idField = schemaFields.find((sf) => ["id", "_id", "key"].includes(sf.name.toLowerCase()));
+      const idProp = idField ? idField.name : "id";
+      return `  update${fPascal}: (patch) => set((s) => ({ ${fName}: (patch && typeof patch === "object" && "${idProp}" in patch && Array.isArray(s.${fName})) ? s.${fName}.map((it) => (typeof it === "object" && it !== null && "${idProp}" in it && it.${idProp} === patch.${idProp} ? { ...it, ...patch } : it)) : s.${fName} })),`;
     }
     return `  update${fPascal}: (patch) => set((s) => ({ ${fName}: (patch && s.${fName} && typeof s.${fName} === "object") ? { ...s.${fName}, ...patch } : s.${fName} })),`;
   });
@@ -843,23 +928,82 @@ ${payloadPrep}
     const fPascal = toPascalCase(f.name);
     if (isArrayField(f)) {
       const cleanBase = (f.type || "string").replace(/\[\]$/, "").trim();
-      const matchedCustom = (options?.customTypes || store.customTypes || []).find(
-        (ct) => ct.id === f.customTypeId || ct.name.toLowerCase() === cleanBase.toLowerCase(),
-      );
+      const availableTypes = options?.customTypes || store.customTypes || [];
+      const matchedCustom =
+        (f.customTypeId ? availableTypes.find((ct) => ct.id === f.customTypeId) : undefined) ||
+        availableTypes.find((ct) => ct.name.toLowerCase() === cleanBase.toLowerCase());
       const schemaFields = matchedCustom ? extractFieldsFromCustomType(matchedCustom) : [];
-      const hasSender = schemaFields.some((sf) => sf.name === "sender") || cleanBase === "Message";
-      const hasRole = schemaFields.some((sf) => sf.name === "role") || (!hasSender && (cleanBase === "ChatMessage" || !matchedCustom));
-      const hasStreaming = schemaFields.some((sf) => sf.name === "streaming");
-      const contentProp = schemaFields.find((sf) => sf.name === "content" || sf.name === "text" || sf.name === "delta")?.name || "content";
-      const idProp = schemaFields.find((sf) => sf.name === "id" || sf.name === "_id")?.name || "id";
+
+      const contentField = schemaFields.find((sf) =>
+        ["content", "text", "delta", "chunk", "body"].includes(sf.name.toLowerCase()),
+      );
+      const contentProp = contentField ? contentField.name : "content";
+
+      const idField = schemaFields.find((sf) =>
+        ["id", "_id", "key"].includes(sf.name.toLowerCase()),
+      );
+      const idProp = idField ? idField.name : "id";
+
+      const senderField = schemaFields.find((sf) =>
+        ["sender", "author", "speaker"].includes(sf.name.toLowerCase()),
+      );
+      const roleField = schemaFields.find((sf) => sf.name.toLowerCase() === "role");
+      const streamingField = schemaFields.find((sf) =>
+        ["streaming", "isstreaming"].includes(sf.name.toLowerCase()),
+      );
+
+      const hasSender = Boolean(senderField) || (!roleField && cleanBase === "Message");
+      const hasRole = Boolean(roleField) || (!hasSender && (cleanBase === "ChatMessage" || !matchedCustom));
+      const hasStreaming = Boolean(streamingField);
+
+      // Algorithmically derive allowed enum / union literals from field type
+      const senderEnumValues = getAllowedEnumValues(senderField);
+      const userSenderVal =
+        senderEnumValues.find((v) => /user|human|client/i.test(v)) ||
+        (senderEnumValues.length > 1 ? senderEnumValues[1] : senderEnumValues[0]) ||
+        "USER";
+      const aiSenderVal =
+        senderEnumValues.find((v) => /ai|assistant|bot|model/i.test(v)) ||
+        senderEnumValues[0] ||
+        "AI";
+      const senderPropName = senderField ? senderField.name : "sender";
+
+      let senderExpr = `("role" in src && typeof src.role === "string" && src.role.toLowerCase() === "user" ? ${JSON.stringify(userSenderVal)} : ${JSON.stringify(aiSenderVal)})`;
+      if (senderEnumValues.length > 0) {
+        const branches = senderEnumValues
+          .map((v) => `("${senderPropName}" in src && src.${senderPropName} === ${JSON.stringify(v)}) ? ${JSON.stringify(v)} : `)
+          .join("");
+        senderExpr = `${branches}${senderExpr}`;
+      } else if (cleanBase === "Message" && !senderField) {
+        senderExpr = `("${senderPropName}" in src && src.${senderPropName} === "AI") ? "AI" : ("${senderPropName}" in src && src.${senderPropName} === "USER") ? "USER" : ("${senderPropName}" in src && src.${senderPropName} === "SYSTEM") ? "SYSTEM" : ${senderExpr}`;
+      } else {
+        senderExpr = `("${senderPropName}" in src && typeof src.${senderPropName} === "string") ? src.${senderPropName} : ${senderExpr}`;
+      }
+
+      const roleEnumValues = getAllowedEnumValues(roleField);
+      const assistantRoleVal =
+        roleEnumValues.find((v) => /assistant|ai|bot|model/i.test(v)) ||
+        roleEnumValues[0] ||
+        "assistant";
+      const rolePropName = roleField ? roleField.name : "role";
+
+      let roleExpr = `${JSON.stringify(assistantRoleVal)}`;
+      if (roleEnumValues.length > 0) {
+        const branches = roleEnumValues
+          .map((v) => `("${rolePropName}" in src && src.${rolePropName} === ${JSON.stringify(v)}) ? ${JSON.stringify(v)} : `)
+          .join("");
+        roleExpr = `${branches}${roleExpr}`;
+      } else {
+        roleExpr = `("${rolePropName}" in src && typeof src.${rolePropName} === "string") ? src.${rolePropName} : ${roleExpr}`;
+      }
 
       const extraFields = schemaFields.filter(
         (sf) =>
           sf.name !== idProp &&
-          sf.name !== "sender" &&
-          sf.name !== "role" &&
+          (!senderField || sf.name !== senderField.name) &&
+          (!roleField || sf.name !== roleField.name) &&
           sf.name !== contentProp &&
-          sf.name !== "streaming" &&
+          (!streamingField || sf.name !== streamingField.name) &&
           sf.required !== false,
       );
 
@@ -868,35 +1012,35 @@ ${payloadPrep}
         .join("\n");
 
       const senderCode = hasSender
-        ? `            sender: ("sender" in src && (src.sender === "AI" || src.sender === "USER" || src.sender === "SYSTEM")) ? src.sender : ("role" in src && typeof src.role === "string" && src.role.toLowerCase() === "user" ? "USER" : "AI"),\n`
+        ? `            ${senderPropName}: ${senderExpr},\n`
         : "";
       const roleCode = hasRole
-        ? `            role: ("role" in src && typeof src.role === "string") ? src.role : "assistant",\n`
+        ? `            ${rolePropName}: ${roleExpr},\n`
         : "";
-      const streamingCode = hasStreaming ? `            streaming: true,\n` : "";
-      const updateStreamingCode = hasStreaming ? `, streaming: true` : "";
+      const streamingCode = hasStreaming ? `            ${streamingField!.name}: true,\n` : "";
+      const updateStreamingCode = hasStreaming ? `, ${streamingField!.name}: true` : "";
 
       const targetFinderCondition = hasRole
-        ? `typeof last === "object" && last !== null && "role" in last && last.role === role${hasStreaming ? ` && "streaming" in last && last.streaming === true` : ""}`
+        ? `typeof last === "object" && last !== null && "${rolePropName}" in last && last.${rolePropName} === role${hasStreaming ? ` && "${streamingField!.name}" in last && last.${streamingField!.name} === true` : ""}`
         : hasSender
-        ? `typeof last === "object" && last !== null && "sender" in last && last.sender === ("sender" in src ? src.sender : "AI")${hasStreaming ? ` && "streaming" in last && last.streaming === true` : ""}`
-        : `${hasStreaming ? `typeof last === "object" && last !== null && "streaming" in last && last.streaming === true` : `typeof last === "object" && last !== null`}`;
+        ? `typeof last === "object" && last !== null && "${senderPropName}" in last && last.${senderPropName} === ("${senderPropName}" in src ? src.${senderPropName} : ${JSON.stringify(aiSenderVal)})${hasStreaming ? ` && "${streamingField!.name}" in last && last.${streamingField!.name} === true` : ""}`
+        : `${hasStreaming ? `typeof last === "object" && last !== null && "${streamingField!.name}" in last && last.${streamingField!.name} === true` : `typeof last === "object" && last !== null`}`;
 
       return `  stream${fPascal}: (chunkOrDelta) => set((s) => {
     const src = typeof chunkOrDelta === "object" && chunkOrDelta !== null ? chunkOrDelta : {};
     const delta = ("delta" in src && typeof src.delta === "string") ? src.delta : ("chunk" in src && typeof src.chunk === "string") ? src.chunk : ("text" in src && typeof src.text === "string") ? src.text : (typeof chunkOrDelta === "string" ? chunkOrDelta : "");
-    const role = ("role" in src && typeof src.role === "string") ? src.role : "assistant";
+    const role = ("role" in src && typeof src.role === "string") ? src.role : ${JSON.stringify(assistantRoleVal)};
     const done = Boolean("done" in src && src.done);
     const current = Array.isArray(s.${fName}) ? s.${fName} : [];
     let i = -1;
-    if ("id" in src && src.id !== undefined) {
-      i = current.findIndex((m) => typeof m === "object" && m !== null && "${idProp}" in m && m.${idProp} === src.id);
+    if ("${idProp}" in src && src.${idProp} !== undefined) {
+      i = current.findIndex((m) => typeof m === "object" && m !== null && "${idProp}" in m && m.${idProp} === src.${idProp});
     } else {
       const last = current[current.length - 1];
       if (${targetFinderCondition}) i = current.length - 1;
     }
     if (done) {
-      return { ${fName}: i !== -1 ? current.map((m, j) => j === i && typeof m === "object" && m !== null ? { ...m${hasStreaming ? ", streaming: false" : ""} } : m) : current };
+      return { ${fName}: i !== -1 ? current.map((m, j) => j === i && typeof m === "object" && m !== null ? { ...m${hasStreaming ? `, ${streamingField!.name}: false` : ""} } : m) : current };
     }
     if (typeof delta !== "string" || !delta) return { ${fName}: current };
     if (i === -1) {
@@ -904,7 +1048,7 @@ ${payloadPrep}
         ${fName}: [
           ...current,
           {
-            ${idProp}: ("id" in src && typeof src.id === "string") ? src.id : "msg_" + current.length + "_" + Date.now(),
+            ${idProp}: ("${idProp}" in src && typeof src.${idProp} === "string") ? src.${idProp} : "msg_" + current.length + "_" + Date.now(),
 ${senderCode}${roleCode}            ${contentProp}: delta,
 ${streamingCode}${extraPropsCode ? extraPropsCode + "\n" : ""}          },
         ],

@@ -58,24 +58,48 @@ import {
   getAvailableCustomTypes,
   resolveCustomType,
   extractFieldsFromCustomType,
+  getAllowedEnumValues,
+  isFieldStreamable,
 } from "../../langgraph/langgraph-canvas/components/inspector/state-inspector/constants";
+
+export { isFieldStreamable };
+
+/**
+ * Checks whether a given field configuration represents an array of chat/message objects.
+ * Primitive arrays (string[], number[], etc.) and non-message object arrays (User[], Product[], etc.)
+ * are NOT message streams.
+ */
+export function isMessageArrayType(
+  type?: string,
+  isArray?: boolean,
+  name?: string,
+  customTypeSchema?: CustomTypeItem | null,
+): boolean {
+  return isFieldStreamable(type, isArray, name, customTypeSchema);
+}
 
 /**
  * Returns supported action types handled by the single reducer of a state variable.
  * Matches the reducer patterns used in LangGraph and modern reactive state stores.
  */
-export function getSupportedActionsForType(type?: string, isArray?: boolean, name?: string): string[] {
+export function getSupportedActionsForType(
+  type?: string,
+  isArray?: boolean,
+  name?: string,
+  customTypeSchema?: CustomTypeItem | null,
+): string[] {
   const clean = (type || "string").toLowerCase().trim();
-  const isMessage =
-    clean.includes("message") ||
-    clean.includes("chat") ||
-    clean === "messages" ||
-    clean === "chatmessage" ||
-    Boolean(name && (name.toLowerCase().includes("message") || name.toLowerCase().includes("chat")));
+  const isArr = Boolean(isArray || clean.endsWith("[]") || clean === "array");
 
-  if (isArray || clean.endsWith("[]") || clean === "array") {
-    const base = ["set", "append", "prepend", "pop", "remove", "update", "reset"];
-    if (isMessage) return [...base, "stream"];
+  if (isArr) {
+    const cleanBase = clean.replace(/\[\]$/, "").trim();
+    const isPrimitive = ["string", "number", "boolean", "any", "unknown"].includes(cleanBase);
+    const base = isPrimitive
+      ? ["set", "append", "prepend", "pop", "remove", "reset"]
+      : ["set", "append", "prepend", "pop", "remove", "update", "reset"];
+    if (isMessageArrayType(type, isArray, name, customTypeSchema)) {
+      return [...base, "stream"];
+    }
     return base;
   }
   switch (clean) {
@@ -271,7 +295,7 @@ export const StateStoreNode = ({
       });
 
       if ((patch.type !== undefined || patch.isArray !== undefined) && !patch.actions) {
-        updated.actions = getSupportedActionsForType(updated.type, isArray, updated.name);
+        updated.actions = getSupportedActionsForType(updated.type, isArray, updated.name, matchedCustom);
       }
       if (
         (patch.type !== undefined || patch.isArray !== undefined) &&
@@ -314,7 +338,7 @@ export const StateStoreNode = ({
     if (currentIsArray) {
       const nextType = cleanBase === "array" ? "string" : cleanBase;
       const isNextCustom = Boolean(matchedCustom && cleanBase !== "array");
-      const nextActions = getSupportedActionsForType(isNextCustom ? "object" : nextType, false, field.name);
+      const nextActions = getSupportedActionsForType(isNextCustom ? "object" : nextType, false, field.name, isNextCustom ? matchedCustom : null);
       const nextReducerCode = getSuggestedReducerCodeForChannelType(
         nextType,
         isNextCustom ? matchedCustom : null,
@@ -330,7 +354,7 @@ export const StateStoreNode = ({
       });
     } else {
       const nextType = cleanBase === "array" ? "array" : `${cleanBase}[]`;
-      const nextActions = getSupportedActionsForType(nextType, true, field.name);
+      const nextActions = getSupportedActionsForType(nextType, true, field.name, matchedCustom);
       const nextReducerCode = getSuggestedReducerCodeForChannelType(
         nextType,
         matchedCustom,
@@ -497,6 +521,7 @@ export const StateStoreNode = ({
         typeName: cleanBase,
         typeId: f.customTypeId,
       });
+      const expectedActions = getSupportedActionsForType(f.type, isArray, f.name, matchedCustom);
       const isMissingCode = !f.customReducerCode || !f.customReducerCode.trim();
       const isMismatched = Boolean(
         f.customReducerCode && !isReducerCodeCompatibleWithType(f.customReducerCode, f.type, isArray),
@@ -513,13 +538,25 @@ export const StateStoreNode = ({
           f.customReducerCode &&
           f.customReducerCode.includes("Initial shape guaranteed by type schema"),
       );
-      if (isMissingCode || isMismatched || isSchemaMismatch || isArrayWithObjectReducer) {
+      const senderField = matchedCustom ? extractFieldsFromCustomType(matchedCustom).find((sf) => sf.name === "sender") : null;
+      const senderEnums = getAllowedEnumValues(senderField);
+      const isSenderEnumMismatch = Boolean(
+        senderEnums.length > 0 &&
+          !senderEnums.includes("USER") &&
+          f.customReducerCode?.includes('src.sender === "USER"')
+      );
+      const hasActionsMismatch = Boolean(
+        (!expectedActions.includes("stream") && f.actions?.includes("stream")) ||
+        (expectedActions.includes("stream") && !f.actions?.includes("stream")) ||
+        (!expectedActions.includes("update") && f.actions?.includes("update"))
+      );
+      if (isMissingCode || isMismatched || isSchemaMismatch || isArrayWithObjectReducer || isSenderEnumMismatch || hasActionsMismatch) {
         needsUpdate = true;
         const generated = getSuggestedReducerCodeForChannelType(f.type, matchedCustom, isArray);
         return {
           ...f,
           customReducerCode: generated,
-          actions: getSupportedActionsForType(f.type, isArray, f.name),
+          actions: expectedActions,
           defaultValue: isArray && (f.defaultValue === "" || f.defaultValue === null || f.defaultValue === undefined) ? [] : f.defaultValue,
           customTypeId: matchedCustom?.id || f.customTypeId,
         };
@@ -745,10 +782,15 @@ export const StateStoreNode = ({
               const isCustomType = availableCustomTypes.some(
                 (t) => t.name === f.type || t.name === cleanFieldBaseType,
               );
+              const matchedCustom = resolveCustomType({
+                availableTypes: availableCustomTypes,
+                typeName: cleanFieldBaseType,
+                typeId: f.customTypeId,
+              });
               const supportedActions =
                 f.actions && f.actions.length > 0 && !(isFieldArray && !f.actions.includes("append"))
                   ? f.actions
-                  : getSupportedActionsForType(f.type, isFieldArray, f.name);
+                  : getSupportedActionsForType(f.type, isFieldArray, f.name, matchedCustom);
               const reducerName = f.reducer || `${f.name || "state"}_reducer`;
 
               const isOutputConnected = edges.some(
@@ -900,6 +942,7 @@ export const StateStoreNode = ({
                             isCustom && !isTargetArray ? "object" : targetType,
                             isTargetArray,
                             f.name,
+                            matchedCustom,
                           );
                           const generatedReducerCode = getSuggestedReducerCodeForChannelType(
                             targetType,

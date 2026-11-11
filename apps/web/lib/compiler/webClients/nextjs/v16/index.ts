@@ -221,13 +221,27 @@ export function compileNextjsV16WebClient(
     };
   });
 
-  // Extract custom types from types nodes across canvas
-  const canvasCustomTypes: CustomTypeItem[] = [];
+  // Extract custom types from types nodes across canvas, prioritizing user custom types over auto-derived package/entity types
+  const userCustomTypes: CustomTypeItem[] = [];
+  const autoDerivedCustomTypes: CustomTypeItem[] = [];
   (allNodes || []).forEach((n) => {
     if (n.type === "types" && Array.isArray(n.data?.types)) {
-      canvasCustomTypes.push(...n.data.types);
+      const d = n.data;
+      const isAutoDerived =
+        n.id === "types-entity-schemas" ||
+        d?.isEntitySchemas ||
+        d?.label === "Entity Types" ||
+        Boolean(d?.sourceEntityId) ||
+        Boolean(d?.isServiceEndpointSchemas) ||
+        Boolean(d?.isPackageNode || d?.packageName || (d?.packageSources && d.packageSources.length > 0 && !d?.isExtended));
+      if (isAutoDerived) {
+        autoDerivedCustomTypes.push(...n.data.types);
+      } else {
+        userCustomTypes.push(...n.data.types);
+      }
     }
   });
+  const canvasCustomTypes: CustomTypeItem[] = [...userCustomTypes, ...autoDerivedCustomTypes];
 
   const allStores = [...appGlobalStores, ...pageStores, ...graphStateStores];
   if (allStores.length > 0) {
