@@ -4,12 +4,31 @@
 
 Dezign2App transforms visual system design graphs (services, PostgreSQL/SQLite databases, Kafka event streams, Redis cache, and auth boundaries) into clean, standard Turborepo monorepos with Next.js 16, Express/FastAPI microservices, Drizzle ORM schemas, and Docker Compose orchestration. It uses deterministic Abstract Syntax Tree (AST) compilation on the local CPU for 100% predictable scaffolding, reserving AI strictly for bespoke business logic.
 
+## The "Algorithm + AI" Paradigm (Why It Beats Vibe Coding)
+Dezign2App divides full-stack software generation into two complementary layers:
+1. **Deterministic Algorithms (The 70% Predictable Architecture)**:
+   - Compiles higher-level system topology, architecture scaffolding, and standard recurring patterns.
+   - Generates inter-communication contracts between servers, database schema imports, Drizzle migrations, Redis cache wiring, Kafka/messaging configs, Docker network bridges, and Better Auth RBAC guards.
+   - **Cost & Reliability**: Compiles in <800ms on local CPU with **0 hallucinations** and **$0 token burn**.
+2. **AI-Generated Code (The 30% Custom Domain Logic)**:
+   - Dedicated solely to unpredictable code blocks, custom controller algorithms, proprietary business logic, and bespoke UI workflows.
+   - **Massive Token & Cost Reduction**: You never waste expensive, slow cloud reasoning models generating repetitive boilerplate. Fast, cost-efficient models write only the custom code blocks, which are locked to verified architectural contracts.
+   - **Eliminates Code Review Fatigue**: Removes the burden of reading and auditing thousands of lines of messy AI-generated boilerplate. Developers only review the small, isolated pieces of custom logic that actually matter.
+
 ## Core Capabilities
 - **Deterministic Monorepo Compiler**: Compiles architecture topology graphs into fully configured Turborepo monorepos in <800ms on local CPU with zero hallucinations and $0 token cost.
+- **Interactive Data Flow Simulation**: Visually track and simulate how requests, payloads, Kafka event streams, and database transactions flow through the distributed topology before compiling.
+- **Dedicated Testing Tab for Unit Tests**: In-canvas testing suite to author, execute, and inspect unit tests, endpoint contract validations, and state mutations in real time.
+- **dpm (Dezign Package Manager)**: The visual abstraction layer for npm. Compose verified visual contracts (`@dpm/*`) and swap frameworks (Express to FastAPI, Postgres to SQLite) with one click.
 - **Non-Destructive AST Sync**: Cleanly separates generated infrastructure contracts (schemas, wire protocols, shared types) from user business logic (controllers, routes, UI). Syncs do not overwrite custom code.
 - **Offline Desktop Studio**: Native Electron 34 desktop application with embedded PostgreSQL, Redis, and SQLite runners, plus a native PTY terminal for 100% offline development.
-- **Dynamic Package Manager (dpm)**: Swap frameworks (e.g., Express to FastAPI, Postgres to SQLite, Clerk to Better Auth) from a single architecture spec without manual rewrites.
 - **100% Code Ownership**: Standard TypeScript monorepo with zero proprietary runtime SDKs and zero vendor lock-in.
+
+## dpm — Dezign Package Manager
+Just as TypeScript brought static typing to JavaScript via DefinitelyTyped (`@types/*`), **dpm** brings visual architecture contracts, syntax-free composition, and deterministic Agentic development to npm packages:
+- **Visual Packages**: Maps packages like `@dpm/express`, `@dpm/stripe`, `@dpm/prisma`, `@dpm/langgraph`, and `@dpm/auth` into draggable nodes with verified typed I/O ports.
+- **Framework & DB Swapping**: Change backend engines (Express to FastAPI) or databases (PostgreSQL to SQLite) without manual rewrites; AST compilers rewrite configuration and bridges automatically.
+- **dpm Specification & RFC**: https://www.dezign2app.com/dpm
 
 ## Default Generated Stack
 - Frontend: Next.js 16 (App Router, Server Actions, TypeScript, Tailwind CSS)
@@ -20,11 +39,11 @@ Dezign2App transforms visual system design graphs (services, PostgreSQL/SQLite d
 - Orchestration: Turborepo, pnpm workspaces, and Docker Compose
 
 ## Pricing
-- **Beta Access**: $100 / year (unlimited monorepo code generation, local CPU compilation, full source code ownership, zero token limits on scaffolding).
+- **Beta Access**: $20 / month (unlimited monorepo code generation, local CPU compilation, full source code ownership, zero token limits on scaffolding).
 
 ## Links
 - Full Technical Specification: https://www.dezign2app.com/llms-full.txt
+- dpm (Dezign Package Manager) RFC: https://www.dezign2app.com/dpm
 - Pricing: https://www.dezign2app.com/pricing
-- Documentation: https://www.dezign2app.com/docs
 - GitHub Releases: https://github.com/dezign2app/dezign2app/releases
 

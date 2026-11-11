@@ -85,7 +85,7 @@ export function PlanCard({ plan }: PlanCardProps) {
           </div>
         )}
         <p className="text-[11px] text-zinc-500 mt-1.5 font-mono">
-          Billed annually. Cancel anytime. Full source ownership.
+          Billed {billingPeriod === "every-year" ? "annually" : "monthly"}. Cancel anytime. Full source ownership.
         </p>
       </div>
 
