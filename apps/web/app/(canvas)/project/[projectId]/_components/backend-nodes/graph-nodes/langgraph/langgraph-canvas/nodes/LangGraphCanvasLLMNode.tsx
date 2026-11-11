@@ -14,6 +14,9 @@ import {
   Shield,
   Sparkles,
   Brain,
+  ListFilter,
+  PenLine,
+  Plus,
 } from "lucide-react";
 import {
   Select,
@@ -21,6 +24,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SelectSeparator,
 } from "@workspace/ui/components/select";
 import {
   Tabs,
@@ -31,16 +35,13 @@ import {
 import type { LangGraphLLMNode, LangGraphCanvasNode } from "@workspace/canvas";
 import {
   LANGGRAPH_CANVAS_NODE_LLM,
+  LANGGRAPH_CANVAS_NODE_LLM_REF,
   HANDLE_LLM_IN,
   HANDLE_LLM_OUT,
 } from "../constants";
 import { LLM_PROVIDER_PRESETS } from "../components/inspector/constants";
 import { LocalInput, LocalTextarea } from "../../../common";
-import {
-  saveLocalEnvVariable,
-  getLocalEnvVariable,
-  fetchLocalEnvVariable,
-} from "@/lib/utils/localEnvSync";
+import { saveLocalEnvVariable } from "@/lib/utils/localEnvSync";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { toast } from "sonner";
 
@@ -49,13 +50,41 @@ export const LangGraphCanvasLLMNode = ({
   data,
   selected,
 }: NodeProps<LangGraphLLMNode>) => {
-  const { setNodes } = useReactFlow<LangGraphCanvasNode>();
+  const { setNodes, setEdges } = useReactFlow<LangGraphCanvasNode>();
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameValue, setNameValue] = useState(data.label || "LLM");
 
   useEffect(() => {
     setNameValue(data.label || "LLM");
   }, [data.label]);
+
+  const handleDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (data.onDeleteLLM) {
+      data.onDeleteLLM();
+    }
+    setNodes((nds) =>
+      nds
+        .filter((n) => n.id !== id)
+        .map((n) => {
+          if (
+            n.type === LANGGRAPH_CANVAS_NODE_LLM_REF &&
+            (n.data as any)?.llmRef === id
+          ) {
+            return {
+              ...n,
+              data: {
+                ...n.data,
+                llmRef: undefined,
+                label: "LLM Ref",
+              },
+            };
+          }
+          return n;
+        }),
+    );
+    setEdges((eds) => eds.filter((e) => e.source !== id && e.target !== id));
+  };
 
   const updateLLMData = (changes: Partial<typeof data>) => {
     setNodes((nds) =>
@@ -67,31 +96,6 @@ export const LangGraphCanvasLLMNode = ({
     );
   };
 
-  // Auto-populate API key from localStorage or .env if empty on mount
-  useEffect(() => {
-    if (!data.apiKeyHeader) {
-      const provider = (data.provider || "openai").toLowerCase();
-      const envVarName =
-        LLM_PROVIDER_PRESETS[provider]?.defaultApiKeyEnv ||
-        (provider === "groq" ? "GROQ_API_KEY" : `${provider.toUpperCase()}_API_KEY`);
-
-      const cached =
-        (typeof window !== "undefined"
-          ? localStorage.getItem(`dezign2app_lg_key_${provider}`) ||
-            localStorage.getItem(`dezign2app_env_${envVarName}`)
-          : "") || "";
-
-      if (cached) {
-        updateLLMData({ apiKeyHeader: cached });
-      } else {
-        fetchLocalEnvVariable(envVarName).then((val) => {
-          if (val) {
-            updateLLMData({ apiKeyHeader: val });
-          }
-        });
-      }
-    }
-  }, [data.provider]);
 
   const handleApiKeyChange = (val: string) => {
     updateLLMData({ apiKeyHeader: val });
@@ -194,6 +198,17 @@ export const LangGraphCanvasLLMNode = ({
     LLM_PROVIDER_PRESETS[activeProviderKey] || LLM_PROVIDER_PRESETS.custom;
   const currentModels = activePreset?.models || [];
 
+  const isModelInPresets = currentModels.includes(data.model || "");
+  const [isCustomModel, setIsCustomModel] = useState(
+    !isModelInPresets && Boolean(data.model),
+  );
+
+  useEffect(() => {
+    if (data.model && !currentModels.includes(data.model)) {
+      setIsCustomModel(true);
+    }
+  }, [data.provider, data.model, currentModels]);
+
   const defaultBody = JSON.stringify(
     {
       model: data.model || activePreset?.defaultModel || "gpt-4o-mini",
@@ -292,19 +307,14 @@ export const LangGraphCanvasLLMNode = ({
           <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-400 font-mono border border-sky-500/20">
             {activeProviderKey.toUpperCase()}
           </span>
-          {data.onDeleteLLM && (
-            <button
-              type="button"
-              className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all opacity-0 group-hover:opacity-100 nodrag"
-              onClick={(e) => {
-                e.stopPropagation();
-                data.onDeleteLLM?.();
-              }}
-              title="Delete LLM"
-            >
-              <Trash className="w-3.5 h-3.5" />
-            </button>
-          )}
+          <button
+            type="button"
+            className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all opacity-0 group-hover:opacity-100 nodrag cursor-pointer"
+            onClick={handleDelete}
+            title="Delete LLM"
+          >
+            <Trash className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
 
@@ -330,6 +340,7 @@ export const LangGraphCanvasLLMNode = ({
             } else {
               updateLLMData({ provider: val });
             }
+            setIsCustomModel(false);
           }}
         >
           <SelectTrigger className="h-6 text-[10px] bg-background border border-border/60 rounded px-2 font-medium text-foreground nodrag">
@@ -484,33 +495,122 @@ export const LangGraphCanvasLLMNode = ({
           <div className="flex flex-col gap-0.5">
             <label className="text-[9px] font-medium text-muted-foreground flex items-center justify-between">
               <span>Model Identifier</span>
-              <span className="font-mono text-[8.5px] text-sky-400">
-                {data.model || activePreset?.defaultModel}
-              </span>
+              <div className="flex items-center gap-1.5">
+                {currentModels.length > 0 && (
+                  isCustomModel ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsCustomModel(false);
+                        const fallback =
+                          activePreset?.defaultModel || currentModels[0] || "";
+                        updateLLMData({ model: fallback });
+                      }}
+                      className="text-[8.5px] text-sky-400 hover:underline cursor-pointer flex items-center gap-0.5 nodrag"
+                      title="Switch to preset models"
+                    >
+                      <ListFilter className="w-2.5 h-2.5" />
+                      <span>Presets</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setIsCustomModel(true)}
+                      className="text-[8.5px] text-muted-foreground hover:text-sky-400 hover:underline cursor-pointer flex items-center gap-0.5 nodrag"
+                      title="Configure custom model"
+                    >
+                      <Plus className="w-2.5 h-2.5" />
+                      <span>Custom</span>
+                    </button>
+                  )
+                )}
+                {isCustomModel ? (
+                  <span className="text-[8px] font-mono text-amber-400 bg-amber-500/10 px-1 rounded border border-amber-500/20">
+                    Custom
+                  </span>
+                ) : (
+                  <span className="font-mono text-[8.5px] text-sky-400">
+                    {data.model || activePreset?.defaultModel}
+                  </span>
+                )}
+              </div>
             </label>
-            {currentModels.length > 0 ? (
-              <Select
-                value={data.model || activePreset?.defaultModel}
-                onValueChange={(val: string) => updateLLMData({ model: val })}
-              >
-                <SelectTrigger className="h-6 text-[10px] bg-background border border-border/60 rounded px-1.5 font-mono text-foreground nodrag">
-                  <SelectValue placeholder="Select model" />
-                </SelectTrigger>
-                <SelectContent className="nodrag">
-                  {currentModels.map((m) => (
-                    <SelectItem key={m} value={m}>
-                      {m}
+            {currentModels.length > 0 && !isCustomModel ? (
+              <div className="flex items-center gap-1">
+                <Select
+                  value={
+                    currentModels.includes(data.model || "")
+                      ? data.model
+                      : activePreset?.defaultModel || currentModels[0]
+                  }
+                  onValueChange={(val: string) => {
+                    if (val === "__custom__") {
+                      setIsCustomModel(true);
+                    } else {
+                      updateLLMData({ model: val });
+                    }
+                  }}
+                >
+                  <SelectTrigger className="h-6 text-[10px] bg-background border border-border/60 rounded px-1.5 font-mono text-foreground flex-1 nodrag">
+                    <SelectValue placeholder="Select model" />
+                  </SelectTrigger>
+                  <SelectContent className="nodrag">
+                    {currentModels.map((m) => (
+                      <SelectItem key={m} value={m}>
+                        {m}
+                      </SelectItem>
+                    ))}
+                    <SelectSeparator />
+                    <SelectItem
+                      value="__custom__"
+                      className="text-sky-400 font-medium focus:text-sky-400 cursor-pointer"
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <Plus className="w-3 h-3" />
+                        Custom Model...
+                      </span>
                     </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                  </SelectContent>
+                </Select>
+                <button
+                  type="button"
+                  className="h-6 w-6 rounded bg-secondary/50 hover:bg-secondary text-muted-foreground hover:text-sky-400 border border-border/60 flex items-center justify-center shrink-0 nodrag transition-colors"
+                  onClick={() => setIsCustomModel(true)}
+                  title="Configure custom model"
+                >
+                  <PenLine className="w-3 h-3" />
+                </button>
+              </div>
             ) : (
-              <LocalInput
-                className="h-6 text-[10px] bg-background border border-border/60 rounded px-1.5 font-mono text-foreground nodrag"
-                placeholder="e.g. gpt-4o, claude-3-5-sonnet, llama3:8b"
-                value={data.model || ""}
-                onChange={(e) => updateLLMData({ model: e.target.value })}
-              />
+              <div className="flex items-center gap-1">
+                <LocalInput
+                  autoFocus={isCustomModel}
+                  className="h-6 text-[10px] bg-background border border-border/60 rounded px-1.5 font-mono text-foreground flex-1 nodrag"
+                  placeholder={
+                    activePreset?.defaultModel
+                      ? `e.g. ${activePreset.defaultModel}, custom-model`
+                      : "e.g. gpt-4o, claude-3-5-sonnet, llama3:8b"
+                  }
+                  value={data.model || ""}
+                  onChange={(e) => updateLLMData({ model: e.target.value })}
+                />
+                {currentModels.length > 0 && (
+                  <button
+                    type="button"
+                    className="h-6 px-1.5 text-[9px] rounded bg-secondary/60 hover:bg-secondary text-muted-foreground hover:text-foreground border border-border/60 flex items-center gap-1 shrink-0 nodrag transition-colors"
+                    onClick={() => {
+                      setIsCustomModel(false);
+                      const fallback =
+                        activePreset?.defaultModel || currentModels[0] || "";
+                      updateLLMData({ model: fallback });
+                    }}
+                    title="Switch back to preset models"
+                  >
+                    <ListFilter className="w-3 h-3 text-sky-400" />
+                    <span>Presets</span>
+                  </button>
+                )}
+              </div>
             )}
           </div>
 

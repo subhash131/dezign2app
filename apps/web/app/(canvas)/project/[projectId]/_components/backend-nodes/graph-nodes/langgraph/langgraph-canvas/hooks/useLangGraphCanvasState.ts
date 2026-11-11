@@ -727,7 +727,26 @@ export function useLangGraphCanvasState({
   const handleDeleteStep = () => {
     if (!selectedNodeId || isReservedNodeId(selectedNodeId)) return;
     const nodeId = selectedNodeId;
-    setNodes((nds) => nds.filter((n) => n.id !== nodeId));
+    setNodes((nds) =>
+      nds
+        .filter((n) => n.id !== nodeId)
+        .map((n) => {
+          if (
+            n.type === "langgraph_llm_ref" &&
+            (n.data as any)?.llmRef === nodeId
+          ) {
+            return {
+              ...n,
+              data: {
+                ...n.data,
+                llmRef: undefined,
+                label: "LLM Ref",
+              },
+            };
+          }
+          return n;
+        }),
+    );
     const edgesToRemove = edges
       .filter((e) => e.source === nodeId || e.target === nodeId)
       .map((e) => e.id);

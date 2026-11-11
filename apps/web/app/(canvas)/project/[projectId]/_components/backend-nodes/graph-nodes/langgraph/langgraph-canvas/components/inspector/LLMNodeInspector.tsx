@@ -1,5 +1,14 @@
-import React from "react";
-import { Trash, Globe, Key, Code, Shield } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import {
+  Trash,
+  Globe,
+  Key,
+  Code,
+  Shield,
+  ListFilter,
+  PenLine,
+  Plus,
+} from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Label } from "@workspace/ui/components/label";
 import {
@@ -8,6 +17,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SelectSeparator,
 } from "@workspace/ui/components/select";
 import type { LangGraphLLMNodeData } from "@workspace/canvas";
 import { LocalInput, LocalTextarea } from "../../../../common";
@@ -35,6 +45,25 @@ export function LLMNodeInspector({
   const activePreset =
     LLM_PROVIDER_PRESETS[activeProviderKey] || LLM_PROVIDER_PRESETS.custom;
   const currentModels = activePreset?.models || [];
+
+  const isModelInPresets = currentModels.includes(selectedLLMData.model || "");
+  const [isCustomModel, setIsCustomModel] = useState(
+    !isModelInPresets && Boolean(selectedLLMData.model),
+  );
+
+  useEffect(() => {
+    const inPresets = currentModels.includes(selectedLLMData.model || "");
+    if (selectedLLMData.model && !inPresets) {
+      setIsCustomModel(true);
+    } else if (!selectedLLMData.model) {
+      setIsCustomModel(false);
+    }
+  }, [
+    selectedLLMData.provider,
+    (selectedLLMData as any).id,
+    (selectedLLMData as any).llmId,
+    currentModels,
+  ]);
 
   const handleApiKeyChange = (val: string) => {
     onUpdateLLM?.({ apiKeyHeader: val });
@@ -192,6 +221,7 @@ export function LLMNodeInspector({
             } else {
               onUpdateLLM?.({ provider: val });
             }
+            setIsCustomModel(false);
           }}
         >
           <SelectTrigger className="h-8 text-xs bg-background/50">
@@ -209,30 +239,119 @@ export function LLMNodeInspector({
 
       {/* Model Identifier */}
       <div className="flex flex-col gap-1.5">
-        <Label className="text-xs font-medium">Model Identifier</Label>
-        {currentModels.length > 0 ? (
-          <Select
-            value={selectedLLMData.model || activePreset?.defaultModel}
-            onValueChange={(val: string) => onUpdateLLM?.({ model: val })}
-          >
-            <SelectTrigger className="h-8 text-xs bg-background/50 font-mono">
-              <SelectValue placeholder="Select model" />
-            </SelectTrigger>
-            <SelectContent>
-              {currentModels.map((m) => (
-                <SelectItem key={m} value={m}>
-                  {m}
+        <div className="flex items-center justify-between">
+          <Label className="text-xs font-medium">Model Identifier</Label>
+          {currentModels.length > 0 && (
+            <div className="flex items-center gap-1.5">
+              {isCustomModel ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCustomModel(false);
+                    const fallback =
+                      activePreset?.defaultModel || currentModels[0] || "";
+                    onUpdateLLM?.({ model: fallback });
+                  }}
+                  className="text-xs text-sky-400 hover:underline cursor-pointer flex items-center gap-1"
+                  title="Switch to preset models"
+                >
+                  <ListFilter className="w-3 h-3" />
+                  <span>Use presets</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setIsCustomModel(true)}
+                  className="text-xs text-muted-foreground hover:text-sky-400 hover:underline cursor-pointer flex items-center gap-1"
+                  title="Configure custom model"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>Custom model</span>
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+        {currentModels.length > 0 && !isCustomModel ? (
+          <div className="flex items-center gap-1.5">
+            <Select
+              value={
+                currentModels.includes(selectedLLMData.model || "")
+                  ? selectedLLMData.model
+                  : activePreset?.defaultModel || currentModels[0]
+              }
+              onValueChange={(val: string) => {
+                if (val === "__custom__") {
+                  setIsCustomModel(true);
+                } else {
+                  onUpdateLLM?.({ model: val });
+                }
+              }}
+            >
+              <SelectTrigger className="h-8 text-xs bg-background/50 font-mono flex-1">
+                <SelectValue placeholder="Select model" />
+              </SelectTrigger>
+              <SelectContent>
+                {currentModels.map((m) => (
+                  <SelectItem key={m} value={m}>
+                    {m}
+                  </SelectItem>
+                ))}
+                <SelectSeparator />
+                <SelectItem
+                  value="__custom__"
+                  className="text-sky-400 font-medium focus:text-sky-400 cursor-pointer"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Plus className="w-3.5 h-3.5" />
+                    Custom Model...
+                  </span>
                 </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+              </SelectContent>
+            </Select>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 px-2 text-xs text-muted-foreground hover:text-sky-400"
+              onClick={() => setIsCustomModel(true)}
+              title="Configure custom model"
+            >
+              <PenLine className="w-3.5 h-3.5" />
+            </Button>
+          </div>
         ) : (
-          <LocalInput
-            className="h-8 text-xs bg-background/50 font-mono"
-            placeholder="e.g. gpt-4o, claude-3-5-sonnet, llama3:8b"
-            value={selectedLLMData.model || ""}
-            onChange={(e) => onUpdateLLM?.({ model: e.target.value })}
-          />
+          <div className="flex items-center gap-1.5">
+            <LocalInput
+              autoFocus={isCustomModel}
+              className="h-8 text-xs bg-background/50 font-mono flex-1"
+              placeholder={
+                activePreset?.defaultModel
+                  ? `e.g. ${activePreset.defaultModel}, custom-model`
+                  : "e.g. gpt-4o, claude-3-5-sonnet, llama3:8b"
+              }
+              value={selectedLLMData.model || ""}
+              onChange={(e) => onUpdateLLM?.({ model: e.target.value })}
+            />
+            {currentModels.length > 0 && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 px-2.5 text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1"
+                onClick={() => {
+                  setIsCustomModel(false);
+                  const fallback =
+                    activePreset?.defaultModel || currentModels[0] || "";
+                  onUpdateLLM?.({ model: fallback });
+                }}
+                title="Switch back to preset models"
+              >
+                <ListFilter className="w-3.5 h-3.5" />
+                <span>Presets</span>
+              </Button>
+            )}
+          </div>
         )}
       </div>
 
