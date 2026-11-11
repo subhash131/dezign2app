@@ -13,6 +13,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const publicRoutes = [
     { url: "", changeFrequency: "daily", priority: 1.0 },
     { url: "/pricing", changeFrequency: "weekly", priority: 0.9 },
+    { url: "/dpm", changeFrequency: "weekly", priority: 0.9 },
     { url: "/about", changeFrequency: "monthly", priority: 0.8 },
     { url: "/docs", changeFrequency: "weekly", priority: 0.8 },
     { url: "/blog", changeFrequency: "weekly", priority: 0.7 },

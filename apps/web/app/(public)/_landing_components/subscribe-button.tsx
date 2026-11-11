@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useSession } from "@/lib/auth-client";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { isElectron, getElectronAPI } from "@/lib/electron";
 
 interface SubscribeButtonProps {
@@ -16,7 +16,6 @@ export const SubscribeButton = ({ productId }: SubscribeButtonProps) => {
   const isLoaded = !isPending;
   const router = useRouter();
 
-  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [hasAutoTriggered, setHasAutoTriggered] = useState(false);
 
@@ -75,12 +74,14 @@ export const SubscribeButton = ({ productId }: SubscribeButtonProps) => {
   };
 
   useEffect(() => {
-    const shouldAutoCheckout = searchParams.get("checkout") === "true";
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const shouldAutoCheckout = params.get("checkout") === "true";
     if (isSignedIn && shouldAutoCheckout && !loading && !hasAutoTriggered) {
       setHasAutoTriggered(true);
       handleCheckout();
     }
-  }, [isSignedIn, searchParams, loading, hasAutoTriggered]);
+  }, [isSignedIn, loading, hasAutoTriggered]);
 
   const buttonStyle = `
     w-full mt-4 py-3 rounded-lg text-sm font-semibold transition-colors
