@@ -8,9 +8,13 @@ import { isElectron, getElectronAPI } from "@/lib/electron";
 
 interface SubscribeButtonProps {
   productId: string;
+  paymentUrl?: string;
 }
 
-export const SubscribeButton = ({ productId }: SubscribeButtonProps) => {
+export const SubscribeButton = ({
+  productId,
+  paymentUrl,
+}: SubscribeButtonProps) => {
   const { data: session, isPending } = useSession();
   const isSignedIn = !!session?.user;
   const isLoaded = !isPending;
@@ -18,6 +22,11 @@ export const SubscribeButton = ({ productId }: SubscribeButtonProps) => {
 
   const [loading, setLoading] = useState(false);
   const [hasAutoTriggered, setHasAutoTriggered] = useState(false);
+
+  const targetPaymentUrl =
+    paymentUrl ||
+    process.env.NEXT_PUBLIC_CREEM_PAYMENT_URL ||
+    `https://www.creem.io/payment/${productId || "prod_3SqZz0dwcsNP45v1pDXguW"}`;
 
   const handleCheckout = async () => {
     if (loading) return;
@@ -65,9 +74,25 @@ export const SubscribeButton = ({ productId }: SubscribeButtonProps) => {
           }
         }
         window.location.href = checkoutUrl;
+        return;
       }
+      throw new Error("No checkout URL returned");
     } catch (error) {
-      toast.error("Something went wrong. Please try again.");
+      console.warn("API checkout failed, falling back to direct payment link:", error);
+      const userEmail = session?.user?.email;
+      const fallbackUrl = userEmail
+        ? `${targetPaymentUrl}?email=${encodeURIComponent(userEmail)}&customer_email=${encodeURIComponent(userEmail)}`
+        : targetPaymentUrl;
+
+      if (isElectron()) {
+        const api = getElectronAPI();
+        if (api?.auth) {
+          api.auth.openBrowserLogin(fallbackUrl);
+          toast.success("Opened checkout in your browser!");
+          return;
+        }
+      }
+      window.location.href = fallbackUrl;
     } finally {
       setLoading(false);
     }
