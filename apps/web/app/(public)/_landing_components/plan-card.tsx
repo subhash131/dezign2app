@@ -16,6 +16,7 @@ export interface Plan {
   freeLabel?: string;
   featured: boolean;
   features: string[];
+  paymentUrl?: string;
 }
 
 interface PlanCardProps {
@@ -91,7 +92,7 @@ export function PlanCard({ plan }: PlanCardProps) {
 
       {/* CTA Button */}
       <div className="mt-4">
-        <SubscribeButton productId={id} />
+        <SubscribeButton productId={id} paymentUrl={plan.paymentUrl} />
       </div>
 
       {/* Value Guarantee */}

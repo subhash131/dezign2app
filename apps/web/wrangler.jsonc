@@ -22,6 +22,8 @@
     "NEXT_PUBLIC_CONVEX_SITE_URL": "https://gregarious-quail-82.convex.site",
     "NEXT_PUBLIC_CONVEX_URL": "https://gregarious-quail-82.convex.cloud",
     "NEXT_PUBLIC_DESKTOP_AUTH_URL": "https://dezign2app.com",
+    "NEXT_PUBLIC_BETA_PRODUCT_ID": "prod_3SqZz0dwcsNP45v1pDXguW",
+    "NEXT_PUBLIC_CREEM_PAYMENT_URL": "https://www.creem.io/payment/prod_3SqZz0dwcsNP45v1pDXguW",
     "NODE_OPTIONS": "--max-old-space-size=4096",
     "NODE_VERSION": "22",
     "TEST_MODE": "false"

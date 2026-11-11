@@ -54,12 +54,17 @@ function normalizeBillingPeriod(
 const TARGET_PRODUCT_ID =
   process.env.NEXT_PUBLIC_BETA_PRODUCT_ID || "prod_3SqZz0dwcsNP45v1pDXguW";
 
+const CREEM_PAYMENT_URL =
+  process.env.NEXT_PUBLIC_CREEM_PAYMENT_URL ||
+  `https://www.creem.io/payment/${TARGET_PRODUCT_ID}`;
+
 const DEFAULT_BETA_PLAN: Plan = {
   id: TARGET_PRODUCT_ID,
   name: "Beta Access",
   desc: "Everything you need to compile system architecture into production code.",
-  price: 100,
-  billingPeriod: "every-year",
+  price: 20,
+  billingPeriod: "every-month",
+  paymentUrl: CREEM_PAYMENT_URL,
   featured: true,
   features: [
     "Full-Stack Monorepo Code Generation",
@@ -156,10 +161,17 @@ const Pricing = ({
               id: targetItem.id,
               name: planName,
               desc: cleanDesc,
-              price: targetItem.price !== undefined ? targetItem.price / 100 : 0,
+              price:
+                targetItem.price !== undefined
+                  ? targetItem.price / 100
+                  : 20,
               billingPeriod: normalizeBillingPeriod(targetItem),
               featured: true,
               features: featuresList,
+              paymentUrl:
+                targetItem.id === TARGET_PRODUCT_ID
+                  ? CREEM_PAYMENT_URL
+                  : `https://www.creem.io/payment/${targetItem.id}`,
             },
           ]);
           return;
