@@ -121,7 +121,15 @@ export const AuthenticatedProvider = ({
     });
     if (!isPending && !session?.user) {
       console.warn("[AuthenticatedProvider] Unauthenticated access detected (no session user). Redirecting to /sign-in...");
-      router.replace("/sign-in");
+      const currentPath =
+        typeof window !== "undefined"
+          ? window.location.pathname + window.location.search
+          : "";
+      if (currentPath && currentPath !== "/" && !currentPath.startsWith("/sign-in") && !currentPath.startsWith("/sign-up")) {
+        router.replace(`/sign-in?redirect_url=${encodeURIComponent(currentPath)}`);
+      } else {
+        router.replace("/sign-in");
+      }
     }
   }, [session, isPending, router]);
 
