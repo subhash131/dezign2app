@@ -21,9 +21,11 @@ import { BackendCanvas } from "./_components/BackendCanvas";
 import { CreateCommitDialog } from "./_components/history/CreateCommitDialog";
 import { VersionHistoryDrawer } from "./_components/history/VersionHistoryDrawer";
 import { VersionPreviewBanner } from "./_components/history/VersionPreviewBanner";
+import { PublishProjectDialog } from "@/components/project/PublishProjectDialog";
 import { useCanvasKeyboardShortcuts } from "./_components/hooks/useCanvasKeyboardShortcuts";
-import { Loader2, ArrowLeft } from "lucide-react";
+import { Loader2, ArrowLeft, Globe, Copy } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@workspace/ui/components/button";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -43,6 +45,7 @@ export default function ProjectCanvasPage({
   params: Promise<{ projectId: string }>;
 }): React.JSX.Element {
   const { projectId } = React.use(params);
+  const router = useRouter();
 
   const [view, setView] = useQueryState<BackendCanvasView>(
     "view",
@@ -55,8 +58,10 @@ export default function ProjectCanvasPage({
 
   const [commitDialogOpen, setCommitDialogOpen] = useState(false);
   const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
+  const [publishDialogOpen, setPublishDialogOpen] = useState(false);
   const [previewVersionId, setPreviewVersionId] = useState<Id<"project_versions"> | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
+  const [isCloning, setIsCloning] = useState(false);
 
   // Synchronize store canvasView with query state
   const setStoreView = useBackendCanvasStore((s) => s.setView);
@@ -71,6 +76,31 @@ export default function ProjectCanvasPage({
   const project = useQuery(api.projects.getProjectById, {
     projectId: projectId as Id<"projects">,
   });
+
+  // If a non-owner accesses a published project via the editor route, redirect to the dedicated /preview route
+  useEffect(() => {
+    if (project && project.isReadOnly && project.isPublished) {
+      router.replace(`/preview/${projectId}`);
+    }
+  }, [project, projectId, router]);
+
+  const cloneProjectMutation = useMutation(api.projects.cloneProject);
+
+  const handleCloneProject = async () => {
+    try {
+      setIsCloning(true);
+      const newProjectId = await cloneProjectMutation({
+        projectId: projectId as Id<"projects">,
+      });
+      toast.success("Project cloned successfully! Redirecting...");
+      router.push(`/project/${newProjectId}`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to clone project";
+      toast.error(msg);
+    } finally {
+      setIsCloning(false);
+    }
+  };
 
   // Fetch preview version details if user clicked Preview in History Drawer
   const previewVersion = useQuery(
@@ -230,6 +260,8 @@ export default function ProjectCanvasPage({
             setView={setView}
             onOpenCommit={() => setCommitDialogOpen(true)}
             onOpenHistory={() => setHistoryDrawerOpen(true)}
+            isPublished={project.isPublished}
+            onOpenPublish={() => setPublishDialogOpen(true)}
           />
 
           {previewVersion && (
@@ -245,6 +277,18 @@ export default function ProjectCanvasPage({
       </div>
 
       {/* Modals & Overlays */}
+      <PublishProjectDialog
+        projectId={projectId as Id<"projects">}
+        projectName={project.name}
+        isOpen={publishDialogOpen}
+        onClose={() => setPublishDialogOpen(false)}
+        initialData={{
+          description: project.description,
+          category: project.category,
+          tags: project.tags,
+          isPublished: project.isPublished,
+        }}
+      />
       <CreateCommitDialog
         projectId={projectId}
         isOpen={commitDialogOpen}

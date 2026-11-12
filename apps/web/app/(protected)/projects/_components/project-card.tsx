@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { Pencil, Trash, Copy, ExternalLink, FolderOpen } from "lucide-react";
+import { Pencil, Trash, Copy, ExternalLink, FolderOpen, Globe } from "lucide-react";
 import { Doc } from "@workspace/backend/_generated/dataModel";
 import {
   Card,
@@ -35,6 +35,7 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { cn } from "@workspace/ui/lib/utils";
 import { ProjectDialog } from "./project-dialog";
+import { PublishProjectDialog } from "@/components/project/PublishProjectDialog";
 
 import { deleteProjectWorkspaceDir } from "@/app/(canvas)/project/[projectId]/_components/terminal/hooks/projectWorkspaceUtils";
 
@@ -49,6 +50,7 @@ export const ProjectCard = ({ project, className }: ProjectCardProps) => {
   const router = useRouter();
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isPublishOpen, setIsPublishOpen] = useState(false);
 
   const removeProject = useMutation(api.projects.removeProject);
   const duplicateProject = useMutation(api.projects.duplicateProject);
@@ -104,6 +106,15 @@ export const ProjectCard = ({ project, className }: ProjectCardProps) => {
         handleDuplicate();
       },
     },
+    {
+      label: project.isPublished ? "Publishing Settings" : "Publish to Community",
+      icon: <Globe size={14} />,
+      onClick: (e) => {
+        e?.preventDefault();
+        e?.stopPropagation();
+        setIsPublishOpen(true);
+      },
+    },
     { isSeparator: true },
     {
       label: "Delete",
@@ -144,7 +155,15 @@ export const ProjectCard = ({ project, className }: ProjectCardProps) => {
               className="relative z-20 aspect-video w-full object-cover brightness-60 grayscale transition-all rounded-t-lg"
             />
             <CardHeader className="p-4 bg-background/50 backdrop-blur-sm gap-0 rounded-none">
-              <CardAction>
+              <CardAction className="flex items-center gap-1.5">
+                {project.isPublished && (
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] bg-muted/50 text-muted-foreground border-border/60 gap-1 px-1.5 py-0 font-normal"
+                  >
+                    <Globe size={10} /> Published
+                  </Badge>
+                )}
                 <Badge variant="secondary" className="text-xs font-normal">
                   {updatedAtText}
                 </Badge>
@@ -166,6 +185,19 @@ export const ProjectCard = ({ project, className }: ProjectCardProps) => {
         project={project}
         open={isEditOpen}
         onOpenChange={setIsEditOpen}
+      />
+
+      <PublishProjectDialog
+        projectId={project._id}
+        projectName={project.name}
+        isOpen={isPublishOpen}
+        onClose={() => setIsPublishOpen(false)}
+        initialData={{
+          description: project.description,
+          category: project.category,
+          tags: project.tags,
+          isPublished: project.isPublished,
+        }}
       />
 
       <AlertDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
