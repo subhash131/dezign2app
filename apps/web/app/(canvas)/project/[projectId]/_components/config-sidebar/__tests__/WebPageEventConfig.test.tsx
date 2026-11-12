@@ -58,9 +58,23 @@ vi.mock("@workspace/ui/components/accordion", () => ({
   AccordionContent: ({ children }: MockAccordionProps) => <div>{children}</div>,
 }));
 
+vi.mock("@workspace/ui/components/checkbox", () => ({
+  Checkbox: ({ checked, onCheckedChange, id }: any) => (
+    <input
+      type="checkbox"
+      id={id}
+      checked={Boolean(checked)}
+      onChange={(e) => onCheckedChange?.(e.target.checked)}
+    />
+  ),
+}));
+
 vi.mock("../web-page-event-config", () => ({
   ActionFlowEditor: () => <div data-testid="mock-action-flow-editor">ActionFlowEditor</div>,
   EventNavigationSection: () => <div data-testid="mock-event-nav">EventNavigationSection</div>,
+  ActionSimulator: () => <div data-testid="mock-action-simulator">ActionSimulator</div>,
+  EffectVariableMappingSection: () => <div data-testid="mock-effect-variable-mapping">EffectVariableMappingSection</div>,
+  MountExecutionStrategySection: () => <div data-testid="mock-mount-execution-strategy">MountExecutionStrategySection</div>,
 }));
 
 vi.mock("@workspace/ui/components/select", () => ({
@@ -81,6 +95,8 @@ vi.mock("@workspace/ui/components/select", () => ({
   ),
   SelectValue: ({ placeholder }: MockSelectValueProps) => <span>{placeholder}</span>,
   SelectContent: ({ children }: MockSelectSubComponentProps) => <div>{children}</div>,
+  SelectGroup: ({ children }: MockSelectSubComponentProps) => <div>{children}</div>,
+  SelectLabel: ({ children }: MockSelectSubComponentProps) => <div>{children}</div>,
   SelectItem: ({ children, value }: MockSelectItemProps) => (
     <div data-value={value}>{children}</div>
   ),

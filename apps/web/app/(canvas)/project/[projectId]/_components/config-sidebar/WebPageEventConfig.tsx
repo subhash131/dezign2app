@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { cn } from "@workspace/ui/lib/utils";
 import {
   Accordion,
   AccordionContent,
@@ -7,11 +8,20 @@ import {
   AccordionTrigger,
 } from "@workspace/ui/components/accordion";
 import { BackendNode, UIEventItem, PageSection } from "@/types/canvas";
-import { Endpoint, WEB_PAGE_EVENTS } from "@workspace/canvas";
+import type { MountConfig } from "@workspace/canvas/types";
+import {
+  Endpoint,
+  WEB_PAGE_EVENTS,
+  PAGE_LIFECYCLE_EVENTS,
+  PAGE_EFFECT_EVENTS,
+  UI_INTERACTION_EVENTS,
+} from "@workspace/canvas";
 import {
   EventNavigationSection,
   ActionFlowEditor,
   ActionSimulator,
+  EffectVariableMappingSection,
+  MountExecutionStrategySection,
 } from "./web-page-event-config";
 import {
   ActionFlowCombobox,
@@ -28,13 +38,130 @@ import { Checkbox } from "@workspace/ui/components/checkbox";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
-import { Radio, Wifi, Video, RefreshCw, Layers, Zap, Play } from "lucide-react";
+import {
+  Radio,
+  Wifi,
+  Video,
+  RefreshCw,
+  Layers,
+  Zap,
+  Play,
+  Timer,
+  Route,
+  Sparkles,
+  LogOut,
+  Server,
+  Info,
+} from "lucide-react";
 
 const EVENT_OPTIONS = [...WEB_PAGE_EVENTS];
+
+interface EventTriggerExplanation {
+  title: string;
+  description: string;
+}
+
+const EVENT_TRIGGER_DESCRIPTIONS: Record<string, EventTriggerExplanation> = {
+  // Page Lifecycle
+  onMount: {
+    title: "On Component Mount",
+    description: "Triggers once when the page loads in the browser (or pre-renders on the server if SSR is enabled).",
+  },
+  mount: {
+    title: "On Component Mount",
+    description: "Triggers once when the page loads in the browser (or pre-renders on the server if SSR is enabled).",
+  },
+  pageLoad: {
+    title: "On Page Load",
+    description: "Triggers on initial page load to fetch initial data and populate stores.",
+  },
+  unmount: {
+    title: "On Component Unmount",
+    description: "Triggers when navigating away or when the section is unmounted. Ideal for resetting store state or cleanup.",
+  },
+
+  // Reactive Effects
+  visibilityChange: {
+    title: "On Tab Visibility Change",
+    description: "Triggers when the user switches tabs, minimizes the browser, or returns to this tab (document.visibilityState === 'visible'). Perfect for revalidating fresh data on focus.",
+  },
+  effect: {
+    title: "On State/Variable Change",
+    description: "Triggers reactively whenever watched variables, Zustand stores, or query parameters change (supports debounce).",
+  },
+  interval: {
+    title: "On Recurring Timer",
+    description: "Triggers periodically on a recurring interval (e.g. every 5 seconds) while the page remains open.",
+  },
+  paramChange: {
+    title: "On Route Param Change",
+    description: "Triggers when dynamic path parameters (e.g. [id]) or query string parameters change without a full page reload.",
+  },
+  beforeUnload: {
+    title: "Before Window Closes",
+    description: "Triggers when the user attempts to close, refresh, or leave the browser window. Used for unsaved change warning guards.",
+  },
+
+  // User Interactions
+  click: {
+    title: "On Element Click",
+    description: "Triggers when the user clicks or taps on this element or button.",
+  },
+  doubleClick: {
+    title: "On Double Click",
+    description: "Triggers when the user quickly double-clicks on this element.",
+  },
+  submit: {
+    title: "On Form Submit",
+    description: "Triggers when the form is submitted (e.g. clicking Submit button or pressing Enter).",
+  },
+  change: {
+    title: "On Value Change",
+    description: "Triggers when the input, select, or checkbox value changes.",
+  },
+  input: {
+    title: "On Value Input",
+    description: "Triggers synchronously on every keystroke or character input.",
+  },
+  focus: {
+    title: "On Element Focus",
+    description: "Triggers when the user focuses or clicks into this field.",
+  },
+  blur: {
+    title: "On Element Blur",
+    description: "Triggers when this field loses focus as the user moves away.",
+  },
+  mouseEnter: {
+    title: "On Mouse Enter (Hover)",
+    description: "Triggers when the mouse pointer moves over this element.",
+  },
+  mouseLeave: {
+    title: "On Mouse Leave",
+    description: "Triggers when the mouse pointer moves out of this element.",
+  },
+  keyDown: {
+    title: "On Key Down",
+    description: "Triggers when the user presses a physical key on the keyboard.",
+  },
+  keyUp: {
+    title: "On Key Up",
+    description: "Triggers when the user releases a key on the keyboard.",
+  },
+  scroll: {
+    title: "On Container Scroll",
+    description: "Triggers as the user scrolls within this element or container.",
+  },
+  navigateToPage: {
+    title: "On Page Navigation",
+    description: "Triggers client-side route navigation to a target page.",
+  },
+};
 
 const SERVER_NODE_TYPES = [
   "service",
@@ -102,11 +229,15 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
   });
 
   const initialEvent = item?.event || "click";
-  const isStandard = EVENT_OPTIONS.some((opt) => opt === initialEvent);
+  const normalizedInitialEvent =
+    initialEvent === "mount" || initialEvent === "pageLoad"
+      ? "onMount"
+      : initialEvent;
+  const isStandard = EVENT_OPTIONS.some((opt) => opt === normalizedInitialEvent);
 
   const [eventName, setEventName] = useState(item?.name || "");
   const [eventType, setEventType] = useState(
-    isStandard ? initialEvent : "click",
+    isStandard ? normalizedInitialEvent : "click",
   );
   const [navType, setNavType] = useState<"link" | "router">(
     item?.navigationType || "link",
@@ -120,6 +251,21 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
   const [wsConfig, setWsConfig] = useState(item?.wsConfig || {});
   const [webRtcConfig, setWebRtcConfig] = useState(item?.webRtcConfig || {});
   const [pollingConfig, setPollingConfig] = useState(item?.pollingConfig || {});
+  const [intervalConfig, setIntervalConfig] = useState(
+    item?.intervalConfig || { intervalMs: 5000, runImmediately: true },
+  );
+  const [paramChangeConfig, setParamChangeConfig] = useState(
+    item?.paramChangeConfig || { watchPathParams: [], watchQueryParams: [] },
+  );
+  const [effectConfig, setEffectConfig] = useState(
+    item?.effectConfig || { dependencies: [], debounceMs: 0 },
+  );
+  const [mountConfig, setMountConfig] = useState<MountConfig>(
+    item?.mountConfig || { strategy: "client", cacheMode: "no-store" },
+  );
+  const [unmountConfig, setUnmountConfig] = useState(
+    item?.unmountConfig || { resetStoreNodeIds: [] },
+  );
   const [itemKeyField, setItemKeyField] = useState(
     item?.itemContextFields?.[0] || "id",
   );
@@ -141,6 +287,11 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
       setWsConfig(item.wsConfig || {});
       setWebRtcConfig(item.webRtcConfig || {});
       setPollingConfig(item.pollingConfig || {});
+      setIntervalConfig(item.intervalConfig || { intervalMs: 5000, runImmediately: true });
+      setParamChangeConfig(item.paramChangeConfig || { watchPathParams: [], watchQueryParams: [] });
+      setEffectConfig(item.effectConfig || { dependencies: [], debounceMs: 0 });
+      setMountConfig(item.mountConfig || { strategy: "client", cacheMode: "no-store" });
+      setUnmountConfig(item.unmountConfig || { resetStoreNodeIds: [] });
       setItemKeyField(item.itemContextFields?.[0] || "id");
       setSelectedStateId(item.itemSourceStateId || "");
     }
@@ -167,6 +318,14 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
   ) => {
     if (!parentNode) return;
 
+    const isTargetLifecycle =
+      finalEvent === "onMount" ||
+      finalEvent === "mount" ||
+      finalEvent === "pageLoad" ||
+      finalEvent === "unmount" ||
+      PAGE_EFFECT_EVENTS.some((e) => e === finalEvent) ||
+      finalEvent === "polling";
+
     updateActionInParent({
       name,
       event: finalEvent,
@@ -176,6 +335,7 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
           : extraChanges?.navigationType ?? navType,
       navigationCondition: extraChanges?.navigationCondition ?? navCond,
       conditionCode: extraChanges?.conditionCode ?? condCode,
+      ...(isTargetLifecycle ? { scope: "section" } : {}),
       ...extraChanges,
     });
 
@@ -330,13 +490,31 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
     deleteEdge(edgeId);
   };
 
-  if (!item) return <div className="p-4 text-xs text-muted-foreground">Action not found.</div>;
-
   const isNavigateToPage = eventType === "navigateToPage";
   const isSse = eventType === "sse";
   const isWebsocket = eventType === "websocket";
   const isWebrtc = eventType === "webrtc";
   const isPolling = eventType === "polling";
+  const isMount = eventType === "mount" || eventType === "pageLoad" || eventType === "onMount";
+  const isUnmount = eventType === "unmount";
+  const isInterval = eventType === "interval";
+  const isParamChange = eventType === "paramChange";
+  const isEffect = eventType === "effect";
+  const isVisibilityChange = eventType === "visibilityChange";
+  const isBeforeUnload = eventType === "beforeUnload";
+  const isLifecycleOrEffect =
+    isMount ||
+    isUnmount ||
+    isInterval ||
+    isParamChange ||
+    isEffect ||
+    isVisibilityChange ||
+    isBeforeUnload ||
+    isPolling;
+  const canBeItemScoped = !isLifecycleOrEffect;
+  const currentTriggerExplanation =
+    EVENT_TRIGGER_DESCRIPTIONS[eventType] ||
+    (isMount ? EVENT_TRIGGER_DESCRIPTIONS["onMount"] : undefined);
   const sourceState = item?.itemSourceStateId
     ? parentSection?.stateObjects?.find(
         (st) => st.id === item.itemSourceStateId || st.name === item.itemSourceStateId,
@@ -359,6 +537,20 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
       eligibleStates[0]
     );
   }, [selectedStateId, item?.itemSourceStateId, eligibleStates, sectionStateObjects]);
+
+  const stateStores = React.useMemo(() => {
+    return nodes
+      .filter((n) => n.type === "state_store")
+      .map((n) => ({
+        id: n.id,
+        name: n.data?.label || n.data?.storeName || "Store",
+        fields: (n.data?.fields || []).map((f: any) => ({
+          id: f.id || f.name,
+          name: f.name,
+          type: f.type || "any",
+        })),
+      }));
+  }, [nodes]);
 
   const itemPropSuggestions = React.useMemo(() => {
     return resolveItemPropsFromState(activeTargetState, nodes, itemKeyField);
@@ -411,6 +603,10 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
     });
   };
 
+  if (!item) {
+    return <div className="p-4 text-xs text-muted-foreground">Action not found.</div>;
+  }
+
   return (
     <div className="flex flex-col gap-5 font-sans">
       {/* Merged Action Header: Event Type & Action Name */}
@@ -423,10 +619,10 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold text-foreground">Action Event</span>
               <Badge variant="outline" className="text-[10px] font-mono px-1.5 py-0 uppercase">
-                {eventType}
+                {isMount ? "onMount" : eventType}
               </Badge>
               {isItemScoped && (
-                <Badge variant="secondary" className="text-[10px] font-mono px-1.5 py-0 bg-violet-500/15 text-violet-400 border border-violet-500/30">
+                <Badge variant="secondary" className="text-[10px] font-mono px-1.5 py-0 bg-sky-500/15 text-sky-400 border border-sky-500/30">
                   Item Scoped
                 </Badge>
               )}
@@ -454,12 +650,56 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
               <SelectTrigger className="h-8 text-xs bg-background font-mono focus:ring-1 focus:ring-ring focus:ring-offset-0">
                 <SelectValue placeholder="Select trigger event" />
               </SelectTrigger>
-              <SelectContent>
-                {EVENT_OPTIONS.map((opt) => (
-                  <SelectItem key={opt} value={opt} className="text-xs font-mono">
-                    {opt}
+              <SelectContent className="max-h-72">
+                <SelectGroup>
+                  <SelectLabel className="text-[10px] font-bold text-muted-foreground uppercase px-2 py-1">
+                    ⚡ Page Lifecycle
+                  </SelectLabel>
+                  <SelectItem value="onMount" className="text-xs font-mono">
+                    onMount
                   </SelectItem>
-                ))}
+                  {eventType === "mount" && (
+                    <SelectItem value="mount" className="text-xs font-mono">
+                      onMount (mount)
+                    </SelectItem>
+                  )}
+                  {eventType === "pageLoad" && (
+                    <SelectItem value="pageLoad" className="text-xs font-mono">
+                      onMount (pageLoad)
+                    </SelectItem>
+                  )}
+                  <SelectItem value="unmount" className="text-xs font-mono">
+                    unmount
+                  </SelectItem>
+                </SelectGroup>
+                <SelectGroup>
+                  <SelectLabel className="text-[10px] font-bold text-muted-foreground uppercase px-2 py-1">
+                    🔄 Reactive Effects
+                  </SelectLabel>
+                  {PAGE_EFFECT_EVENTS.map((opt) => (
+                    <SelectItem key={opt} value={opt} className="text-xs font-mono">
+                      {opt}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+                <SelectGroup>
+                  <SelectLabel className="text-[10px] font-bold text-muted-foreground uppercase px-2 py-1">
+                    👆 User Interactions
+                  </SelectLabel>
+                  {UI_INTERACTION_EVENTS.filter((e) => e !== "navigateToPage").map((opt) => (
+                    <SelectItem key={opt} value={opt} className="text-xs font-mono">
+                      {opt}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+                <SelectGroup>
+                  <SelectLabel className="text-[10px] font-bold text-muted-foreground uppercase px-2 py-1">
+                    🧭 Navigation
+                  </SelectLabel>
+                  <SelectItem value="navigateToPage" className="text-xs font-mono">
+                    navigateToPage
+                  </SelectItem>
+                </SelectGroup>
               </SelectContent>
             </Select>
           </div>
@@ -478,119 +718,132 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
           </div>
         </div>
 
-        {/* Checkbox for Array Item Action */}
-        <div className="pt-2.5 border-t border-border/40 flex flex-col gap-2.5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="is-item-scoped"
-                checked={isItemScoped}
-                onCheckedChange={(checked) => {
-                  handleToggleItemScoped(Boolean(checked));
-                }}
-              />
-              <label
-                htmlFor="is-item-scoped"
-                className="text-xs font-medium cursor-pointer select-none text-foreground flex items-center gap-1.5"
-              >
-                <span>Trigger per Array Item</span>
-                <span className="text-[10px] text-muted-foreground font-normal">
-                  (attach action to individual array items)
-                </span>
-              </label>
+        {/* Dynamic Trigger Event Explanation */}
+        {currentTriggerExplanation && (
+          <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-secondary/40 border border-border/50 text-[11px] text-muted-foreground leading-relaxed">
+            <Info size={14} className="text-sky-500 shrink-0 mt-0.5" />
+            <div>
+              <strong className="text-foreground font-medium">{currentTriggerExplanation.title}: </strong>
+              <span>{currentTriggerExplanation.description}</span>
             </div>
-            {isItemScoped && (
-              <Badge variant="outline" className="text-[9px] font-mono border-violet-500/40 text-violet-300">
-                {sourceState?.name ? `${sourceState.name}[]` : "array item"}
-              </Badge>
-            )}
           </div>
+        )}
 
-          {isItemScoped && (
-            <div className="p-3 rounded-lg border border-violet-500/30 bg-violet-500/[0.04] flex flex-col gap-2.5">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <div className="flex flex-col gap-1">
-                  <Label className="text-[10px] font-medium text-muted-foreground">
-                    Target Array State
-                  </Label>
-                  {eligibleStates.length > 0 ? (
-                    <Select
-                      value={selectedStateId || eligibleStates[0]?.id || ""}
-                      onValueChange={(val) => handleSelectTargetState(val)}
-                    >
-                      <SelectTrigger className="h-7 text-xs font-mono bg-background">
-                        <SelectValue placeholder="Select target state" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {eligibleStates.map((st) => (
-                          <SelectItem key={st.id} value={st.id} className="text-xs font-mono">
-                            {st.name} ({st.type})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <Input
-                      className="h-7 text-xs font-mono bg-background"
-                      placeholder="e.g. messages, items"
-                      value={customStateName}
-                      onChange={(e) => setCustomStateName(e.target.value)}
-                      onBlur={() => {
-                        const cleaned = customStateName.trim();
-                        if (cleaned) {
-                          updateActionInParent({ itemSourceStateId: cleaned });
-                        }
-                      }}
-                    />
-                  )}
-                </div>
+        {/* Checkbox for Array Item Action (Only applicable for user interaction events) */}
+        {canBeItemScoped && (
+          <div className="pt-2.5 border-t border-border/40 flex flex-col gap-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="is-item-scoped"
+                  checked={isItemScoped}
+                  onCheckedChange={(checked) => {
+                    handleToggleItemScoped(Boolean(checked));
+                  }}
+                />
+                <label
+                  htmlFor="is-item-scoped"
+                  className="text-xs font-medium cursor-pointer select-none text-foreground flex items-center gap-1.5"
+                >
+                  <span>Trigger per Array Item</span>
+                  <span className="text-[10px] text-muted-foreground font-normal">
+                    (attach action to individual array items)
+                  </span>
+                </label>
+              </div>
+              {isItemScoped && (
+                <Badge variant="outline" className="text-[9px] font-mono border-sky-500/40 text-sky-300">
+                  {sourceState?.name ? `${sourceState.name}[]` : "array item"}
+                </Badge>
+              )}
+            </div>
 
-                <div className="flex flex-col gap-1">
-                  <div className="flex items-center justify-between">
+            {isItemScoped && (
+              <div className="p-3 rounded-lg border border-sky-500/30 bg-sky-500/[0.04] flex flex-col gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div className="flex flex-col gap-1">
                     <Label className="text-[10px] font-medium text-muted-foreground">
-                      Item Context Identifier Key
+                      Target Array State
                     </Label>
-                    {targetStateTypeName && (
-                      <span className="text-[9px] font-mono text-violet-400 font-normal">
-                        Type: {targetStateTypeName}
-                      </span>
+                    {eligibleStates.length > 0 ? (
+                      <Select
+                        value={selectedStateId || eligibleStates[0]?.id || ""}
+                        onValueChange={(val) => handleSelectTargetState(val)}
+                      >
+                        <SelectTrigger className="h-7 text-xs font-mono bg-background">
+                          <SelectValue placeholder="Select target state" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {eligibleStates.map((st) => (
+                            <SelectItem key={st.id} value={st.id} className="text-xs font-mono">
+                              {st.name} ({st.type})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input
+                        className="h-7 text-xs font-mono bg-background"
+                        placeholder="e.g. messages, items"
+                        value={customStateName}
+                        onChange={(e) => setCustomStateName(e.target.value)}
+                        onBlur={() => {
+                          const cleaned = customStateName.trim();
+                          if (cleaned) {
+                            updateActionInParent({ itemSourceStateId: cleaned });
+                          }
+                        }}
+                      />
                     )}
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <ActionFlowCombobox
-                      value={itemKeyField}
-                      onChange={(val) => {
-                        const cleaned = val.trim() || "id";
-                        setItemKeyField(cleaned);
-                        updateActionInParent({ itemContextFields: [cleaned] });
-                      }}
-                      placeholder="e.g. id, uuid, slug"
-                      headerLabel={
-                        targetStateTypeName
-                          ? `Props of ${targetStateTypeName}`
-                          : "Item Properties"
-                      }
-                      options={itemPropSuggestions}
-                      className="h-7 text-xs font-mono bg-background"
-                    />
-                    <span className="text-[10px] text-muted-foreground whitespace-nowrap font-mono shrink-0">
-                      item.{itemKeyField || "id"}
-                    </span>
+
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-[10px] font-medium text-muted-foreground">
+                        Item Context Identifier Key
+                      </Label>
+                      {targetStateTypeName && (
+                        <span className="text-[9px] font-mono text-sky-400 font-normal">
+                          Type: {targetStateTypeName}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <ActionFlowCombobox
+                        value={itemKeyField}
+                        onChange={(val) => {
+                          const cleaned = val.trim() || "id";
+                          setItemKeyField(cleaned);
+                          updateActionInParent({ itemContextFields: [cleaned] });
+                        }}
+                        placeholder="e.g. id, uuid, slug"
+                        headerLabel={
+                          targetStateTypeName
+                            ? `Props of ${targetStateTypeName}`
+                            : "Item Properties"
+                        }
+                        options={itemPropSuggestions}
+                        className="h-7 text-xs font-mono bg-background"
+                      />
+                      <span className="text-[10px] text-muted-foreground whitespace-nowrap font-mono shrink-0">
+                        item.{itemKeyField || "id"}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="text-[10px] text-muted-foreground leading-relaxed">
-                Clicking an item in{" "}
-                <span className="font-semibold text-foreground font-mono">
-                  {activeTargetState?.name || sourceState?.name || "the array"}
-                </span>{" "}
-                triggers this action and passes{" "}
-                <code className="text-violet-400 font-mono">&#123; {itemKeyField || "id"}: item.{itemKeyField || "id"} &#125;</code> into the request.
+                <div className="text-[10px] text-muted-foreground leading-relaxed">
+                  Clicking an item in{" "}
+                  <span className="font-semibold text-foreground font-mono">
+                    {activeTargetState?.name || sourceState?.name || "the array"}
+                  </span>{" "}
+                  triggers this action and passes{" "}
+                  <code className="text-sky-400 font-mono">&#123; {itemKeyField || "id"}: item.{itemKeyField || "id"} &#125;</code> into the request.
+                </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </div>
 
       <Accordion
@@ -598,7 +851,19 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
         defaultValue={
           isNavigateToPage
             ? ["navigation"]
-            : ["connection", "simulator", "sse_config", "ws_config", "webrtc_config", "polling_config"]
+            : [
+                "connection",
+                "simulator",
+                "sse_config",
+                "ws_config",
+                "webrtc_config",
+                "polling_config",
+                "mount_config",
+                "interval_config",
+                "param_change_config",
+                "effect_config",
+                "unmount_config",
+              ]
         }
         className="w-full flex flex-col gap-3 border-none"
       >
@@ -707,8 +972,8 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
         )}
 
         {isWebrtc && (
-          <AccordionItem value="webrtc_config" className="border border-purple-500/30 rounded-lg bg-purple-500/5 overflow-hidden">
-            <AccordionTrigger className="px-4 py-3 text-xs font-semibold hover:no-underline flex items-center justify-between text-purple-600 dark:text-purple-400">
+          <AccordionItem value="webrtc_config" className="border border-cyan-500/30 rounded-lg bg-cyan-500/5 overflow-hidden">
+            <AccordionTrigger className="px-4 py-3 text-xs font-semibold hover:no-underline flex items-center justify-between text-cyan-600 dark:text-cyan-400">
               <span className="flex items-center gap-2"><Video size={14} /> WebRTC Setup</span>
             </AccordionTrigger>
             <AccordionContent className="px-4 pb-4 pt-1 space-y-3">
@@ -724,6 +989,285 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
             </AccordionTrigger>
             <AccordionContent className="px-4 pb-4 pt-1 space-y-3">
               <div className="space-y-1"><Label className="text-xs">Interval (ms)</Label><Input type="number" value={pollingConfig.intervalMs ?? 5000} onChange={(e) => { const next = { ...pollingConfig, intervalMs: parseInt(e.target.value, 10) }; setPollingConfig(next); updateEventFields({ pollingConfig: next }); }} className="h-8 text-xs bg-background" /></div>
+            </AccordionContent>
+          </AccordionItem>
+        )}
+
+        {isMount && (
+          <AccordionItem
+            value="mount_config"
+            className="border border-sky-500/30 rounded-xl bg-sky-500/5 overflow-hidden"
+          >
+            <AccordionTrigger className="px-4 py-3 text-xs font-semibold hover:no-underline flex items-center justify-between text-sky-600 dark:text-sky-400">
+              <span className="flex items-center gap-2">
+                <Server size={14} /> Mount Execution Strategy
+              </span>
+              <Badge
+                variant="outline"
+                className="text-[10px] uppercase font-mono border-sky-500/40 text-sky-600 dark:text-sky-400"
+              >
+                {mountConfig.strategy === "ssr" ? "Server (SSR)" : "Client (useEffect)"}
+              </Badge>
+            </AccordionTrigger>
+            <AccordionContent className="px-4 pb-4 pt-1">
+              <MountExecutionStrategySection
+                mountConfig={mountConfig}
+                isProtected={isProtected}
+                hasEndpoint={actionEdges.length > 0 || Boolean(item?.url)}
+                onChange={(newCfg) => {
+                  setMountConfig(newCfg);
+                  updateActionInParent({ mountConfig: newCfg });
+                }}
+              />
+            </AccordionContent>
+          </AccordionItem>
+        )}
+
+        {isInterval && (
+          <AccordionItem
+            value="interval_config"
+            className="border border-amber-500/30 rounded-xl bg-amber-500/5 overflow-hidden"
+          >
+            <AccordionTrigger className="px-4 py-3 text-xs font-semibold hover:no-underline flex items-center justify-between text-amber-600 dark:text-amber-400">
+              <span className="flex items-center gap-2">
+                <Timer size={14} /> Timer Interval Configuration
+              </span>
+            </AccordionTrigger>
+            <AccordionContent className="px-4 pb-4 pt-1 space-y-3.5">
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs">Interval Duration (ms)</Label>
+                  <span className="text-[10px] font-mono text-muted-foreground">
+                    {(intervalConfig.intervalMs ?? 5000) >= 1000
+                      ? `${(intervalConfig.intervalMs ?? 5000) / 1000}s`
+                      : `${intervalConfig.intervalMs ?? 5000}ms`}
+                  </span>
+                </div>
+                <Input
+                  type="number"
+                  min={100}
+                  step={500}
+                  value={intervalConfig.intervalMs ?? 5000}
+                  onChange={(e) => {
+                    const next = {
+                      ...intervalConfig,
+                      intervalMs: Math.max(100, parseInt(e.target.value, 10) || 1000),
+                    };
+                    setIntervalConfig(next);
+                    updateEventFields({ intervalConfig: next });
+                  }}
+                  className="h-8 text-xs bg-background font-mono"
+                />
+              </div>
+
+              {/* Quick Preset Buttons */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {[
+                  { label: "1s", ms: 1000 },
+                  { label: "5s", ms: 5000 },
+                  { label: "10s", ms: 10000 },
+                  { label: "30s", ms: 30000 },
+                  { label: "1m", ms: 60000 },
+                ].map((preset) => (
+                  <button
+                    key={preset.ms}
+                    type="button"
+                    onClick={() => {
+                      const next = { ...intervalConfig, intervalMs: preset.ms };
+                      setIntervalConfig(next);
+                      updateEventFields({ intervalConfig: next });
+                    }}
+                    className={cn(
+                      "px-2 py-0.5 rounded text-[10px] font-mono font-medium border transition-colors cursor-pointer",
+                      intervalConfig.intervalMs === preset.ms
+                        ? "bg-amber-500 text-amber-950 border-amber-500 font-bold"
+                        : "bg-background hover:bg-secondary border-border text-muted-foreground",
+                    )}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Run immediately checkbox */}
+              <div className="flex items-center gap-2 pt-1 border-t border-amber-500/20">
+                <Checkbox
+                  id="interval-run-immediately"
+                  checked={intervalConfig.runImmediately ?? true}
+                  onCheckedChange={(checked) => {
+                    const next = { ...intervalConfig, runImmediately: Boolean(checked) };
+                    setIntervalConfig(next);
+                    updateEventFields({ intervalConfig: next });
+                  }}
+                />
+                <label
+                  htmlFor="interval-run-immediately"
+                  className="text-xs font-medium cursor-pointer select-none text-foreground flex flex-col"
+                >
+                  <span>Execute immediately on mount</span>
+                  <span className="text-[10px] text-muted-foreground font-normal">
+                    Fires the action immediately when the page loads, then repeatedly every interval.
+                  </span>
+                </label>
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        )}
+
+        {isParamChange && (
+          <AccordionItem
+            value="param_change_config"
+            className="border border-sky-500/30 rounded-xl bg-sky-500/5 overflow-hidden"
+          >
+            <AccordionTrigger className="px-4 py-3 text-xs font-semibold hover:no-underline flex items-center justify-between text-sky-600 dark:text-sky-400">
+              <span className="flex items-center gap-2">
+                <Route size={14} /> Route &amp; Query Param Watcher
+              </span>
+            </AccordionTrigger>
+            <AccordionContent className="px-4 pb-4 pt-1 space-y-3">
+              <div className="text-[11px] text-muted-foreground leading-relaxed">
+                Re-executes this action when the selected Next.js App Router dynamic parameters (<code className="text-sky-400 font-mono">useParams()</code>) or query search parameters (<code className="text-sky-400 font-mono">useSearchParams()</code>) update.
+              </div>
+
+              {/* Path params checkboxes */}
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-medium text-foreground">
+                  Dynamic Route Parameters
+                </Label>
+                {(parentNode?.data?.pathParams || []).length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {(parentNode?.data?.pathParams || []).map((p: any) => {
+                      const isChecked = (paramChangeConfig.watchPathParams || []).includes(p.name);
+                      return (
+                        <label
+                          key={p.name}
+                          className="flex items-center gap-1.5 px-2 py-1 rounded bg-background border text-xs font-mono cursor-pointer hover:bg-secondary transition-colors"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              const curr = paramChangeConfig.watchPathParams || [];
+                              const nextParams = e.target.checked
+                                ? [...curr, p.name]
+                                : curr.filter((name) => name !== p.name);
+                              const next = { ...paramChangeConfig, watchPathParams: nextParams };
+                              setParamChangeConfig(next);
+                              updateEventFields({ paramChangeConfig: next });
+                            }}
+                            className="rounded"
+                          />
+                          <span>:{p.name}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-[10px] text-muted-foreground italic">
+                    No dynamic path parameters on this page (e.g. [id]).
+                  </div>
+                )}
+              </div>
+
+              {/* Query params checkboxes */}
+              <div className="space-y-1.5 pt-2 border-t border-sky-500/20">
+                <Label className="text-[11px] font-medium text-foreground">
+                  Query Search Parameters
+                </Label>
+                {(parentNode?.data?.queryParams || []).length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {(parentNode?.data?.queryParams || []).map((q: any) => {
+                      const keyName = q.key || q.name;
+                      const isChecked = (paramChangeConfig.watchQueryParams || []).includes(keyName);
+                      return (
+                        <label
+                          key={keyName}
+                          className="flex items-center gap-1.5 px-2 py-1 rounded bg-background border text-xs font-mono cursor-pointer hover:bg-secondary transition-colors"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              const curr = paramChangeConfig.watchQueryParams || [];
+                              const nextParams = e.target.checked
+                                ? [...curr, keyName]
+                                : curr.filter((name) => name !== keyName);
+                              const next = { ...paramChangeConfig, watchQueryParams: nextParams };
+                              setParamChangeConfig(next);
+                              updateEventFields({ paramChangeConfig: next });
+                            }}
+                            className="rounded"
+                          />
+                          <span>?{keyName}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-[10px] text-muted-foreground italic">
+                    No query parameters configured on this page (e.g. ?page=1).
+                  </div>
+                )}
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        )}
+
+        {isEffect && (
+          <AccordionItem
+            value="effect_config"
+            className="border border-sky-500/30 rounded-xl bg-sky-500/5 overflow-hidden"
+          >
+            <AccordionTrigger className="px-4 py-3 text-xs font-semibold hover:no-underline flex items-center justify-between text-sky-600 dark:text-sky-400">
+              <span className="flex items-center gap-2">
+                <Sparkles size={14} /> Variable Change Trigger Mapping
+              </span>
+              <Badge
+                variant="outline"
+                className="text-[10px] font-mono border-sky-500/30 text-sky-600 dark:text-sky-400"
+              >
+                {(effectConfig.variableMappings?.length ?? effectConfig.dependencies?.length ?? 0)}{" "}
+                {(effectConfig.variableMappings?.length ?? effectConfig.dependencies?.length ?? 0) === 1
+                  ? "var"
+                  : "vars"}{" "}
+                mapped
+              </Badge>
+            </AccordionTrigger>
+            <AccordionContent className="px-4 pb-4 pt-1">
+              <EffectVariableMappingSection
+                effectConfig={effectConfig}
+                onChange={(next) => {
+                  setEffectConfig(next);
+                  updateEventFields({ effectConfig: next });
+                }}
+                currentSectionStateObjects={sectionStateObjects}
+                allPageSections={sections}
+                stateStores={stateStores}
+                pathParams={parentNode?.data?.pathParams || []}
+                queryParams={parentNode?.data?.queryParams || []}
+                actionName={eventName || item?.name || "onEffect"}
+              />
+            </AccordionContent>
+          </AccordionItem>
+        )}
+
+        {isUnmount && (
+          <AccordionItem
+            value="unmount_config"
+            className="border border-rose-500/30 rounded-xl bg-rose-500/5 overflow-hidden"
+          >
+            <AccordionTrigger className="px-4 py-3 text-xs font-semibold hover:no-underline flex items-center justify-between text-rose-600 dark:text-rose-400">
+              <span className="flex items-center gap-2">
+                <LogOut size={14} /> Unmount &amp; Teardown Cleanup
+              </span>
+            </AccordionTrigger>
+            <AccordionContent className="px-4 pb-4 pt-1 space-y-3">
+              <div className="text-[11px] text-muted-foreground leading-relaxed">
+                Executes inside the cleanup return function of the page <code className="text-rose-400 font-mono">useEffect()</code> when the user navigates away or the page unmounts.
+              </div>
+              <div className="p-2.5 rounded-lg border border-rose-500/20 bg-background text-[11px] text-muted-foreground leading-relaxed">
+                Connect this action to State Stores to automatically invoke <code className="font-mono text-rose-400">useStore.getState().reset()</code> on unmount.
+              </div>
             </AccordionContent>
           </AccordionItem>
         )}

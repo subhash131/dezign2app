@@ -18,12 +18,22 @@ export function cleanWebPageEdge(
     edge.sourceHandle?.startsWith("events-") ||
       edge.sourceHandle?.startsWith("event-in-") ||
       edge.sourceHandle?.startsWith("pageload-in-") ||
+      edge.sourceHandle?.startsWith("mount-in-") ||
+      edge.sourceHandle?.startsWith("onmount-in-") ||
+      edge.sourceHandle?.startsWith("unmount-in-") ||
+      edge.sourceHandle?.startsWith("interval-in-") ||
+      edge.sourceHandle?.startsWith("effect-in-") ||
       edge.sourceHandle?.startsWith("action-in-"),
   );
   const isTargetAction = Boolean(
     edge.targetHandle?.startsWith("events-") ||
       edge.targetHandle?.startsWith("event-in-") ||
       edge.targetHandle?.startsWith("pageload-in-") ||
+      edge.targetHandle?.startsWith("mount-in-") ||
+      edge.targetHandle?.startsWith("onmount-in-") ||
+      edge.targetHandle?.startsWith("unmount-in-") ||
+      edge.targetHandle?.startsWith("interval-in-") ||
+      edge.targetHandle?.startsWith("effect-in-") ||
       edge.targetHandle?.startsWith("action-in-"),
   );
 
@@ -40,7 +50,7 @@ export function cleanWebPageEdge(
       : (edge.sourceHandle ?? "");
 
     const actionId = webHandle.replace(
-      /^(?:events-|event-in-|pageload-in-|action-in-)/,
+      /^(?:events-|event-in-|pageload-in-|mount-in-|onmount-in-|unmount-in-|interval-in-|effect-in-|action-in-)/,
       "",
     );
     const otherEpId = otherHandle
@@ -302,6 +312,11 @@ export function cleanWebPageEdge(
       Boolean(webHandle?.startsWith("events-")) ||
       Boolean(webHandle?.startsWith("event-in-")) ||
       Boolean(webHandle?.startsWith("pageload-in-")) ||
+      Boolean(webHandle?.startsWith("mount-in-")) ||
+      Boolean(webHandle?.startsWith("onmount-in-")) ||
+      Boolean(webHandle?.startsWith("unmount-in-")) ||
+      Boolean(webHandle?.startsWith("interval-in-")) ||
+      Boolean(webHandle?.startsWith("effect-in-")) ||
       Boolean(webHandle?.startsWith("action-in-")) ||
       Boolean(webHandle?.startsWith("sse-in-")) ||
       Boolean(webHandle?.startsWith("websocket-in-")) ||
@@ -310,7 +325,7 @@ export function cleanWebPageEdge(
 
     if (isActionHandle) {
       const actionId = webHandle!.replace(
-        /^(events-|event-in-|pageload-in-|action-in-|sse-in-|websocket-in-|ws-in-|webrtc-in-)/,
+        /^(events-|event-in-|pageload-in-|mount-in-|onmount-in-|unmount-in-|interval-in-|effect-in-|action-in-|sse-in-|websocket-in-|ws-in-|webrtc-in-)/,
         "",
       );
       const hasOtherActionEdge = ctx.nextEdges.some(

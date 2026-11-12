@@ -225,13 +225,17 @@ export function handleTransformerConnect({
       webHandle.startsWith("events-") ||
       webHandle.startsWith("event-in-") ||
       webHandle.startsWith("pageload-in-") ||
+      webHandle.startsWith("mount-in-") ||
+      webHandle.startsWith("unmount-in-") ||
+      webHandle.startsWith("interval-in-") ||
+      webHandle.startsWith("effect-in-") ||
       webHandle.startsWith("action-in-") ||
       webHandle.startsWith("rtc-out-") ||
       webHandle.startsWith("rtc-in-");
 
     let actionId = isActionHandle
       ? webHandle.replace(
-          /^(?:events-|event-in-|pageload-in-|action-in-|rtc-out-|rtc-in-)/,
+          /^(?:events-|event-in-|pageload-in-|mount-in-|unmount-in-|interval-in-|effect-in-|action-in-|rtc-out-|rtc-in-)/,
           "",
         )
       : (passedRefNode?.data?.targetActionId || "");
@@ -494,7 +498,7 @@ export function handleTransformerConnect({
       ? (connection.targetHandle ?? "")
       : (connection.sourceHandle ?? "");
     const actionId = webHandle.replace(
-      /^(?:events-|event-in-|pageload-in-|action-in-|rtc-out-|rtc-in-)/,
+      /^(?:events-|event-in-|pageload-in-|mount-in-|unmount-in-|interval-in-|effect-in-|action-in-|rtc-out-|rtc-in-)/,
       "",
     );
 
@@ -576,7 +580,11 @@ export function resolveWebPageActionInboundHandle(
   const evtStr = (matchedAction.event || matchedAction.name || "").toLowerCase();
   const isPageLoad =
     evtStr === "pageload" ||
+    evtStr === "mount" ||
+    evtStr === "onmount" ||
     actId === "pageLoad" ||
+    actId === "mount" ||
+    actId === "onMount" ||
     actId.toLowerCase().includes("pageload");
   const isSse = evtStr === "sse" || evtStr === "ssemessage";
   const isWebsocket =
@@ -723,7 +731,7 @@ export function healDirectTransformerEdges({
         : (directEdge.targetHandle ?? "");
 
     const actionId = isTargetWebPage
-      ? webHandle.replace(/^(?:events-|event-in-|pageload-in-|action-in-|rtc-out-|rtc-in-)/, "")
+      ? webHandle.replace(/^(?:events-|event-in-|pageload-in-|mount-in-|unmount-in-|interval-in-|effect-in-|action-in-|rtc-out-|rtc-in-)/, "")
       : "";
     const targetId = !isTargetWebPage
       ? webHandle.replace(/^(?:endpoint-in-|consumedEvents-in-)/, "")
@@ -971,7 +979,7 @@ export function healDirectTransformerEdges({
       src.type === "webPage" ? (invEdge.sourceHandle ?? "") : (invEdge.targetHandle ?? "");
     const actionId =
       rawHandle.replace(
-        /^(?:events-|event-in-|pageload-in-|action-in-|rtc-out-|rtc-in-)/,
+        /^(?:events-|event-in-|pageload-in-|mount-in-|unmount-in-|interval-in-|effect-in-|action-in-|rtc-out-|rtc-in-)/,
         "",
       ) || (refNode.data?.targetActionId || "");
 

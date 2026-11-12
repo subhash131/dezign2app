@@ -2,9 +2,21 @@ import type { WebAppZone, RedirectMap } from "../types/auth";
 import type { SectionPreset, CategorizedLibrary, PresetTriggerOption } from "../types/web-app";
 import type { BackendNode } from "../types/nodes";
 import type { Endpoint } from "../schemas/endpoints";
-import { WEB_PAGE_EVENTS } from "../graph-rules";
+import {
+  WEB_PAGE_EVENTS,
+  PAGE_LIFECYCLE_EVENTS,
+  PAGE_EFFECT_EVENTS,
+  UI_INTERACTION_EVENTS,
+  type WebPageEventType,
+} from "../graph-rules";
 
-export { WEB_PAGE_EVENTS };
+export {
+  WEB_PAGE_EVENTS,
+  PAGE_LIFECYCLE_EVENTS,
+  PAGE_EFFECT_EVENTS,
+  UI_INTERACTION_EVENTS,
+  type WebPageEventType,
+};
 export const EVENT_OPTIONS = WEB_PAGE_EVENTS;
 
 export const SERVER_NODE_TYPES = [

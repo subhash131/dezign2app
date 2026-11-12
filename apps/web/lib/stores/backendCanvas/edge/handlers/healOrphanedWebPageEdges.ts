@@ -140,13 +140,18 @@ export function healOrphanedWebPageEdges({
       edge.targetHandle &&
       (edge.targetHandle.startsWith("event-in-") ||
         edge.targetHandle.startsWith("pageload-in-") ||
+        edge.targetHandle.startsWith("mount-in-") ||
+        edge.targetHandle.startsWith("onmount-in-") ||
+        edge.targetHandle.startsWith("unmount-in-") ||
+        edge.targetHandle.startsWith("interval-in-") ||
+        edge.targetHandle.startsWith("effect-in-") ||
         edge.targetHandle.startsWith("sse-in-") ||
         edge.targetHandle.startsWith("websocket-in-") ||
         edge.targetHandle.startsWith("webrtc-in-"))
     ) {
       if (targetNode.type === "webPage") {
         const actionId = edge.targetHandle.replace(
-          /^(?:event-in-|pageload-in-|sse-in-|websocket-in-|webrtc-in-)/,
+          /^(?:event-in-|pageload-in-|mount-in-|onmount-in-|unmount-in-|interval-in-|effect-in-|sse-in-|websocket-in-|webrtc-in-)/,
           "",
         );
         const sections: PageSection[] = targetNode.data?.sections || [];

@@ -607,6 +607,31 @@ export type FrontendActionStepDraft = {
   storageValueSource?: FrontendFieldSource;
 };
 
+export interface EffectVariableMapping {
+  id: string;
+  source: "section_state" | "store" | "param" | "custom";
+  variableName: string;
+  displayName?: string;
+  varType?: string;
+  sectionId?: string;
+  sectionName?: string;
+  storeId?: string;
+  storeName?: string;
+  paramKey?: string;
+}
+
+export interface EffectConfig {
+  dependencies?: string[];
+  variableMappings?: EffectVariableMapping[];
+  debounceMs?: number;
+}
+
+export interface MountConfig {
+  strategy?: "client" | "ssr";
+  cacheMode?: "no-store" | "force-cache" | "revalidate";
+  revalidateSeconds?: number;
+}
+
 export type UIEventItem = {
   id: string;
   name: string;
@@ -687,6 +712,21 @@ export type UIEventItem = {
     intervalMs?: number;
     stopOnError?: boolean;
     maxRounds?: number;
+  };
+  // Lifecycle & Effect configs
+  mountConfig?: MountConfig;
+  intervalConfig?: {
+    intervalMs: number;
+    runImmediately?: boolean;
+  };
+  paramChangeConfig?: {
+    watchPathParams?: string[];
+    watchQueryParams?: string[];
+  };
+  effectConfig?: EffectConfig;
+  unmountConfig?: {
+    resetStoreNodeIds?: string[];
+    triggerEndpointId?: string;
   };
   // Item-scoped event for array state fields
   scope?: "section" | "item";
