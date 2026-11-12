@@ -3,6 +3,12 @@ export {
   generatePageLoadEffect,
   generatePageLoadSection,
   generateJsonValueTypeDecl,
+  generateIntervalEffects,
+  generateParamChangeEffects,
+  generateStateWatcherEffects,
+  generateVisibilityEffects,
+  generateBeforeUnloadEffects,
+  type LifecycleActionMeta,
 } from "./pageLoadGenerator";
 
 export { generateSseEffects } from "./sseEffectGenerator";

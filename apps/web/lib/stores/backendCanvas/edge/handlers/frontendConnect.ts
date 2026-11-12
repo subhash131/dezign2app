@@ -394,6 +394,11 @@ export function handleFrontendConnect({
       webHandle.startsWith("events-") ||
       webHandle.startsWith("event-in-") ||
       webHandle.startsWith("pageload-in-") ||
+      webHandle.startsWith("mount-in-") ||
+      webHandle.startsWith("onmount-in-") ||
+      webHandle.startsWith("unmount-in-") ||
+      webHandle.startsWith("interval-in-") ||
+      webHandle.startsWith("effect-in-") ||
       webHandle.startsWith("action-in-") ||
       webHandle.startsWith("sse-in-") ||
       webHandle.startsWith("websocket-in-") ||
@@ -534,9 +539,26 @@ export function handleFrontendConnect({
       }
 
       if (isActionHandle) {
-        const actionIdToBind = webHandle.replace(/^(events-|event-in-|pageload-in-|action-in-|sse-in-|websocket-in-|ws-in-|webrtc-in-)/, "");
+        const actionIdToBind = webHandle.replace(/^(events-|event-in-|pageload-in-|mount-in-|onmount-in-|unmount-in-|interval-in-|effect-in-|action-in-|sse-in-|websocket-in-|ws-in-|webrtc-in-)/, "");
         const sections: PageSection[] = webPageNode.data?.sections || [];
         let updatedActionName = "";
+
+        const targetAction = sections.flatMap((sec: PageSection) => sec.actions || []).find((a: UIEventItem) => a.id === actionIdToBind);
+        const isPageLoad =
+          targetAction?.event === "pageLoad" ||
+          targetAction?.event === "mount" ||
+          targetAction?.event === "onMount" ||
+          targetAction?.name === "pageLoad" ||
+          targetAction?.name === "mount" ||
+          targetAction?.name === "onMount";
+        const isUnmount = targetAction?.event === "unmount" || targetAction?.name === "unmount";
+        const isInterval = targetAction?.event === "interval";
+        const isEffect = targetAction?.event === "effect" || targetAction?.event === "paramChange" || targetAction?.event === "visibilityChange" || targetAction?.event === "beforeUnload";
+
+        if (isUnmount && actionType === "mutate") {
+          actionType = "reset";
+          actionName = "reset";
+        }
 
         const newBindingId = `bnd-${actionIdToBind}-${Date.now()}`;
         const newBinding: StoreActionBinding = {
@@ -584,9 +606,15 @@ export function handleFrontendConnect({
         });
 
         // Normalize edge direction: always from StateStore (source) to WebPage action (target)
-        const targetAction = sections.flatMap((sec: PageSection) => sec.actions || []).find((a: UIEventItem) => a.id === actionIdToBind);
-        const isPageLoad = targetAction?.event === "pageLoad" || targetAction?.name === "pageLoad";
-        const normalizedTargetHandle = isPageLoad ? `pageload-in-${actionIdToBind}` : `event-in-${actionIdToBind}`;
+        const normalizedTargetHandle = isPageLoad
+          ? `pageload-in-${actionIdToBind}`
+          : isUnmount
+          ? `unmount-in-${actionIdToBind}`
+          : isInterval
+          ? `interval-in-${actionIdToBind}`
+          : isEffect
+          ? `effect-in-${actionIdToBind}`
+          : `event-in-${actionIdToBind}`;
         const normalizedSourceHandle =
           actionType === "populate"
             ? "populate-out"

@@ -8,12 +8,17 @@ import { cn } from "@workspace/ui/lib/utils";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
 import {
   WEB_PAGE_EVENTS,
+  PAGE_LIFECYCLE_EVENTS,
+  PAGE_EFFECT_EVENTS,
+  UI_INTERACTION_EVENTS,
   CANVAS_ROW_HANDLE_CLASS,
   CANVAS_ROW_HANDLE_LEFT_OFFSET_CLASS,
   CANVAS_ROW_HANDLE_RIGHT_OFFSET_CLASS,
@@ -80,8 +85,9 @@ export const SectionActionRow = ({
     if (isEditing) {
       setEditName(action.name || "");
       const evt = action.event || "click";
-      const isStandard = isStandardWebPageEvent(evt);
-      setEditEvent(isStandard ? evt : "click");
+      const normalizedEvt = evt === "mount" || evt === "pageLoad" ? "onMount" : evt;
+      const isStandard = isStandardWebPageEvent(normalizedEvt);
+      setEditEvent(isStandard ? normalizedEvt : "click");
 
       const focus = () => {
         if (inputRef.current) {
@@ -110,7 +116,15 @@ export const SectionActionRow = ({
 
   const evtStr = action.event || "";
   const evtLower = evtStr.toLowerCase();
-  const isPageLoad = evtStr === "pageLoad";
+  const isMount = evtStr === "mount" || evtStr === "pageLoad" || evtStr === "onMount";
+  const isPageLoad = isMount;
+  const isUnmount = evtStr === "unmount";
+  const isInterval = evtStr === "interval";
+  const isParamChange = evtStr === "paramChange";
+  const isEffect = evtStr === "effect";
+  const isVisibilityChange = evtStr === "visibilityChange";
+  const isBeforeUnload = evtStr === "beforeUnload";
+  const isReactiveEffect = isParamChange || isEffect || isVisibilityChange || isBeforeUnload;
   const isSse = evtStr === "sse" || evtStr === "sseMessage" || evtLower === "sse";
   const isWebsocket =
     evtStr === "websocket" ||
@@ -172,6 +186,11 @@ export const SectionActionRow = ({
         (e.target === nodeId &&
           (e.targetHandle === `event-in-${action.id}` ||
             e.targetHandle === `pageload-in-${action.id}` ||
+            e.targetHandle === `mount-in-${action.id}` ||
+            e.targetHandle === `onmount-in-${action.id}` ||
+            e.targetHandle === `unmount-in-${action.id}` ||
+            e.targetHandle === `interval-in-${action.id}` ||
+            e.targetHandle === `effect-in-${action.id}` ||
             e.targetHandle === `sse-in-${action.id}` ||
             e.targetHandle === `websocket-in-${action.id}` ||
             e.targetHandle === `webrtc-in-${action.id}` ||
@@ -276,21 +295,45 @@ export const SectionActionRow = ({
 
   const getEventBadge = () => {
     const evt = action.event || action.name || "click";
-    const isUnmount = evt === "unmount";
-    const isPageLoad = evt === "pageLoad";
+    const isMountEvt = evt === "mount" || evt === "pageLoad" || evt === "onMount";
+    const isUnmountEvt = evt === "unmount";
+    const isIntervalEvt = evt === "interval";
+    const isParamChangeEvt = evt === "paramChange";
+    const isEffectEvt = evt === "effect";
+    const isVisibilityEvt = evt === "visibilityChange";
+    const isBeforeUnloadEvt = evt === "beforeUnload";
+
+    let badgeClass = "text-muted-foreground";
+    let badgeText = evt;
+
+    if (isMountEvt) {
+      badgeClass = "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-semibold";
+      badgeText = "onMount";
+    } else if (isUnmountEvt) {
+      badgeClass = "bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 font-semibold";
+    } else if (isIntervalEvt) {
+      badgeClass = "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 font-semibold";
+      badgeText = action.intervalConfig?.intervalMs ? `interval (${action.intervalConfig.intervalMs}ms)` : "interval";
+    } else if (isParamChangeEvt) {
+      badgeClass = "bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 font-semibold";
+    } else if (isEffectEvt) {
+      badgeClass = "bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/20 font-semibold";
+    } else if (isVisibilityEvt) {
+      badgeClass = "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 font-semibold";
+      badgeText = "visibility";
+    } else if (isBeforeUnloadEvt) {
+      badgeClass = "bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20 font-semibold";
+    }
+
     return (
       <div className="flex items-center gap-1">
         <span
           className={cn(
             "text-[8px] font-mono truncate px-1 rounded",
-            isUnmount
-              ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 font-semibold"
-              : isPageLoad
-              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-semibold"
-              : "text-muted-foreground",
+            badgeClass,
           )}
         >
-          {evt}
+          {badgeText}
         </span>
         {(() => {
           const rawBindings =
@@ -409,7 +452,49 @@ export const SectionActionRow = ({
             isActionConnected && CANVAS_HANDLE_CONNECTED_CLASS,
           )}
           style={{ top: "50%" }}
-          title="pageLoad (in): Wire from State Store or API endpoint"
+          title="onMount (in): Wire from State Store or API endpoint"
+        />
+      ) : isUnmount ? (
+        <Handle
+          type="target"
+          position={Position.Left}
+          id={`unmount-in-${action.id}`}
+          className={cn(
+            CANVAS_ROW_HANDLE_CLASS,
+            CANVAS_ROW_HANDLE_LEFT_OFFSET_CLASS,
+            "!border-2 !border-background !bg-rose-500 transition-all",
+            isActionConnected && CANVAS_HANDLE_CONNECTED_CLASS,
+          )}
+          style={{ top: "50%" }}
+          title="unmount (in): Teardown reset from State Store or API endpoint"
+        />
+      ) : isInterval ? (
+        <Handle
+          type="target"
+          position={Position.Left}
+          id={`interval-in-${action.id}`}
+          className={cn(
+            CANVAS_ROW_HANDLE_CLASS,
+            CANVAS_ROW_HANDLE_LEFT_OFFSET_CLASS,
+            "!border-2 !border-background !bg-amber-500 transition-all",
+            isActionConnected && CANVAS_HANDLE_CONNECTED_CLASS,
+          )}
+          style={{ top: "50%" }}
+          title="interval (in): Periodic timer trigger from State Store or API"
+        />
+      ) : isReactiveEffect ? (
+        <Handle
+          type="target"
+          position={Position.Left}
+          id={`effect-in-${action.id}`}
+          className={cn(
+            CANVAS_ROW_HANDLE_CLASS,
+            CANVAS_ROW_HANDLE_LEFT_OFFSET_CLASS,
+            "!border-2 !border-background !bg-violet-500 transition-all",
+            isActionConnected && CANVAS_HANDLE_CONNECTED_CLASS,
+          )}
+          style={{ top: "50%" }}
+          title={`${action.event || "effect"} (in): Reactive effect trigger`}
         />
       ) : isSse ? (
         <Handle
@@ -528,12 +613,56 @@ export const SectionActionRow = ({
               <SelectTrigger className="h-6 text-xs w-full bg-background focus:ring-1 focus:ring-ring focus:ring-offset-0">
                 <SelectValue placeholder="Event type" />
               </SelectTrigger>
-              <SelectContent>
-                {EVENT_OPTIONS.map((opt) => (
-                  <SelectItem key={opt} value={opt} className="text-xs">
-                    {opt}
+              <SelectContent className="max-h-72">
+                <SelectGroup>
+                  <SelectLabel className="text-[10px] font-bold text-muted-foreground uppercase px-2 py-1">
+                    ⚡ Page Lifecycle
+                  </SelectLabel>
+                  <SelectItem value="onMount" className="text-xs">
+                    onMount
                   </SelectItem>
-                ))}
+                  {editEvent === "mount" && (
+                    <SelectItem value="mount" className="text-xs">
+                      onMount (mount)
+                    </SelectItem>
+                  )}
+                  {editEvent === "pageLoad" && (
+                    <SelectItem value="pageLoad" className="text-xs">
+                      onMount (pageLoad)
+                    </SelectItem>
+                  )}
+                  <SelectItem value="unmount" className="text-xs">
+                    unmount
+                  </SelectItem>
+                </SelectGroup>
+                <SelectGroup>
+                  <SelectLabel className="text-[10px] font-bold text-muted-foreground uppercase px-2 py-1">
+                    🔄 Reactive Effects
+                  </SelectLabel>
+                  {PAGE_EFFECT_EVENTS.map((opt) => (
+                    <SelectItem key={opt} value={opt} className="text-xs">
+                      {opt}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+                <SelectGroup>
+                  <SelectLabel className="text-[10px] font-bold text-muted-foreground uppercase px-2 py-1">
+                    👆 User Interactions
+                  </SelectLabel>
+                  {UI_INTERACTION_EVENTS.filter((e) => e !== "navigateToPage").map((opt) => (
+                    <SelectItem key={opt} value={opt} className="text-xs">
+                      {opt}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+                <SelectGroup>
+                  <SelectLabel className="text-[10px] font-bold text-muted-foreground uppercase px-2 py-1">
+                    🧭 Navigation
+                  </SelectLabel>
+                  <SelectItem value="navigateToPage" className="text-xs">
+                    navigateToPage
+                  </SelectItem>
+                </SelectGroup>
               </SelectContent>
             </Select>
           </div>

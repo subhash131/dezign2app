@@ -211,6 +211,25 @@ export const storageOperationBindingSchema = z.object({
   serviceNodeId: z.string().optional(),
 });
 
+export const effectVariableMappingSchema = z.object({
+  id: z.string(),
+  source: z.enum(["section_state", "store", "param", "custom"]),
+  variableName: z.string(),
+  displayName: z.string().optional(),
+  varType: z.string().optional(),
+  sectionId: z.string().optional(),
+  sectionName: z.string().optional(),
+  storeId: z.string().optional(),
+  storeName: z.string().optional(),
+  paramKey: z.string().optional(),
+});
+
+export const effectConfigSchema = z.object({
+  dependencies: z.array(z.string()).optional(),
+  variableMappings: z.array(effectVariableMappingSchema).optional(),
+  debounceMs: z.number().optional(),
+});
+
 export const clientEventInputSchema = z.object({
   id: z.string().optional().describe("Unique identifier for this event"),
   name: z
@@ -282,6 +301,32 @@ export const clientEventInputSchema = z.object({
   scope: z.enum(["section", "item"]).optional(),
   itemSourceStateId: z.string().optional(),
   itemContextFields: z.array(z.string()).optional(),
+  intervalConfig: z
+    .object({
+      intervalMs: z.number(),
+      runImmediately: z.boolean().optional(),
+    })
+    .optional(),
+  paramChangeConfig: z
+    .object({
+      watchPathParams: z.array(z.string()).optional(),
+      watchQueryParams: z.array(z.string()).optional(),
+    })
+    .optional(),
+  effectConfig: effectConfigSchema.optional(),
+  unmountConfig: z
+    .object({
+      resetStoreNodeIds: z.array(z.string()).optional(),
+      triggerEndpointId: z.string().optional(),
+    })
+    .optional(),
+  mountConfig: z
+    .object({
+      strategy: z.enum(["client", "ssr"]).optional(),
+      cacheMode: z.enum(["no-store", "force-cache", "revalidate"]).optional(),
+      revalidateSeconds: z.number().optional(),
+    })
+    .optional(),
 });
 
 export const webPageEventSchema = clientEventInputSchema;

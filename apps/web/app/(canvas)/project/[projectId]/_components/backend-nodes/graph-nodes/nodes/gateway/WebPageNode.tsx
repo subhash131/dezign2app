@@ -119,12 +119,27 @@ export const WebPageNode = React.memo(({
 
         if (bindings.length === 0) return;
 
-        const isPageLoad = act.event === "pageLoad" || act.name === "pageLoad";
+        const isPageLoad =
+          act.event === "pageLoad" ||
+          act.event === "mount" ||
+          act.event === "onMount" ||
+          act.name === "pageLoad" ||
+          act.name === "mount" ||
+          act.name === "onMount";
+        const isUnmount = act.event === "unmount" || act.name === "unmount";
+        const isInterval = act.event === "interval";
+        const isEffect = act.event === "effect" || act.event === "paramChange" || act.event === "visibilityChange" || act.event === "beforeUnload";
         const isSse = act.event === "sse" || act.event === "sseMessage";
         const isWebsocket = act.event === "websocket" || act.event === "ws" || act.event === "websocketMessage";
         const isWebrtc = act.event === "webrtc";
         const targetHandle = isPageLoad
           ? `pageload-in-${act.id}`
+          : isUnmount
+          ? `unmount-in-${act.id}`
+          : isInterval
+          ? `interval-in-${act.id}`
+          : isEffect
+          ? `effect-in-${act.id}`
           : isSse
           ? `sse-in-${act.id}`
           : isWebsocket
@@ -216,13 +231,28 @@ export const WebPageNode = React.memo(({
         );
         if (transSteps.length === 0) return;
 
-        const isPageLoad = act.event === "pageLoad" || act.name === "pageLoad";
+        const isPageLoad =
+          act.event === "pageLoad" ||
+          act.event === "mount" ||
+          act.event === "onMount" ||
+          act.name === "pageLoad" ||
+          act.name === "mount" ||
+          act.name === "onMount";
+        const isUnmount = act.event === "unmount" || act.name === "unmount";
+        const isInterval = act.event === "interval";
+        const isEffect = act.event === "effect" || act.event === "paramChange" || act.event === "visibilityChange" || act.event === "beforeUnload";
         const isSse = act.event === "sse" || act.event === "sseMessage";
         const isWebsocket =
           act.event === "websocket" || act.event === "ws" || act.event === "websocketMessage";
         const isWebrtc = act.event === "webrtc";
         const targetHandle = isPageLoad
           ? `pageload-in-${act.id}`
+          : isUnmount
+          ? `unmount-in-${act.id}`
+          : isInterval
+          ? `interval-in-${act.id}`
+          : isEffect
+          ? `effect-in-${act.id}`
           : isSse
           ? `sse-in-${act.id}`
           : isWebsocket

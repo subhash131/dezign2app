@@ -608,6 +608,32 @@ export const storageOperationBindingConvexValidator = v.object({
   serviceNodeId: v.optional(v.string()),
 });
 
+// Reactive Effect Variable Mapping Validator
+export const effectVariableMappingConvexValidator = v.object({
+  id: v.string(),
+  source: v.union(
+    v.literal("section_state"),
+    v.literal("store"),
+    v.literal("param"),
+    v.literal("custom"),
+  ),
+  variableName: v.string(),
+  displayName: v.optional(v.string()),
+  varType: v.optional(v.string()),
+  sectionId: v.optional(v.string()),
+  sectionName: v.optional(v.string()),
+  storeId: v.optional(v.string()),
+  storeName: v.optional(v.string()),
+  paramKey: v.optional(v.string()),
+});
+
+// Reactive Effect Config Validator
+export const effectConfigConvexValidator = v.object({
+  dependencies: v.optional(v.array(v.string())),
+  variableMappings: v.optional(v.array(effectVariableMappingConvexValidator)),
+  debounceMs: v.optional(v.number()),
+});
+
 // UI Event Item Validator
 export const webPageEventConvexValidator = v.object({
   id: v.optional(v.string()),
@@ -668,6 +694,38 @@ export const webPageEventConvexValidator = v.object({
   scope: v.optional(v.union(v.literal("section"), v.literal("item"))),
   itemSourceStateId: v.optional(v.string()),
   itemContextFields: v.optional(v.array(v.string())),
+  intervalConfig: v.optional(
+    v.object({
+      intervalMs: v.number(),
+      runImmediately: v.optional(v.boolean()),
+    }),
+  ),
+  paramChangeConfig: v.optional(
+    v.object({
+      watchPathParams: v.optional(v.array(v.string())),
+      watchQueryParams: v.optional(v.array(v.string())),
+    }),
+  ),
+  effectConfig: v.optional(effectConfigConvexValidator),
+  unmountConfig: v.optional(
+    v.object({
+      resetStoreNodeIds: v.optional(v.array(v.string())),
+      triggerEndpointId: v.optional(v.string()),
+    }),
+  ),
+  mountConfig: v.optional(
+    v.object({
+      strategy: v.optional(v.union(v.literal("client"), v.literal("ssr"))),
+      cacheMode: v.optional(
+        v.union(
+          v.literal("no-store"),
+          v.literal("force-cache"),
+          v.literal("revalidate"),
+        ),
+      ),
+      revalidateSeconds: v.optional(v.number()),
+    }),
+  ),
 });
 
 // Page State Object Validator

@@ -13,6 +13,15 @@ import {
   hasTransformerActionSteps,
 } from "./componentTemplates";
 import { resolveBaseUrlInfo, type StorageUploadConfig } from "./event-generators";
+import {
+  generateIntervalEffects,
+  generateParamChangeEffects,
+  generateStateWatcherEffects,
+  generateVisibilityEffects,
+  generateBeforeUnloadEffects,
+  generateJsonValueTypeDecl,
+  type LifecycleActionMeta,
+} from "./page-generators";
 import { isAuthPage, isAuthLoginPage, isAuthRegisterPage } from "../../../compileAuth";
 import { typeStrToTsAndZod } from "../../../generators/schemaToTypeScript";
 import { generateApiClientFile } from "./apiClientTemplate";
@@ -259,10 +268,17 @@ export function generatePageAndComponentFiles({
 
     const allActions: UIEventItem[] = normalizedSections.flatMap((s) => s.actions || []);
     const pageLoadEvents = allActions.filter(
-      (e) => e.event === "pageLoad" || e.name === "pageLoad",
+      (e) =>
+        e.event === "pageLoad" ||
+        e.event === "mount" ||
+        e.event === "onMount" ||
+        e.name === "pageLoad" ||
+        e.name === "mount" ||
+        e.name === "onMount",
     );
 
     let pageLoadFetchStatements = "";
+    let pageLoadStorePopulationLines = "";
     // Derive a typed PageLoadData interface from the first pageLoad endpoint
     let pageLoadDataType = "JSONValue";
     let pageLoadDataTypeDecl = "";
@@ -485,6 +501,8 @@ export function generatePageAndComponentFiles({
         })
         .join("\n          ");
 
+      pageLoadStorePopulationLines = storePopulationLines;
+
       const pageLoadDataExpr = pageLoadEvents.length === 1
         ? `results["${pageLoadEvents[0]?.name || "pageLoad"}"]`
         : `results`;
@@ -562,29 +580,40 @@ export function generatePageAndComponentFiles({
       });
     });
 
-    const pageStoreNames = new Set<string>();
+    const pageStoreCleanNames = new Set<string>();
+    const addStoreName = (name?: string) => {
+      if (!name) return;
+      const clean = name.replace(/Store$/i, "");
+      if (clean) {
+        pageStoreCleanNames.add(clean.charAt(0).toUpperCase() + clean.slice(1));
+      }
+    };
+
     pageLoadEvents.forEach((evt) => {
       (evt.storeActionBindings || (evt.storeActionBinding ? [evt.storeActionBinding] : [])).forEach((b) => {
-        if (b?.storeName) pageStoreNames.add(b.storeName);
+        addStoreName(b?.storeName);
       });
     });
     unmountActions.forEach((evt) => {
       (evt.storeActionBindings || (evt.storeActionBinding ? [evt.storeActionBinding] : [])).forEach((b) => {
-        if (b?.storeName) pageStoreNames.add(b.storeName);
+        addStoreName(b?.storeName);
       });
     });
     (pageMeta.realtimeConnections || []).forEach((c) => {
       (c.storeActionBindings || (c.storeActionBinding ? [c.storeActionBinding] : [])).forEach((b) => {
-        if (b?.storeName) pageStoreNames.add(b.storeName);
+        addStoreName(b?.storeName);
+      });
+    });
+    allActions.forEach((evt) => {
+      evt.effectConfig?.variableMappings?.forEach((m) => {
+        if (m.source === "store" && m.storeName) {
+          addStoreName(m.storeName);
+        }
       });
     });
 
-    const pageStoreImports = Array.from(pageStoreNames)
-      .map((sName) => {
-        const clean = sName.replace(/Store$/i, "");
-        const hookName = `use${clean.charAt(0).toUpperCase() + clean.slice(1)}Store`;
-        return `import { ${hookName} } from "@/lib/stores";`;
-      })
+    const pageStoreImports = Array.from(pageStoreCleanNames)
+      .map((clean) => `import { use${clean}Store } from "@/lib/stores";`)
       .join("\n");
 
     const groupFolder = pageMeta.routeGroupPath || (pageMeta.routeGroup ? `(${pageMeta.routeGroup})` : "(public)");
@@ -602,8 +631,21 @@ export function generatePageAndComponentFiles({
       const sectionDir = `${baseComponentsDir}/${secFolder}`;
 
       const secActionMetas: EventComponentMeta[] = [];
+      const PAGE_LEVEL_LIFECYCLE_EVENTS = new Set([
+        "onMount",
+        "mount",
+        "pageLoad",
+        "unmount",
+        "interval",
+        "paramChange",
+        "effect",
+        "visibilityChange",
+        "beforeUnload",
+      ]);
       const nonPageLoadActions = (sec.actions || []).filter(
-        (e) => e.event !== "pageLoad" && e.name !== "pageLoad",
+        (e) =>
+          !PAGE_LEVEL_LIFECYCLE_EVENTS.has(e.event || "") &&
+          !PAGE_LEVEL_LIFECYCLE_EVENTS.has(e.name || ""),
       );
 
       nonPageLoadActions.forEach((evt, evtIdx) => {
@@ -1051,16 +1093,151 @@ export function generatePageAndComponentFiles({
       });
     }
 
-    const pageCode = generatePageCode(
-      pageMeta,
-      pageLoadFetchStatements,
-      sectionsMeta,
-      effectiveAuthNode?.data,
-      pageLoadDataType,
-      pageLoadDataTypeDecl,
-      unmountCleanupsList.join("\n      "),
-      pageStoreImports,
-    );
+    const resolveLifecycleMeta = (act: UIEventItem): LifecycleActionMeta => {
+      const link = resolveLinkedEndpoint(
+        node.id,
+        act.id,
+        allNodes,
+        allEdges,
+        endpoints,
+      );
+      const actUrl = link?.path || link?.fullUrl || link?.endpoint?.name || act.url || "";
+      const actMethod = link?.method || link?.endpoint?.type || act.method || "GET";
+      const actName = act.name || act.event || "action";
+      return { action: act, actName, actUrl, actMethod };
+    };
+
+    const intervalActions = allActions.filter((a) => a.event === "interval");
+    const paramChangeActions = allActions.filter((a) => a.event === "paramChange");
+    const effectActions = allActions.filter((a) => a.event === "effect");
+    const visibilityActions = allActions.filter((a) => a.event === "visibilityChange");
+    const beforeUnloadActions = allActions.filter((a) => a.event === "beforeUnload");
+
+    const lifecycleEffectsJsx = [
+      generateIntervalEffects(intervalActions.map(resolveLifecycleMeta)),
+      generateParamChangeEffects(paramChangeActions.map(resolveLifecycleMeta)),
+      generateStateWatcherEffects(effectActions.map(resolveLifecycleMeta)),
+      generateVisibilityEffects(visibilityActions.map(resolveLifecycleMeta)),
+      generateBeforeUnloadEffects(beforeUnloadActions.map(resolveLifecycleMeta)),
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    const hasParamWatcher = paramChangeActions.length > 0;
+
+    const ssrMountEvent = pageLoadEvents.find((e) => e.mountConfig?.strategy === "ssr");
+    const isSsrMount = Boolean(ssrMountEvent);
+
+    let pageCode = "";
+    if (isSsrMount) {
+      const clientComponentName = `${pageMeta.componentName}Client`;
+      const clientComponentFilePath = pageMeta.isRoot
+        ? `app/${groupFolder}/_components/${clientComponentName}.tsx`
+        : `app/${groupFolder}/${pageMeta.slug}/_components/${clientComponentName}.tsx`;
+
+      const clientViewCode = generatePageCode(
+        pageMeta,
+        "",
+        sectionsMeta,
+        effectiveAuthNode?.data,
+        pageLoadDataType,
+        pageLoadDataTypeDecl,
+        unmountCleanupsList.join("\n      "),
+        pageStoreImports,
+        lifecycleEffectsJsx,
+        hasParamWatcher,
+        true, // isSsr = true
+        clientComponentName,
+        pageLoadStorePopulationLines,
+      );
+
+      pageFiles.push({
+        filename: clientComponentFilePath,
+        language: "typescript",
+        content: clientViewCode,
+      });
+
+      const link = resolveLinkedEndpoint(
+        node.id,
+        ssrMountEvent!.id,
+        allNodes,
+        allEdges,
+        endpoints,
+      );
+      const hasConfiguredEndpoint = Boolean(link || ssrMountEvent?.url);
+
+      const linkUrlInfo = link
+        ? resolveBaseUrlInfo(link.fullUrl, link.serviceName || link.targetNodeName)
+        : null;
+      const fetchUrlExpr = link
+        ? (linkUrlInfo?.hasBaseUrl ? linkUrlInfo.urlExpression : `"${link.fullUrl}"`)
+        : (ssrMountEvent?.url ? `"${ssrMountEvent.url}"` : `""`);
+      const cacheMode = ssrMountEvent!.mountConfig?.cacheMode || "no-store";
+      const revalidateSeconds = ssrMountEvent!.mountConfig?.revalidateSeconds ?? 60;
+      const fetchCachingOption =
+        cacheMode === "revalidate"
+          ? `next: { revalidate: ${revalidateSeconds} },`
+          : `cache: "${cacheMode}",`;
+
+      const serverJsonValueDecl =
+        pageLoadDataType.includes("JSONValue") && hasConfiguredEndpoint
+          ? generateJsonValueTypeDecl(true)
+          : "";
+
+      if (hasConfiguredEndpoint) {
+        pageCode = `import React from "react";
+import ${clientComponentName} from "./_components/${clientComponentName}";
+${pageLoadDataTypeDecl ? `${pageLoadDataTypeDecl}\n` : ""}${serverJsonValueDecl}export default async function ${pageMeta.componentName}() {
+  let initialData: ${pageLoadDataType} = null;
+  let initialError: string | null = null;
+
+  try {
+    ${linkUrlInfo?.hasBaseUrl ? `${linkUrlInfo.baseUrlDeclaration}\n    ` : ""}const res = await fetch(${fetchUrlExpr}, {
+      method: "${link?.method || "GET"}",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      ${fetchCachingOption}
+    });
+    if (!res.ok) {
+      initialError = "HTTP " + res.status + ": " + (res.statusText || "Failed to load page data");
+    } else {
+      initialData = await res.json();
+    }
+  } catch (err) {
+    initialError = err instanceof Error ? err.message : "Failed to load page data";
+  }
+
+  return (
+    <${clientComponentName} initialData={initialData} initialError={initialError} />
+  );
+}
+`;
+      } else {
+        pageCode = `import React from "react";
+import ${clientComponentName} from "./_components/${clientComponentName}";
+
+export default async function ${pageMeta.componentName}() {
+  return (
+    <${clientComponentName} initialData={null} initialError={null} />
+  );
+}
+`;
+      }
+    } else {
+      pageCode = generatePageCode(
+        pageMeta,
+        pageLoadFetchStatements,
+        sectionsMeta,
+        effectiveAuthNode?.data,
+        pageLoadDataType,
+        pageLoadDataTypeDecl,
+        unmountCleanupsList.join("\n      "),
+        pageStoreImports,
+        lifecycleEffectsJsx,
+        hasParamWatcher,
+      );
+    }
 
     const targetFilePath = pageMeta.isRoot
       ? `app/${groupFolder}/page.tsx`
