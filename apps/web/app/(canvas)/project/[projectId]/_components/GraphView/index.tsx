@@ -297,6 +297,11 @@ export function GraphView({ projectId, projectName }: GraphViewProps) {
   }, [graphNodes, graphEdges]);
 
   const hasFitted = useRef(false);
+  const lastProjectIdRef = useRef(projectId);
+  if (lastProjectIdRef.current !== projectId) {
+    lastProjectIdRef.current = projectId;
+    hasFitted.current = false;
+  }
   useEffect(() => {
     if (graphNodes.length > 0 && !hasFitted.current) {
       hasFitted.current = true;
@@ -310,12 +315,23 @@ export function GraphView({ projectId, projectName }: GraphViewProps) {
           // fallback to fitView
         }
       }
+      // Immediate attempt
       fitView({
         nodes: flowNodesToFit.length > 0 ? flowNodesToFit : undefined,
         duration: 0,
         padding: 0.35,
         maxZoom: 0.65,
       });
+      // Second attempt after custom node DOM components have finished layout and measurement
+      const timer = setTimeout(() => {
+        fitView({
+          nodes: flowNodesToFit.length > 0 ? flowNodesToFit : undefined,
+          duration: 200,
+          padding: 0.35,
+          maxZoom: 0.65,
+        });
+      }, 100);
+      return () => clearTimeout(timer);
     }
   }, [graphNodes.length, flowNodesToFit, fitView, setViewport, projectId]);
 

@@ -52,6 +52,7 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
 
   const storeProjectId = useBackendCanvasStore((s) => s.projectId);
   const hasHydrated = useRef(false);
+  const [isHydrated, setIsHydrated] = React.useState(false);
   const needsReset = storeProjectId !== projectId;
 
   // Reset must happen in a useEffect, NOT in the render body.
@@ -61,6 +62,7 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
   useEffect(() => {
     if (needsReset) {
       hasHydrated.current = false;
+      setIsHydrated(false);
       useBackendCanvasStore.getState().reset(projectId);
       useSimulationStore.setState({ testCases: [], selectedCaseId: undefined });
     }
@@ -670,6 +672,7 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
     useSimulationStore
       .getState()
       .setTestCases(initialElements.testCases || []);
+    setIsHydrated(true);
   }, [initialElements, setNodesAndEdges, projectId]);
 
   // Handle view changes: swap active positions for existing nodes
@@ -1010,8 +1013,8 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
   }, []);
 
   return {
-    isLoading: initialElements === undefined,
-    hasHydrated: hasHydrated.current,
+    isLoading: initialElements === undefined || !isHydrated,
+    hasHydrated: isHydrated,
     nodes,
   };
 }
