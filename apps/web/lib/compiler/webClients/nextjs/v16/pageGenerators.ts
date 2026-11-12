@@ -49,7 +49,17 @@ export function generatePageCode(
     return generateAuthPageCode(pageMeta, authNodeData);
   }
 
-  const allImports = sectionsMeta
+  const eagerSections = sectionsMeta.filter(
+    (s) => !s.loadStrategy || s.loadStrategy === "eager",
+  );
+  const dynamicSections = sectionsMeta.filter(
+    (s) => s.loadStrategy === "dynamic" || s.loadStrategy === "dynamic-no-ssr",
+  );
+
+  const dynamicNextImport =
+    dynamicSections.length > 0 ? 'import dynamic from "next/dynamic";' : "";
+
+  const staticSectionImports = eagerSections
     .map(
       (s) =>
         isSsr
@@ -57,6 +67,27 @@ export function generatePageCode(
           : `import { ${s.componentName} } from "./_components/${s.folderName}";`,
     )
     .join("\n");
+
+  const dynamicSectionDecls = dynamicSections
+    .map((s) => {
+      const relPath = isSsr ? `./${s.folderName}` : `./_components/${s.folderName}`;
+      if (s.loadStrategy === "dynamic-no-ssr") {
+        return `const ${s.componentName} = dynamic(\n  () => import("${relPath}").then((mod) => mod.${s.componentName}),\n  { ssr: false }\n);`;
+      }
+      return `const ${s.componentName} = dynamic(\n  () => import("${relPath}").then((mod) => mod.${s.componentName})\n);`;
+    })
+    .join("\n\n");
+
+  const sectionImportsBlock = [dynamicNextImport, staticSectionImports]
+    .filter(Boolean)
+    .join("\n");
+
+  const allImports = [
+    sectionImportsBlock,
+    dynamicSectionDecls ? `${dynamicSectionDecls}\n` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 
   const allActions = sectionsMeta.flatMap((s) => s.actions || []);
   const hasApiActions = allActions.some(

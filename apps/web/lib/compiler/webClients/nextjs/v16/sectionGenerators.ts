@@ -9,6 +9,7 @@ export interface SectionMeta {
   folderName: string;
   componentName: string;
   renderMode?: "server" | "client";
+  loadStrategy?: "eager" | "dynamic" | "dynamic-no-ssr";
   actions?: EventComponentMeta[];
   hasSidebar?: boolean;
   hasChat?: boolean;

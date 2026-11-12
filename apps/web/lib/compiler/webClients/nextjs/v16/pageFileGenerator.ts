@@ -1068,6 +1068,7 @@ export function generatePageAndComponentFiles({
         folderName: secFolder,
         componentName: secCompName,
         renderMode: sec.renderMode,
+        loadStrategy: sec.loadStrategy || "eager",
         actions: secActionMetas,
         hasSidebar: (sec.componentBindings || []).some(
           (cb) => cb.componentType === "sidebar",
