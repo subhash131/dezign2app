@@ -57,9 +57,111 @@ import {
   Sparkles,
   LogOut,
   Server,
+  Info,
 } from "lucide-react";
 
 const EVENT_OPTIONS = [...WEB_PAGE_EVENTS];
+
+interface EventTriggerExplanation {
+  title: string;
+  description: string;
+}
+
+const EVENT_TRIGGER_DESCRIPTIONS: Record<string, EventTriggerExplanation> = {
+  // Page Lifecycle
+  onMount: {
+    title: "On Component Mount",
+    description: "Triggers once when the page loads in the browser (or pre-renders on the server if SSR is enabled).",
+  },
+  mount: {
+    title: "On Component Mount",
+    description: "Triggers once when the page loads in the browser (or pre-renders on the server if SSR is enabled).",
+  },
+  pageLoad: {
+    title: "On Page Load",
+    description: "Triggers on initial page load to fetch initial data and populate stores.",
+  },
+  unmount: {
+    title: "On Component Unmount",
+    description: "Triggers when navigating away or when the section is unmounted. Ideal for resetting store state or cleanup.",
+  },
+
+  // Reactive Effects
+  visibilityChange: {
+    title: "On Tab Visibility Change",
+    description: "Triggers when the user switches tabs, minimizes the browser, or returns to this tab (document.visibilityState === 'visible'). Perfect for revalidating fresh data on focus.",
+  },
+  effect: {
+    title: "On State/Variable Change",
+    description: "Triggers reactively whenever watched variables, Zustand stores, or query parameters change (supports debounce).",
+  },
+  interval: {
+    title: "On Recurring Timer",
+    description: "Triggers periodically on a recurring interval (e.g. every 5 seconds) while the page remains open.",
+  },
+  paramChange: {
+    title: "On Route Param Change",
+    description: "Triggers when dynamic path parameters (e.g. [id]) or query string parameters change without a full page reload.",
+  },
+  beforeUnload: {
+    title: "Before Window Closes",
+    description: "Triggers when the user attempts to close, refresh, or leave the browser window. Used for unsaved change warning guards.",
+  },
+
+  // User Interactions
+  click: {
+    title: "On Element Click",
+    description: "Triggers when the user clicks or taps on this element or button.",
+  },
+  doubleClick: {
+    title: "On Double Click",
+    description: "Triggers when the user quickly double-clicks on this element.",
+  },
+  submit: {
+    title: "On Form Submit",
+    description: "Triggers when the form is submitted (e.g. clicking Submit button or pressing Enter).",
+  },
+  change: {
+    title: "On Value Change",
+    description: "Triggers when the input, select, or checkbox value changes.",
+  },
+  input: {
+    title: "On Value Input",
+    description: "Triggers synchronously on every keystroke or character input.",
+  },
+  focus: {
+    title: "On Element Focus",
+    description: "Triggers when the user focuses or clicks into this field.",
+  },
+  blur: {
+    title: "On Element Blur",
+    description: "Triggers when this field loses focus as the user moves away.",
+  },
+  mouseEnter: {
+    title: "On Mouse Enter (Hover)",
+    description: "Triggers when the mouse pointer moves over this element.",
+  },
+  mouseLeave: {
+    title: "On Mouse Leave",
+    description: "Triggers when the mouse pointer moves out of this element.",
+  },
+  keyDown: {
+    title: "On Key Down",
+    description: "Triggers when the user presses a physical key on the keyboard.",
+  },
+  keyUp: {
+    title: "On Key Up",
+    description: "Triggers when the user releases a key on the keyboard.",
+  },
+  scroll: {
+    title: "On Container Scroll",
+    description: "Triggers as the user scrolls within this element or container.",
+  },
+  navigateToPage: {
+    title: "On Page Navigation",
+    description: "Triggers client-side route navigation to a target page.",
+  },
+};
 
 const SERVER_NODE_TYPES = [
   "service",
@@ -216,6 +318,14 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
   ) => {
     if (!parentNode) return;
 
+    const isTargetLifecycle =
+      finalEvent === "onMount" ||
+      finalEvent === "mount" ||
+      finalEvent === "pageLoad" ||
+      finalEvent === "unmount" ||
+      PAGE_EFFECT_EVENTS.some((e) => e === finalEvent) ||
+      finalEvent === "polling";
+
     updateActionInParent({
       name,
       event: finalEvent,
@@ -225,6 +335,7 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
           : extraChanges?.navigationType ?? navType,
       navigationCondition: extraChanges?.navigationCondition ?? navCond,
       conditionCode: extraChanges?.conditionCode ?? condCode,
+      ...(isTargetLifecycle ? { scope: "section" } : {}),
       ...extraChanges,
     });
 
@@ -393,6 +504,19 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
   const isEffect = eventType === "effect";
   const isVisibilityChange = eventType === "visibilityChange";
   const isBeforeUnload = eventType === "beforeUnload";
+  const isLifecycleOrEffect =
+    isMount ||
+    isUnmount ||
+    isInterval ||
+    isParamChange ||
+    isEffect ||
+    isVisibilityChange ||
+    isBeforeUnload ||
+    isPolling;
+  const canBeItemScoped = !isLifecycleOrEffect;
+  const currentTriggerExplanation =
+    EVENT_TRIGGER_DESCRIPTIONS[eventType] ||
+    (isMount ? EVENT_TRIGGER_DESCRIPTIONS["onMount"] : undefined);
   const sourceState = item?.itemSourceStateId
     ? parentSection?.stateObjects?.find(
         (st) => st.id === item.itemSourceStateId || st.name === item.itemSourceStateId,
@@ -592,119 +716,132 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
           </div>
         </div>
 
-        {/* Checkbox for Array Item Action */}
-        <div className="pt-2.5 border-t border-border/40 flex flex-col gap-2.5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="is-item-scoped"
-                checked={isItemScoped}
-                onCheckedChange={(checked) => {
-                  handleToggleItemScoped(Boolean(checked));
-                }}
-              />
-              <label
-                htmlFor="is-item-scoped"
-                className="text-xs font-medium cursor-pointer select-none text-foreground flex items-center gap-1.5"
-              >
-                <span>Trigger per Array Item</span>
-                <span className="text-[10px] text-muted-foreground font-normal">
-                  (attach action to individual array items)
-                </span>
-              </label>
+        {/* Dynamic Trigger Event Explanation */}
+        {currentTriggerExplanation && (
+          <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-secondary/40 border border-border/50 text-[11px] text-muted-foreground leading-relaxed">
+            <Info size={14} className="text-sky-500 shrink-0 mt-0.5" />
+            <div>
+              <strong className="text-foreground font-medium">{currentTriggerExplanation.title}: </strong>
+              <span>{currentTriggerExplanation.description}</span>
             </div>
-            {isItemScoped && (
-              <Badge variant="outline" className="text-[9px] font-mono border-violet-500/40 text-violet-300">
-                {sourceState?.name ? `${sourceState.name}[]` : "array item"}
-              </Badge>
-            )}
           </div>
+        )}
 
-          {isItemScoped && (
-            <div className="p-3 rounded-lg border border-violet-500/30 bg-violet-500/[0.04] flex flex-col gap-2.5">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <div className="flex flex-col gap-1">
-                  <Label className="text-[10px] font-medium text-muted-foreground">
-                    Target Array State
-                  </Label>
-                  {eligibleStates.length > 0 ? (
-                    <Select
-                      value={selectedStateId || eligibleStates[0]?.id || ""}
-                      onValueChange={(val) => handleSelectTargetState(val)}
-                    >
-                      <SelectTrigger className="h-7 text-xs font-mono bg-background">
-                        <SelectValue placeholder="Select target state" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {eligibleStates.map((st) => (
-                          <SelectItem key={st.id} value={st.id} className="text-xs font-mono">
-                            {st.name} ({st.type})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <Input
-                      className="h-7 text-xs font-mono bg-background"
-                      placeholder="e.g. messages, items"
-                      value={customStateName}
-                      onChange={(e) => setCustomStateName(e.target.value)}
-                      onBlur={() => {
-                        const cleaned = customStateName.trim();
-                        if (cleaned) {
-                          updateActionInParent({ itemSourceStateId: cleaned });
-                        }
-                      }}
-                    />
-                  )}
-                </div>
+        {/* Checkbox for Array Item Action (Only applicable for user interaction events) */}
+        {canBeItemScoped && (
+          <div className="pt-2.5 border-t border-border/40 flex flex-col gap-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="is-item-scoped"
+                  checked={isItemScoped}
+                  onCheckedChange={(checked) => {
+                    handleToggleItemScoped(Boolean(checked));
+                  }}
+                />
+                <label
+                  htmlFor="is-item-scoped"
+                  className="text-xs font-medium cursor-pointer select-none text-foreground flex items-center gap-1.5"
+                >
+                  <span>Trigger per Array Item</span>
+                  <span className="text-[10px] text-muted-foreground font-normal">
+                    (attach action to individual array items)
+                  </span>
+                </label>
+              </div>
+              {isItemScoped && (
+                <Badge variant="outline" className="text-[9px] font-mono border-violet-500/40 text-violet-300">
+                  {sourceState?.name ? `${sourceState.name}[]` : "array item"}
+                </Badge>
+              )}
+            </div>
 
-                <div className="flex flex-col gap-1">
-                  <div className="flex items-center justify-between">
+            {isItemScoped && (
+              <div className="p-3 rounded-lg border border-violet-500/30 bg-violet-500/[0.04] flex flex-col gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div className="flex flex-col gap-1">
                     <Label className="text-[10px] font-medium text-muted-foreground">
-                      Item Context Identifier Key
+                      Target Array State
                     </Label>
-                    {targetStateTypeName && (
-                      <span className="text-[9px] font-mono text-violet-400 font-normal">
-                        Type: {targetStateTypeName}
-                      </span>
+                    {eligibleStates.length > 0 ? (
+                      <Select
+                        value={selectedStateId || eligibleStates[0]?.id || ""}
+                        onValueChange={(val) => handleSelectTargetState(val)}
+                      >
+                        <SelectTrigger className="h-7 text-xs font-mono bg-background">
+                          <SelectValue placeholder="Select target state" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {eligibleStates.map((st) => (
+                            <SelectItem key={st.id} value={st.id} className="text-xs font-mono">
+                              {st.name} ({st.type})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input
+                        className="h-7 text-xs font-mono bg-background"
+                        placeholder="e.g. messages, items"
+                        value={customStateName}
+                        onChange={(e) => setCustomStateName(e.target.value)}
+                        onBlur={() => {
+                          const cleaned = customStateName.trim();
+                          if (cleaned) {
+                            updateActionInParent({ itemSourceStateId: cleaned });
+                          }
+                        }}
+                      />
                     )}
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <ActionFlowCombobox
-                      value={itemKeyField}
-                      onChange={(val) => {
-                        const cleaned = val.trim() || "id";
-                        setItemKeyField(cleaned);
-                        updateActionInParent({ itemContextFields: [cleaned] });
-                      }}
-                      placeholder="e.g. id, uuid, slug"
-                      headerLabel={
-                        targetStateTypeName
-                          ? `Props of ${targetStateTypeName}`
-                          : "Item Properties"
-                      }
-                      options={itemPropSuggestions}
-                      className="h-7 text-xs font-mono bg-background"
-                    />
-                    <span className="text-[10px] text-muted-foreground whitespace-nowrap font-mono shrink-0">
-                      item.{itemKeyField || "id"}
-                    </span>
+
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-[10px] font-medium text-muted-foreground">
+                        Item Context Identifier Key
+                      </Label>
+                      {targetStateTypeName && (
+                        <span className="text-[9px] font-mono text-violet-400 font-normal">
+                          Type: {targetStateTypeName}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <ActionFlowCombobox
+                        value={itemKeyField}
+                        onChange={(val) => {
+                          const cleaned = val.trim() || "id";
+                          setItemKeyField(cleaned);
+                          updateActionInParent({ itemContextFields: [cleaned] });
+                        }}
+                        placeholder="e.g. id, uuid, slug"
+                        headerLabel={
+                          targetStateTypeName
+                            ? `Props of ${targetStateTypeName}`
+                            : "Item Properties"
+                        }
+                        options={itemPropSuggestions}
+                        className="h-7 text-xs font-mono bg-background"
+                      />
+                      <span className="text-[10px] text-muted-foreground whitespace-nowrap font-mono shrink-0">
+                        item.{itemKeyField || "id"}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="text-[10px] text-muted-foreground leading-relaxed">
-                Clicking an item in{" "}
-                <span className="font-semibold text-foreground font-mono">
-                  {activeTargetState?.name || sourceState?.name || "the array"}
-                </span>{" "}
-                triggers this action and passes{" "}
-                <code className="text-violet-400 font-mono">&#123; {itemKeyField || "id"}: item.{itemKeyField || "id"} &#125;</code> into the request.
+                <div className="text-[10px] text-muted-foreground leading-relaxed">
+                  Clicking an item in{" "}
+                  <span className="font-semibold text-foreground font-mono">
+                    {activeTargetState?.name || sourceState?.name || "the array"}
+                  </span>{" "}
+                  triggers this action and passes{" "}
+                  <code className="text-violet-400 font-mono">&#123; {itemKeyField || "id"}: item.{itemKeyField || "id"} &#125;</code> into the request.
+                </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </div>
 
       <Accordion
