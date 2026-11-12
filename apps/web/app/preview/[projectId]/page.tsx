@@ -75,6 +75,15 @@ export default function PublicProjectPreviewPage({
       : "skip",
   );
 
+  const canvasElements = useQuery(
+    api.canvas.getBackendElements,
+    session?.user
+      ? {
+          projectId: projectId as Id<"projects">,
+        }
+      : "skip",
+  );
+
   const cloneMutation = useMutation(api.projects.cloneProject);
 
   // If user signed in with ?action=clone, auto-trigger clone
@@ -149,7 +158,7 @@ export default function PublicProjectPreviewPage({
     );
   }
 
-  if (project === undefined) {
+  if (project === undefined || canvasElements === undefined) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-background text-foreground">
         <div className="flex flex-col items-center gap-3">

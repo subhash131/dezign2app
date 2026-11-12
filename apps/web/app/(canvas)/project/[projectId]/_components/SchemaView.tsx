@@ -137,6 +137,11 @@ export function SchemaView({ projectId }: SchemaViewProps) {
   }, [schemaNodes]);
 
   const hasFitted = useRef(false);
+  const lastProjectIdRef = useRef(projectId);
+  if (lastProjectIdRef.current !== projectId) {
+    lastProjectIdRef.current = projectId;
+    hasFitted.current = false;
+  }
   useEffect(() => {
     if (schemaNodes.length > 0 && !hasFitted.current) {
       hasFitted.current = true;
@@ -151,6 +156,10 @@ export function SchemaView({ projectId }: SchemaViewProps) {
         }
       }
       fitView({ padding: 0.35, maxZoom: 0.65, duration: 0 });
+      const timer = setTimeout(() => {
+        fitView({ padding: 0.35, maxZoom: 0.65, duration: 200 });
+      }, 100);
+      return () => clearTimeout(timer);
     }
   }, [schemaNodes.length, fitView, setViewport, projectId]);
 
