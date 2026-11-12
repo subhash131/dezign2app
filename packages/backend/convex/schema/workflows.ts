@@ -36,11 +36,17 @@ export const workflowTables = {
     updatedAt: v.number(),
     organizationId: v.optional(v.string()),
     isArchived: v.optional(v.boolean()), // Soft delete support
+    isPublished: v.optional(v.boolean()),
+    publishedAt: v.optional(v.number()),
+    cloneCount: v.optional(v.number()),
+    category: v.optional(v.string()),
+    tags: v.optional(v.array(v.string())),
   })
     .index("by_organization", ["organizationId"])
     .index("by_name", ["name"])
     .index("by_creator", ["createdBy"])
-    .index("by_creator_organization", ["createdBy", "organizationId"]),
+    .index("by_creator_organization", ["createdBy", "organizationId"])
+    .index("by_published", ["isPublished"]),
 
   workflows: defineTable({
     name: v.string(),
