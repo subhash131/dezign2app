@@ -174,7 +174,7 @@ export default function PublicProjectPreviewPage({
 
               <Badge
                 variant="outline"
-                className="text-[10px] bg-emerald-500/10 text-emerald-500 border-emerald-500/30 gap-1 hidden md:inline-flex py-0 px-1.5"
+                className="text-[10px] gap-1 hidden md:inline-flex py-0 px-1.5"
               >
                 <Globe className="w-2.5 h-2.5" /> Published
               </Badge>
@@ -227,7 +227,7 @@ export default function PublicProjectPreviewPage({
               >
                 {copied ? (
                   <>
-                    <Check className="w-3.5 h-3.5 text-emerald-500" />
+                    <Check className="w-3.5 h-3.5 text-primary" />
                     <span className="hidden sm:inline">Copied</span>
                   </>
                 ) : (
@@ -271,7 +271,7 @@ export default function PublicProjectPreviewPage({
           {/* Prominent Clone Button */}
           <Button
             size="sm"
-            className="h-8 gap-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs px-3.5"
+            className="h-8 gap-1.5 text-xs font-semibold px-3.5"
             onClick={() => void handleClone()}
             disabled={isCloning}
           >

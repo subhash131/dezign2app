@@ -283,19 +283,10 @@ export function CanvasToolbar({
                   <Button
                     variant={isPublished ? "outline" : "secondary"}
                     size="sm"
-                    className={cn(
-                      "py-3.5 h-8 gap-1.5 text-xs font-medium",
-                      isPublished &&
-                        "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/15",
-                    )}
+                    className="py-3.5 h-8 gap-1.5 text-xs font-medium"
                     onClick={onOpenPublish}
                   >
-                    <Globe
-                      className={cn(
-                        "w-3.5 h-3.5",
-                        isPublished ? "text-emerald-500" : "text-primary",
-                      )}
-                    />
+                    <Globe className="w-3.5 h-3.5" />
                     <span>{isPublished ? "Published" : "Publish"}</span>
                   </Button>
                 </TooltipTrigger>

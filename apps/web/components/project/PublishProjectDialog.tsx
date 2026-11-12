@@ -160,7 +160,7 @@ export function PublishProjectDialog({
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+            <div className="p-2 rounded-lg bg-muted text-foreground border border-border/60">
               <Globe className="w-5 h-5" />
             </div>
             <div>
@@ -181,7 +181,7 @@ export function PublishProjectDialog({
               <Label className="text-sm font-medium flex items-center gap-1.5">
                 <span>Publicly Available</span>
                 {isPublished && (
-                  <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/30 text-[10px] py-0 px-1.5">
+                  <Badge variant="secondary" className="text-[10px] py-0 px-1.5">
                     Live
                   </Badge>
                 )}
@@ -218,7 +218,7 @@ export function PublishProjectDialog({
                 >
                   {copied ? (
                     <>
-                      <Check className="w-3.5 h-3.5 text-emerald-500" />
+                      <Check className="w-3.5 h-3.5 text-primary" />
                       <span>Copied</span>
                     </>
                   ) : (
@@ -329,7 +329,7 @@ export function PublishProjectDialog({
             <Button
               type="button"
               size="sm"
-              className="text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white"
+              className="text-xs gap-1.5"
               onClick={() => void handleSubmit()}
               disabled={isSubmitting}
             >

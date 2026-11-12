@@ -159,7 +159,7 @@ export const ProjectCard = ({ project, className }: ProjectCardProps) => {
                 {project.isPublished && (
                   <Badge
                     variant="outline"
-                    className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 gap-1 px-1.5 py-0 font-normal"
+                    className="text-[10px] bg-muted/50 text-muted-foreground border-border/60 gap-1 px-1.5 py-0 font-normal"
                   >
                     <Globe size={10} /> Published
                   </Badge>

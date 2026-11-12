@@ -7,21 +7,20 @@ import { usePaginatedQuery, useMutation } from "convex/react";
 import { api } from "@workspace/backend/_generated/api";
 import { Id } from "@workspace/backend/_generated/dataModel";
 import {
-  Globe,
   Search,
   Copy,
   ExternalLink,
-  Layers,
-  Network,
   FolderOpen,
   Loader2,
   Sparkles,
+  Globe,
 } from "lucide-react";
 import {
   Card,
   CardHeader,
   CardTitle,
   CardDescription,
+  CardAction,
   CardFooter,
 } from "@workspace/ui/components/card";
 import { Badge } from "@workspace/ui/components/badge";
@@ -32,6 +31,11 @@ import {
   AvatarFallback,
   AvatarImage,
 } from "@workspace/ui/components/avatar";
+import {
+  ActionMenu,
+  ActionMenuItem,
+  ActionMenuSeparator,
+} from "@workspace/ui/components/action-menu";
 import { Spinner } from "@workspace/ui/components/spinner";
 import { cn } from "@workspace/ui/lib/utils";
 import { toast } from "sonner";
@@ -69,7 +73,7 @@ export default function PublishedProjectsPage() {
       category: selectedCategory === "All" ? undefined : selectedCategory,
       search: searchQuery.trim() || undefined,
     },
-    { initialNumItems: 12 },
+    { initialNumItems: 16 },
   );
 
   const sentinelRef = React.useRef<HTMLDivElement>(null);
@@ -80,7 +84,7 @@ export default function PublishedProjectsPage() {
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries?.[0]?.isIntersecting) {
-          loadMore(6);
+          loadMore(8);
         }
       },
       { threshold: 0.5 },
@@ -110,36 +114,28 @@ export default function PublishedProjectsPage() {
   };
 
   return (
-    <div className="w-full bg-background flex flex-col relative h-full overflow-y-auto">
-      {/* Header */}
-      <div className="sticky top-0 bg-background/90 backdrop-blur-md px-8 py-5 z-40 border-b flex flex-col gap-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
-                <Globe className="w-4 h-4" />
-              </div>
-              <h1 className="text-xl font-bold tracking-tight">Published Projects</h1>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Explore open system architectures, microservices, and AI workflows published by the community. Clone any project to customize it for your needs.
-            </p>
+    <div className="w-full bg-background hide-scrollbar flex flex-col relative h-full overflow-y-auto">
+      {/* Header - aligned with /projects px-10 py-4 */}
+      <div className="w-full sticky top-0 bg-background/80 backdrop-blur-md px-10 py-4 z-50 border-b flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold tracking-tight">Published Projects</h1>
           </div>
 
           {/* Search Bar */}
-          <div className="relative w-full sm:w-72">
+          <div className="relative w-72">
             <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search projects or tags..."
+              placeholder="Search published projects..."
               className="pl-8 text-xs h-9 bg-muted/40"
             />
           </div>
         </div>
 
         {/* Categories Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
           {CATEGORIES.map((cat) => {
             const isSelected = selectedCategory === cat;
             return (
@@ -161,22 +157,164 @@ export default function PublishedProjectsPage() {
         </div>
       </div>
 
-      {/* Grid Content */}
-      <div className="p-8 w-full max-w-7xl mx-auto flex-1">
-        {status === "LoadingFirstPage" ? (
-          <div className="flex h-[320px] w-full items-center justify-center">
+      {/* Grid Content - matching projects-grid.tsx exactly with w-full p-8 */}
+      <div className="flex flex-col w-full pb-10">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 p-8 w-full">
+          {projects?.map((proj) => {
+            const isCloningThis = cloningProjectId === proj._id;
+            const initials = (proj.creatorName || "A")
+              .slice(0, 2)
+              .toUpperCase();
+
+            const updatedAtText =
+              dayjs(proj.publishedAt || proj.updatedAt).fromNow() === "a few seconds ago"
+                ? "Just now"
+                : dayjs(proj.publishedAt || proj.updatedAt).fromNow();
+
+            const previewRoute = `/preview/${proj._id}`;
+
+            const menuItems: (ActionMenuItem | ActionMenuSeparator)[] = [
+              {
+                label: "Preview",
+                icon: <ExternalLink size={14} />,
+                onClick: () => router.push(previewRoute),
+              },
+              {
+                label: "Clone to Workspace",
+                icon: <Copy size={14} />,
+                onClick: () => void handleClone(proj._id, proj.name),
+              },
+              { isSeparator: true },
+              {
+                label: "Copy Preview Link",
+                icon: <Globe size={14} />,
+                onClick: () => {
+                  if (typeof window !== "undefined") {
+                    void navigator.clipboard.writeText(`${window.location.origin}${previewRoute}`);
+                    toast.success("Preview link copied");
+                  }
+                },
+              },
+            ];
+
+            return (
+              <ActionMenu key={proj._id} items={menuItems} contentClassName="w-48">
+                <Link href={previewRoute}>
+                  <Card
+                    className="gap-0 relative w-full pt-0 hover:shadow-lg transition-all border p-0 border-border/50 group bg-secondary/10 overflow-hidden cursor-pointer"
+                  >
+                    {/* Visual Cover identical to ProjectCard */}
+                    <div className="absolute inset-0 z-30 aspect-video bg-black/20 group-hover:bg-black/10 transition-colors rounded-t-lg flex items-center justify-center">
+                      <FolderOpen
+                        className="text-white/20 group-hover:scale-110 transition-transform"
+                        size={48}
+                      />
+                    </div>
+                    <img
+                      src={`https://avatar.vercel.sh/${proj._id}`}
+                      alt={proj.name}
+                      className="relative z-20 aspect-video w-full object-cover brightness-60 grayscale transition-all rounded-t-lg"
+                    />
+
+                    {/* Header with CardAction slot */}
+                    <CardHeader className="p-4 bg-background/50 backdrop-blur-sm gap-0 rounded-none">
+                      <CardAction className="flex items-center gap-1.5">
+                        {proj.category && (
+                          <Badge variant="secondary" className="text-xs font-normal">
+                            {proj.category}
+                          </Badge>
+                        )}
+                        <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
+                          {updatedAtText}
+                        </Badge>
+                      </CardAction>
+                      <CardTitle className="text-sm font-medium truncate">
+                        {proj.name}
+                      </CardTitle>
+                      {proj.description && (
+                        <CardDescription className="text-xs truncate">
+                          {proj.description}
+                        </CardDescription>
+                      )}
+                    </CardHeader>
+
+                    {/* Minimal clean footer */}
+                    <CardFooter className="px-4 py-2.5 bg-background/30 border-t border-border/40 flex items-center justify-between gap-2 rounded-b-lg">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Avatar className="w-5 h-5 border border-border/50">
+                          {proj.creatorAvatar && (
+                            <AvatarImage
+                              src={proj.creatorAvatar}
+                              alt={proj.creatorName}
+                            />
+                          )}
+                          <AvatarFallback className="text-[9px] bg-muted text-muted-foreground font-semibold">
+                            {initials}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="text-xs text-muted-foreground truncate">
+                          {proj.creatorName || "Anonymous"}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        {proj.cloneCount ? (
+                          <span className="text-[11px] text-muted-foreground font-mono">
+                            {proj.cloneCount} {proj.cloneCount === 1 ? "clone" : "clones"}
+                          </span>
+                        ) : null}
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="h-7 px-2.5 text-xs gap-1.5"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            void handleClone(proj._id, proj.name);
+                          }}
+                          disabled={isCloningThis}
+                        >
+                          {isCloningThis ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <Copy className="w-3 h-3" />
+                          )}
+                          <span>Clone</span>
+                        </Button>
+                      </div>
+                    </CardFooter>
+                  </Card>
+                </Link>
+              </ActionMenu>
+            );
+          })}
+        </div>
+
+        {/* Loading First Page Spinner */}
+        {status === "LoadingFirstPage" && (
+          <div className="flex h-[300px] w-full items-center justify-center">
             <Spinner className="h-8 w-8 text-primary" />
           </div>
-        ) : projects.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="p-4 rounded-2xl bg-muted/50 border border-border/80 text-muted-foreground mb-4">
-              <Globe className="w-8 h-8 opacity-60" />
+        )}
+
+        {/* Sentinel for Infinite Scroll */}
+        {(status === "CanLoadMore" || status === "LoadingMore") && (
+          <div ref={sentinelRef} className="flex justify-center mt-4 min-h-[40px]">
+            {status === "LoadingMore" && <Spinner className="h-6 w-6" />}
+          </div>
+        )}
+
+        {/* Empty State */}
+        {projects?.length === 0 && status === "Exhausted" && (
+          <div className="flex h-[400px] flex-col items-center justify-center rounded-xl border-2 border-dashed bg-muted/30 text-center animate-in fade-in zoom-in duration-300 mx-auto w-[95%]">
+            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-lg bg-background shadow-sm">
+              <Sparkles className="h-10 w-10 text-muted-foreground" />
             </div>
-            <h3 className="text-lg font-semibold">No published projects found</h3>
-            <p className="text-xs text-muted-foreground max-w-sm mt-1.5">
+            <h3 className="mt-6 text-2xl font-bold">No published projects found</h3>
+            <p className="mt-2 text-sm text-muted-foreground max-w-sm">
               {searchQuery || selectedCategory !== "All"
-                ? "No published projects match your current search or category filter. Try clearing the filters."
-                : "No projects have been published to the community yet. Be the first to publish one from your canvas toolbar!"}
+                ? "No published projects match your current filters. Try clearing the search or category."
+                : "No projects have been published to the community yet. Publish one from your canvas toolbar to share it!"}
             </p>
             {(searchQuery || selectedCategory !== "All") && (
               <Button
@@ -192,171 +330,8 @@ export default function PublishedProjectsPage() {
               </Button>
             )}
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {projects.map((proj) => {
-              const isCloningThis = cloningProjectId === proj._id;
-              const initials = (proj.creatorName || "A")
-                .slice(0, 2)
-                .toUpperCase();
-
-              return (
-                <Card
-                  key={proj._id}
-                  className="flex flex-col overflow-hidden border border-border/60 hover:border-border transition-all duration-200 group bg-card/60 backdrop-blur-xs"
-                >
-                  {/* Card Cover */}
-                  <Link
-                    href={`/preview/${proj._id}`}
-                    className="relative aspect-video w-full bg-muted/40 overflow-hidden block"
-                  >
-                    <div className="absolute inset-0 z-10 bg-black/20 group-hover:bg-black/10 transition-colors flex items-center justify-center">
-                      <FolderOpen className="text-white/30 group-hover:scale-105 transition-transform w-12 h-12" />
-                    </div>
-                    <img
-                      src={`https://avatar.vercel.sh/${proj._id}`}
-                      alt={proj.name}
-                      className="w-full h-full object-cover brightness-60 grayscale group-hover:scale-102 transition-transform duration-300"
-                    />
-
-                    {/* Category pill on top of image */}
-                    {proj.category && (
-                      <div className="absolute top-3 left-3 z-20">
-                        <Badge
-                          variant="secondary"
-                          className="text-[10px] font-medium bg-background/80 backdrop-blur-md border border-border/50 shadow-xs"
-                        >
-                          {proj.category}
-                        </Badge>
-                      </div>
-                    )}
-
-                    {/* Clone Count badge */}
-                    <div className="absolute top-3 right-3 z-20">
-                      <Badge
-                        variant="secondary"
-                        className="text-[10px] font-mono bg-background/80 backdrop-blur-md border border-border/50 gap-1"
-                      >
-                        <Copy className="w-2.5 h-2.5" />
-                        <span>{proj.cloneCount ?? 0}</span>
-                      </Badge>
-                    </div>
-                  </Link>
-
-                  {/* Header / Meta */}
-                  <CardHeader className="p-4 pb-2 flex-1 space-y-1.5">
-                    <div className="flex items-start justify-between gap-2">
-                      <Link
-                        href={`/preview/${proj._id}`}
-                        className="hover:underline"
-                      >
-                        <CardTitle className="text-base font-semibold truncate group-hover:text-primary transition-colors">
-                          {proj.name}
-                        </CardTitle>
-                      </Link>
-                    </div>
-
-                    <CardDescription className="text-xs line-clamp-2 leading-relaxed min-h-[32px]">
-                      {proj.description ||
-                        "A visual architecture ready to be explored and cloned."}
-                    </CardDescription>
-
-                    {/* Tags */}
-                    {proj.tags && proj.tags.length > 0 && (
-                      <div className="flex items-center gap-1 flex-wrap pt-1">
-                        {proj.tags.slice(0, 3).map((tag: string) => (
-                          <span
-                            key={tag}
-                            className="text-[10px] px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground font-mono"
-                          >
-                            #{tag}
-                          </span>
-                        ))}
-                        {proj.tags.length > 3 && (
-                          <span className="text-[10px] text-muted-foreground">
-                            +{proj.tags.length - 3}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </CardHeader>
-
-                  {/* Stats Bar */}
-                  <div className="px-4 py-2 border-t border-b border-border/40 bg-muted/20 flex items-center justify-between text-[11px] text-muted-foreground">
-                    <div className="flex items-center gap-3">
-                      <span className="flex items-center gap-1">
-                        <Network className="w-3 h-3 text-primary" />
-                        <span>{proj.nodesCount} Nodes</span>
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Layers className="w-3 h-3 text-emerald-500" />
-                        <span>{proj.endpointsCount} Endpoints</span>
-                      </span>
-                    </div>
-
-                    {proj.publishedAt && (
-                      <span className="text-[10px]">
-                        {dayjs(proj.publishedAt).fromNow()}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Footer with Creator info & Clone button */}
-                  <CardFooter className="p-4 pt-3 flex items-center justify-between gap-3 bg-card">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Avatar className="w-6 h-6 border">
-                        {proj.creatorAvatar && (
-                          <AvatarImage
-                            src={proj.creatorAvatar}
-                            alt={proj.creatorName}
-                          />
-                        )}
-                        <AvatarFallback className="text-[9px] bg-primary/10 text-primary font-semibold">
-                          {initials}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="text-xs text-muted-foreground truncate font-medium max-w-[100px]">
-                        {proj.creatorName}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Button
-                        asChild
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground"
-                      >
-                        <Link href={`/preview/${proj._id}`} title="Inspect Canvas">
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </Link>
-                      </Button>
-
-                      <Button
-                        size="sm"
-                        className="h-8 px-3 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white gap-1.5 shadow-xs"
-                        onClick={() => void handleClone(proj._id, proj.name)}
-                        disabled={isCloningThis}
-                      >
-                        {isCloningThis ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <Copy className="w-3.5 h-3.5" />
-                        )}
-                        <span>Clone</span>
-                      </Button>
-                    </div>
-                  </CardFooter>
-                </Card>
-              );
-            })}
-          </div>
         )}
-
-        {/* Sentinel for Infinite Scroll */}
-        <div ref={sentinelRef} className="h-6 w-full" />
       </div>
     </div>
   );
 }
-
