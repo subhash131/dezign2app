@@ -218,5 +218,225 @@ describe("compileNextjsV16WebClient - Page Lifecycle and Reactive Effects", () =
     // 7. Verifies onMount lifecycle loads initial data
     expect(content).toContain("fetchInitialData");
   });
+
+  it("compiles Server-Side Rendering (SSR) mount action into async Server Component and Client View", () => {
+    const webAppNode: BackendNode = {
+      id: "node-webapp-ssr",
+      type: "webApp",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "SsrApp",
+        appSlug: "ssr-app",
+      },
+    };
+
+    const webPageNode: BackendNode = {
+      id: "node-page-ssr",
+      type: "webPage",
+      position: { x: 200, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "/products",
+        sections: [
+          {
+            id: "sec-products",
+            name: "ProductsSection",
+            renderMode: "client",
+            actions: [
+              {
+                id: "act-mount-ssr",
+                name: "loadProducts",
+                event: "onMount",
+                mountConfig: {
+                  strategy: "ssr",
+                  cacheMode: "revalidate",
+                  revalidateSeconds: 60,
+                },
+                storeActionBinding: {
+                  storeName: "ProductsStore",
+                  actionName: "populate",
+                  actionType: "populate",
+                },
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const serviceNode: BackendNode = {
+      id: "node-service-products",
+      type: "service",
+      position: { x: 500, y: 0 },
+      fractionalIndex: "a2",
+      data: {
+        label: "ProductService",
+        port: "4000",
+        endpoints: [],
+      },
+    };
+
+    const endpoints: (Endpoint & { nodeId: string })[] = [
+      {
+        id: "ep-products",
+        nodeId: "node-service-products",
+        name: "/api/products",
+        type: "GET",
+      },
+    ];
+
+    const edges: BackendEdge[] = [
+      {
+        id: "edge-webapp-page",
+        source: "node-webapp-ssr",
+        target: "node-page-ssr",
+        sourceHandle: "public-in",
+        targetHandle: "page-in",
+        type: "connection",
+        fractionalIndex: "a0",
+      },
+      {
+        id: "edge-mount-service",
+        source: "node-page-ssr",
+        target: "node-service-products",
+        sourceHandle: "events-act-mount-ssr",
+        targetHandle: "endpoint-in-ep-products",
+        type: "connection",
+        fractionalIndex: "a1",
+      },
+    ];
+
+    const allNodes = [webAppNode, webPageNode, serviceNode];
+    const result = compileNextjsV16WebClient(
+      [webPageNode],
+      endpoints,
+      [],
+      allNodes,
+      edges,
+      "SsrApp",
+      undefined,
+      "ssr-app",
+      webAppNode,
+    );
+
+    // 1. Verifies Server Component page.tsx
+    const serverPageFile = result.files.find(
+      (f) => f.filename === "app/(public)/products/page.tsx",
+    );
+    expect(serverPageFile).toBeDefined();
+    const serverContent = serverPageFile!.content;
+
+    expect(serverContent).not.toContain('"use client"');
+    expect(serverContent).toContain("export default async function ProductsPage()");
+    expect(serverContent).toContain("fetch(");
+    expect(serverContent).toContain("/api/products");
+    expect(serverContent).not.toContain('cache: "revalidate"');
+    expect(serverContent).toContain("next: { revalidate: 60 }");
+    expect(serverContent).toContain("<ProductsPageClient initialData={initialData}");
+
+    // 2. Verifies Client View Component ProductsPageClient.tsx
+    const clientViewFile = result.files.find(
+      (f) => f.filename === "app/(public)/products/_components/ProductsPageClient.tsx",
+    );
+    expect(clientViewFile).toBeDefined();
+    const clientContent = clientViewFile!.content;
+
+    expect(clientContent).toContain('"use client"');
+    expect(clientContent).toContain("export default function ProductsPageClient(");
+    expect(clientContent).toContain("initialData = null");
+    expect(clientContent).toContain("initialData ?? null");
+    expect(clientContent).toContain("useProductsStore.getState().populate(initialData);");
+  });
+
+  it("compiles clean Server Component without fetch or missing JSONValue when SSR onMount has no connected endpoint", () => {
+    const webAppNode: BackendNode = {
+      id: "node-webapp-chat",
+      type: "webApp",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "ChatApp",
+        appSlug: "chat-app",
+      },
+    };
+
+    const webPageNode: BackendNode = {
+      id: "node-page-chat",
+      type: "webPage",
+      position: { x: 200, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "/chat/[id]",
+        sections: [
+          {
+            id: "sec-chat",
+            name: "ChatSection",
+            renderMode: "client",
+            actions: [
+              {
+                id: "act-mount-chat",
+                name: "onMount",
+                event: "onMount",
+                mountConfig: {
+                  strategy: "ssr",
+                  cacheMode: "no-store",
+                },
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const edges: BackendEdge[] = [
+      {
+        id: "edge-webapp-chat",
+        source: "node-webapp-chat",
+        target: "node-page-chat",
+        sourceHandle: "public-in",
+        targetHandle: "page-in",
+        type: "connection",
+        fractionalIndex: "a0",
+      },
+    ];
+
+    const result = compileNextjsV16WebClient(
+      [webPageNode],
+      [],
+      [],
+      [webAppNode, webPageNode],
+      edges,
+      "ChatApp",
+      undefined,
+      "chat-app",
+      webAppNode,
+    );
+
+    const serverPageFile = result.files.find(
+      (f) => f.filename === "app/(public)/chat/[id]/page.tsx",
+    );
+    expect(serverPageFile).toBeDefined();
+    const serverContent = serverPageFile!.content;
+
+    // Should be a clean Server Component with NO fetch call and NO unimported JSONValue
+    expect(serverContent).not.toContain('"use client"');
+    expect(serverContent).not.toContain("fetch(");
+    expect(serverContent).not.toContain('"/api"');
+    expect(serverContent).not.toContain("JSONValue");
+    expect(serverContent).not.toContain("Suspense");
+    expect(serverContent).toContain("export default async function ChatIdPage()");
+    expect(serverContent).toContain("<ChatIdPageClient initialData={null} initialError={null} />");
+
+    const clientViewFile = result.files.find(
+      (f) => f.filename === "app/(public)/chat/[id]/_components/ChatIdPageClient.tsx",
+    );
+    expect(clientViewFile).toBeDefined();
+    const clientContent = clientViewFile!.content;
+
+    expect(clientContent).toContain('"use client"');
+    expect(clientContent).toContain("export default function ChatIdPageClient(");
+    expect(clientContent).toContain("type JSONValue");
+  });
 });
 

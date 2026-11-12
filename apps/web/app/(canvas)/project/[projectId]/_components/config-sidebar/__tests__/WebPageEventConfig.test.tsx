@@ -74,6 +74,7 @@ vi.mock("../web-page-event-config", () => ({
   EventNavigationSection: () => <div data-testid="mock-event-nav">EventNavigationSection</div>,
   ActionSimulator: () => <div data-testid="mock-action-simulator">ActionSimulator</div>,
   EffectVariableMappingSection: () => <div data-testid="mock-effect-variable-mapping">EffectVariableMappingSection</div>,
+  MountExecutionStrategySection: () => <div data-testid="mock-mount-execution-strategy">MountExecutionStrategySection</div>,
 }));
 
 vi.mock("@workspace/ui/components/select", () => ({

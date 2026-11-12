@@ -19,6 +19,7 @@ import {
   generateStateWatcherEffects,
   generateVisibilityEffects,
   generateBeforeUnloadEffects,
+  generateJsonValueTypeDecl,
   type LifecycleActionMeta,
 } from "./page-generators";
 import { isAuthPage, isAuthLoginPage, isAuthRegisterPage } from "../../../compileAuth";
@@ -277,6 +278,7 @@ export function generatePageAndComponentFiles({
     );
 
     let pageLoadFetchStatements = "";
+    let pageLoadStorePopulationLines = "";
     // Derive a typed PageLoadData interface from the first pageLoad endpoint
     let pageLoadDataType = "JSONValue";
     let pageLoadDataTypeDecl = "";
@@ -498,6 +500,8 @@ export function generatePageAndComponentFiles({
           return `${hookName}.getState().${actionMethod}(${dispatchArg});`;
         })
         .join("\n          ");
+
+      pageLoadStorePopulationLines = storePopulationLines;
 
       const pageLoadDataExpr = pageLoadEvents.length === 1
         ? `results["${pageLoadEvents[0]?.name || "pageLoad"}"]`
@@ -1121,18 +1125,119 @@ export function generatePageAndComponentFiles({
 
     const hasParamWatcher = paramChangeActions.length > 0;
 
-    const pageCode = generatePageCode(
-      pageMeta,
-      pageLoadFetchStatements,
-      sectionsMeta,
-      effectiveAuthNode?.data,
-      pageLoadDataType,
-      pageLoadDataTypeDecl,
-      unmountCleanupsList.join("\n      "),
-      pageStoreImports,
-      lifecycleEffectsJsx,
-      hasParamWatcher,
-    );
+    const ssrMountEvent = pageLoadEvents.find((e) => e.mountConfig?.strategy === "ssr");
+    const isSsrMount = Boolean(ssrMountEvent);
+
+    let pageCode = "";
+    if (isSsrMount) {
+      const clientComponentName = `${pageMeta.componentName}Client`;
+      const clientComponentFilePath = pageMeta.isRoot
+        ? `app/${groupFolder}/_components/${clientComponentName}.tsx`
+        : `app/${groupFolder}/${pageMeta.slug}/_components/${clientComponentName}.tsx`;
+
+      const clientViewCode = generatePageCode(
+        pageMeta,
+        "",
+        sectionsMeta,
+        effectiveAuthNode?.data,
+        pageLoadDataType,
+        pageLoadDataTypeDecl,
+        unmountCleanupsList.join("\n      "),
+        pageStoreImports,
+        lifecycleEffectsJsx,
+        hasParamWatcher,
+        true, // isSsr = true
+        clientComponentName,
+        pageLoadStorePopulationLines,
+      );
+
+      pageFiles.push({
+        filename: clientComponentFilePath,
+        language: "typescript",
+        content: clientViewCode,
+      });
+
+      const link = resolveLinkedEndpoint(
+        node.id,
+        ssrMountEvent!.id,
+        allNodes,
+        allEdges,
+        endpoints,
+      );
+      const hasConfiguredEndpoint = Boolean(link || ssrMountEvent?.url);
+
+      const linkUrlInfo = link
+        ? resolveBaseUrlInfo(link.fullUrl, link.serviceName || link.targetNodeName)
+        : null;
+      const fetchUrlExpr = link
+        ? (linkUrlInfo?.hasBaseUrl ? linkUrlInfo.urlExpression : `"${link.fullUrl}"`)
+        : (ssrMountEvent?.url ? `"${ssrMountEvent.url}"` : `""`);
+      const cacheMode = ssrMountEvent!.mountConfig?.cacheMode || "no-store";
+      const revalidateSeconds = ssrMountEvent!.mountConfig?.revalidateSeconds ?? 60;
+      const fetchCachingOption =
+        cacheMode === "revalidate"
+          ? `next: { revalidate: ${revalidateSeconds} },`
+          : `cache: "${cacheMode}",`;
+
+      const serverJsonValueDecl =
+        pageLoadDataType.includes("JSONValue") && hasConfiguredEndpoint
+          ? generateJsonValueTypeDecl(true)
+          : "";
+
+      if (hasConfiguredEndpoint) {
+        pageCode = `import React from "react";
+import ${clientComponentName} from "./_components/${clientComponentName}";
+${pageLoadDataTypeDecl ? `${pageLoadDataTypeDecl}\n` : ""}${serverJsonValueDecl}export default async function ${pageMeta.componentName}() {
+  let initialData: ${pageLoadDataType} = null;
+  let initialError: string | null = null;
+
+  try {
+    ${linkUrlInfo?.hasBaseUrl ? `${linkUrlInfo.baseUrlDeclaration}\n    ` : ""}const res = await fetch(${fetchUrlExpr}, {
+      method: "${link?.method || "GET"}",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      ${fetchCachingOption}
+    });
+    if (!res.ok) {
+      initialError = "HTTP " + res.status + ": " + (res.statusText || "Failed to load page data");
+    } else {
+      initialData = await res.json();
+    }
+  } catch (err) {
+    initialError = err instanceof Error ? err.message : "Failed to load page data";
+  }
+
+  return (
+    <${clientComponentName} initialData={initialData} initialError={initialError} />
+  );
+}
+`;
+      } else {
+        pageCode = `import React from "react";
+import ${clientComponentName} from "./_components/${clientComponentName}";
+
+export default async function ${pageMeta.componentName}() {
+  return (
+    <${clientComponentName} initialData={null} initialError={null} />
+  );
+}
+`;
+      }
+    } else {
+      pageCode = generatePageCode(
+        pageMeta,
+        pageLoadFetchStatements,
+        sectionsMeta,
+        effectiveAuthNode?.data,
+        pageLoadDataType,
+        pageLoadDataTypeDecl,
+        unmountCleanupsList.join("\n      "),
+        pageStoreImports,
+        lifecycleEffectsJsx,
+        hasParamWatcher,
+      );
+    }
 
     const targetFilePath = pageMeta.isRoot
       ? `app/${groupFolder}/page.tsx`

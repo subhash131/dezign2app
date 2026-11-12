@@ -626,6 +626,12 @@ export interface EffectConfig {
   debounceMs?: number;
 }
 
+export interface MountConfig {
+  strategy?: "client" | "ssr";
+  cacheMode?: "no-store" | "force-cache" | "revalidate";
+  revalidateSeconds?: number;
+}
+
 export type UIEventItem = {
   id: string;
   name: string;
@@ -708,6 +714,7 @@ export type UIEventItem = {
     maxRounds?: number;
   };
   // Lifecycle & Effect configs
+  mountConfig?: MountConfig;
   intervalConfig?: {
     intervalMs: number;
     runImmediately?: boolean;

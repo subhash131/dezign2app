@@ -140,11 +140,17 @@ export function generateBeforeUnloadEffects(beforeUnloadActions: LifecycleAction
     .join("\n");
 }
 
-export function generatePageLoadState(hasPageLoad: boolean, pageLoadDataType: string = "JSONValue"): string {
+export function generatePageLoadState(
+  hasPageLoad: boolean,
+  pageLoadDataType: string = "JSONValue",
+  isSsr: boolean = false,
+): string {
   if (!hasPageLoad) return "";
-  return `  const [pageLoadData, setPageLoadData] = useState<${pageLoadDataType}>(null);
+  const initialDataExpr = isSsr ? "initialData ?? null" : "null";
+  const initialErrorExpr = isSsr ? "initialError ?? null" : "null";
+  return `  const [pageLoadData, setPageLoadData] = useState<${pageLoadDataType}>(${initialDataExpr});
   const [pageLoadLoading, setPageLoadLoading] = useState<boolean>(false);
-  const [pageLoadError, setPageLoadError] = useState<string | null>(null);
+  const [pageLoadError, setPageLoadError] = useState<string | null>(${initialErrorExpr});
 
 `;
 }
@@ -154,9 +160,34 @@ export function generatePageLoadEffect(
   pageMeta: PageInfo,
   pageLoadFetchStatements: string,
   unmountCleanups: string = "",
+  isSsr: boolean = false,
+  ssrStorePopulation: string = "",
 ): string {
   const hasUnmount = Boolean(unmountCleanups && unmountCleanups.trim());
   if (!hasPageLoad && !hasUnmount) return "";
+
+  if (isSsr) {
+    const adjustedStorePopulation = ssrStorePopulation
+      ? ssrStorePopulation.replace(/\bdata\b/g, "initialData").trim()
+      : "";
+    const storeBlock = adjustedStorePopulation
+      ? `    if (initialData) {\n      ${adjustedStorePopulation}\n    }\n`
+      : "";
+    const cleanupBlock = [
+      "      isMounted = false;",
+      unmountCleanups ? `      ${unmountCleanups.trim()}` : "",
+    ].filter(Boolean).join("\n");
+
+    return `  // SSR Hydration & Lifecycle for ${pageMeta.label}
+  useEffect(() => {
+    let isMounted = true;
+${storeBlock}    return () => {
+${cleanupBlock}
+    };
+  }, [initialData]);
+
+`;
+  }
 
   const loadDataBlock = hasPageLoad
     ? `    async function loadPageData() {

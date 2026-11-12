@@ -8,6 +8,7 @@ import {
   AccordionTrigger,
 } from "@workspace/ui/components/accordion";
 import { BackendNode, UIEventItem, PageSection } from "@/types/canvas";
+import type { MountConfig } from "@workspace/canvas/types";
 import {
   Endpoint,
   WEB_PAGE_EVENTS,
@@ -20,6 +21,7 @@ import {
   ActionFlowEditor,
   ActionSimulator,
   EffectVariableMappingSection,
+  MountExecutionStrategySection,
 } from "./web-page-event-config";
 import {
   ActionFlowCombobox,
@@ -54,6 +56,7 @@ import {
   Route,
   Sparkles,
   LogOut,
+  Server,
 } from "lucide-react";
 
 const EVENT_OPTIONS = [...WEB_PAGE_EVENTS];
@@ -155,6 +158,9 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
   const [effectConfig, setEffectConfig] = useState(
     item?.effectConfig || { dependencies: [], debounceMs: 0 },
   );
+  const [mountConfig, setMountConfig] = useState<MountConfig>(
+    item?.mountConfig || { strategy: "client", cacheMode: "no-store" },
+  );
   const [unmountConfig, setUnmountConfig] = useState(
     item?.unmountConfig || { resetStoreNodeIds: [] },
   );
@@ -182,6 +188,7 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
       setIntervalConfig(item.intervalConfig || { intervalMs: 5000, runImmediately: true });
       setParamChangeConfig(item.paramChangeConfig || { watchPathParams: [], watchQueryParams: [] });
       setEffectConfig(item.effectConfig || { dependencies: [], debounceMs: 0 });
+      setMountConfig(item.mountConfig || { strategy: "client", cacheMode: "no-store" });
       setUnmountConfig(item.unmountConfig || { resetStoreNodeIds: [] });
       setItemKeyField(item.itemContextFields?.[0] || "id");
       setSelectedStateId(item.itemSourceStateId || "");
@@ -712,6 +719,7 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
                 "ws_config",
                 "webrtc_config",
                 "polling_config",
+                "mount_config",
                 "interval_config",
                 "param_change_config",
                 "effect_config",
@@ -842,6 +850,36 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
             </AccordionTrigger>
             <AccordionContent className="px-4 pb-4 pt-1 space-y-3">
               <div className="space-y-1"><Label className="text-xs">Interval (ms)</Label><Input type="number" value={pollingConfig.intervalMs ?? 5000} onChange={(e) => { const next = { ...pollingConfig, intervalMs: parseInt(e.target.value, 10) }; setPollingConfig(next); updateEventFields({ pollingConfig: next }); }} className="h-8 text-xs bg-background" /></div>
+            </AccordionContent>
+          </AccordionItem>
+        )}
+
+        {isMount && (
+          <AccordionItem
+            value="mount_config"
+            className="border border-sky-500/30 rounded-xl bg-sky-500/5 overflow-hidden"
+          >
+            <AccordionTrigger className="px-4 py-3 text-xs font-semibold hover:no-underline flex items-center justify-between text-sky-600 dark:text-sky-400">
+              <span className="flex items-center gap-2">
+                <Server size={14} /> Mount Execution Strategy
+              </span>
+              <Badge
+                variant="outline"
+                className="text-[10px] uppercase font-mono border-sky-500/40 text-sky-600 dark:text-sky-400"
+              >
+                {mountConfig.strategy === "ssr" ? "Server (SSR)" : "Client (useEffect)"}
+              </Badge>
+            </AccordionTrigger>
+            <AccordionContent className="px-4 pb-4 pt-1">
+              <MountExecutionStrategySection
+                mountConfig={mountConfig}
+                isProtected={isProtected}
+                hasEndpoint={actionEdges.length > 0 || Boolean(item?.url)}
+                onChange={(newCfg) => {
+                  setMountConfig(newCfg);
+                  updateActionInParent({ mountConfig: newCfg });
+                }}
+              />
             </AccordionContent>
           </AccordionItem>
         )}
