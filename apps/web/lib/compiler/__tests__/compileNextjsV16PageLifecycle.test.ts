@@ -438,5 +438,164 @@ describe("compileNextjsV16WebClient - Page Lifecycle and Reactive Effects", () =
     expect(clientContent).toContain("export default function ChatIdPageClient(");
     expect(clientContent).toContain("type JSONValue");
   });
+
+  it("compiles section load strategies (eager, dynamic, and dynamic-no-ssr)", () => {
+    const webAppNode: BackendNode = {
+      id: "node-webapp-split",
+      type: "webApp",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "SplitApp",
+        appSlug: "split-app",
+      },
+    };
+
+    const webPageNode: BackendNode = {
+      id: "node-page-split",
+      type: "webPage",
+      position: { x: 200, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "/analytics",
+        sections: [
+          {
+            id: "sec-nav",
+            name: "Navigation Header",
+            renderMode: "server",
+            loadStrategy: "eager",
+            actions: [],
+          },
+          {
+            id: "sec-chart",
+            name: "Analytics Chart",
+            renderMode: "client",
+            loadStrategy: "dynamic",
+            actions: [],
+          },
+          {
+            id: "sec-canvas",
+            name: "Interactive Canvas",
+            renderMode: "client",
+            loadStrategy: "dynamic-no-ssr",
+            actions: [],
+          },
+        ],
+      },
+    };
+
+    const result = compileNextjsV16WebClient(
+      [webPageNode],
+      [],
+      [],
+      [webAppNode, webPageNode],
+      [],
+      "SplitApp",
+      undefined,
+      "split-app",
+      webAppNode,
+    );
+
+    const pageFile = result.files.find(
+      (f) => f.filename === "app/(public)/analytics/page.tsx",
+    );
+    expect(pageFile).toBeDefined();
+    const content = pageFile!.content;
+
+    // dynamic import statement present
+    expect(content).toContain('import dynamic from "next/dynamic";');
+    // eager section statically imported
+    expect(content).toContain(
+      'import { NavigationHeaderSection } from "./_components/navigation-header";',
+    );
+    // dynamic section code-split
+    expect(content).toContain(
+      'const AnalyticsChartSection = dynamic(\n  () => import("./_components/analytics-chart").then((mod) => mod.AnalyticsChartSection)\n);',
+    );
+    // dynamic-no-ssr section with { ssr: false }
+    expect(content).toContain(
+      'const InteractiveCanvasSection = dynamic(\n  () => import("./_components/interactive-canvas").then((mod) => mod.InteractiveCanvasSection),\n  { ssr: false }\n);',
+    );
+    expect(content).toContain("export default function AnalyticsPage() {");
+  });
+
+  it("compiles section load strategies in SSR mode (PageClient relative paths)", () => {
+    const webAppNode: BackendNode = {
+      id: "node-webapp-split-ssr",
+      type: "webApp",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "SplitSsrApp",
+        appSlug: "split-ssr-app",
+      },
+    };
+
+    const webPageNode: BackendNode = {
+      id: "node-page-split-ssr",
+      type: "webPage",
+      position: { x: 200, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "/dashboard",
+        sections: [
+          {
+            id: "sec-sidebar",
+            name: "App Sidebar",
+            renderMode: "server",
+            loadStrategy: "eager",
+            actions: [
+              {
+                id: "act-ssr-mount",
+                name: "loadDashboard",
+                event: "onMount",
+                mountConfig: {
+                  strategy: "ssr",
+                  cacheMode: "no-store",
+                },
+              },
+            ],
+          },
+          {
+            id: "sec-flow",
+            name: "Node Flow View",
+            renderMode: "client",
+            loadStrategy: "dynamic-no-ssr",
+            actions: [],
+          },
+        ],
+      },
+    };
+
+    const result = compileNextjsV16WebClient(
+      [webPageNode],
+      [],
+      [],
+      [webAppNode, webPageNode],
+      [],
+      "SplitSsrApp",
+      undefined,
+      "split-ssr-app",
+      webAppNode,
+    );
+
+    const clientViewFile = result.files.find(
+      (f) => f.filename === "app/(public)/dashboard/_components/DashboardPageClient.tsx",
+    );
+    expect(clientViewFile).toBeDefined();
+    const clientContent = clientViewFile!.content;
+
+    // Must import dynamic from next/dynamic
+    expect(clientContent).toContain('import dynamic from "next/dynamic";');
+    // Eager section imported relative to _components
+    expect(clientContent).toContain(
+      'import { AppSidebarSection } from "./app-sidebar";',
+    );
+    // Dynamic-no-ssr section with relative path and ssr: false
+    expect(clientContent).toContain(
+      'const NodeFlowViewSection = dynamic(\n  () => import("./node-flow-view").then((mod) => mod.NodeFlowViewSection),\n  { ssr: false }\n);',
+    );
+    expect(clientContent).toContain("export default function DashboardPageClient(");
+  });
 });
 
