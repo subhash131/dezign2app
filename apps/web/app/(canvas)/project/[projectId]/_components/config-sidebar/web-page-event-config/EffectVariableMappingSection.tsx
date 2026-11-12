@@ -294,17 +294,17 @@ export const EffectVariableMappingSection: React.FC<EffectVariableMappingSection
   return (
     <div className={cn("space-y-4 font-sans", className)}>
       {/* 1. Header & Callout */}
-      <div className="flex flex-col gap-1.5 p-3 rounded-xl bg-violet-500/10 border border-violet-500/20 text-foreground">
+      <div className="flex flex-col gap-1.5 p-3 rounded-xl bg-secondary/40 border border-border/70 text-foreground">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Sparkles size={15} className="text-violet-500 shrink-0" />
+            <Sparkles size={15} className="text-sky-500 shrink-0" />
             <span className="text-xs font-semibold text-foreground">
               Variable Change Trigger Mapping
             </span>
           </div>
           <Badge
             variant="outline"
-            className="text-[10px] font-mono px-2 py-0 border-violet-500/40 text-violet-600 dark:text-violet-400 bg-background/60"
+            className="text-[10px] font-mono px-2 py-0 border-sky-500/40 text-sky-600 dark:text-sky-400 bg-background/60"
           >
             {mappings.length} {mappings.length === 1 ? "variable" : "variables"} mapped
           </Badge>
@@ -337,7 +337,7 @@ export const EffectVariableMappingSection: React.FC<EffectVariableMappingSection
               }
             }}
           >
-            <SelectTrigger className="h-8 text-xs bg-background font-mono flex-1 focus:ring-1 focus:ring-violet-500">
+            <SelectTrigger className="h-8 text-xs bg-background font-mono flex-1 focus:ring-1 focus:ring-sky-500">
               <SelectValue placeholder="Select variable to watch..." />
             </SelectTrigger>
             <SelectContent className="max-h-72">
@@ -466,9 +466,9 @@ export const EffectVariableMappingSection: React.FC<EffectVariableMappingSection
               {/* Group 5: Custom Expression */}
               <SelectGroup>
                 <SelectLabel className="text-[10px] font-bold text-muted-foreground uppercase px-2 py-1 flex items-center gap-1.5">
-                  <Code2 size={11} className="text-violet-500" /> Custom Expression
+                  <Code2 size={11} className="text-sky-500" /> Custom Expression
                 </SelectLabel>
-                <SelectItem value="CUSTOM_PROMPT" className="text-xs font-mono text-violet-500">
+                <SelectItem value="CUSTOM_PROMPT" className="text-xs font-mono text-sky-500">
                   + Enter custom variable name...
                 </SelectItem>
               </SelectGroup>
@@ -481,7 +481,7 @@ export const EffectVariableMappingSection: React.FC<EffectVariableMappingSection
               variant="outline"
               size="sm"
               onClick={() => setIsAddingCustom(true)}
-              className="h-8 px-2.5 text-xs gap-1 shrink-0 border-violet-500/30 text-violet-600 dark:text-violet-400 hover:bg-violet-500/10"
+              className="h-8 px-2.5 text-xs gap-1 shrink-0 border-sky-500/30 text-sky-600 dark:text-sky-400 hover:bg-sky-500/10"
               title="Add a custom variable expression"
             >
               <Plus size={12} />
@@ -515,7 +515,7 @@ export const EffectVariableMappingSection: React.FC<EffectVariableMappingSection
               size="sm"
               onClick={handleAddCustomVar}
               disabled={!customVarName.trim()}
-              className="h-7 px-2.5 text-xs bg-violet-600 hover:bg-violet-700 text-white shrink-0"
+              className="h-7 px-2.5 text-xs bg-sky-600 hover:bg-sky-700 text-white shrink-0"
             >
               Add
             </Button>
@@ -560,7 +560,7 @@ export const EffectVariableMappingSection: React.FC<EffectVariableMappingSection
                     isSectionState && "bg-emerald-500/5 border-emerald-500/20",
                     isStore && "bg-sky-500/5 border-sky-500/20",
                     isParam && "bg-amber-500/5 border-amber-500/20",
-                    isCustom && "bg-violet-500/5 border-violet-500/20",
+                    isCustom && "bg-sky-500/5 border-sky-500/20",
                   )}
                 >
                   <div className="flex items-center gap-2 min-w-0">
@@ -568,7 +568,7 @@ export const EffectVariableMappingSection: React.FC<EffectVariableMappingSection
                       {isSectionState && <Box size={14} className="text-emerald-500" />}
                       {isStore && <Database size={14} className="text-sky-500" />}
                       {isParam && <Route size={14} className="text-amber-500" />}
-                      {isCustom && <Code2 size={14} className="text-violet-500" />}
+                      {isCustom && <Code2 size={14} className="text-sky-500" />}
                     </div>
 
                     <div className="flex flex-col min-w-0">
@@ -610,7 +610,7 @@ export const EffectVariableMappingSection: React.FC<EffectVariableMappingSection
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center p-5 rounded-xl border border-dashed border-border text-center bg-muted/10 space-y-1.5">
-            <Sparkles size={20} className="text-violet-400/80 mb-0.5" />
+            <Sparkles size={20} className="text-sky-400/80 mb-0.5" />
             <div className="text-xs font-medium text-foreground">No Variables Mapped</div>
             <p className="text-[11px] text-muted-foreground max-w-xs leading-normal">
               Select a section state variable, store property, or route param above to trigger this effect whenever its value changes.
@@ -623,7 +623,7 @@ export const EffectVariableMappingSection: React.FC<EffectVariableMappingSection
       <div className="flex flex-col gap-2 p-3 rounded-xl bg-card border border-border/70 shadow-xs">
         <div className="flex items-center justify-between">
           <Label className="text-[11px] font-semibold text-foreground flex items-center gap-1.5">
-            <Sliders size={13} className="text-violet-500" />
+            <Sliders size={13} className="text-sky-500" />
             <span>Debounce Delay (ms)</span>
           </Label>
           <span className="text-[10px] font-mono text-muted-foreground">
@@ -640,7 +640,7 @@ export const EffectVariableMappingSection: React.FC<EffectVariableMappingSection
               className={cn(
                 "px-2 py-0.5 rounded text-[10px] font-mono border transition-all",
                 currentDebounce === preset
-                  ? "bg-violet-500 text-white border-violet-500 shadow-xs"
+                  ? "bg-sky-500 text-white border-sky-500 shadow-xs"
                   : "bg-background border-border text-muted-foreground hover:bg-muted",
               )}
             >
@@ -655,7 +655,7 @@ export const EffectVariableMappingSection: React.FC<EffectVariableMappingSection
           step={50}
           value={currentDebounce}
           onChange={(e) => handleDebounceChange(parseInt(e.target.value, 10) || 0)}
-          className="h-8 text-xs bg-background font-mono focus:ring-1 focus:ring-violet-500"
+          className="h-8 text-xs bg-background font-mono focus:ring-1 focus:ring-sky-500"
           placeholder="e.g. 300 for debounced search input"
         />
       </div>

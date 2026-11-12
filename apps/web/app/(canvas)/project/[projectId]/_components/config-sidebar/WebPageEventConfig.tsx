@@ -490,8 +490,6 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
     deleteEdge(edgeId);
   };
 
-  if (!item) return <div className="p-4 text-xs text-muted-foreground">Action not found.</div>;
-
   const isNavigateToPage = eventType === "navigateToPage";
   const isSse = eventType === "sse";
   const isWebsocket = eventType === "websocket";
@@ -605,6 +603,10 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
     });
   };
 
+  if (!item) {
+    return <div className="p-4 text-xs text-muted-foreground">Action not found.</div>;
+  }
+
   return (
     <div className="flex flex-col gap-5 font-sans">
       {/* Merged Action Header: Event Type & Action Name */}
@@ -620,7 +622,7 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
                 {isMount ? "onMount" : eventType}
               </Badge>
               {isItemScoped && (
-                <Badge variant="secondary" className="text-[10px] font-mono px-1.5 py-0 bg-violet-500/15 text-violet-400 border border-violet-500/30">
+                <Badge variant="secondary" className="text-[10px] font-mono px-1.5 py-0 bg-sky-500/15 text-sky-400 border border-sky-500/30">
                   Item Scoped
                 </Badge>
               )}
@@ -750,14 +752,14 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
                 </label>
               </div>
               {isItemScoped && (
-                <Badge variant="outline" className="text-[9px] font-mono border-violet-500/40 text-violet-300">
+                <Badge variant="outline" className="text-[9px] font-mono border-sky-500/40 text-sky-300">
                   {sourceState?.name ? `${sourceState.name}[]` : "array item"}
                 </Badge>
               )}
             </div>
 
             {isItemScoped && (
-              <div className="p-3 rounded-lg border border-violet-500/30 bg-violet-500/[0.04] flex flex-col gap-2.5">
+              <div className="p-3 rounded-lg border border-sky-500/30 bg-sky-500/[0.04] flex flex-col gap-2.5">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   <div className="flex flex-col gap-1">
                     <Label className="text-[10px] font-medium text-muted-foreground">
@@ -801,7 +803,7 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
                         Item Context Identifier Key
                       </Label>
                       {targetStateTypeName && (
-                        <span className="text-[9px] font-mono text-violet-400 font-normal">
+                        <span className="text-[9px] font-mono text-sky-400 font-normal">
                           Type: {targetStateTypeName}
                         </span>
                       )}
@@ -836,7 +838,7 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
                     {activeTargetState?.name || sourceState?.name || "the array"}
                   </span>{" "}
                   triggers this action and passes{" "}
-                  <code className="text-violet-400 font-mono">&#123; {itemKeyField || "id"}: item.{itemKeyField || "id"} &#125;</code> into the request.
+                  <code className="text-sky-400 font-mono">&#123; {itemKeyField || "id"}: item.{itemKeyField || "id"} &#125;</code> into the request.
                 </div>
               </div>
             )}
@@ -970,8 +972,8 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
         )}
 
         {isWebrtc && (
-          <AccordionItem value="webrtc_config" className="border border-purple-500/30 rounded-lg bg-purple-500/5 overflow-hidden">
-            <AccordionTrigger className="px-4 py-3 text-xs font-semibold hover:no-underline flex items-center justify-between text-purple-600 dark:text-purple-400">
+          <AccordionItem value="webrtc_config" className="border border-cyan-500/30 rounded-lg bg-cyan-500/5 overflow-hidden">
+            <AccordionTrigger className="px-4 py-3 text-xs font-semibold hover:no-underline flex items-center justify-between text-cyan-600 dark:text-cyan-400">
               <span className="flex items-center gap-2"><Video size={14} /> WebRTC Setup</span>
             </AccordionTrigger>
             <AccordionContent className="px-4 pb-4 pt-1 space-y-3">
@@ -1214,15 +1216,15 @@ export const WebPageEventConfig = ({ id, nodeId }: WebPageEventConfigProps) => {
         {isEffect && (
           <AccordionItem
             value="effect_config"
-            className="border border-violet-500/30 rounded-xl bg-violet-500/5 overflow-hidden"
+            className="border border-sky-500/30 rounded-xl bg-sky-500/5 overflow-hidden"
           >
-            <AccordionTrigger className="px-4 py-3 text-xs font-semibold hover:no-underline flex items-center justify-between text-violet-600 dark:text-violet-400">
+            <AccordionTrigger className="px-4 py-3 text-xs font-semibold hover:no-underline flex items-center justify-between text-sky-600 dark:text-sky-400">
               <span className="flex items-center gap-2">
                 <Sparkles size={14} /> Variable Change Trigger Mapping
               </span>
               <Badge
                 variant="outline"
-                className="text-[10px] font-mono border-violet-500/30 text-violet-600 dark:text-violet-400"
+                className="text-[10px] font-mono border-sky-500/30 text-sky-600 dark:text-sky-400"
               >
                 {(effectConfig.variableMappings?.length ?? effectConfig.dependencies?.length ?? 0)}{" "}
                 {(effectConfig.variableMappings?.length ?? effectConfig.dependencies?.length ?? 0) === 1
