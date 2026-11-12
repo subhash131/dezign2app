@@ -1,13 +1,17 @@
 import { v, ConvexError } from "convex/values";
 import { mutation, query } from "../_generated/server";
 import { log } from "../logger";
+import { assertActiveSubscriptionForProject } from "../auth_guards";
 
 export const getFrontendRecords = query({
   args: { projectId: v.id("projects") },
   async handler(ctx, args) {
     log(`[getFrontendRecords] Reading frontend records for project ${args.projectId}`);
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("Not authenticated");
+    const project = await ctx.db.get(args.projectId);
+    if (!project?.isPublished && !identity) {
+      throw new ConvexError("Not authenticated");
+    }
 
     const rows = await ctx.db
       .query("canvas_frontend_records")
@@ -31,8 +35,7 @@ export const syncFrontendRecords = mutation({
     log(
       `[syncFrontendRecords] Syncing records for project ${args.projectId}: ${args.put.length} put, ${args.remove.length} remove`,
     );
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("Not authenticated");
+    await assertActiveSubscriptionForProject(ctx, args.projectId);
 
     // Upsert each record
     for (const record of args.put) {

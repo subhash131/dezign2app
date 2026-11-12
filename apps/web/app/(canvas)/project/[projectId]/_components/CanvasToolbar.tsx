@@ -13,6 +13,9 @@ import {
   Redo2,
   GitCommit,
   History,
+  Globe,
+  Copy,
+  Loader2,
 } from "lucide-react";
 import { BackendCanvasView } from "@/types/canvas";
 import { Button } from "@workspace/ui/components/button";
@@ -32,6 +35,11 @@ interface CanvasToolbarProps {
   setView?: (view: BackendCanvasView) => void;
   onOpenCommit: () => void;
   onOpenHistory: () => void;
+  isReadOnly?: boolean;
+  isPublished?: boolean;
+  onOpenPublish?: () => void;
+  onCloneProject?: () => void;
+  isCloning?: boolean;
 }
 
 export function CanvasToolbar({
@@ -41,6 +49,11 @@ export function CanvasToolbar({
   setView,
   onOpenCommit,
   onOpenHistory,
+  isReadOnly,
+  isPublished,
+  onOpenPublish,
+  onCloneProject,
+  isCloning,
 }: CanvasToolbarProps): React.JSX.Element {
   const canUndo = useBackendCanvasStore((s) =>
     view === "schema"
@@ -202,78 +215,126 @@ export function CanvasToolbar({
       </div>
 
       <div className="flex items-center space-x-2">
-        {/* Version History Button */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="secondary"
-              size="sm"
-              className="py-3.5 h-8 gap-1.5 text-xs font-medium"
-              onClick={onOpenHistory}
-            >
-              <History className="w-3.5 h-3.5 text-primary" />
-              <span>History</span>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" className="text-xs">
-            View version checkpoints & audit history
-          </TooltipContent>
-        </Tooltip>
+        {isReadOnly ? (
+          /* Read-Only Mode: Show prominent Clone App button */
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="default"
+                size="sm"
+                className="py-3.5 h-8 gap-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm"
+                onClick={onCloneProject}
+                disabled={isCloning}
+              >
+                {isCloning ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Copy className="w-3.5 h-3.5" />
+                )}
+                <span>Clone App</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-xs">
+              Clone this published architecture into your own workspace to edit and build on it
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          <>
+            {/* Version History Button */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="py-3.5 h-8 gap-1.5 text-xs font-medium"
+                  onClick={onOpenHistory}
+                >
+                  <History className="w-3.5 h-3.5 text-primary" />
+                  <span>History</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-xs">
+                View version checkpoints & audit history
+              </TooltipContent>
+            </Tooltip>
 
-        {/* Commit Checkpoint Button */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              className="py-3.5 h-8 gap-1.5 text-xs font-medium border-primary/20 hover:bg-primary/5"
-              onClick={onOpenCommit}
-            >
-              <GitCommit className="w-3.5 h-3.5 text-primary" />
-              <span>Commit</span>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" className="text-xs">
-            Create a version checkpoint snapshot
-          </TooltipContent>
-        </Tooltip>
+            {/* Commit Checkpoint Button */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="py-3.5 h-8 gap-1.5 text-xs font-medium border-primary/20 hover:bg-primary/5"
+                  onClick={onOpenCommit}
+                >
+                  <GitCommit className="w-3.5 h-3.5 text-primary" />
+                  <span>Commit</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-xs">
+                Create a version checkpoint snapshot
+              </TooltipContent>
+            </Tooltip>
 
-        <AppUpdateToolbarButton />
+            {/* Publish Project Button */}
+            {onOpenPublish && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={isPublished ? "outline" : "secondary"}
+                    size="sm"
+                    className="py-3.5 h-8 gap-1.5 text-xs font-medium"
+                    onClick={onOpenPublish}
+                  >
+                    <Globe className="w-3.5 h-3.5" />
+                    <span>{isPublished ? "Published" : "Publish"}</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="text-xs">
+                  {isPublished
+                    ? "Project is publicly published. Click to manage visibility or copy link."
+                    : "Publish this project to the community so others can view and clone it."}
+                </TooltipContent>
+              </Tooltip>
+            )}
 
-        <Button asChild variant={"secondary"} size="sm" className="py-3.5 h-8">
-          <Link href={"#"}>
-            <Cloud className="mr-1 w-3.5 h-3.5" />
-            Deploy
-          </Link>
-        </Button>
+            <AppUpdateToolbarButton />
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant={"secondary"}
-              size="sm"
-              className="py-3.5 h-8"
-              asChild
-            >
-              <Link href={`/project/${projectId}/compiler`}>
-                <Code className="w-4 h-4 mr-1 text-primary" />
-                Code
+            <Button asChild variant={"secondary"} size="sm" className="py-3.5 h-8">
+              <Link href={"#"}>
+                <Cloud className="mr-1 w-3.5 h-3.5" />
+                Deploy
               </Link>
             </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" className="max-w-64 p-3">
-            <div className="space-y-1">
-              <div className="flex items-center gap-1.5 font-semibold text-xs text-background">
-                <Hammer className="w-3.5 h-3.5" />
-                <span>Monorepo IDE & Compiler</span>
-              </div>
-              <p className="text-[11px] text-background/80 leading-relaxed">
-                Open full IDE page with Monaco editor, terminal, and AI agent to edit function bodies.
-              </p>
-            </div>
-          </TooltipContent>
-        </Tooltip>
 
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={"secondary"}
+                  size="sm"
+                  className="py-3.5 h-8"
+                  asChild
+                >
+                  <Link href={`/project/${projectId}/compiler`}>
+                    <Code className="w-4 h-4 mr-1 text-primary" />
+                    Code
+                  </Link>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-64 p-3">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5 font-semibold text-xs text-background">
+                    <Hammer className="w-3.5 h-3.5" />
+                    <span>Monorepo IDE & Compiler</span>
+                  </div>
+                  <p className="text-[11px] text-background/80 leading-relaxed">
+                    Open full IDE page with Monaco editor, terminal, and AI agent to edit function bodies.
+                  </p>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </>
+        )}
       </div>
     </div>
   );

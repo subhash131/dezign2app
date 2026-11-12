@@ -36,6 +36,7 @@ const isPublicRoute = createRouteMatcher([
   "/changelog(.*)",
   "/integrations(.*)",
   "/auth/desktop(.*)",
+  "/preview(.*)",
   "/robots.txt",
   "/sitemap.xml",
   "/favicon.ico",
