@@ -297,6 +297,9 @@ export const getProjectById = query({
   async handler(ctx, args) {
     log(`[getProjectById] Querying project ${args.projectId}`);
     const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return null;
+    }
     const project = await ctx.db.get(args.projectId);
     if (!project) {
       return null;

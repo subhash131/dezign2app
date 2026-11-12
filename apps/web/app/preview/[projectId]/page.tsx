@@ -10,6 +10,7 @@ import { useSession } from "@/lib/auth-client";
 import { BackendCanvasView } from "@/types/canvas";
 import { BackendCanvas } from "@/app/(canvas)/project/[projectId]/_components/BackendCanvas";
 import { ReactFlowProvider } from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
 import {
   ArrowLeft,
   Network,
@@ -51,15 +52,28 @@ export default function PublicProjectPreviewPage({
   const { projectId } = React.use(params);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { data: session } = useSession();
+  const { data: session, isPending: isSessionLoading } = useSession();
 
   const [view, setView] = useState<BackendCanvasView>("graph");
   const [copied, setCopied] = useState(false);
   const [isCloning, setIsCloning] = useState(false);
 
-  const project = useQuery(api.projects.getProjectById, {
-    projectId: projectId as Id<"projects">,
-  });
+  // Require authentication to view /preview/[projectId]
+  useEffect(() => {
+    if (!isSessionLoading && !session?.user) {
+      const returnUrl = `/preview/${projectId}`;
+      router.replace(`/sign-in?redirect_url=${encodeURIComponent(returnUrl)}`);
+    }
+  }, [session, isSessionLoading, projectId, router]);
+
+  const project = useQuery(
+    api.projects.getProjectById,
+    session?.user
+      ? {
+          projectId: projectId as Id<"projects">,
+        }
+      : "skip",
+  );
 
   const cloneMutation = useMutation(api.projects.cloneProject);
 
@@ -104,6 +118,36 @@ export default function PublicProjectPreviewPage({
       setIsCloning(false);
     }
   };
+
+  if (isSessionLoading) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-background text-foreground">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <p className="text-xs text-muted-foreground font-mono">Verifying authentication...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!session?.user) {
+    return (
+      <div className="flex h-screen w-screen flex-col items-center justify-center gap-4 bg-background text-foreground p-6 text-center">
+        <div className="p-4 rounded-full bg-destructive/10 text-destructive mb-2">
+          <ShieldAlert className="w-10 h-10" />
+        </div>
+        <h2 className="text-xl font-bold">Authentication Required</h2>
+        <p className="text-xs text-muted-foreground max-w-md">
+          You must be signed in to view this preview.
+        </p>
+        <Button asChild size="sm" className="mt-2 text-xs">
+          <Link href={`/sign-in?redirect_url=${encodeURIComponent(`/preview/${projectId}`)}`}>
+            Sign In to Continue
+          </Link>
+        </Button>
+      </div>
+    );
+  }
 
   if (project === undefined) {
     return (
@@ -313,7 +357,7 @@ export default function PublicProjectPreviewPage({
       {/* ========================================================================= */}
       {/* INTERACTIVE READ-ONLY VISUAL CANVAS                                       */}
       {/* ========================================================================= */}
-      <div className="flex-1 w-full h-full relative overflow-hidden">
+      <div className="flex-1 min-h-0 w-full h-full relative overflow-hidden">
         <ReactFlowProvider>
           <BackendCanvas
             projectId={projectId}

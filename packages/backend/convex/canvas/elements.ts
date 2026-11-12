@@ -17,6 +17,18 @@ export const getBackendElements = query({
   },
   async handler(ctx, args) {
     log(`[getBackendElements] Querying canvas elements for project: ${args.projectId}`);
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return {
+        nodes: [],
+        edges: [],
+        endpoints: [],
+        events: [],
+        testCases: [],
+        identityProviders: [],
+      };
+    }
+
     const nodes = await ctx.db
       .query("canvas_backend_nodes")
       .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
