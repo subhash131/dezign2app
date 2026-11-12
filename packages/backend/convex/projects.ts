@@ -1,13 +1,160 @@
 import { ConvexError, v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, MutationCtx } from "./_generated/server";
 import { paginationOptsValidator } from "convex/server";
-import { Doc } from "./_generated/dataModel";
+import { Doc, Id } from "./_generated/dataModel";
 import { log } from "./logger";
 import {
   isUserAuthorizedForOrg,
   assertCanCreateProject,
   assertActiveSubscriptionForProject,
 } from "./auth_guards";
+
+async function deepCopyProjectData(
+  ctx: MutationCtx,
+  sourceProjectId: Id<"projects">,
+  targetProjectId: Id<"projects">,
+) {
+  // 1. Concurrently fetch all source project collections in parallel
+  const [
+    nodes,
+    edges,
+    endpoints,
+    events,
+    idps,
+    testCases,
+    frontendRecords,
+    langgraphSteps,
+    langgraphEdges,
+    reqs,
+    plans,
+  ] = await Promise.all([
+    ctx.db
+      .query("canvas_backend_nodes")
+      .withIndex("by_project", (q) => q.eq("projectId", sourceProjectId))
+      .collect(),
+    ctx.db
+      .query("canvas_backend_edges")
+      .withIndex("by_project", (q) => q.eq("projectId", sourceProjectId))
+      .collect(),
+    ctx.db
+      .query("canvas_backend_endpoints")
+      .withIndex("by_project", (q) => q.eq("projectId", sourceProjectId))
+      .collect(),
+    ctx.db
+      .query("canvas_backend_events")
+      .withIndex("by_project", (q) => q.eq("projectId", sourceProjectId))
+      .collect(),
+    ctx.db
+      .query("canvas_backend_identity_providers")
+      .withIndex("by_project", (q) => q.eq("projectId", sourceProjectId))
+      .collect(),
+    ctx.db
+      .query("canvas_backend_test_cases")
+      .withIndex("by_project", (q) => q.eq("projectId", sourceProjectId))
+      .collect(),
+    ctx.db
+      .query("canvas_frontend_records")
+      .withIndex("by_project", (q) => q.eq("projectId", sourceProjectId))
+      .collect(),
+    ctx.db
+      .query("canvas_backend_langgraph_steps")
+      .withIndex("by_project", (q) => q.eq("projectId", sourceProjectId))
+      .collect(),
+    ctx.db
+      .query("canvas_backend_langgraph_edges")
+      .withIndex("by_project", (q) => q.eq("projectId", sourceProjectId))
+      .collect(),
+    ctx.db
+      .query("projectRequirements")
+      .withIndex("by_project", (q) => q.eq("projectId", sourceProjectId))
+      .collect(),
+    ctx.db
+      .query("projectPlans")
+      .withIndex("by_project", (q) => q.eq("projectId", sourceProjectId))
+      .collect(),
+  ]);
+
+  // 2. Concurrently insert all records into the target project
+  await Promise.all([
+    ...nodes.map((n) => {
+      const { _id, _creationTime, projectId, ...nodeRest } = n;
+      return ctx.db.insert("canvas_backend_nodes", {
+        ...nodeRest,
+        projectId: targetProjectId,
+      });
+    }),
+    ...edges.map((e) => {
+      const { _id, _creationTime, projectId, ...edgeRest } = e;
+      return ctx.db.insert("canvas_backend_edges", {
+        ...edgeRest,
+        projectId: targetProjectId,
+      });
+    }),
+    ...endpoints.map((ep) => {
+      const { _id, _creationTime, projectId, ...epRest } = ep;
+      return ctx.db.insert("canvas_backend_endpoints", {
+        ...epRest,
+        projectId: targetProjectId,
+      });
+    }),
+    ...events.map((ev) => {
+      const { _id, _creationTime, projectId, ...evRest } = ev;
+      return ctx.db.insert("canvas_backend_events", {
+        ...evRest,
+        projectId: targetProjectId,
+      });
+    }),
+    ...idps.map((idp) => {
+      const { _id, _creationTime, projectId, ...idpRest } = idp;
+      return ctx.db.insert("canvas_backend_identity_providers", {
+        ...idpRest,
+        projectId: targetProjectId,
+      });
+    }),
+    ...testCases.map((tc) => {
+      const { _id, _creationTime, projectId, ...tcRest } = tc;
+      return ctx.db.insert("canvas_backend_test_cases", {
+        ...tcRest,
+        projectId: targetProjectId,
+      });
+    }),
+    ...frontendRecords.map((r) => {
+      const { _id, _creationTime, projectId, ...recordRest } = r;
+      return ctx.db.insert("canvas_frontend_records", {
+        ...recordRest,
+        projectId: targetProjectId,
+      });
+    }),
+    ...langgraphSteps.map((s) => {
+      const { _id, _creationTime, projectId, ...stepRest } = s;
+      return ctx.db.insert("canvas_backend_langgraph_steps", {
+        ...stepRest,
+        projectId: targetProjectId,
+      });
+    }),
+    ...langgraphEdges.map((le) => {
+      const { _id, _creationTime, projectId, ...lgEdgeRest } = le;
+      return ctx.db.insert("canvas_backend_langgraph_edges", {
+        ...lgEdgeRest,
+        projectId: targetProjectId,
+      });
+    }),
+    ...reqs.map((req) => {
+      const { _id, _creationTime, projectId, ...reqRest } = req;
+      return ctx.db.insert("projectRequirements", {
+        ...reqRest,
+        projectId: targetProjectId,
+      });
+    }),
+    ...plans.map((plan) => {
+      const { _id, _creationTime, projectId, ...planRest } = plan;
+      return ctx.db.insert("projectPlans", {
+        ...planRest,
+        projectId: targetProjectId,
+      });
+    }),
+  ]);
+}
 
 export const createProject = mutation({
   args: {
@@ -150,35 +297,44 @@ export const getProjectById = query({
   async handler(ctx, args) {
     log(`[getProjectById] Querying project ${args.projectId}`);
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      return null;
-    }
-
     const project = await ctx.db.get(args.projectId);
     if (!project) {
       return null;
     }
 
-    const userOrgId = identity.org_id?.toString();
+    const userOrgId = identity?.org_id?.toString();
+    let isOwner = false;
 
-    // Check organization membership or creator status
-    if (project.organizationId) {
-      const authorized = await isUserAuthorizedForOrg(
-        ctx,
-        identity.subject,
-        project.organizationId,
-        userOrgId,
-      );
-      if (!authorized && project.createdBy !== identity.subject) {
-        return null;
+    if (identity) {
+      if (project.organizationId) {
+        const authorized = await isUserAuthorizedForOrg(
+          ctx,
+          identity.subject,
+          project.organizationId,
+          userOrgId,
+        );
+        if (authorized || project.createdBy === identity.subject) {
+          isOwner = true;
+        }
+      } else {
+        if (project.createdBy === identity.subject) {
+          isOwner = true;
+        }
       }
-    } else {
-      if (project.createdBy !== identity.subject) {
+    }
+
+    // If not owner, only allow viewing if published
+    if (!isOwner) {
+      if (!project.isPublished) {
         return null;
       }
     }
 
-    return project;
+    return {
+      ...project,
+      isOwner,
+      isReadOnly: !isOwner,
+    };
   },
 });
 
@@ -405,20 +561,223 @@ export const duplicateProject = mutation({
   },
   handler: async (ctx, args) => {
     log(`[duplicateProject] Duplicating project ${args.projectId}`);
-    const { project } = await assertActiveSubscriptionForProject(
+    const { project, identity } = await assertActiveSubscriptionForProject(
       ctx,
       args.projectId,
     );
     await assertCanCreateProject(ctx, project.organizationId);
 
-    const { _id, _creationTime, ...projectRest } = project;
     const newProjectId = await ctx.db.insert("projects", {
-      ...projectRest,
-      name: `${projectRest.name} (Copy)`,
+      name: `${project.name} (Copy)`,
+      description: project.description,
+      category: project.category,
+      tags: project.tags,
+      organizationId: project.organizationId,
+      createdBy: identity.subject,
       createdAt: Date.now(),
       updatedAt: Date.now(),
+      isPublished: false,
+      cloneCount: 0,
     });
+
+    await deepCopyProjectData(ctx, args.projectId, newProjectId);
     log(`[duplicateProject] Created copy with new ID ${newProjectId}`);
     return newProjectId;
+  },
+});
+
+export const cloneProject = mutation({
+  args: {
+    projectId: v.id("projects"),
+    name: v.optional(v.string()),
+    targetOrganizationId: v.optional(v.union(v.string(), v.null())),
+  },
+  handler: async (ctx, args) => {
+    log(`[cloneProject] Cloning project ${args.projectId}`);
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new ConvexError({
+        code: "UNAUTHORIZED",
+        message: "You must be logged in to clone a project",
+      });
+    }
+
+    const sourceProject = await ctx.db.get(args.projectId);
+    if (!sourceProject) {
+      throw new ConvexError({
+        code: "NOT_FOUND",
+        message: "Project not found",
+      });
+    }
+
+    // Authorization check: must own project, be in same org, or project must be published
+    let isAuthorized = false;
+    if (sourceProject.isPublished) {
+      isAuthorized = true;
+    } else {
+      const userOrgId = identity.org_id?.toString();
+      if (sourceProject.organizationId) {
+        isAuthorized = await isUserAuthorizedForOrg(
+          ctx,
+          identity.subject,
+          sourceProject.organizationId,
+          userOrgId,
+        );
+      }
+      if (sourceProject.createdBy === identity.subject) {
+        isAuthorized = true;
+      }
+    }
+
+    if (!isAuthorized) {
+      throw new ConvexError({
+        code: "UNAUTHORIZED",
+        message: "You are not authorized to clone this project",
+      });
+    }
+
+    // Determine target organization
+    let targetOrgId: string | undefined = undefined;
+    if (
+      args.targetOrganizationId !== undefined &&
+      args.targetOrganizationId !== null &&
+      args.targetOrganizationId !== "personal"
+    ) {
+      targetOrgId = args.targetOrganizationId;
+    } else if (args.targetOrganizationId === undefined && identity.org_id) {
+      targetOrgId = identity.org_id.toString();
+    }
+
+    await assertCanCreateProject(ctx, targetOrgId);
+
+    const newProjectName = args.name || `${sourceProject.name} (Clone)`;
+    const newProjectId = await ctx.db.insert("projects", {
+      name: newProjectName,
+      description: sourceProject.description,
+      category: sourceProject.category,
+      tags: sourceProject.tags,
+      organizationId: targetOrgId,
+      createdBy: identity.subject,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      isPublished: false,
+      cloneCount: 0,
+    });
+
+    await deepCopyProjectData(ctx, args.projectId, newProjectId);
+
+    // Increment clone count on source project
+    await ctx.db.patch(args.projectId, {
+      cloneCount: (sourceProject.cloneCount ?? 0) + 1,
+    });
+
+    log(`[cloneProject] Successfully cloned project ${args.projectId} to ${newProjectId}`);
+    return newProjectId;
+  },
+});
+
+export const publishProject = mutation({
+  args: {
+    projectId: v.id("projects"),
+    isPublished: v.boolean(),
+    description: v.optional(v.string()),
+    category: v.optional(v.string()),
+    tags: v.optional(v.array(v.string())),
+  },
+  async handler(ctx, args) {
+    log(`[publishProject] Toggling publish for project ${args.projectId}: ${args.isPublished}`);
+    const { project } = await assertActiveSubscriptionForProject(
+      ctx,
+      args.projectId,
+    );
+
+    const patches: Partial<Doc<"projects">> = {
+      isPublished: args.isPublished,
+      updatedAt: Date.now(),
+    };
+
+    if (args.isPublished && !project.publishedAt) {
+      patches.publishedAt = Date.now();
+    }
+    if (args.description !== undefined) patches.description = args.description;
+    if (args.category !== undefined) patches.category = args.category;
+    if (args.tags !== undefined) patches.tags = args.tags;
+
+    await ctx.db.patch(args.projectId, patches);
+    return { success: true, isPublished: args.isPublished };
+  },
+});
+
+export const getPublishedProjects = query({
+  args: {
+    paginationOpts: paginationOptsValidator,
+    category: v.optional(v.string()),
+    search: v.optional(v.string()),
+  },
+  async handler(ctx, args) {
+    log(`[getPublishedProjects] Querying published projects`);
+    const paginated = await ctx.db
+      .query("projects")
+      .withIndex("by_published", (q) => q.eq("isPublished", true))
+      .order("desc")
+      .paginate(args.paginationOpts);
+
+    let filteredPage = paginated.page;
+
+    if (args.category && args.category !== "all") {
+      filteredPage = filteredPage.filter(
+        (p) => p.category?.toLowerCase() === args.category?.toLowerCase(),
+      );
+    }
+
+    if (args.search && args.search.trim()) {
+      const q = args.search.toLowerCase();
+      filteredPage = filteredPage.filter(
+        (p) =>
+          p.name.toLowerCase().includes(q) ||
+          p.description?.toLowerCase().includes(q) ||
+          p.tags?.some((t) => t.toLowerCase().includes(q)),
+      );
+    }
+
+    const enrichedPage = await Promise.all(
+      filteredPage.map(async (project) => {
+        const creator = await ctx.db
+          .query("users")
+          .withIndex("by_auth_id", (q) => q.eq("authId", project.createdBy))
+          .first();
+
+        const nodesCount = (
+          await ctx.db
+            .query("canvas_backend_nodes")
+            .withIndex("by_project", (q) => q.eq("projectId", project._id))
+            .collect()
+        ).length;
+
+        const endpointsCount = (
+          await ctx.db
+            .query("canvas_backend_endpoints")
+            .withIndex("by_project", (q) => q.eq("projectId", project._id))
+            .collect()
+        ).length;
+
+        return {
+          ...project,
+          creatorName:
+            creator?.name ||
+            (creator?.email ? creator.email.split("@")[0] : "Architect"),
+          creatorAvatar: creator?.avatarUrl,
+          creatorEmail: creator?.email,
+          nodesCount,
+          endpointsCount,
+          cloneCount: project.cloneCount ?? 0,
+        };
+      }),
+    );
+
+    return {
+      ...paginated,
+      page: enrichedPage,
+    };
   },
 });

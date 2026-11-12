@@ -6,6 +6,7 @@ import {
   Building2,
   ClipboardList,
   GitBranchPlus,
+  Globe,
   Info,
   LayoutTemplate,
   LogOut,
@@ -69,6 +70,11 @@ const projectsNavItems: SidebarItem[] = [
     title: "Projects",
     url: "/projects",
     icon: ClipboardList,
+  },
+  {
+    title: "Published Projects",
+    url: "/published",
+    icon: Globe,
   },
 ];
 const helpNavItems: SidebarItem[] = [
