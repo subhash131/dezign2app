@@ -118,7 +118,7 @@ describe("compileAuthActionStep - authStepResolver & event templates", () => {
 
     expect(code).toContain('import { authClient } from "@/lib/auth-client";');
     expect(code).toContain("await authClient.signOut();");
-    expect(code).toContain("router?.push(`/login`);");
+    expect(code).toContain("router.push(`/login`);");
   });
 
   it("generateEventComponent treats action with auth step as active execution, not pure navigation", () => {
