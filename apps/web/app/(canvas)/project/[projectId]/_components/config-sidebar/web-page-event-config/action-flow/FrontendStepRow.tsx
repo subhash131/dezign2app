@@ -16,6 +16,7 @@ import { ConditionStep } from "./ConditionStep";
 import { NotificationStep } from "./NotificationStep";
 import { ResetFormStep } from "./ResetFormStep";
 import { BrowserStorageStep } from "./BrowserStorageStep";
+import { AuthStep } from "./AuthStep";
 
 export interface FrontendStepRowProps {
   step: FrontendActionStepDraft;
@@ -109,6 +110,20 @@ export const FrontendStepRow: React.FC<FrontendStepRowProps> = ({
                   itemKeyField={itemKeyField}
                   itemSourceStateName={itemSourceStateName}
                   itemPropSuggestions={itemPropSuggestions}
+                  onChange={onChange}
+                />
+              )}
+
+              {step.type === "auth" && (
+                <AuthStep
+                  draft={step}
+                  allSteps={allSteps}
+                  stepIndex={index}
+                  allNodes={allNodes}
+                  endpoints={endpoints}
+                  webPageNodeId={webPageNodeId}
+                  actionId={actionId}
+                  actionItem={actionItem}
                   onChange={onChange}
                 />
               )}

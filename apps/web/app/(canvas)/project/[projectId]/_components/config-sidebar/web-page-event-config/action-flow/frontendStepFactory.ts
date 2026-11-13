@@ -17,6 +17,17 @@ export function createDefaultFrontendStep(
         ...defaults,
       };
 
+    case "auth":
+      return {
+        id,
+        order,
+        type: "auth",
+        name: "Auth Action",
+        authOperation: "signOut",
+        authOutputVariable: "authResult",
+        ...defaults,
+      };
+
     case "storage_put":
       return {
         id,

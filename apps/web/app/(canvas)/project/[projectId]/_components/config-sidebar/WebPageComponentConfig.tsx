@@ -31,7 +31,11 @@ import {
   ComponentEventActionCard,
   GenerateFormFromEndpointDialog,
   ComponentResponseMappingCard,
+  BUILTIN_AUTH_ACTIONS,
+  BuiltinAuthActionKey,
+  createBuiltinAuthAction,
 } from "./web-page-component-config";
+import type { BackendNode } from "@/types/canvas";
 import { Button } from "@workspace/ui/components/button";
 import { Separator } from "@workspace/ui/components/separator";
 import { toast } from "sonner";
@@ -99,6 +103,76 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
   // All state store nodes for state binding dropdowns
   const stateStores = useBackendCanvasStore(
     useShallow((s) => s.nodes.filter((n) => n.type === "state_store")),
+  );
+
+  // Find connected AuthNode info for Better-Auth built-in actions
+  const { isAuthConnected, authNodeLabel, connectedAuthNode } = useBackendCanvasStore(
+    useShallow((s) => {
+      const allNodes = s.nodes;
+      const allEdges = s.edges;
+      const authNodes = allNodes.filter((n) => n.type === "auth" || n.type === "identity_provider");
+
+      let matchedAuthNode: BackendNode | null = null;
+
+      if (parentNode?.data?.authNodeId) {
+        matchedAuthNode = authNodes.find((a) => a.id === parentNode.data.authNodeId) || null;
+      }
+
+      if (!matchedAuthNode) {
+        // Direct edge between this page/node and an AuthNode
+        const edge = allEdges.find((e) => {
+          if (e.target === nodeId || e.source === nodeId) {
+            const otherId = e.source === nodeId ? e.target : e.source;
+            return authNodes.some((a) => a.id === otherId);
+          }
+          return false;
+        });
+        if (edge) {
+          const authId = edge.source === nodeId ? edge.target : edge.source;
+          matchedAuthNode = authNodes.find((a) => a.id === authId) || null;
+        }
+      }
+
+      if (!matchedAuthNode && parentNode?.data?.zoneId) {
+        // Zone-based WebApp connection
+        const webAppNode = allNodes.find(
+          (n) =>
+            n.type === "webApp" &&
+            (n.data?.zones || []).some(
+              (z) => typeof z === "object" && z !== null && "id" in z && z.id === parentNode.data.zoneId,
+            ),
+        );
+        if (webAppNode) {
+          if (webAppNode.data?.authNodeId) {
+            matchedAuthNode = authNodes.find((a) => a.id === webAppNode.data.authNodeId) || null;
+          }
+          if (!matchedAuthNode) {
+            const webAppEdge = allEdges.find((e) => {
+              if (e.target === webAppNode.id || e.source === webAppNode.id) {
+                const otherId = e.source === webAppNode.id ? e.target : e.source;
+                return authNodes.some((a) => a.id === otherId);
+              }
+              return false;
+            });
+            if (webAppEdge) {
+              const authId = webAppEdge.source === webAppNode.id ? webAppEdge.target : webAppEdge.source;
+              matchedAuthNode = authNodes.find((a) => a.id === authId) || null;
+            }
+          }
+        }
+      }
+
+      // Single AuthNode fallback across the canvas
+      if (!matchedAuthNode && authNodes.length === 1) {
+        matchedAuthNode = authNodes[0] || null;
+      }
+
+      return {
+        isAuthConnected: Boolean(matchedAuthNode),
+        authNodeLabel: matchedAuthNode?.data?.label || "Better Auth",
+        connectedAuthNode: matchedAuthNode,
+      };
+    }),
   );
 
   const sections: PageSection[] = parentNode?.data?.sections || [];
@@ -770,6 +844,83 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
       handleCreateActionForElement(activeElement.id, name, eventType);
     },
     [activeElement.id, handleCreateActionForElement],
+  );
+
+  const handleSelectBuiltinAuthAction = useCallback(
+    (actionKey: BuiltinAuthActionKey) => {
+      const currentParent = useBackendCanvasStore
+        .getState()
+        .nodes.find((n) => n.id === nodeId);
+      if (!currentParent) return;
+
+      const currentSections: PageSection[] = currentParent.data?.sections || [];
+      const currentTargetSec =
+        currentSections.find((s) => (s.componentBindings || []).some((c) => c.id === id)) ||
+        currentSections.find((s) => s.id === sectionId) ||
+        currentSections[0];
+      if (!currentTargetSec) return;
+
+      const authDef =
+        BUILTIN_AUTH_ACTIONS.find((a) => a.key === actionKey) || BUILTIN_AUTH_ACTIONS[0]!;
+      const existingActions = [...(currentTargetSec.actions || [])];
+
+      // Resolve redirect route if any from AuthNode config or default
+      const redirects = connectedAuthNode?.data?.redirects || {};
+      const signInRedirect = redirects.signInPageUrl || "/login";
+
+      // Check if this action already exists in the section
+      let targetAct = existingActions.find(
+        (a) => a.name === authDef.defaultActionName || a.url === authDef.url,
+      );
+
+      const newActionsToAdd: UIEventItem[] = [];
+      if (!targetAct) {
+        targetAct = createBuiltinAuthAction(actionKey, signInRedirect);
+        newActionsToAdd.push(targetAct);
+      }
+
+      const updatedActions = [...existingActions, ...newActionsToAdd];
+
+      // Update current active element
+      const updatedElements = currentElements.map((el) => {
+        if (el.id !== activeElement.id) return el;
+        return {
+          ...el,
+          actionId: targetAct!.id,
+          actionName: targetAct!.name,
+          triggerEvent: authDef.event || el.triggerEvent || "click",
+        };
+      });
+
+      const updatedBindings = (currentTargetSec.componentBindings || []).map((c) =>
+        c.id === id
+          ? {
+              ...c,
+              elements: updatedElements,
+              actionId: updatedElements[0]?.actionId || targetAct!.id,
+              actionName: updatedElements[0]?.actionName || targetAct!.name,
+            }
+          : c,
+      );
+
+      const updatedSections = currentSections.map((sec) =>
+        sec.id === currentTargetSec.id
+          ? { ...sec, actions: updatedActions, componentBindings: updatedBindings }
+          : sec,
+      );
+
+      updateNode(nodeId, {
+        data: {
+          ...currentParent.data,
+          sections: updatedSections,
+        },
+      });
+
+      toast.success(
+        `Wired element "${activeElement.label || activeElement.name || "element"}" to Better Auth ${authDef.defaultActionName}()!`,
+      );
+    },
+    [nodeId, id, sectionId, activeElement, currentElements, connectedAuthNode, updateNode],
   );
 
   const handleUpdateChatAction = useCallback(
@@ -1742,6 +1893,9 @@ export const WebPageComponentConfig: React.FC<WebPageComponentConfigProps> = ({
         onUpdateChatStreamConnection={handleUpdateChatStreamConnection}
         onQuickWireChatStreamConnection={handleQuickWireChatStreamConnection}
         onOpenRealtimeConnectionConfig={handleOpenRealtimeConnectionConfig}
+        isAuthConnected={isAuthConnected}
+        authNodeLabel={authNodeLabel}
+        onSelectBuiltinAuthAction={handleSelectBuiltinAuthAction}
       />
 
       <Separator className="bg-border/50" />

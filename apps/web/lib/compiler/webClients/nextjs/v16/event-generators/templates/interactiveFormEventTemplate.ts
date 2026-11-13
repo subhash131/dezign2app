@@ -13,6 +13,13 @@ import {
   renderTransformerInvocationList,
   renderActionStepNavigation,
 } from "../transformerStepResolver";
+import {
+  partitionAuthSteps,
+  resolveAuthImports,
+  resolveAuthStepRequirements,
+  renderAuthStepList,
+  filterAuthSteps,
+} from "../authStepResolver";
 
 function resolveActionLibImports(libraries?: string[]): string {
   if (!libraries || libraries.length === 0) return "";
@@ -95,9 +102,22 @@ export function generateInteractiveFormEventTemplate({
   const allTransformerSteps = [...preSteps, ...postSteps];
   const transImports = resolveTransformerImports(allTransformerSteps);
 
+  const { preAuthSteps, postAuthSteps } = partitionAuthSteps(actionSteps, hasApiUrl);
+  const authImports = resolveAuthImports(actionSteps);
+  const authReqs = resolveAuthStepRequirements(filterAuthSteps(actionSteps));
+
   const stepOutputMap = new Map<string, string>();
+  const preAuthCode = renderAuthStepList(preAuthSteps, stepOutputMap, {
+    hasTriggerResult: false,
+    payloadVar: "bodyFields",
+  });
   const preStepsCode = renderTransformerInvocationList(preSteps, stepOutputMap, {
     hasTriggerResult: false,
+    payloadVar: "bodyFields",
+  });
+  const postAuthCode = renderAuthStepList(postAuthSteps, stepOutputMap, {
+    hasTriggerResult: true,
+    resDataVar: "resData",
     payloadVar: "bodyFields",
   });
   const postStepsCode = renderTransformerInvocationList(postSteps, stepOutputMap, {
@@ -153,6 +173,7 @@ export function generateInteractiveFormEventTemplate({
         .map((b) => b.storeName?.replace(/Store$/i, ""))
         .filter((n): n is string => Boolean(n)),
       ...transImports.uniqueStoreNames,
+      ...authReqs.storeNames,
       ...navResult.storeNames,
     ]),
   );
@@ -378,8 +399,8 @@ export function generateInteractiveFormEventTemplate({
 
   const navImports = new Set<string>();
   if (navResult.needsUseRouter) navImports.add("useRouter");
-  if (hasPathParams || transImports.needsUseParams || navResult.needsUseParams) navImports.add("useParams");
-  if (hasQueryParams || transImports.needsUseSearchParams || navResult.needsUseSearchParams) navImports.add("useSearchParams");
+  if (hasPathParams || transImports.needsUseParams || navResult.needsUseParams || authReqs.needsUseParams) navImports.add("useParams");
+  if (hasQueryParams || transImports.needsUseSearchParams || navResult.needsUseSearchParams || authReqs.needsUseSearchParams) navImports.add("useSearchParams");
 
   const navImportLines =
     navImports.size > 0
@@ -394,7 +415,7 @@ export function generateInteractiveFormEventTemplate({
   return `"use client";
 
 import React, { useState, useEffect } from "react";
-${navImportLines}${storeImports}${transformerImportLines}import { Button } from "@workspace/ui/components/button";
+${navImportLines}${storeImports}${transformerImportLines}${authImports.importStatement}import { Button } from "@workspace/ui/components/button";
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@workspace/ui/components/card";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
@@ -471,7 +492,7 @@ ${hasBodyFields || hasRawJson ? `      let payloadBody: Record<string, string | 
           return;
         }
       }
-` : ""}${preStepsCode}${storeSnippet.preTrigger}      const triggerResult = await onTrigger?.(
+` : ""}${preAuthCode}${preStepsCode}${storeSnippet.preTrigger}      const triggerResult = await onTrigger?.(
         "${eventName}",
         "${eventType}",
         finalUrl,
@@ -485,7 +506,7 @@ ${hasBodyFields || hasRawJson ? `      let payloadBody: Record<string, string | 
         triggerResult && typeof triggerResult === "object" && "data" in triggerResult && triggerResult.data !== undefined
           ? triggerResult.data
           : triggerResult;
-${postStepsCode}${storeSnippet.postTrigger}${navResult.navigationCode ? `${navResult.navigationCode}\n` : ""}    } finally {
+${postAuthCode}${postStepsCode}${storeSnippet.postTrigger}${navResult.navigationCode ? `${navResult.navigationCode}\n` : ""}    } finally {
       setIsSubmitting(false);
     }
   };

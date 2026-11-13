@@ -468,7 +468,13 @@ export async function getAuthBearerToken(): Promise<string | null> {
           return false;
         }
         return act.actionSteps.some((s) => {
-          if (!s || typeof s !== "object" || !("type" in s) || s.type !== "api_call") {
+          if (!s || typeof s !== "object" || !("type" in s)) {
+            return false;
+          }
+          if (s.type === "auth") {
+            return true;
+          }
+          if (s.type !== "api_call") {
             return false;
           }
           const bindings = Array.isArray(s.requestBindings) ? s.requestBindings : [];
@@ -562,6 +568,19 @@ export async function getAuthBearerToken(): Promise<string | null> {
 
   return null;
 }
+`,
+    });
+  }
+
+  if (hasStepAuthAnywhere && !files.some((f) => f.filename === "lib/auth-client.ts")) {
+    files.push({
+      filename: "lib/auth-client.ts",
+      language: "typescript",
+      content: `import { createAuthClient } from "better-auth/react";
+
+export const authClient = createAuthClient({
+  baseURL: typeof window !== "undefined" ? window.location.origin : "",
+});
 `,
     });
   }

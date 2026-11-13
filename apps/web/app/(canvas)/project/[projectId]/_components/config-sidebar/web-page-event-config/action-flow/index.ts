@@ -14,6 +14,7 @@ export { CustomCodeStep } from "./CustomCodeStep";
 export { ConditionStep } from "./ConditionStep";
 export { NotificationStep } from "./NotificationStep";
 export { ResetFormStep } from "./ResetFormStep";
+export { AuthStep } from "./AuthStep";
 export { ResponseFieldPicker } from "./ResponseFieldPicker";
 export { ActionFlowCombobox } from "./ActionFlowCombobox";
 export * from "./types";

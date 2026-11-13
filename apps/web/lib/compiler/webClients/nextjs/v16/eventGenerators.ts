@@ -70,7 +70,8 @@ export function generateEventComponent(
         s.type === "api_call" ||
         s.type === "storage_put" ||
         s.type === "state_mutation" ||
-        s.type === "browser_storage",
+        s.type === "browser_storage" ||
+        s.type === "auth",
     );
 
   const hasStoreBindings =

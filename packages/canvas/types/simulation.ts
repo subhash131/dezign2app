@@ -466,7 +466,8 @@ export type FrontendActionStepType =
   | "reset_form"
   | "update_query_params"
   | "transform"
-  | "browser_storage";
+  | "browser_storage"
+  | "auth";
 
 export type QueryParamUpdateItem = {
   key: string;
@@ -628,6 +629,23 @@ export type FrontendActionStepDraft = {
   storageOperation?: "set" | "remove" | "clear" | "toggle" | "append";
   storageKey?: string;
   storageValueSource?: FrontendFieldSource;
+
+  // --- For type === "auth" ---
+  authOperation?:
+    | "signOut"
+    | "signInEmail"
+    | "signUpEmail"
+    | "signInSocial"
+    | "setActiveOrg"
+    | "leaveOrg"
+    | "getSession";
+  authProvider?: string; // e.g. "google", "github" for signInSocial
+  authEmailSource?: FrontendFieldSource; // for signInEmail, signUpEmail
+  authPasswordSource?: FrontendFieldSource; // for signInEmail, signUpEmail
+  authNameSource?: FrontendFieldSource; // for signUpEmail
+  authOrgIdSource?: FrontendFieldSource; // for setActiveOrg, leaveOrg
+  authCallbackUrl?: string; // for signInSocial callback
+  authOutputVariable?: string; // default e.g. "authResult"
 };
 
 export interface EffectVariableMapping {
