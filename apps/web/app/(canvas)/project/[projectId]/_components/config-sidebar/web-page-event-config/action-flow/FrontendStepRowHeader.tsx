@@ -209,6 +209,18 @@ export function formatStepCodePreview(
       if (op === "append") return `${engine}.append("${key}", ...)`;
       return `${engine}.setItem("${key}", ...)`;
     }
+
+    case "auth": {
+      const op = step.authOperation || "signOut";
+      if (op === "signOut") return "await authClient.signOut()";
+      if (op === "signInSocial") return `await authClient.signIn.social({ provider: "${step.authProvider || "google"}" })`;
+      if (op === "signInEmail") return "await authClient.signIn.email({ email, password })";
+      if (op === "signUpEmail") return "await authClient.signUp.email({ email, password, name })";
+      if (op === "setActiveOrg") return "await authClient.organization.setActive({ organizationId })";
+      if (op === "leaveOrg") return "await authClient.organization.leave({ organizationId })";
+      if (op === "getSession") return "await authClient.getSession()";
+      return `await authClient.${op}()`;
+    }
   }
 }
 

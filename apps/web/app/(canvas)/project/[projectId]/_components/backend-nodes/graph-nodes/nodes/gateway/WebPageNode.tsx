@@ -1059,6 +1059,14 @@ export const WebPageNode = React.memo(({
           sidebarCollapsible: "icon",
           sidebarVariant: "sidebar",
           sidebarStaticItems: navItems,
+          sidebarGroups: [
+            {
+              id: `group-main-${Date.now()}`,
+              label: "Navigation",
+              mode: "static",
+              items: navItems,
+            },
+          ],
         },
       };
 

@@ -12,6 +12,13 @@ import {
   renderTransformerInvocationList,
   renderActionStepNavigation,
 } from "../transformerStepResolver";
+import {
+  partitionAuthSteps,
+  resolveAuthImports,
+  resolveAuthStepRequirements,
+  renderAuthStepList,
+  filterAuthSteps,
+} from "../authStepResolver";
 
 function resolveActionLibImports(libraries?: string[]): string {
   if (!libraries || libraries.length === 0) return "";
@@ -76,9 +83,20 @@ export function generateSimpleButtonEventTemplate({
   const allTransformerSteps = [...preSteps, ...postSteps];
   const transImports = resolveTransformerImports(allTransformerSteps);
 
+  const { preAuthSteps, postAuthSteps } = partitionAuthSteps(actionSteps, hasApiUrl);
+  const authImports = resolveAuthImports(actionSteps);
+  const authReqs = resolveAuthStepRequirements(filterAuthSteps(actionSteps));
+
   const stepOutputMap = new Map<string, string>();
+  const preAuthCode = renderAuthStepList(preAuthSteps, stepOutputMap, {
+    hasTriggerResult: false,
+  });
   const preStepsCode = renderTransformerInvocationList(preSteps, stepOutputMap, {
     hasTriggerResult: false,
+  });
+  const postAuthCode = renderAuthStepList(postAuthSteps, stepOutputMap, {
+    hasTriggerResult: true,
+    resDataVar: "resData",
   });
   const postStepsCode = renderTransformerInvocationList(postSteps, stepOutputMap, {
     hasTriggerResult: true,
@@ -125,6 +143,7 @@ export function generateSimpleButtonEventTemplate({
         .map((b) => b.storeName?.replace(/Store$/i, ""))
         .filter((n): n is string => Boolean(n)),
       ...transImports.uniqueStoreNames,
+      ...authReqs.storeNames,
       ...navResult.storeNames,
     ]),
   );
@@ -141,8 +160,8 @@ export function generateSimpleButtonEventTemplate({
 
   const navImports = new Set<string>();
   if (navResult.needsUseRouter) navImports.add("useRouter");
-  if (transImports.needsUseParams || navResult.needsUseParams) navImports.add("useParams");
-  if (transImports.needsUseSearchParams || navResult.needsUseSearchParams) navImports.add("useSearchParams");
+  if (transImports.needsUseParams || navResult.needsUseParams || authReqs.needsUseParams) navImports.add("useParams");
+  if (transImports.needsUseSearchParams || navResult.needsUseSearchParams || authReqs.needsUseSearchParams) navImports.add("useSearchParams");
 
   const navImportLines =
     navImports.size > 0
@@ -320,7 +339,7 @@ export function generateSimpleButtonEventTemplate({
   return `"use client";
 
 import React, { useState } from "react";
-${navImportLines}${storeImports}${transformerImportLines}${libImports}import { Button } from "@workspace/ui/components/button";
+${navImportLines}${storeImports}${transformerImportLines}${authImports.importStatement}${libImports}import { Button } from "@workspace/ui/components/button";
 ${typeDefs.join("\n\n")}
 
 export function ${componentName}({ onTrigger }: ${componentName}Props) {
@@ -330,7 +349,7 @@ ${navResult.needsUseRouter ? `  const router = useRouter();\n` : ""}${transImpor
     e.preventDefault();
     setIsSubmitting(true);
     try {
-${urlInfo.baseUrlDeclaration ? `      ${urlInfo.baseUrlDeclaration}\n` : ""}${preStepsCode}${storeSnippet.preTrigger}      const triggerResult = await onTrigger?.(
+${urlInfo.baseUrlDeclaration ? `      ${urlInfo.baseUrlDeclaration}\n` : ""}${preAuthCode}${preStepsCode}${storeSnippet.preTrigger}      const triggerResult = await onTrigger?.(
         "${eventName}",
         "${eventType}",
         ${urlInfo.urlExpression},
@@ -341,7 +360,7 @@ ${urlInfo.baseUrlDeclaration ? `      ${urlInfo.baseUrlDeclaration}\n` : ""}${pr
         triggerResult && typeof triggerResult === "object" && "data" in triggerResult && triggerResult.data !== undefined
           ? triggerResult.data
           : triggerResult;
-${postStepsCode}${storeSnippet.postTrigger}${navResult.navigationCode ? `${navResult.navigationCode}\n` : ""}    } finally {
+${postAuthCode}${postStepsCode}${storeSnippet.postTrigger}${navResult.navigationCode ? `${navResult.navigationCode}\n` : ""}    } finally {
       setIsSubmitting(false);
     }
   };

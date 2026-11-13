@@ -12,6 +12,7 @@ import {
   Sparkles,
   CheckCircle2,
   Settings2,
+  ShieldCheck,
 } from "lucide-react";
 import { UIEventItem, RealtimeConnection } from "@workspace/canvas";
 import { Button } from "@workspace/ui/components/button";
@@ -21,10 +22,17 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@work
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
+import { cn } from "@workspace/ui/lib/utils";
+import {
+  BuiltinAuthActionKey,
+  findSuggestedAuthAction,
+} from "./builtinAuthActions";
 
 export interface ComponentEventActionCardProps {
   elementLabel?: string;
@@ -36,6 +44,11 @@ export interface ComponentEventActionCardProps {
   onUpdate: (changes: { triggerEvent?: string; actionId?: string; actionName?: string }) => void;
   onCreateAction: (name?: string, eventType?: string) => void;
   onOpenActionFlow?: (actionId: string) => void;
+
+  // Dedicated Better-Auth & Package Built-in Actions
+  isAuthConnected?: boolean;
+  authNodeLabel?: string;
+  onSelectBuiltinAuthAction?: (key: BuiltinAuthActionKey) => void;
 
   // Dedicated action slots for compound components (e.g. Chat)
   chatOnFetchActionId?: string;
@@ -63,6 +76,9 @@ export const ComponentEventActionCard: React.FC<ComponentEventActionCardProps> =
   onUpdate,
   onCreateAction,
   onOpenActionFlow,
+  isAuthConnected = false,
+  authNodeLabel = "Auth",
+  onSelectBuiltinAuthAction,
   chatOnFetchActionId,
   chatOnFetchActionName,
   chatOnSendActionId,
@@ -78,6 +94,14 @@ export const ComponentEventActionCard: React.FC<ComponentEventActionCardProps> =
   const cleanLabel = elementLabel || "Selected Component";
   const cleanType = elementType || "element";
   const isChat = cleanType === "chat";
+
+  const suggestedAuth = isAuthConnected ? findSuggestedAuthAction(cleanLabel) : undefined;
+  const activeAction = availableActions.find((a) => a.id === actionId);
+  const isAuthAction =
+    activeAction?.actionType === "auth_builtin" ||
+    activeAction?.actionType === "auth_sign_out" ||
+    (activeAction?.url && activeAction.url.includes("/api/auth/")) ||
+    (actionName && ["signout", "signin", "signup", "leaveorg", "setactiveorg"].includes(actionName.toLowerCase()));
 
   // Effective action IDs for Chat
   const effectiveSendId = chatOnSendActionId || actionId;
@@ -506,8 +530,17 @@ export const ComponentEventActionCard: React.FC<ComponentEventActionCardProps> =
               </Badge>
             )}
             {actionId ? (
-              <Badge variant="outline" className="text-[10px] text-amber-600 dark:text-amber-400 border-amber-500/30 bg-amber-500/10 font-medium">
-                Wired
+              <Badge
+                variant="outline"
+                className={cn(
+                  "text-[10px] font-medium flex items-center gap-1",
+                  isAuthAction
+                    ? "text-indigo-600 dark:text-indigo-400 border-indigo-500/30 bg-indigo-500/10"
+                    : "text-amber-600 dark:text-amber-400 border-amber-500/30 bg-amber-500/10",
+                )}
+              >
+                {isAuthAction ? <ShieldCheck size={10} /> : null}
+                <span>{actionName ? `Wired: ${actionName}` : "Wired"}</span>
               </Badge>
             ) : (
               <Badge variant="outline" className="text-[10px] text-muted-foreground border-border/50 font-normal">
@@ -525,6 +558,34 @@ export const ComponentEventActionCard: React.FC<ComponentEventActionCardProps> =
         </CardDescription>
       </CardHeader>
       <CardContent className="p-4 pt-1 space-y-3.5 text-xs">
+        {/* Quick Suggestion for Better Auth (e.g. Logout / Sign Out button) */}
+        {isAuthConnected && suggestedAuth && !actionId && onSelectBuiltinAuthAction && (
+          <div className="flex items-center justify-between p-2.5 rounded-lg bg-indigo-500/[0.08] border border-indigo-500/25">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="p-1.5 rounded-md bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 shrink-0">
+                <ShieldCheck size={13} />
+              </div>
+              <div className="min-w-0">
+                <div className="text-[11px] font-semibold text-foreground truncate">
+                  ⚡ Quick-Wire Better Auth: {suggestedAuth.label}
+                </div>
+                <div className="text-[10px] text-muted-foreground truncate">
+                  {suggestedAuth.stepsDescription}
+                </div>
+              </div>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => onSelectBuiltinAuthAction(suggestedAuth.key)}
+              className="h-6 text-[11px] font-medium bg-indigo-600 hover:bg-indigo-500 text-white cursor-pointer shrink-0 ml-2 shadow-xs"
+            >
+              <ShieldCheck size={10} className="mr-1" />
+              Auto-Wire
+            </Button>
+          </div>
+        )}
+
         {/* Target Element Callout */}
         <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-muted/40 border border-border/50 text-[11px]">
           <div className="flex items-center gap-1.5 min-w-0">
@@ -602,17 +663,36 @@ export const ComponentEventActionCard: React.FC<ComponentEventActionCardProps> =
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="__none__">None (No Action)</SelectItem>
-              {availableActions.map((act) => (
-                <SelectItem key={act.id} value={act.id || ""}>
-                  <div className="flex items-center gap-1.5">
-                    <Zap size={11} className="text-amber-500" />
-                    <span>{act.name}</span>
-                    <span className="text-[10px] text-muted-foreground">
-                      ({act.actionSteps?.length || 0} steps)
-                    </span>
-                  </div>
-                </SelectItem>
-              ))}
+
+              {availableActions.length > 0 && (
+                <SelectGroup>
+                  <SelectLabel className="text-[10px] uppercase font-mono tracking-wider text-muted-foreground">
+                    Action Workflows
+                  </SelectLabel>
+                  {availableActions.map((act) => {
+                    const isActAuth =
+                      act.actionType === "auth_builtin" ||
+                      act.actionType === "auth_sign_out" ||
+                      (act.url && act.url.includes("/api/auth/")) ||
+                      act.name.toLowerCase().includes("signout");
+                    return (
+                      <SelectItem key={act.id} value={act.id || ""}>
+                        <div className="flex items-center gap-1.5">
+                          {isActAuth ? (
+                            <ShieldCheck size={11} className="text-indigo-500" />
+                          ) : (
+                            <Zap size={11} className="text-amber-500" />
+                          )}
+                          <span className="font-medium">{act.name}</span>
+                          <span className="text-[10px] text-muted-foreground">
+                            ({act.actionSteps?.length || 0} steps)
+                          </span>
+                        </div>
+                      </SelectItem>
+                    );
+                  })}
+                </SelectGroup>
+              )}
             </SelectContent>
           </Select>
         </div>

@@ -170,6 +170,8 @@ const SERVER_NODE_TYPES = [
   "langgraph",
   "worker",
   "external",
+  "auth",
+  "identity_provider",
 ];
 
 /** Collect all endpoints from a node */
@@ -192,6 +194,60 @@ function collectEndpoints(
     for (const group of node.data.routeGroups) {
       for (const ep of group.endpoints || []) {
         if (!results.find((r) => r.id === ep.id)) results.push(ep);
+      }
+    }
+  }
+
+  // Inject standard Better-Auth endpoints for AuthNodes
+  if (node.type === "auth" || node.type === "identity_provider") {
+    const defaultAuthEndpoints: Endpoint[] = [
+      {
+        id: "auth-ep-sign-out",
+        name: "/api/auth/sign-out",
+        type: "POST",
+        summary: "Better Auth: Invalidate user session and clear auth cookies",
+      },
+      {
+        id: "auth-ep-get-session",
+        name: "/api/auth/get-session",
+        type: "GET",
+        summary: "Better Auth: Fetch current active session and user object",
+      },
+      {
+        id: "auth-ep-sign-in-email",
+        name: "/api/auth/sign-in/email",
+        type: "POST",
+        summary: "Better Auth: Email and password authentication",
+      },
+      {
+        id: "auth-ep-sign-up-email",
+        name: "/api/auth/sign-up/email",
+        type: "POST",
+        summary: "Better Auth: Create new user account",
+      },
+      {
+        id: "auth-ep-sign-in-social",
+        name: "/api/auth/sign-in/social",
+        type: "POST",
+        summary: "Better Auth: Initiate OAuth login provider flow",
+      },
+      {
+        id: "auth-ep-set-active-org",
+        name: "/api/auth/organization/set-active",
+        type: "POST",
+        summary: "Better Auth: Switch tenant organization context",
+      },
+      {
+        id: "auth-ep-leave-org",
+        name: "/api/auth/organization/leave",
+        type: "POST",
+        summary: "Better Auth: Leave current organization",
+      },
+    ];
+
+    for (const ep of defaultAuthEndpoints) {
+      if (!results.find((r) => r.id === ep.id || r.name === ep.name)) {
+        results.push(ep);
       }
     }
   }

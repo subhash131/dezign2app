@@ -93,11 +93,33 @@ export interface SidebarStaticItemQueryParam {
 export interface SidebarStaticItem {
   id: string;
   name: string;
-  link: string;
+  link?: string;
   icon?: string;
   badge?: string;
+  itemType?: "link" | "action";
+  actionId?: string;
+  actionName?: string;
+  triggerEvent?: string;
   pathParams?: SidebarStaticItemParam[];
   queryParams?: SidebarStaticItemQueryParam[];
+}
+
+export interface SidebarGroupActionConfig {
+  title?: string;
+  icon?: string;
+  actionId?: string;
+  actionName?: string;
+}
+
+export interface SidebarGroupConfig {
+  id: string;
+  label?: string;
+  mode?: "static" | "dynamic";
+  items?: SidebarStaticItem[];
+  navBinding?: string;
+  navStoreId?: string;
+  navStoreName?: string;
+  action?: SidebarGroupActionConfig;
 }
 
 export type TopbarStaticItem = SidebarStaticItem;
@@ -219,6 +241,7 @@ export interface ComponentPropMappings {
   sidebarNavStoreId?: string;
   sidebarNavStoreName?: string;
   sidebarStaticItems?: Array<SidebarStaticItem>;
+  sidebarGroups?: Array<SidebarGroupConfig>;
   sidebarCollapsible?: "offcanvas" | "icon" | "none";
   sidebarVariant?: "sidebar" | "floating" | "inset";
   sidebarSide?: "left" | "right";
@@ -443,7 +466,8 @@ export type FrontendActionStepType =
   | "reset_form"
   | "update_query_params"
   | "transform"
-  | "browser_storage";
+  | "browser_storage"
+  | "auth";
 
 export type QueryParamUpdateItem = {
   key: string;
@@ -605,6 +629,23 @@ export type FrontendActionStepDraft = {
   storageOperation?: "set" | "remove" | "clear" | "toggle" | "append";
   storageKey?: string;
   storageValueSource?: FrontendFieldSource;
+
+  // --- For type === "auth" ---
+  authOperation?:
+    | "signOut"
+    | "signInEmail"
+    | "signUpEmail"
+    | "signInSocial"
+    | "setActiveOrg"
+    | "leaveOrg"
+    | "getSession";
+  authProvider?: string; // e.g. "google", "github" for signInSocial
+  authEmailSource?: FrontendFieldSource; // for signInEmail, signUpEmail
+  authPasswordSource?: FrontendFieldSource; // for signInEmail, signUpEmail
+  authNameSource?: FrontendFieldSource; // for signUpEmail
+  authOrgIdSource?: FrontendFieldSource; // for setActiveOrg, leaveOrg
+  authCallbackUrl?: string; // for signInSocial callback
+  authOutputVariable?: string; // default e.g. "authResult"
 };
 
 export interface EffectVariableMapping {

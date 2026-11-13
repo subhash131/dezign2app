@@ -65,6 +65,9 @@ interface SidebarPreviewItem {
   link?: string;
   icon?: string;
   badge?: string;
+  itemType?: "link" | "action";
+  actionId?: string;
+  actionName?: string;
 }
 
 export interface StateComponentPreviewProps {
@@ -634,7 +637,10 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React
               const link = typeof val.link === "string" ? val.link : (typeof val.href === "string" ? val.href : (typeof val.url === "string" ? val.url : undefined));
               const icon = typeof val.icon === "string" ? val.icon : undefined;
               const badge = typeof val.badge === "string" ? val.badge : undefined;
-              return { id, name, link, icon, badge };
+              const itemType = val.itemType === "action" ? "action" : "link";
+              const actionId = typeof val.actionId === "string" ? val.actionId : undefined;
+              const actionName = typeof val.actionName === "string" ? val.actionName : undefined;
+              return { id, name, link, icon, badge, itemType, actionId, actionName };
             }
             return null;
           };
@@ -650,6 +656,46 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React
             : staticItems;
 
           const items: SidebarPreviewItem[] = rawItems.length > 0 ? rawItems : defaultItems;
+
+          const configuredGroups = propMappings.sidebarGroups;
+          const groupsToRender: Array<{
+            id: string;
+            label: string;
+            items: SidebarPreviewItem[];
+            isDynamic: boolean;
+          }> = configuredGroups && configuredGroups.length > 0
+            ? configuredGroups.map((grp, gIdx) => {
+                const isDynamic = grp.mode === "dynamic";
+                let grpItems: SidebarPreviewItem[] = [];
+                if (isDynamic) {
+                  grpItems = dynamicItems.length > 0
+                    ? dynamicItems
+                    : [
+                        { id: `dyn-${gIdx}-1`, name: `${grp.label || "Item"} 1`, link: "/#" },
+                        { id: `dyn-${gIdx}-2`, name: `${grp.label || "Item"} 2`, link: "/#" },
+                      ];
+                } else {
+                  grpItems = (grp.items && grp.items.length > 0)
+                    ? grp.items
+                    : [
+                        { id: `st-${gIdx}-1`, name: `${grp.label || "Page"} 1`, link: `/${(grp.label || "page").toLowerCase().replace(/[^a-z0-9]/g, "")}-1` },
+                      ];
+                }
+                return {
+                  id: grp.id || `group-${gIdx}`,
+                  label: grp.label || "Navigation",
+                  items: grpItems,
+                  isDynamic,
+                };
+              })
+            : [
+                {
+                  id: "group-main",
+                  label: "Navigation",
+                  items: items,
+                  isDynamic: navMode === "dynamic",
+                },
+              ];
 
           const variant = propMappings.sidebarVariant || "sidebar";
           const side = propMappings.sidebarSide || "left";
@@ -780,48 +826,82 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React
                           </button>
                         )}
 
-                        <SidebarGroup>
-                          {!isIconMode && (
-                            <SidebarGroupLabel className="text-[10px] flex items-center justify-between">
-                              <span>Navigation</span>
-                              <span className="text-[8px] font-mono text-muted-foreground uppercase">
-                                {side} · {variant}
-                              </span>
-                            </SidebarGroupLabel>
-                          )}
-                          <SidebarGroupContent>
-                            <SidebarMenu className={isIconMode ? "items-center" : ""}>
-                              {items.map((item: SidebarPreviewItem, idx: number) => {
-                                const isActive = idx === 0;
-                                const NavIcon = (navIcons[idx % navIcons.length]) ?? Folder;
-                                return (
-                                  <SidebarMenuItem key={item.id || idx}>
-                                    <SidebarMenuButton
-                                      asChild
-                                      tooltip={item.name}
-                                      isActive={isActive}
-                                      onClick={() => {
-                                        toast.info(`Simulated route: ${item.link || item.name}`);
-                                      }}
-                                    >
-                                      <a
-                                        href={item.link || "#"}
-                                        className={cn(
-                                          "text-xs flex items-center gap-2",
-                                          isIconMode && "justify-center p-1.5"
-                                        )}
-                                        title={item.name}
+                        {groupsToRender.map((group, groupIdx) => (
+                          <SidebarGroup key={group.id || groupIdx}>
+                            {!isIconMode && (
+                              <SidebarGroupLabel className="text-[10px] flex items-center justify-between">
+                                <span>{group.label}</span>
+                                {groupIdx === 0 && (
+                                  <span className="text-[8px] font-mono text-muted-foreground uppercase">
+                                    {side} · {variant}
+                                  </span>
+                                )}
+                              </SidebarGroupLabel>
+                            )}
+                            <SidebarGroupContent>
+                              <SidebarMenu className={isIconMode ? "items-center" : ""}>
+                                {group.items.map((item: SidebarPreviewItem, idx: number) => {
+                                  const isActive = groupIdx === 0 && idx === 0;
+                                  const NavIcon = (navIcons[(groupIdx * 2 + idx) % navIcons.length]) ?? Folder;
+                                  const isActionButton = item.itemType === "action" || Boolean(item.actionId || item.actionName);
+
+                                  if (isActionButton) {
+                                    return (
+                                      <SidebarMenuItem key={item.id || idx}>
+                                        <SidebarMenuButton
+                                          tooltip={item.name}
+                                          isActive={isActive}
+                                          onClick={() => {
+                                            toast.success(`Action Triggered: ${item.actionName || item.name || "Button Action"}`);
+                                          }}
+                                          className={cn(
+                                            "text-xs flex items-center gap-2 cursor-pointer transition-colors hover:text-amber-500",
+                                            isIconMode && "justify-center p-1.5"
+                                          )}
+                                        >
+                                          <NavIcon size={14} className="shrink-0 text-amber-500" />
+                                          {!isIconMode && (
+                                            <span className="flex-1 truncate text-left">{item.name || `Action ${idx + 1}`}</span>
+                                          )}
+                                          {!isIconMode && (
+                                            <span className="text-[7.5px] font-mono text-amber-500 bg-amber-500/10 px-1 py-0.2 rounded border border-amber-500/20">
+                                              action
+                                            </span>
+                                          )}
+                                        </SidebarMenuButton>
+                                      </SidebarMenuItem>
+                                    );
+                                  }
+
+                                  return (
+                                    <SidebarMenuItem key={item.id || idx}>
+                                      <SidebarMenuButton
+                                        asChild
+                                        tooltip={item.name}
+                                        isActive={isActive}
+                                        onClick={() => {
+                                          toast.info(`Simulated route: ${item.link || item.name}`);
+                                        }}
                                       >
-                                        <NavIcon size={14} className="shrink-0" />
-                                        {!isIconMode && <span>{item.name || `Nav ${idx + 1}`}</span>}
-                                      </a>
-                                    </SidebarMenuButton>
-                                  </SidebarMenuItem>
-                                );
-                              })}
-                            </SidebarMenu>
-                          </SidebarGroupContent>
-                        </SidebarGroup>
+                                        <a
+                                          href={item.link || "#"}
+                                          className={cn(
+                                            "text-xs flex items-center gap-2",
+                                            isIconMode && "justify-center p-1.5"
+                                          )}
+                                          title={item.name}
+                                        >
+                                          <NavIcon size={14} className="shrink-0" />
+                                          {!isIconMode && <span>{item.name || `Nav ${idx + 1}`}</span>}
+                                        </a>
+                                      </SidebarMenuButton>
+                                    </SidebarMenuItem>
+                                  );
+                                })}
+                              </SidebarMenu>
+                            </SidebarGroupContent>
+                          </SidebarGroup>
+                        ))}
                       </SidebarContent>
                     </Sidebar>
                   </SidebarProvider>
@@ -914,7 +994,10 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React
               const link = typeof val.link === "string" ? val.link : (typeof val.href === "string" ? val.href : (typeof val.url === "string" ? val.url : undefined));
               const icon = typeof val.icon === "string" ? val.icon : undefined;
               const badge = typeof val.badge === "string" ? val.badge : undefined;
-              return { id, name, link, icon, badge };
+              const itemType = val.itemType === "action" ? "action" : "link";
+              const actionId = typeof val.actionId === "string" ? val.actionId : undefined;
+              const actionName = typeof val.actionName === "string" ? val.actionName : undefined;
+              return { id, name, link, icon, badge, itemType, actionId, actionName };
             }
             return null;
           };

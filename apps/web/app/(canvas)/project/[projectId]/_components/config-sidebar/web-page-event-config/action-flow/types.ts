@@ -154,3 +154,15 @@ export interface BrowserStorageStepProps {
   onChange: (updated: FrontendActionStepDraft) => void;
 }
 
+export interface AuthStepProps {
+  draft: FrontendActionStepDraft;
+  allSteps?: FrontendActionStepDraft[];
+  stepIndex?: number;
+  allNodes?: BackendNode[];
+  endpoints?: (Endpoint & { nodeId: string })[];
+  webPageNodeId?: string;
+  actionId?: string;
+  actionItem?: UIEventItem;
+  onChange: (updated: FrontendActionStepDraft) => void;
+}
+

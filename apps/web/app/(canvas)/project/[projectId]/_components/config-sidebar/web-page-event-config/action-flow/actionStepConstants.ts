@@ -10,6 +10,7 @@ import {
   RotateCcw,
   SlidersHorizontal,
   Shuffle,
+  ShieldCheck,
 } from "lucide-react";
 import type { FrontendActionStepType } from "./types";
 
@@ -29,6 +30,12 @@ export const FRONTEND_STEP_TYPE_META: Record<
     icon: React.createElement(Globe, { size: 12 }),
     color: "text-blue-500 bg-blue-500/10 border-blue-500/30",
     description: "Trigger an HTTP API request to a backend service",
+  },
+  auth: {
+    label: "Auth",
+    icon: React.createElement(ShieldCheck, { size: 12 }),
+    color: "text-indigo-500 bg-indigo-500/10 border-indigo-500/30",
+    description: "Trigger a Better Auth action (sign out, social login, credentials, organization)",
   },
   storage_put: {
     label: "Storage",
@@ -94,6 +101,7 @@ export const FRONTEND_STEP_TYPE_META: Record<
 
 export const FRONTEND_ADDABLE_STEP_TYPES: readonly FrontendActionStepType[] = [
   "api_call",
+  "auth",
   "storage_put",
   "state_mutation",
   "browser_storage",

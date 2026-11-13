@@ -1,4 +1,6 @@
-import { ComponentPropMappings, UIEventItem, SidebarStaticItem } from "@/types/canvas";
+import { ComponentPropMappings, UIEventItem, SidebarStaticItem, SidebarGroupConfig } from "@/types/canvas";
+
+export type { SidebarGroupConfig };
 
 export interface StateStoreInfo {
   id: string;
@@ -32,6 +34,9 @@ export interface SwitchCheckboxPropsConfigProps extends BasePropsConfigProps {
 
 export interface SidebarPropsConfigProps extends BasePropsConfigProps {
   onCreateNavStateVariable?: (preferredStoreId?: string) => void;
+  availableActions?: UIEventItem[];
+  onOpenEventConfig?: (actionId: string) => void;
+  onCreateAction?: (name?: string, eventType?: string) => void;
 }
 
 export interface TopbarPropsConfigProps extends BasePropsConfigProps {
@@ -51,6 +56,9 @@ export interface SidebarStaticItemRowProps {
     name: string;
     fields: Array<{ id: string; name: string; type?: string }>;
   }>;
+  availableActions?: UIEventItem[];
+  onOpenEventConfig?: (actionId: string) => void;
+  onCreateAction?: (name?: string, eventType?: string) => void;
   onUpdate: (patch: Partial<SidebarStaticItem>) => void;
   onDelete: () => void;
 }
