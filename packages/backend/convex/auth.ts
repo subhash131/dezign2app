@@ -101,9 +101,7 @@ export const createAuthOptions = (
   ].filter(Boolean) as string[];
 
   const finalTrustedOrigins = Array.from(new Set(trustedOrigins));
-  const isProd =
-    process.env.NODE_ENV === "production" ||
-    Boolean(baseURL?.includes("dezign2app.com"));
+  const isProd = Boolean(baseURL?.includes("dezign2app.com"));
   const cookieDomain = isProd ? ".dezign2app.com" : undefined;
 
   log("[convex:auth] createAuth invoked. baseURL:", baseURL, "isProd:", isProd, "trustedOrigins:", finalTrustedOrigins);
