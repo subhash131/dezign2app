@@ -519,7 +519,7 @@ ${hasPathParams ? `  useEffect(() => {
   }, [routeSearchParams]);\n` : ""}
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (rawJsonBody && rawJsonBody.trim()) {
+${hasRawJson ? `    if (rawJsonBody && rawJsonBody.trim()) {
       try {
         JSON.parse(rawJsonBody);
         setJsonError(null);
@@ -528,17 +528,11 @@ ${hasPathParams ? `  useEffect(() => {
         setJsonError("Invalid JSON: " + message);
         return;
       }
-    }
-    setIsSubmitting(true);
+    }\n` : ""}    setIsSubmitting(true);
     try {
       await handle${componentName}({
         onTrigger,
-${navResult.needsUseRouter ? `        router,\n` : ""}${hasPathParams || transImports.needsUseParams || navResult.needsUseParams ? `        routeParams: routeParams ? Object.fromEntries(Object.entries(routeParams).map(([k, v]) => [k, Array.isArray(v) ? v.join("/") : String(v)])) : undefined,\n` : ""}${hasQueryParams || transImports.needsUseSearchParams || navResult.needsUseSearchParams ? `        routeSearchParams,\n` : ""}        pathParams,
-        queryParams,
-        headers: customHeaders,
-        bodyFields,
-        rawJsonBody,
-      });
+${navResult.needsUseRouter ? `        router,\n` : ""}${hasPathParams || transImports.needsUseParams || navResult.needsUseParams ? `        routeParams: routeParams ? Object.fromEntries(Object.entries(routeParams).map(([k, v]) => [k, Array.isArray(v) ? v.join("/") : String(v)])) : undefined,\n` : ""}${hasQueryParams || transImports.needsUseSearchParams || navResult.needsUseSearchParams ? `        routeSearchParams,\n` : ""}${hasPathParams ? `        pathParams,\n` : ""}${hasQueryParams ? `        queryParams,\n` : ""}${hasHeaders ? `        headers: customHeaders,\n` : ""}${hasBodyFields ? `        bodyFields,\n` : ""}${hasRawJson ? `        rawJsonBody,\n` : ""}      });
     } finally {
       setIsSubmitting(false);
     }

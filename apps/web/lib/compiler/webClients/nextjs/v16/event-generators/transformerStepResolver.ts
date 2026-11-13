@@ -504,11 +504,11 @@ ${indent}}`;
     } else if (isRouterReplace) {
       navCode = `${indent}const navUrl = new URL(\`${pathTemplate}\`, "http://localhost");
 ${queryParts.map((qp) => `${indent}${qp}`).join("\n")}
-${indent}router.replace(navUrl.pathname + navUrl.search);`;
+${indent}router?.replace(navUrl.pathname + navUrl.search);`;
     } else {
       navCode = `${indent}const navUrl = new URL(\`${pathTemplate}\`, "http://localhost");
 ${queryParts.map((qp) => `${indent}${qp}`).join("\n")}
-${indent}router.push(navUrl.pathname + navUrl.search);`;
+${indent}router?.push(navUrl.pathname + navUrl.search);`;
     }
   } else {
     if (isHistoryPush) {
@@ -520,9 +520,9 @@ ${indent}}`;
 ${indent}  window.history.replaceState({}, "", \`${pathTemplate}\`);
 ${indent}}`;
     } else if (isRouterReplace) {
-      navCode = `${indent}router.replace(\`${pathTemplate}\`);`;
+      navCode = `${indent}router?.replace(\`${pathTemplate}\`);`;
     } else {
-      navCode = `${indent}router.push(\`${pathTemplate}\`);`;
+      navCode = `${indent}router?.push(\`${pathTemplate}\`);`;
     }
   }
 

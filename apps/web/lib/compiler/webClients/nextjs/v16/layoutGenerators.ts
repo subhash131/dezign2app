@@ -867,7 +867,7 @@ export interface SidebarActionButtonProps {
   children?: React.ReactNode;
 }
 
-const actionHandlers: Record<string, () => Promise<Record<string, string | number | boolean | null | undefined> | void>> = {
+const actionHandlers: Record<string, () => Promise<string | number | boolean | void | Record<string, string | number | boolean | null | undefined> | null>> = {
 ${handlerEntries}
 };
 
