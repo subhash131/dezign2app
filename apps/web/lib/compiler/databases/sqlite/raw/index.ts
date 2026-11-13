@@ -235,7 +235,11 @@ function generateTableHelpers(
     })
     .join(", ");
 
-  const updateBindTypes = writableCols
+  const isCreatedAt = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, "") === "createdat";
+  const isUpdatedAt = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, "") === "updatedat";
+  const updateCols = writableCols.filter((c) => !isCreatedAt(c.name));
+
+  const updateBindTypes = updateCols
     .map((c) => {
       const varName = toVarName(c.name);
       const nameLower = c.name.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -270,9 +274,9 @@ function generateTableHelpers(
     code += `  "INSERT INTO ${tableName} (${insertCols}) VALUES (${insertPlaceholders}) ${upsertConflictList}"\n`;
     code += `);\n\n`;
   }
-  if (writableCols.length > 0) {
+  if (updateCols.length > 0) {
     code += `const stmtUpdate = db.prepare<[${updateBindTypes}, ${pkVarName}: ${pkTs}]>(\n`;
-    code += `  "UPDATE ${tableName} SET ${writableCols.map((c) => `${c.name} = ?`).join(", ")} WHERE ${pkColName} = ?"\n`;
+    code += `  "UPDATE ${tableName} SET ${updateCols.map((c) => `${c.name} = ?`).join(", ")} WHERE ${pkColName} = ?"\n`;
     code += `);\n\n`;
   }
 
@@ -508,7 +512,7 @@ function generateTableHelpers(
       const operationalCreatedDefaultMsg = colVarNames.has("message") ? "" : `, message: "${pascalSingular} created successfully"`;
       code += `  return { ${pkColName}: _rowId${operationalCreatedDefaultMsg} } as unknown as ${Pascal};\n`;
       code += `}\n\n`;
-    } else if (op.kind === "update" && writableCols.length > 0) {
+    } else if (op.kind === "update" && updateCols.length > 0) {
       code += `/** ${op.description || `Update a ${tableName} row by primary key`} */\n`;
       code += `export function ${effectiveName}(${pkVarName}: ${pkTs}, data: Update${Pascal}Data): ${Pascal} | undefined {\n`;
       code += `  logger.info("Updating record in ${tableName}...", { ${pkVarName}, data });\n`;
@@ -518,8 +522,24 @@ function generateTableHelpers(
       code += `    return undefined;\n`;
       code += `  }\n`;
       code += `  const updated = { ...current, ...data };\n`;
-      code += `  stmtUpdate.run(${writableCols.map((c) => `updated.${toVarName(c.name)}`).join(", ")}, ${pkVarName});\n`;
+      const fallbackUpdateArgs = updateCols
+        .map((c) => {
+          const v = `updated.${toVarName(c.name)}`;
+          if (isUpdatedAt(c.name)) {
+            return `(${v} || new Date().toISOString())`;
+          }
+          return v;
+        })
+        .join(", ");
+      code += `  stmtUpdate.run(${fallbackUpdateArgs}, ${pkVarName});\n`;
       code += `  logger.info("✓ Record updated in ${tableName}", { ${pkVarName} });\n`;
+      code += `  const fresh = find${toPascal(tableName)}ById(${pkVarName});\n`;
+      const operationalUpdatedMsg = colVarNames.has("message") ? "" : `, message: "${pascalSingular} updated successfully"`;
+      code += `  return fresh ? ({ ...fresh${operationalUpdatedMsg} } as unknown as ${Pascal}) : undefined;\n`;
+      code += `}\n\n`;
+    } else if (op.kind === "update") {
+      code += `/** ${op.description || `Update a ${tableName} row by primary key`} */\n`;
+      code += `export function ${effectiveName}(${pkVarName}: ${pkTs}): ${Pascal} | undefined {\n`;
       code += `  const fresh = find${toPascal(tableName)}ById(${pkVarName});\n`;
       const operationalUpdatedMsg = colVarNames.has("message") ? "" : `, message: "${pascalSingular} updated successfully"`;
       code += `  return fresh ? ({ ...fresh${operationalUpdatedMsg} } as unknown as ${Pascal}) : undefined;\n`;
@@ -1128,7 +1148,7 @@ try {
     "/** Singleton synchronous SQLite connection. */",
     "export const db: Database.Database = new Database(dbPath);",
     "/** Connection pool alias for generic database consumers expecting `pool` */",
-    "export const pool = db;",
+    "export const pool: Database.Database = db;",
     "",
     "// Recommended pragmas for correctness and performance",
     'db.pragma("journal_mode = WAL");',

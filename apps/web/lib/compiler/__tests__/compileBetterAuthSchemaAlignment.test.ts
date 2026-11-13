@@ -223,4 +223,71 @@ describe("Better Auth Database Schema Alignment", () => {
     const code = connectionFile!.content;
     expect(code).toContain('CREATE UNIQUE INDEX IF NOT EXISTS \\"idx_organization_slug\\" ON \\"organization\\" (\\"slug\\")');
   });
+
+  it("compileRawSqliteDatabase generates correctly typed pool export and aligned stmtUpdate argument counts for all auth tables", () => {
+    const authNode: BackendNode = {
+      id: "auth-1",
+      type: "auth",
+      data: {
+        label: "Better Auth",
+        framework: "better_auth",
+        version: "1.6",
+        plugins: ["bearer", "admin", "organization", "passkey"],
+      },
+      fractionalIndex: "a0",
+      position: { x: 0, y: 0 },
+    };
+
+    const sqliteDbNode: BackendNode = {
+      id: "db-1",
+      type: "database",
+      data: {
+        label: "primary-sqlite-db",
+        dbEngine: "sqlite",
+      },
+      fractionalIndex: "a1",
+      position: { x: 100, y: 0 },
+    };
+
+    const edge: BackendEdge = {
+      id: "e1",
+      source: "auth-1",
+      target: "db-1",
+      type: "connection",
+      fractionalIndex: "a0",
+    };
+
+    const result = compileDatabaseNodes([authNode, sqliteDbNode], [edge]);
+    const connectionFile = result.files.find((f) => f.filename.endsWith("connection.ts"));
+    expect(connectionFile).toBeDefined();
+
+    // 1. Verify pool export is explicitly typed as Database.Database (avoiding TS4023)
+    expect(connectionFile!.content).toContain("export const pool: Database.Database = db;");
+
+    // 2. Check all auth helper files: stmtUpdate prepare args must match stmtUpdate.run args
+    const authTables = ["user", "account", "session", "verification", "organization", "member", "invitation", "passkey"];
+    for (const table of authTables) {
+      const helperFile = result.files.find((f) => f.filename.endsWith(`helpers/${table}.ts`));
+      expect(helperFile, `helper file for ${table} must exist`).toBeDefined();
+      const content = helperFile!.content;
+
+      // Ensure stmtUpdate doesn't update createdAt
+      const prepareMatch = content.match(/const stmtUpdate = db\.prepare<\[([^\]]+)\]>\(\s*"UPDATE [^"]+ SET ([^"]+) WHERE/);
+      if (prepareMatch) {
+        const [, typeArgsStr, setClause] = prepareMatch;
+        expect(setClause).not.toMatch(/\bcreated_?at\b\s*=\s*\?/i);
+
+        // Count expected parameters in db.prepare type tuple:
+        const expectedParamCount = typeArgsStr.split(",").length;
+
+        // Find stmtUpdate.run(...) call
+        const runMatch = content.match(/stmtUpdate\.run\(([^)]+)\);/);
+        expect(runMatch, `stmtUpdate.run call must exist in ${table}`).toBeDefined();
+        if (runMatch) {
+          const runArgs = runMatch[1].split(",").map((s) => s.trim());
+          expect(runArgs.length, `Argument count in stmtUpdate.run for ${table} must match prepared statement type params`).toBe(expectedParamCount);
+        }
+      }
+    }
+  });
 });
