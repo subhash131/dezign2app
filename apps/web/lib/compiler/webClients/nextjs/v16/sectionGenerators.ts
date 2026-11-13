@@ -214,6 +214,41 @@ export function generateSectionComponent(
     });
   }
 
+  const findMatchingEventComponent = (
+    actionId?: string,
+    actionName?: string,
+  ): EventComponentMeta | undefined => {
+    if (!actionId && !actionName) return undefined;
+    const cleanName = actionName?.trim().toLowerCase();
+    return eventComponents.find((c) => {
+      if (actionId && (c.eventItem?.id === actionId || c.componentName === actionId)) return true;
+      if (cleanName) {
+        if (c.eventName.trim().toLowerCase() === cleanName) return true;
+        if (c.componentName.toLowerCase() === cleanName) return true;
+        if (c.componentName.replace(/Action$/i, "").toLowerCase() === cleanName) return true;
+      }
+      return false;
+    });
+  };
+
+  const mappedActionComponentNames = new Set<string>();
+  if (hasComponentBindings) {
+    (section.componentBindings || []).forEach((comp) => {
+      const checkAction = (actId?: string, actName?: string) => {
+        const match = findMatchingEventComponent(actId, actName);
+        if (match) mappedActionComponentNames.add(match.componentName);
+      };
+      checkAction(comp.actionId, comp.actionName);
+      comp.propMappings?.sidebarStaticItems?.forEach((s) => checkAction(s.actionId, s.actionName || s.name));
+      comp.propMappings?.sidebarGroups?.forEach((g) => g.items?.forEach((s) => checkAction(s.actionId, s.actionName || s.name)));
+      comp.elements?.forEach((el) => checkAction(el.actionId, el.actionName));
+    });
+  }
+
+  const mappedActionImports = Array.from(mappedActionComponentNames)
+    .map((cName) => `import { handle${cName} } from "./${cName}";`)
+    .join("\n");
+
   const isActionBound = (c: EventComponentMeta) => {
     if (c.eventItem?.scope === "item") return true;
     if (c.eventItem?.id && boundActionIds.has(c.eventItem.id)) return true;
@@ -697,7 +732,7 @@ export function generateSectionComponent(
   );
 
   return `${isClient ? `"use client";\n\n` : ""}${reactImport}
-${libraryImports}${storeImports ? `${storeImports}\n` : ""}${actionImports ? `${actionImports}\n` : ""}export interface ${sectionCompName}Props {
+${libraryImports}${storeImports ? `${storeImports}\n` : ""}${actionImports ? `${actionImports}\n` : ""}${mappedActionImports ? `${mappedActionImports}\n` : ""}export interface ${sectionCompName}Props {
   onTrigger?: (
     eventName: string,
     eventType: string,
@@ -977,7 +1012,10 @@ export default ${sectionCompName};
     const actMethod = act?.method || "POST";
     const hasAction = Boolean(item.actionId || item.actionName);
 
-    const clickAttr = hasAction
+    const matchedAct = findMatchingEventComponent(item.actionId, item.actionName || item.name);
+    const clickAttr = matchedAct
+      ? ` onClick={async () => { await handle${matchedAct.componentName}({ onTrigger }); }}`
+      : hasAction
       ? ` onClick={() => onTrigger?.("${actName}", "${actEvent}", ${resolveActionTriggerUrl(actUrl, actName, eventComponents)}, "${actMethod}")}`
       : "";
 
@@ -1003,7 +1041,12 @@ export default ${sectionCompName};
       if (valVar && hasSetter) {
         let changeAttr = ` onChange={(e) => ${setterVar}(e.target.value)}`;
         if (hasAction) {
-          changeAttr = ` onChange={(e) => { ${setterVar}(e.target.value); onTrigger?.("${actName}", "change", ${resolveActionTriggerUrl(actUrl, actName, eventComponents)}, "${actMethod}", false, undefined, undefined, { value: e.target.value }); }}`;
+          const inputAct = findMatchingEventComponent(item.actionId, item.actionName || item.name);
+          if (inputAct) {
+            changeAttr = ` onChange={async (e) => { ${setterVar}(e.target.value); await handle${inputAct.componentName}({ onTrigger }); }}`;
+          } else {
+            changeAttr = ` onChange={(e) => { ${setterVar}(e.target.value); onTrigger?.("${actName}", "change", ${resolveActionTriggerUrl(actUrl, actName, eventComponents)}, "${actMethod}", false, undefined, undefined, { value: e.target.value }); }}`;
+          }
         }
         return `<Input key="${item.id}" placeholder="${ph}" value={String(${valVar} ?? "")}${changeAttr}${disabledAttr} className="h-8 text-xs max-w-xs" />`;
       }
@@ -1018,7 +1061,12 @@ export default ${sectionCompName};
       if (valVar && hasSetter) {
         let changeAttr = ` onCheckedChange={(checked) => ${setterVar}(checked)}`;
         if (hasAction) {
-          changeAttr = ` onCheckedChange={(checked) => { ${setterVar}(checked); onTrigger?.("${actName}", "change", ${resolveActionTriggerUrl(actUrl, actName, eventComponents)}, "${actMethod}", false, undefined, undefined, { checked }); }}`;
+          const switchAct = findMatchingEventComponent(item.actionId, item.actionName || item.name);
+          if (switchAct) {
+            changeAttr = ` onCheckedChange={async (checked) => { ${setterVar}(checked); await handle${switchAct.componentName}({ onTrigger }); }}`;
+          } else {
+            changeAttr = ` onCheckedChange={(checked) => { ${setterVar}(checked); onTrigger?.("${actName}", "change", ${resolveActionTriggerUrl(actUrl, actName, eventComponents)}, "${actMethod}", false, undefined, undefined, { checked }); }}`;
+          }
         }
         return `<div key="${item.id}" className="flex items-center gap-2 text-xs"><Switch checked={Boolean(${valVar})}${changeAttr}${disabledAttr} /><span>${labelText}</span></div>`;
       }
@@ -1155,7 +1203,10 @@ export default ${sectionCompName};
                   const actEvent = act?.event || sItem.triggerEvent || "click";
                   const actUrl = act?.url || "";
                   const actMethod = act?.method || "POST";
-                  const clickAttr = ` onClick={() => onTrigger?.("${actName}", "${actEvent}", ${resolveActionTriggerUrl(actUrl, actName, eventComponents)}, "${actMethod}")}`;
+                  const matchedAct = findMatchingEventComponent(sItem.actionId, sItem.actionName || sItem.name);
+                  const clickAttr = matchedAct
+                    ? ` onClick={async () => { await handle${matchedAct.componentName}({ onTrigger }); }}`
+                    : ` onClick={() => onTrigger?.("${actName}", "${actEvent}", ${resolveActionTriggerUrl(actUrl, actName, eventComponents)}, "${actMethod}")}`;
                   return `                      <SidebarMenuItem key="${sItem.id}">
                         <SidebarMenuButton tooltip="${sItem.name}" className="transition-all duration-150 ease-in-out cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"${clickAttr}>
                           <${IconComp} className="size-3.5 shrink-0 mr-2 inline-block transition-transform duration-150 group-hover/menu-item:scale-105" />
@@ -1264,7 +1315,10 @@ ${groupsJsx}
               const actEvent = act?.event || sItem.triggerEvent || "click";
               const actUrl = act?.url || "";
               const actMethod = act?.method || "POST";
-              const clickAttr = ` onClick={() => onTrigger?.("${actName}", "${actEvent}", ${resolveActionTriggerUrl(actUrl, actName, eventComponents)}, "${actMethod}")}`;
+              const matchedAct = findMatchingEventComponent(sItem.actionId, sItem.actionName || sItem.name);
+              const clickAttr = matchedAct
+                ? ` onClick={async () => { await handle${matchedAct.componentName}({ onTrigger }); }}`
+                : ` onClick={() => onTrigger?.("${actName}", "${actEvent}", ${resolveActionTriggerUrl(actUrl, actName, eventComponents)}, "${actMethod}")}`;
               return `                      <SidebarMenuItem key="${sItem.id}">
                         <SidebarMenuButton tooltip="${sItem.name}" className="transition-all duration-150 ease-in-out cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"${clickAttr}>
                           <${IconComp} className="size-3.5 shrink-0 mr-2 inline-block transition-transform duration-150 group-hover/menu-item:scale-105" />
@@ -1813,7 +1867,7 @@ ${authButtonsJsx}
   const contentJsx = contentParts.filter(Boolean).join("\n");
 
   return `${isClient ? `"use client";\n\n` : ""}${reactImport}
-${extraComponentImports ? `${extraComponentImports}\n` : ""}${toastImport}${libraryImports}${storeImports ? `${storeImports}\n` : ""}${actionImports ? `${actionImports}\n` : ""}export interface ${sectionCompName}Props {
+${extraComponentImports ? `${extraComponentImports}\n` : ""}${toastImport}${libraryImports}${storeImports ? `${storeImports}\n` : ""}${actionImports ? `${actionImports}\n` : ""}${mappedActionImports ? `${mappedActionImports}\n` : ""}export interface ${sectionCompName}Props {
   onTrigger?: (
     eventName: string,
     eventType: string,

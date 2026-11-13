@@ -8,9 +8,12 @@ import {
   PageSection,
   UIEventItem,
   ConditionNode,
+  Endpoint,
 } from "@workspace/canvas/types";
-import { slugToComponentName } from "./slugUtils";
+import { labelToSlug, slugToComponentName } from "./slugUtils";
 import { generateLayoutEventsDrawer } from "./page-generators";
+import { generateEventComponent } from "./eventGenerators";
+import { resolveLinkedEndpoint } from "./endpointResolver";
 
 export function generateRootLayout(
   projectName: string,
@@ -235,16 +238,32 @@ import { Layers } from "lucide-react";`;
         ];
 
   const navIconNames = ["LayoutDashboard", "BarChart2", "Folder", "Settings"];
+
+  const sidebarGroups = sidebarComp?.propMappings?.sidebarGroups;
+  const hasSidebarGroups = Boolean(sidebarGroups && sidebarGroups.length > 0);
+
+  const hasSidebarActions =
+    staticItems.some(
+      (sItem) => sItem.itemType === "action" || Boolean(sItem.actionId || sItem.actionName),
+    ) ||
+    Boolean(
+      sidebarGroups?.some((grp) =>
+        grp.items?.some(
+          (sItem) => sItem.itemType === "action" || Boolean(sItem.actionId || sItem.actionName),
+        ),
+      ),
+    );
+
   const staticItemsJsx = staticItems
     .map((sItem, sIdx) => {
       const IconComp = navIconNames[sIdx % navIconNames.length];
       const isActionButton = sItem.itemType === "action" || Boolean(sItem.actionId || sItem.actionName);
       if (isActionButton) {
         return `                      <SidebarMenuItem key="${sItem.id}">
-                        <SidebarMenuButton tooltip="${sItem.name}" className="transition-all duration-150 ease-in-out cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
+                        <SidebarActionButton actionName="${sItem.actionName || sItem.name}" actionId="${sItem.actionId || ""}" tooltip="${sItem.name}" className="transition-all duration-150 ease-in-out cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
                           <${IconComp} className="size-3.5 shrink-0 mr-2 inline-block transition-transform duration-150 group-hover/menu-item:scale-105" />
                           <span>${sItem.name}</span>
-                        </SidebarMenuButton>
+                        </SidebarActionButton>
                       </SidebarMenuItem>`;
       }
       const resolvedHref = resolveSidebarItemHref(sItem);
@@ -258,9 +277,6 @@ import { Layers } from "lucide-react";`;
                       </SidebarMenuItem>`;
     })
     .join("\n");
-
-  const sidebarGroups = sidebarComp?.propMappings?.sidebarGroups;
-  const hasSidebarGroups = Boolean(sidebarGroups && sidebarGroups.length > 0);
 
   let sidebarGroupsContentJsx = "";
   if (hasSidebarGroups) {
@@ -280,10 +296,10 @@ import { Layers } from "lucide-react";`;
             const isActionButton = sItem.itemType === "action" || Boolean(sItem.actionId || sItem.actionName);
             if (isActionButton) {
               return `                      <SidebarMenuItem key="${sItem.id}">
-                        <SidebarMenuButton tooltip="${sItem.name}" className="transition-all duration-150 ease-in-out cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
+                        <SidebarActionButton actionName="${sItem.actionName || sItem.name}" actionId="${sItem.actionId || ""}" tooltip="${sItem.name}" className="transition-all duration-150 ease-in-out cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
                           <${IconComp} className="size-3.5 shrink-0 mr-2 inline-block transition-transform duration-150 group-hover/menu-item:scale-105" />
                           <span>${sItem.name}</span>
-                        </SidebarMenuButton>
+                        </SidebarActionButton>
                       </SidebarMenuItem>`;
             }
             const resolvedHref = resolveSidebarItemHref(sItem);
@@ -343,6 +359,10 @@ import { PanelLeft, LayoutDashboard, BarChart2, Folder, Settings } from "lucide-
     headerImports = `${sidebarImports}\n`;
   } else if (topbarComp) {
     headerImports = `${topbarImports}\n`;
+  }
+
+  if (hasSidebarActions) {
+    headerImports = `${headerImports}import { SidebarActionButton } from "./_components/SidebarActionButton";\n`;
   }
 
   if (hasEventsDrawer) {
@@ -599,6 +619,7 @@ export function generateRouteGroupLayouts(
   allNodes: BackendNode[] = [],
   allEdges: BackendEdge[] = [],
   authNode?: BackendNode,
+  endpoints: (Endpoint & { nodeId: string })[] = [],
 ): CompiledFile[] {
   const files: CompiledFile[] = [];
   const zones: WebAppZone[] = Array.isArray(webAppNode?.data?.zones)
@@ -640,32 +661,38 @@ export function generateRouteGroupLayouts(
       return;
     }
 
-    // Find any connected layout node for this zone
+    // Check for layout-level page info
+    const layoutPageInfo = pagesInfo.find(
+      (p) =>
+        p.isLayout &&
+        (p.routeGroup === leafGroup ||
+          p.routeGroupPath === folderPath),
+    );
+
+    // Find any connected layout node for this zone or route group
     const connectedLayoutNode = allNodes.find((n) => {
       if (n.type !== "webPage") return false;
       const isLayout =
         Boolean(n.data?.isLayout) || n.data?.label?.trim().toLowerCase() === "layout";
       if (!isLayout) return false;
-      if (!matchedZone) return false;
-      if (n.data?.zoneId === matchedZone.id) return true;
-      return allEdges.some((e) => {
-        return (
-          (e.source === webAppNode?.id &&
-            e.sourceHandle === matchedZone.handleId &&
-            e.target === n.id) ||
-          (e.target === webAppNode?.id &&
-            e.targetHandle === matchedZone.handleId &&
-            e.source === n.id)
-        );
-      });
+      if (layoutPageInfo && n.id === layoutPageInfo.nodeId) return true;
+      if (n.data?.routeGroup === leafGroup) return true;
+      if (n.data?.path && (n.data.path.includes(folderPath) || n.data.path.includes(leafGroup))) return true;
+      if (matchedZone && n.data?.zoneId === matchedZone.id) return true;
+      if (matchedZone && webAppNode) {
+        return allEdges.some((e) => {
+          return (
+            (e.source === webAppNode?.id &&
+              e.sourceHandle === matchedZone.handleId &&
+              e.target === n.id) ||
+            (e.target === webAppNode?.id &&
+              e.targetHandle === matchedZone.handleId &&
+              e.source === n.id)
+          );
+        });
+      }
+      return false;
     });
-
-    // Check for layout-level real-time stream connections
-    const layoutPageInfo = pagesInfo.find(
-      (p) =>
-        (connectedLayoutNode && p.nodeId === connectedLayoutNode.id) ||
-        (p.isLayout && (p.routeGroup === leafGroup || p.routeGroupPath === folderPath)),
-    );
 
     const layoutRealtimeConns = layoutPageInfo?.realtimeConnections ?? [];
     const hasEventsDrawer = Array.isArray(layoutRealtimeConns) && layoutRealtimeConns.length > 0;
@@ -711,6 +738,75 @@ export function generateRouteGroupLayouts(
     }
 
     // Default: JWT-based middleware + requireSession() layout
+    const layoutSections: PageSection[] = connectedLayoutNode?.data?.sections ?? [];
+    const layoutSidebarSection = layoutSections.find((s: PageSection) =>
+      (s.componentBindings || []).some((cb) => cb.componentType === "sidebar"),
+    );
+    const layoutSidebarComp = layoutSidebarSection?.componentBindings?.find(
+      (cb) => cb.componentType === "sidebar",
+    );
+    const layoutStaticItems = layoutSidebarComp?.propMappings?.sidebarStaticItems || [];
+    const layoutSidebarGroups = layoutSidebarComp?.propMappings?.sidebarGroups || [];
+
+    // Compile every action configured in layout sections into standalone action files
+    // and compile the exact configured pipeline steps (auth, API, storage, navigation, etc.)
+    const layoutActions: { evt: UIEventItem; compName: string }[] = [];
+    layoutSections.forEach((sec) => {
+      (sec.actions || []).forEach((evt, evtIdx) => {
+        const evtName = evt.name || "Action";
+        const evtType = evt.event || "click";
+        const compName = slugToComponentName(labelToSlug(evtName, evtIdx)).replace(/Page$/, "Action");
+        layoutActions.push({ evt, compName });
+
+        const link = connectedLayoutNode
+          ? resolveLinkedEndpoint(connectedLayoutNode.id, evt.id, allNodes, allEdges, endpoints)
+          : null;
+
+        const actionCode = generateEventComponent(
+          evtName,
+          evtType,
+          link?.fullUrl || evt.url || "",
+          link?.method || evt.method || "POST",
+          compName,
+          evt.targetRoute,
+          undefined,
+          Boolean(authNode),
+          undefined,
+          undefined,
+          undefined,
+          evt,
+          link?.endpoint,
+          link?.serviceName,
+        );
+
+        files.push({
+          filename: `app/${folderPath}/_components/${compName}.tsx`,
+          language: "typescript",
+          content: actionCode,
+        });
+      });
+    });
+
+    const isActionItem = (sItem: any) =>
+      sItem.itemType === "action" ||
+      Boolean(sItem.actionId || sItem.actionName) ||
+      layoutActions.some((a) => a.evt.id === sItem.actionId || a.evt.name === sItem.actionName || a.evt.name === sItem.name);
+
+    const hasSidebarActionBtns =
+      layoutStaticItems.some(isActionItem) ||
+      layoutSidebarGroups.some((grp: any) =>
+        (grp.items || []).some(isActionItem),
+      ) ||
+      layoutActions.length > 0;
+
+    if (hasSidebarActionBtns) {
+      files.push({
+        filename: `app/${folderPath}/_components/SidebarActionButton.tsx`,
+        language: "typescript",
+        content: generateSidebarActionButtonCode(layoutActions),
+      });
+    }
+
     files.push({
       filename: `app/${folderPath}/layout.tsx`,
       language: "typescript",
@@ -727,4 +823,99 @@ export function generateRouteGroupLayouts(
   });
 
   return files;
+}
+
+export function generateSidebarActionButtonCode(
+  layoutActions: { evt: UIEventItem; compName: string }[] = [],
+): string {
+  const actionImports = layoutActions
+    .map((a) => `import { handle${a.compName} } from "./${a.compName}";`)
+    .join("\n");
+
+  const handlerEntries = layoutActions
+    .flatMap((a) => {
+      const entries: string[] = [];
+      const cleanName = (a.evt.name || "").trim().toLowerCase();
+      if (cleanName) {
+        entries.push(`  "${cleanName}": () => handle${a.compName}(),`);
+      }
+      if (a.evt.name) {
+        entries.push(`  "${a.evt.name}": () => handle${a.compName}(),`);
+      }
+      if (a.evt.id) {
+        entries.push(`  "${a.evt.id}": () => handle${a.compName}(),`);
+      }
+      entries.push(`  "${a.compName}": () => handle${a.compName}(),`);
+      entries.push(`  "${a.compName.toLowerCase()}": () => handle${a.compName}(),`);
+      return entries;
+    })
+    .join("\n");
+
+  return `"use client";
+
+import React, { useState } from "react";
+import { SidebarMenuButton } from "@workspace/ui/components/sidebar";
+${actionImports ? `${actionImports}\n` : ""}
+export interface SidebarActionButtonProps {
+  actionName?: string;
+  actionId?: string;
+  tooltip?: string;
+  className?: string;
+  children?: React.ReactNode;
+}
+
+const actionHandlers: Record<string, () => Promise<unknown>> = {
+${handlerEntries}
+};
+
+export function SidebarActionButton({
+  actionName = "action",
+  actionId,
+  tooltip,
+  className,
+  children,
+}: SidebarActionButtonProps) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleClick = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    try {
+      const clean = actionName.trim().toLowerCase();
+      const handler =
+        (actionId && actionHandlers[actionId]) ||
+        (actionName && actionHandlers[actionName]) ||
+        (clean && actionHandlers[clean]);
+
+      if (handler) {
+        await handler();
+        return;
+      }
+
+      window.dispatchEvent(
+        new CustomEvent("dezign:action", {
+          detail: { actionName, actionId },
+        })
+      );
+    } catch (err) {
+      console.error(\`Failed to execute action \${actionName}:\`, err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <SidebarMenuButton
+      tooltip={tooltip || actionName}
+      className={className}
+      onClick={handleClick}
+      disabled={isSubmitting}
+    >
+      {children}
+    </SidebarMenuButton>
+  );
+}
+
+export default SidebarActionButton;
+`;
 }
