@@ -93,11 +93,33 @@ export interface SidebarStaticItemQueryParam {
 export interface SidebarStaticItem {
   id: string;
   name: string;
-  link: string;
+  link?: string;
   icon?: string;
   badge?: string;
+  itemType?: "link" | "action";
+  actionId?: string;
+  actionName?: string;
+  triggerEvent?: string;
   pathParams?: SidebarStaticItemParam[];
   queryParams?: SidebarStaticItemQueryParam[];
+}
+
+export interface SidebarGroupActionConfig {
+  title?: string;
+  icon?: string;
+  actionId?: string;
+  actionName?: string;
+}
+
+export interface SidebarGroupConfig {
+  id: string;
+  label?: string;
+  mode?: "static" | "dynamic";
+  items?: SidebarStaticItem[];
+  navBinding?: string;
+  navStoreId?: string;
+  navStoreName?: string;
+  action?: SidebarGroupActionConfig;
 }
 
 export type TopbarStaticItem = SidebarStaticItem;
@@ -219,6 +241,7 @@ export interface ComponentPropMappings {
   sidebarNavStoreId?: string;
   sidebarNavStoreName?: string;
   sidebarStaticItems?: Array<SidebarStaticItem>;
+  sidebarGroups?: Array<SidebarGroupConfig>;
   sidebarCollapsible?: "offcanvas" | "icon" | "none";
   sidebarVariant?: "sidebar" | "floating" | "inset";
   sidebarSide?: "left" | "right";

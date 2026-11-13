@@ -6,6 +6,8 @@ import {
   Plus,
   Braces,
   X,
+  Zap,
+  Link as LinkIcon,
 } from "lucide-react";
 import { SidebarStaticItemParam, SidebarStaticItemQueryParam } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
@@ -28,6 +30,9 @@ export const SidebarStaticItemRow: React.FC<SidebarStaticItemRowProps> = React.m
   item,
   idx,
   stateStores,
+  availableActions = [],
+  onOpenEventConfig,
+  onCreateAction,
   onUpdate,
   onDelete,
 }) => {
@@ -265,38 +270,151 @@ export const SidebarStaticItemRow: React.FC<SidebarStaticItemRowProps> = React.m
         </Button>
       </div>
 
-      {/* URL Route Input Row with Quick Badges and Actions */}
-      <div className="flex items-center gap-2 pl-6">
-        <span className="text-[10px] font-mono text-muted-foreground shrink-0">url:</span>
-        <LocalInput
-          value={item.link}
-          onChange={(e) => handleLinkChange(e.target.value)}
-          placeholder="/route (e.g. /dashboard or /chat/[id]?tab=chat)"
-          className="h-6 text-[11px] font-mono flex-1 bg-muted/20"
-        />
-        {detectedParamNames.length > 0 && (
-          <Badge
-            variant="outline"
-            className="text-[9px] px-1.5 py-0 h-5 border-primary/40 text-primary bg-primary/10 font-mono shrink-0"
+      {/* Target Type Switcher: Route Link vs Button Action */}
+      <div className="flex items-center justify-between pl-6 text-[10px]">
+        <div className="flex items-center gap-1 bg-muted/50 p-0.5 rounded border border-border/40">
+          <button
+            type="button"
+            onClick={() => onUpdate({ itemType: "link" })}
+            className={cn(
+              "px-2 py-0.5 rounded text-[9.5px] font-medium transition-colors cursor-pointer flex items-center gap-1",
+              item.itemType !== "action"
+                ? "bg-background text-foreground shadow-2xs font-semibold text-primary"
+                : "text-muted-foreground hover:text-foreground",
+            )}
           >
-            {detectedParamNames.map((p) => `[${p}]`).join(" ")}
+            <LinkIcon size={10} />
+            <span>Route Link</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onUpdate({ itemType: "action" })}
+            className={cn(
+              "px-2 py-0.5 rounded text-[9.5px] font-medium transition-colors cursor-pointer flex items-center gap-1",
+              item.itemType === "action"
+                ? "bg-background text-foreground shadow-2xs font-semibold text-amber-500"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <Zap size={10} />
+            <span>Button (onClick)</span>
+          </button>
+        </div>
+
+        {item.itemType === "action" ? (
+          <Badge variant="outline" className="text-[8.5px] font-mono px-1.5 py-0 text-amber-500 border-amber-500/30 bg-amber-500/10">
+            Interactive Button
+          </Badge>
+        ) : (
+          <Badge variant="outline" className="text-[8.5px] font-mono px-1.5 py-0 text-muted-foreground border-border/50">
+            Navigation Link
           </Badge>
         )}
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={handleAddQueryParam}
-          className="h-6 text-[9px] px-1.5 text-muted-foreground hover:text-primary cursor-pointer shrink-0 gap-1"
-          title="Add URL Query Parameter"
-        >
-          <Plus size={10} />
-          <span>Query</span>
-        </Button>
       </div>
 
+      {item.itemType === "action" ? (
+        /* Action Workflow Trigger Row */
+        <div className="flex items-center gap-2 pl-6">
+          <span className="text-[10px] font-mono text-amber-500 shrink-0 flex items-center gap-0.5">
+            <Zap size={10} />
+            <span>action:</span>
+          </span>
+
+          {availableActions.length > 0 ? (
+            <Select
+              value={item.actionId || ""}
+              onValueChange={(val) => {
+                const matched = availableActions.find((a) => a.id === val);
+                onUpdate({
+                  actionId: val,
+                  actionName: matched?.name || "",
+                  triggerEvent: matched?.event || "click",
+                });
+              }}
+            >
+              <SelectTrigger className="h-6 text-[11px] bg-muted/20 flex-1">
+                <SelectValue placeholder="Select Action (onClick)..." />
+              </SelectTrigger>
+              <SelectContent>
+                {availableActions.map((act) => (
+                  <SelectItem key={act.id} value={act.id} className="text-xs">
+                    <div className="flex items-center gap-1.5">
+                      <Zap size={11} className="text-amber-500" />
+                      <span className="font-medium">{act.name}</span>
+                      <span className="text-[9px] text-muted-foreground font-mono">({act.event || "click"})</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <div className="text-[11px] text-muted-foreground flex-1 italic">
+              No actions in section. Click "+ New Action"
+            </div>
+          )}
+
+          {item.actionId && onOpenEventConfig && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onOpenEventConfig(item.actionId!)}
+              className="h-6 text-[9px] px-1.5 text-muted-foreground hover:text-foreground cursor-pointer shrink-0"
+              title="Edit Action Flow"
+            >
+              Edit
+            </Button>
+          )}
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const defaultName = item.name ? `${item.name.replace(/[^a-zA-Z0-9]/g, "")}Action` : "SidebarAction";
+              onCreateAction?.(defaultName, "click");
+            }}
+            className="h-6 text-[9px] px-1.5 text-amber-600 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/10 cursor-pointer shrink-0 gap-1"
+            title="Create New Action Flow"
+          >
+            <Plus size={10} />
+            <span>New Action</span>
+          </Button>
+        </div>
+      ) : (
+        /* URL Route Input Row with Quick Badges and Actions */
+        <div className="flex items-center gap-2 pl-6">
+          <span className="text-[10px] font-mono text-muted-foreground shrink-0">url:</span>
+          <LocalInput
+            value={item.link || ""}
+            onChange={(e) => handleLinkChange(e.target.value)}
+            placeholder="/route (e.g. /dashboard or /chat/[id]?tab=chat)"
+            className="h-6 text-[11px] font-mono flex-1 bg-muted/20"
+          />
+          {detectedParamNames.length > 0 && (
+            <Badge
+              variant="outline"
+              className="text-[9px] px-1.5 py-0 h-5 border-primary/40 text-primary bg-primary/10 font-mono shrink-0"
+            >
+              {detectedParamNames.map((p) => `[${p}]`).join(" ")}
+            </Badge>
+          )}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={handleAddQueryParam}
+            className="h-6 text-[9px] px-1.5 text-muted-foreground hover:text-primary cursor-pointer shrink-0 gap-1"
+            title="Add URL Query Parameter"
+          >
+            <Plus size={10} />
+            <span>Query</span>
+          </Button>
+        </div>
+      )}
+
       {/* Dynamic Route Parameters & Query Configuration Panel */}
-      {hasDynamicOrQuery && (
+      {item.itemType !== "action" && hasDynamicOrQuery && (
         <div className="ml-6 space-y-2 pt-1 border-t border-border/30">
           {/* Dynamic Path Parameters */}
           {detectedParamNames.length > 0 && (

@@ -195,6 +195,16 @@ export function generateSectionComponent(
     (section.componentBindings || []).forEach((comp) => {
       if (comp.actionId) boundActionIds.add(comp.actionId);
       if (comp.actionName) boundActionNames.add(comp.actionName.trim().toLowerCase());
+      comp.propMappings?.sidebarStaticItems?.forEach((sItem) => {
+        if (sItem.actionId) boundActionIds.add(sItem.actionId);
+        if (sItem.actionName) boundActionNames.add(sItem.actionName.trim().toLowerCase());
+      });
+      comp.propMappings?.sidebarGroups?.forEach((grp) => {
+        grp.items?.forEach((sItem) => {
+          if (sItem.actionId) boundActionIds.add(sItem.actionId);
+          if (sItem.actionName) boundActionNames.add(sItem.actionName.trim().toLowerCase());
+        });
+      });
       if (comp.elements) {
         comp.elements.forEach((el) => {
           if (el.actionId) boundActionIds.add(el.actionId);
@@ -228,6 +238,13 @@ export function generateSectionComponent(
       if (comp.disabledStateName) boundStateVarNames.add(toCamelCase(comp.disabledStateName));
       if (comp.loadingStateName) boundStateVarNames.add(toCamelCase(comp.loadingStateName));
       if (comp.propMappings?.sidebarNavBinding) boundStateVarNames.add(toCamelCase(comp.propMappings.sidebarNavBinding));
+      if (comp.propMappings?.sidebarGroups) {
+        comp.propMappings.sidebarGroups.forEach((grp) => {
+          if (grp.mode === "dynamic" && grp.navBinding) {
+            boundStateVarNames.add(toCamelCase(grp.navBinding));
+          }
+        });
+      }
       if (comp.propMappings?.topbarNavBinding) boundStateVarNames.add(toCamelCase(comp.propMappings.topbarNavBinding));
       if (comp.propMappings?.valueBinding) boundStateVarNames.add(toCamelCase(comp.propMappings.valueBinding));
       if (comp.elements) {
@@ -1089,6 +1106,105 @@ export default ${sectionCompName};
         ? toCamelCase(item.propMappings.sidebarNavBinding)
         : valVar;
 
+      const sidebarGroups = item.propMappings?.sidebarGroups;
+      const hasSidebarGroups = Boolean(sidebarGroups && sidebarGroups.length > 0);
+
+      if (hasSidebarGroups) {
+        const navIconNames = ["LayoutDashboard", "BarChart2", "Folder", "Settings"];
+        const groupsJsx = sidebarGroups!
+          .map((grp, gIdx) => {
+            const groupLabel = grp.label || `Section ${gIdx + 1}`;
+            if (grp.mode === "dynamic") {
+              const dynVar = grp.navBinding ? toCamelCase(grp.navBinding) : valVar || "navItems";
+              return `                <SidebarGroup key="${grp.id || gIdx}">
+                  <SidebarGroupLabel className="text-[10px]">${groupLabel}</SidebarGroupLabel>
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {(${dynVar} || []).map((navItem, idx: number) => {
+                        const NavIcon = ([LayoutDashboard, BarChart2, Folder, Settings][(gIdx * 2 + idx) % 4]) ?? Folder;
+                        return (
+                          <SidebarMenuItem key={navItem?.id || idx}>
+                            <SidebarMenuButton asChild tooltip={navItem?.name} className="transition-all duration-150 ease-in-out cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
+                              <Link href={navItem?.link || "#"} className="text-xs">
+                                <NavIcon className="size-3.5 shrink-0 mr-2 inline-block transition-transform duration-150 group-hover/menu-item:scale-105" />
+                                <span>{navItem?.name || "Nav"}</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        );
+                      })}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>`;
+            }
+
+            const grpItems =
+              grp.items && grp.items.length > 0
+                ? grp.items
+                : [
+                    { id: `nav-${gIdx}-1`, name: `${groupLabel} Item 1`, link: "#" },
+                  ];
+
+            const groupStaticJsx = grpItems
+              .map((sItem, sIdx) => {
+                const IconComp = navIconNames[(gIdx * 2 + sIdx) % navIconNames.length];
+                const isActionButton = sItem.itemType === "action" || Boolean(sItem.actionId || sItem.actionName);
+                if (isActionButton) {
+                  const act = (section.actions || []).find((a) => a.id === sItem.actionId || a.name === sItem.actionName);
+                  const actName = act?.name || sItem.actionName || "action";
+                  const actEvent = act?.event || sItem.triggerEvent || "click";
+                  const actUrl = act?.url || "";
+                  const actMethod = act?.method || "POST";
+                  const clickAttr = ` onClick={() => onTrigger?.("${actName}", "${actEvent}", ${resolveActionTriggerUrl(actUrl, actName, eventComponents)}, "${actMethod}")}`;
+                  return `                      <SidebarMenuItem key="${sItem.id}">
+                        <SidebarMenuButton tooltip="${sItem.name}" className="transition-all duration-150 ease-in-out cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"${clickAttr}>
+                          <${IconComp} className="size-3.5 shrink-0 mr-2 inline-block transition-transform duration-150 group-hover/menu-item:scale-105" />
+                          <span>${sItem.name}</span>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>`;
+                }
+                const resolvedHref = resolveSidebarItemHref(sItem);
+                return `                      <SidebarMenuItem key="${sItem.id}">
+                        <SidebarMenuButton asChild tooltip="${sItem.name}" className="transition-all duration-150 ease-in-out cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
+                          <Link href="${resolvedHref}" className="text-xs">
+                            <${IconComp} className="size-3.5 shrink-0 mr-2 inline-block transition-transform duration-150 group-hover/menu-item:scale-105" />
+                            <span>${sItem.name}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>`;
+              })
+              .join("\n");
+
+            return `                <SidebarGroup key="${grp.id || gIdx}">
+                  <SidebarGroupLabel className="text-[10px]">${groupLabel}</SidebarGroupLabel>
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+${groupStaticJsx}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>`;
+          })
+          .join("\n");
+
+        return `<SidebarProvider key="${item.id}" className="min-h-0 w-auto">
+            <Sidebar${sideAttr} collapsible="${collapsible}" variant="${variant}">
+              <SidebarHeader className="border-b border-sidebar-border px-3 py-2.5">
+                <div className="flex items-center gap-2 min-w-0">
+                  <PanelLeft className="size-4 text-primary shrink-0" />
+                  <span className="text-sm font-semibold truncate group-data-[collapsible=icon]:hidden text-sidebar-foreground">
+                    ${title}
+                  </span>
+                </div>
+              </SidebarHeader>
+              <SidebarContent>
+${groupsJsx}
+              </SidebarContent>
+              <SidebarTrigger className="absolute -right-3.5 top-3.5 z-20 h-6 w-6 rounded-full border border-sidebar-border bg-background shadow-xs hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex items-center justify-center text-sidebar-foreground cursor-pointer transition-all duration-200 group-data-[side=right]:-left-3.5 group-data-[side=right]:right-auto hover:scale-105 group-data-[state=collapsed]:group-data-[collapsible=offcanvas]:translate-x-4 group-data-[side=right]:group-data-[state=collapsed]:group-data-[collapsible=offcanvas]:-translate-x-4" />
+              <SidebarRail />
+            </Sidebar>
+          </SidebarProvider>`;
+      }
+
       if (navMode === "dynamic" && activeNavVar) {
         return `<SidebarProvider key="${item.id}" className="min-h-0 w-auto">
             <Sidebar${sideAttr} collapsible="${collapsible}" variant="${variant}">
@@ -1141,6 +1257,21 @@ export default ${sectionCompName};
         .map(
           (sItem, sIdx) => {
             const IconComp = navIconNames[sIdx % navIconNames.length];
+            const isActionButton = sItem.itemType === "action" || Boolean(sItem.actionId || sItem.actionName);
+            if (isActionButton) {
+              const act = (section.actions || []).find((a) => a.id === sItem.actionId || a.name === sItem.actionName);
+              const actName = act?.name || sItem.actionName || "action";
+              const actEvent = act?.event || sItem.triggerEvent || "click";
+              const actUrl = act?.url || "";
+              const actMethod = act?.method || "POST";
+              const clickAttr = ` onClick={() => onTrigger?.("${actName}", "${actEvent}", ${resolveActionTriggerUrl(actUrl, actName, eventComponents)}, "${actMethod}")}`;
+              return `                      <SidebarMenuItem key="${sItem.id}">
+                        <SidebarMenuButton tooltip="${sItem.name}" className="transition-all duration-150 ease-in-out cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"${clickAttr}>
+                          <${IconComp} className="size-3.5 shrink-0 mr-2 inline-block transition-transform duration-150 group-hover/menu-item:scale-105" />
+                          <span>${sItem.name}</span>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>`;
+            }
             const resolvedHref = resolveSidebarItemHref(sItem);
             return `                      <SidebarMenuItem key="${sItem.id}">
                         <SidebarMenuButton asChild tooltip="${sItem.name}" className="transition-all duration-150 ease-in-out cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
