@@ -50,6 +50,19 @@ export interface ${componentName}Props {
   ) => Promise<Record<string, string | number | boolean | null | undefined> | void> | void;
 }
 
+export interface ${componentName}ActionContext {
+  router?: { push: (href: string) => void; replace?: (href: string) => void };
+}
+
+export async function handle${componentName}(ctx: ${componentName}ActionContext = {}) {
+  const targetHref = "${route}";
+  if (ctx.router?.push) {
+    ctx.router.push(targetHref);
+  } else if (typeof window !== "undefined") {
+    window.location.href = targetHref;
+  }
+}
+
 export function ${componentName}({ onTrigger }: ${componentName}Props) {
   return (
     <Link
@@ -153,8 +166,8 @@ export default ${componentName};
   const propFields = dynamicParamMatches
     .map((p) => `  ${p}?: string;`)
     .concat([
-      "  item?: Record<string, unknown>;",
-      "  response?: Record<string, unknown>;",
+      "  item?: Record<string, string | number | boolean | null | undefined>;",
+      "  response?: Record<string, string | number | boolean | null | undefined>;",
     ])
     .join("\n");
 
@@ -175,6 +188,26 @@ ${propFields}
     queryParams?: Record<string, string>,
     requestBody?: Record<string, string | number | boolean | null | undefined>,
   ) => Promise<Record<string, string | number | boolean | null | undefined> | void> | void;
+}
+
+export interface ${componentName}ActionContext {
+  router?: { push: (href: string) => void; replace?: (href: string) => void };
+  routeParams?: Record<string, string | string[] | undefined>;
+  routeSearchParams?: Record<string, string | string[] | undefined> | URLSearchParams;
+  props?: ${componentName}Props;
+}
+
+export async function handle${componentName}(ctx: ${componentName}ActionContext = {}) {
+  const router = ctx.router;
+  const routeParams = ctx.routeParams;
+  const routeSearchParams = ctx.routeSearchParams;
+  const props = ctx.props || {};
+  const targetHref = \`${pathTemplate}\`;
+  if (router?.push) {
+    router.push(targetHref);
+  } else if (typeof window !== "undefined") {
+    window.location.href = targetHref;
+  }
 }
 
 export function ${componentName}(props: ${componentName}Props) {

@@ -787,14 +787,14 @@ export function generateRouteGroupLayouts(
       });
     });
 
-    const isActionItem = (sItem: any) =>
+    const isActionItem = (sItem: { itemType?: string; actionId?: string; actionName?: string; name?: string }) =>
       sItem.itemType === "action" ||
       Boolean(sItem.actionId || sItem.actionName) ||
       layoutActions.some((a) => a.evt.id === sItem.actionId || a.evt.name === sItem.actionName || a.evt.name === sItem.name);
 
     const hasSidebarActionBtns =
       layoutStaticItems.some(isActionItem) ||
-      layoutSidebarGroups.some((grp: any) =>
+      layoutSidebarGroups.some((grp: { items?: Array<{ itemType?: string; actionId?: string; actionName?: string; name?: string }> }) =>
         (grp.items || []).some(isActionItem),
       ) ||
       layoutActions.length > 0;
@@ -828,28 +828,31 @@ export function generateRouteGroupLayouts(
 export function generateSidebarActionButtonCode(
   layoutActions: { evt: UIEventItem; compName: string }[] = [],
 ): string {
-  const actionImports = layoutActions
-    .map((a) => `import { handle${a.compName} } from "./${a.compName}";`)
-    .join("\n");
+  const uniqueImports = new Map<string, string>();
+  const handlerMap = new Map<string, string>();
 
-  const handlerEntries = layoutActions
-    .flatMap((a) => {
-      const entries: string[] = [];
-      const cleanName = (a.evt.name || "").trim().toLowerCase();
-      if (cleanName) {
-        entries.push(`  "${cleanName}": () => handle${a.compName}(),`);
-      }
-      if (a.evt.name) {
-        entries.push(`  "${a.evt.name}": () => handle${a.compName}(),`);
-      }
-      if (a.evt.id) {
-        entries.push(`  "${a.evt.id}": () => handle${a.compName}(),`);
-      }
-      entries.push(`  "${a.compName}": () => handle${a.compName}(),`);
-      entries.push(`  "${a.compName.toLowerCase()}": () => handle${a.compName}(),`);
-      return entries;
-    })
-    .join("\n");
+  layoutActions.forEach((a) => {
+    uniqueImports.set(
+      a.compName,
+      `import { handle${a.compName} } from "./${a.compName}";`,
+    );
+
+    const cleanName = (a.evt.name || "").trim().toLowerCase();
+    if (cleanName) {
+      handlerMap.set(cleanName, `  "${cleanName}": () => handle${a.compName}(),`);
+    }
+    if (a.evt.name) {
+      handlerMap.set(a.evt.name, `  "${a.evt.name}": () => handle${a.compName}(),`);
+    }
+    if (a.evt.id) {
+      handlerMap.set(a.evt.id, `  "${a.evt.id}": () => handle${a.compName}(),`);
+    }
+    handlerMap.set(a.compName, `  "${a.compName}": () => handle${a.compName}(),`);
+    handlerMap.set(a.compName.toLowerCase(), `  "${a.compName.toLowerCase()}": () => handle${a.compName}(),`);
+  });
+
+  const actionImports = Array.from(uniqueImports.values()).join("\n");
+  const handlerEntries = Array.from(handlerMap.values()).join("\n");
 
   return `"use client";
 
@@ -864,7 +867,7 @@ export interface SidebarActionButtonProps {
   children?: React.ReactNode;
 }
 
-const actionHandlers: Record<string, () => Promise<unknown>> = {
+const actionHandlers: Record<string, () => Promise<Record<string, string | number | boolean | null | undefined> | void>> = {
 ${handlerEntries}
 };
 

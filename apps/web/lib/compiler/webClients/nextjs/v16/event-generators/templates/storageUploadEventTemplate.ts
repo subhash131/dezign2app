@@ -115,6 +115,79 @@ ${typedefsJoined}
 const MAX_FILE_SIZE_MB = ${maxSizeMb};
 const ACCEPTED_TYPES: string = "${acceptedMimeTypes}";
 
+export interface ${componentName}ActionContext {
+  onTrigger?: ${componentName}Props["onTrigger"];
+  file?: File;
+}
+
+export async function handle${componentName}(ctx: ${componentName}ActionContext = {}) {
+  const onTrigger = ctx.onTrigger;
+  const selectedFile = ctx.file;
+  if (!selectedFile) return;
+
+  // Step 1: Request a presigned upload URL from the backend
+${urlInfo.baseUrlDeclaration ? `  ${urlInfo.baseUrlDeclaration}\n` : ""}  const presignResult = await onTrigger?.(
+    "${eventName}",
+    "${eventType}",
+    ${urlInfo.urlExpression},
+    "${upperMethod}",
+    ${requireAuthStr},
+    undefined,
+    undefined,
+    { fileName: selectedFile.name, fileType: selectedFile.type, fileSize: selectedFile.size },
+  );
+
+  const presignObj: Record<string, string | number | boolean | null | undefined | Record<string, string | number | boolean | null | undefined>> =
+    presignResult && typeof presignResult === "object" ? presignResult : {};
+  const nestedData: Record<string, string | number | boolean | null | undefined> =
+    presignObj.data && typeof presignObj.data === "object" ? presignObj.data : {};
+  const signedUrl: string | undefined =
+    typeof presignObj.signedUrl === "string"
+      ? presignObj.signedUrl
+      : typeof nestedData.signedUrl === "string"
+      ? nestedData.signedUrl
+      : typeof presignObj.presignedUrl === "string"
+      ? presignObj.presignedUrl
+      : typeof nestedData.presignedUrl === "string"
+      ? nestedData.presignedUrl
+      : typeof presignObj.uploadUrl === "string"
+      ? presignObj.uploadUrl
+      : typeof nestedData.uploadUrl === "string"
+      ? nestedData.uploadUrl
+      : typeof nestedData.url === "string"
+      ? nestedData.url
+      : typeof presignObj.url === "string" && presignObj.url !== ${urlInfo.urlExpression}
+      ? presignObj.url
+      : undefined;
+  const objectKey: string | undefined =
+    typeof presignObj.key === "string"
+      ? presignObj.key
+      : typeof nestedData.key === "string"
+      ? nestedData.key
+      : typeof presignObj.objectKey === "string"
+      ? presignObj.objectKey
+      : typeof nestedData.objectKey === "string"
+      ? nestedData.objectKey
+      : selectedFile.name;
+
+  if (!signedUrl) throw new Error("No presigned URL returned from server");
+
+  // Step 2: PUT the file directly to cloud storage (no server bandwidth consumed)
+  const uploadHeaders: Record<string, string> = {};
+  if (selectedFile.type) {
+    uploadHeaders["Content-Type"] = selectedFile.type;
+  }
+  const uploadRes = await fetch(signedUrl, {
+    method: "PUT",
+    body: selectedFile,
+    headers: uploadHeaders,
+  });
+  if (!uploadRes.ok) {
+    throw new Error(String('Upload failed: ' + uploadRes.status + ' ' + uploadRes.statusText));
+  }
+${postStoreUpdates}  return { signedUrl, key: objectKey };
+}
+
 export function ${componentName}({ onTrigger }: ${componentName}Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [warning, setWarning] = useState<string | null>(null);
@@ -159,67 +232,8 @@ ${previewLogic}  };
     setIsSubmitting(true);
     setWarning(null);
     try {
-      // Step 1: Request a presigned upload URL from the backend
-${urlInfo.baseUrlDeclaration ? `      ${urlInfo.baseUrlDeclaration}\n` : ""}      const presignResult = await onTrigger?.(
-        "${eventName}",
-        "${eventType}",
-        ${urlInfo.urlExpression},
-        "${upperMethod}",
-        ${requireAuthStr},
-        undefined,
-        undefined,
-        { fileName: selectedFile.name, fileType: selectedFile.type, fileSize: selectedFile.size },
-      );
-
-      const presignObj: Record<string, string | number | boolean | null | undefined | Record<string, string | number | boolean | null | undefined>> =
-        presignResult && typeof presignResult === "object" ? presignResult : {};
-      const nestedData: Record<string, string | number | boolean | null | undefined> =
-        presignObj.data && typeof presignObj.data === "object" ? presignObj.data : {};
-      const signedUrl: string | undefined =
-        typeof presignObj.signedUrl === "string"
-          ? presignObj.signedUrl
-          : typeof nestedData.signedUrl === "string"
-          ? nestedData.signedUrl
-          : typeof presignObj.presignedUrl === "string"
-          ? presignObj.presignedUrl
-          : typeof nestedData.presignedUrl === "string"
-          ? nestedData.presignedUrl
-          : typeof presignObj.uploadUrl === "string"
-          ? presignObj.uploadUrl
-          : typeof nestedData.uploadUrl === "string"
-          ? nestedData.uploadUrl
-          : typeof nestedData.url === "string"
-          ? nestedData.url
-          : typeof presignObj.url === "string" && presignObj.url !== ${urlInfo.urlExpression}
-          ? presignObj.url
-          : undefined;
-      const objectKey: string | undefined =
-        typeof presignObj.key === "string"
-          ? presignObj.key
-          : typeof nestedData.key === "string"
-          ? nestedData.key
-          : typeof presignObj.objectKey === "string"
-          ? presignObj.objectKey
-          : typeof nestedData.objectKey === "string"
-          ? nestedData.objectKey
-          : selectedFile.name;
-
-      if (!signedUrl) throw new Error("No presigned URL returned from server");
-
-      // Step 2: PUT the file directly to cloud storage (no server bandwidth consumed)
-      const uploadHeaders: Record<string, string> = {};
-      if (selectedFile.type) {
-        uploadHeaders["Content-Type"] = selectedFile.type;
-      }
-      const uploadRes = await fetch(signedUrl, {
-        method: "PUT",
-        body: selectedFile,
-        headers: uploadHeaders,
-      });
-      if (!uploadRes.ok) {
-        throw new Error(String('Upload failed: ' + uploadRes.status + ' ' + uploadRes.statusText));
-      }
-${postStoreUpdates}    } catch (err) {
+      await handle${componentName}({ onTrigger, file: selectedFile });
+    } catch (err) {
       setWarning(err instanceof Error ? err.message : "Upload failed");
     } finally {
       setIsSubmitting(false);

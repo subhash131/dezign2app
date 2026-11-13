@@ -344,9 +344,9 @@ ${typeDefs.join("\n\n")}
 
 export interface ${componentName}ActionContext {
   onTrigger?: ${componentName}Props["onTrigger"];
-  router?: any;
-  routeParams?: any;
-  routeSearchParams?: any;
+  router?: { push: (href: string) => void; replace?: (href: string) => void };
+  routeParams?: Record<string, string | string[] | undefined>;
+  routeSearchParams?: Record<string, string | string[] | undefined> | URLSearchParams;
 }
 
 export async function handle${componentName}(ctx: ${componentName}ActionContext = {}) {

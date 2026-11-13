@@ -231,23 +231,7 @@ export function generateSectionComponent(
     });
   };
 
-  const mappedActionComponentNames = new Set<string>();
-  if (hasComponentBindings) {
-    (section.componentBindings || []).forEach((comp) => {
-      const checkAction = (actId?: string, actName?: string) => {
-        const match = findMatchingEventComponent(actId, actName);
-        if (match) mappedActionComponentNames.add(match.componentName);
-      };
-      checkAction(comp.actionId, comp.actionName);
-      comp.propMappings?.sidebarStaticItems?.forEach((s) => checkAction(s.actionId, s.actionName || s.name));
-      comp.propMappings?.sidebarGroups?.forEach((g) => g.items?.forEach((s) => checkAction(s.actionId, s.actionName || s.name)));
-      comp.elements?.forEach((el) => checkAction(el.actionId, el.actionName));
-    });
-  }
-
-  const mappedActionImports = Array.from(mappedActionComponentNames)
-    .map((cName) => `import { handle${cName} } from "./${cName}";`)
-    .join("\n");
+  const usedHandleActionComponents = new Set<string>();
 
   const isActionBound = (c: EventComponentMeta) => {
     if (c.eventItem?.scope === "item") return true;
@@ -728,10 +712,13 @@ export function generateSectionComponent(
 
   if (isNavOnly) {
     const hasSidebarBinding = (section.componentBindings || []).some(
-    (cb) => cb.componentType === "sidebar",
-  );
+      (cb) => cb.componentType === "sidebar",
+    );
+    const mappedActionImports = Array.from(usedHandleActionComponents)
+      .map((cName) => `import { handle${cName} } from "./${cName}";`)
+      .join("\n");
 
-  return `${isClient ? `"use client";\n\n` : ""}${reactImport}
+    return `${isClient ? `"use client";\n\n` : ""}${reactImport}
 ${libraryImports}${storeImports ? `${storeImports}\n` : ""}${actionImports ? `${actionImports}\n` : ""}${mappedActionImports ? `${mappedActionImports}\n` : ""}export interface ${sectionCompName}Props {
   onTrigger?: (
     eventName: string,
@@ -1011,13 +998,23 @@ export default ${sectionCompName};
     const actUrl = act?.url || "";
     const actMethod = act?.method || "POST";
     const hasAction = Boolean(item.actionId || item.actionName);
-
-    const matchedAct = findMatchingEventComponent(item.actionId, item.actionName || item.name);
-    const clickAttr = matchedAct
-      ? ` onClick={async () => { await handle${matchedAct.componentName}({ onTrigger }); }}`
-      : hasAction
-      ? ` onClick={() => onTrigger?.("${actName}", "${actEvent}", ${resolveActionTriggerUrl(actUrl, actName, eventComponents)}, "${actMethod}")}`
-      : "";
+    const typesWithClickAttr = new Set([
+      "button",
+      "badge",
+      "toggle",
+      "tooltip",
+      "dropdown-menu",
+      "alert-dialog",
+    ]);
+    const isClickableType = typesWithClickAttr.has(item.type) || (!item.type && hasAction);
+    const matchedAct = isClickableType ? findMatchingEventComponent(item.actionId, item.actionName || item.name) : undefined;
+    let clickAttr = "";
+    if (matchedAct) {
+      usedHandleActionComponents.add(matchedAct.componentName);
+      clickAttr = ` onClick={async () => { await handle${matchedAct.componentName}({ onTrigger }); }}`;
+    } else if (hasAction && isClickableType) {
+      clickAttr = ` onClick={() => onTrigger?.("${actName}", "${actEvent}", ${resolveActionTriggerUrl(actUrl, actName, eventComponents)}, "${actMethod}")}`;
+    }
 
     const disabledAttr = item.disabledStateName
       ? ` disabled={Boolean(${toCamelCase(item.disabledStateName)})}`
@@ -1043,6 +1040,7 @@ export default ${sectionCompName};
         if (hasAction) {
           const inputAct = findMatchingEventComponent(item.actionId, item.actionName || item.name);
           if (inputAct) {
+            usedHandleActionComponents.add(inputAct.componentName);
             changeAttr = ` onChange={async (e) => { ${setterVar}(e.target.value); await handle${inputAct.componentName}({ onTrigger }); }}`;
           } else {
             changeAttr = ` onChange={(e) => { ${setterVar}(e.target.value); onTrigger?.("${actName}", "change", ${resolveActionTriggerUrl(actUrl, actName, eventComponents)}, "${actMethod}", false, undefined, undefined, { value: e.target.value }); }}`;
@@ -1063,6 +1061,7 @@ export default ${sectionCompName};
         if (hasAction) {
           const switchAct = findMatchingEventComponent(item.actionId, item.actionName || item.name);
           if (switchAct) {
+            usedHandleActionComponents.add(switchAct.componentName);
             changeAttr = ` onCheckedChange={async (checked) => { ${setterVar}(checked); await handle${switchAct.componentName}({ onTrigger }); }}`;
           } else {
             changeAttr = ` onCheckedChange={(checked) => { ${setterVar}(checked); onTrigger?.("${actName}", "change", ${resolveActionTriggerUrl(actUrl, actName, eventComponents)}, "${actMethod}", false, undefined, undefined, { checked }); }}`;
@@ -1204,9 +1203,13 @@ export default ${sectionCompName};
                   const actUrl = act?.url || "";
                   const actMethod = act?.method || "POST";
                   const matchedAct = findMatchingEventComponent(sItem.actionId, sItem.actionName || sItem.name);
-                  const clickAttr = matchedAct
-                    ? ` onClick={async () => { await handle${matchedAct.componentName}({ onTrigger }); }}`
-                    : ` onClick={() => onTrigger?.("${actName}", "${actEvent}", ${resolveActionTriggerUrl(actUrl, actName, eventComponents)}, "${actMethod}")}`;
+                  let clickAttr = "";
+                  if (matchedAct) {
+                    usedHandleActionComponents.add(matchedAct.componentName);
+                    clickAttr = ` onClick={async () => { await handle${matchedAct.componentName}({ onTrigger }); }}`;
+                  } else {
+                    clickAttr = ` onClick={() => onTrigger?.("${actName}", "${actEvent}", ${resolveActionTriggerUrl(actUrl, actName, eventComponents)}, "${actMethod}")}`;
+                  }
                   return `                      <SidebarMenuItem key="${sItem.id}">
                         <SidebarMenuButton tooltip="${sItem.name}" className="transition-all duration-150 ease-in-out cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"${clickAttr}>
                           <${IconComp} className="size-3.5 shrink-0 mr-2 inline-block transition-transform duration-150 group-hover/menu-item:scale-105" />
@@ -1316,9 +1319,13 @@ ${groupsJsx}
               const actUrl = act?.url || "";
               const actMethod = act?.method || "POST";
               const matchedAct = findMatchingEventComponent(sItem.actionId, sItem.actionName || sItem.name);
-              const clickAttr = matchedAct
-                ? ` onClick={async () => { await handle${matchedAct.componentName}({ onTrigger }); }}`
-                : ` onClick={() => onTrigger?.("${actName}", "${actEvent}", ${resolveActionTriggerUrl(actUrl, actName, eventComponents)}, "${actMethod}")}`;
+              let clickAttr = "";
+              if (matchedAct) {
+                usedHandleActionComponents.add(matchedAct.componentName);
+                clickAttr = ` onClick={async () => { await handle${matchedAct.componentName}({ onTrigger }); }}`;
+              } else {
+                clickAttr = ` onClick={() => onTrigger?.("${actName}", "${actEvent}", ${resolveActionTriggerUrl(actUrl, actName, eventComponents)}, "${actMethod}")}`;
+              }
               return `                      <SidebarMenuItem key="${sItem.id}">
                         <SidebarMenuButton tooltip="${sItem.name}" className="transition-all duration-150 ease-in-out cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"${clickAttr}>
                           <${IconComp} className="size-3.5 shrink-0 mr-2 inline-block transition-transform duration-150 group-hover/menu-item:scale-105" />
@@ -1865,6 +1872,9 @@ ${authButtonsJsx}
     (cb) => cb.componentType === "chat",
   );
   const contentJsx = contentParts.filter(Boolean).join("\n");
+  const mappedActionImports = Array.from(usedHandleActionComponents)
+    .map((cName) => `import { handle${cName} } from "./${cName}";`)
+    .join("\n");
 
   return `${isClient ? `"use client";\n\n` : ""}${reactImport}
 ${extraComponentImports ? `${extraComponentImports}\n` : ""}${toastImport}${libraryImports}${storeImports ? `${storeImports}\n` : ""}${actionImports ? `${actionImports}\n` : ""}${mappedActionImports ? `${mappedActionImports}\n` : ""}export interface ${sectionCompName}Props {
