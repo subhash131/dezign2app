@@ -7,7 +7,7 @@
     "email": "founder@dezign2app.com"
   },
   "homepage": "https://www.dezign2app.com",
-  "description": "D2A",
+  "description": "d2a-beta",
   "main": "dist-electron/main.js",
   "scripts": {
     "generate-icons": "node scripts/generate-icons.js",
@@ -56,11 +56,11 @@
   },
   "build": {
     "appId": "com.dezign2app.desktop",
-    "productName": "D2A",
+    "productName": "d2a-beta",
     "icon": "build/icon.ico",
     "protocols": [
       {
-        "name": "D2A",
+        "name": "d2a-beta",
         "schemes": [
           "dezign2app"
         ]
@@ -102,9 +102,9 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "D2A",
+      "shortcutName": "d2a-beta",
       "differentialPackage": false,
-      "artifactName": "${productName}-Setup-${version}-${arch}.${ext}"
+      "artifactName": "${productName}-Setup-${arch}.${ext}"
     },
     "mac": {
       "target": [

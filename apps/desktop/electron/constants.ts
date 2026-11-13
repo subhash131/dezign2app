@@ -22,10 +22,10 @@ export const APP_ENV = getAppEnvironment();
 
 export const APP_NAME =
   APP_ENV === "local"
-    ? "D2A Local"
+    ? "d2a-beta Local"
     : APP_ENV === "dev"
-      ? "D2A Dev"
-      : "D2A";
+      ? "d2a-beta Dev"
+      : "d2a-beta";
 
 export const APP_USER_MODEL_ID =
   APP_ENV === "local"
