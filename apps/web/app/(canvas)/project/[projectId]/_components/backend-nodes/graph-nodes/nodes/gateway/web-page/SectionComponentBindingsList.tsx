@@ -578,6 +578,27 @@ export const SectionComponentBindingsList: React.FC<SectionComponentBindingsList
                     {(comp.componentType === "sidebar" || comp.componentType === "topbar") && (
                       (() => {
                         const isTopbar = comp.componentType === "topbar";
+                        const groups = comp.propMappings?.sidebarGroups;
+                        if (!isTopbar && groups && groups.length > 0) {
+                          const staticCount = groups.filter((g) => g.mode === "static").length;
+                          const dynCount = groups.filter((g) => g.mode === "dynamic").length;
+                          const label =
+                            staticCount > 0 && dynCount > 0
+                              ? `${groups.length} groups`
+                              : dynCount > 0
+                              ? `${groups.length} dyn groups`
+                              : `${groups.length} groups`;
+                          return (
+                            <span
+                              title={`Sidebar Groups: ${groups.map((g) => `${g.label || "Group"} (${g.mode || "static"})`).join(", ")}`}
+                              className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded border max-w-[130px] truncate bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/30"
+                            >
+                              <span className="text-[7.5px] text-muted-foreground">groups:</span>
+                              <span className="font-semibold truncate">{label}</span>
+                            </span>
+                          );
+                        }
+
                         const navMode = isTopbar ? (comp.propMappings?.topbarNavMode || "static") : (comp.propMappings?.sidebarNavMode || "dynamic");
                         const navBinding = isTopbar ? comp.propMappings?.topbarNavBinding : comp.propMappings?.sidebarNavBinding;
                         const linksCount = isTopbar ? (comp.propMappings?.topbarStaticItems?.length ?? 4) : (comp.propMappings?.sidebarStaticItems?.length ?? 2);

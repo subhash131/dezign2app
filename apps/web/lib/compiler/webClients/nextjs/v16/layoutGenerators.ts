@@ -250,6 +250,57 @@ import { Layers } from "lucide-react";`;
     })
     .join("\n");
 
+  const sidebarGroups = sidebarComp?.propMappings?.sidebarGroups;
+  const hasSidebarGroups = Boolean(sidebarGroups && sidebarGroups.length > 0);
+
+  let sidebarGroupsContentJsx = "";
+  if (hasSidebarGroups) {
+    sidebarGroupsContentJsx = sidebarGroups!
+      .map((grp, gIdx) => {
+        const groupLabel = grp.label || `Section ${gIdx + 1}`;
+        const grpItems =
+          grp.items && grp.items.length > 0
+            ? grp.items
+            : [
+                { id: `nav-${gIdx}-1`, name: `${groupLabel} Item 1`, link: "#" },
+              ];
+
+        const groupItemsJsx = grpItems
+          .map((sItem, sIdx) => {
+            const IconComp = navIconNames[(gIdx * 2 + sIdx) % navIconNames.length];
+            const resolvedHref = resolveSidebarItemHref(sItem);
+            return `                      <SidebarMenuItem key="${sItem.id}">
+                        <SidebarMenuButton asChild tooltip="${sItem.name}" className="transition-all duration-150 ease-in-out cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
+                          <Link href="${resolvedHref}" className="text-xs">
+                            <${IconComp} className="size-3.5 shrink-0 mr-2 inline-block transition-transform duration-150 group-hover/menu-item:scale-105" />
+                            <span>${sItem.name}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>`;
+          })
+          .join("\n");
+
+        return `            <SidebarGroup key="${grp.id || gIdx}">
+              <SidebarGroupLabel className="text-[10px]">${groupLabel}</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+${groupItemsJsx}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>`;
+      })
+      .join("\n");
+  } else {
+    sidebarGroupsContentJsx = `            <SidebarGroup>
+              <SidebarGroupLabel className="text-[10px]">Navigation</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+${staticItemsJsx}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>`;
+  }
+
   const sidebarImports = `import Link from "next/link";
 import {
   SidebarProvider,
@@ -323,14 +374,7 @@ ${authButtonsJsx}
             </div>
           </SidebarHeader>
           <SidebarContent>
-            <SidebarGroup>
-              <SidebarGroupLabel className="text-[10px]">Navigation</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-${staticItemsJsx}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
+${sidebarGroupsContentJsx}
           </SidebarContent>
           <SidebarTrigger className="absolute -right-3.5 top-3.5 z-20 h-6 w-6 rounded-full border border-sidebar-border bg-background shadow-xs hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex items-center justify-center text-sidebar-foreground cursor-pointer transition-all duration-200 group-data-[side=right]:-left-3.5 group-data-[side=right]:right-auto hover:scale-105" />
           <SidebarRail />

@@ -1,4 +1,6 @@
-import { ComponentPropMappings, UIEventItem, SidebarStaticItem } from "@/types/canvas";
+import { ComponentPropMappings, UIEventItem, SidebarStaticItem, SidebarGroupConfig } from "@/types/canvas";
+
+export type { SidebarGroupConfig };
 
 export interface StateStoreInfo {
   id: string;

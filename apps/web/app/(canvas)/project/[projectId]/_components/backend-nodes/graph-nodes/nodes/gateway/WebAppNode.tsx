@@ -337,6 +337,38 @@ export const WebAppNode = React.memo(({
             { id: "nav-1", name: "Dashboard", link: "/dashboard" },
             { id: "nav-2", name: "Settings", link: "/settings" },
           ];
+
+    const staticNavItems = defaultNavItems.filter(
+      (item) => !(item.pathParams && item.pathParams.length > 0),
+    );
+    const dynamicNavItems = defaultNavItems.filter(
+      (item) => item.pathParams && item.pathParams.length > 0,
+    );
+
+    const initialSidebarGroups =
+      staticNavItems.length > 0 && dynamicNavItems.length > 0
+        ? [
+            {
+              id: `group-static-${Date.now()}`,
+              label: "Main Navigation",
+              mode: "static" as const,
+              items: staticNavItems,
+            },
+            {
+              id: `group-dynamic-${Date.now() + 1}`,
+              label: "Dynamic Routes",
+              mode: "static" as const,
+              items: dynamicNavItems,
+            },
+          ]
+        : [
+            {
+              id: `group-main-${Date.now()}`,
+              label: "Navigation",
+              mode: "static" as const,
+              items: sidebarNavItems,
+            },
+          ];
     const topbarNavItems =
       defaultNavItems.length > 0
         ? defaultNavItems
@@ -403,6 +435,7 @@ export const WebAppNode = React.memo(({
                       sidebarCollapsible: "icon",
                       sidebarVariant: "sidebar",
                       sidebarStaticItems: sidebarNavItems,
+                      sidebarGroups: initialSidebarGroups,
                     },
                   },
                 ],

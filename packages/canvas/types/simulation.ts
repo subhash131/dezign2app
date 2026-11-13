@@ -100,6 +100,16 @@ export interface SidebarStaticItem {
   queryParams?: SidebarStaticItemQueryParam[];
 }
 
+export interface SidebarGroupConfig {
+  id: string;
+  label?: string;
+  mode?: "static" | "dynamic";
+  items?: SidebarStaticItem[];
+  navBinding?: string;
+  navStoreId?: string;
+  navStoreName?: string;
+}
+
 export type TopbarStaticItem = SidebarStaticItem;
 
 
@@ -219,6 +229,7 @@ export interface ComponentPropMappings {
   sidebarNavStoreId?: string;
   sidebarNavStoreName?: string;
   sidebarStaticItems?: Array<SidebarStaticItem>;
+  sidebarGroups?: Array<SidebarGroupConfig>;
   sidebarCollapsible?: "offcanvas" | "icon" | "none";
   sidebarVariant?: "sidebar" | "floating" | "inset";
   sidebarSide?: "left" | "right";
