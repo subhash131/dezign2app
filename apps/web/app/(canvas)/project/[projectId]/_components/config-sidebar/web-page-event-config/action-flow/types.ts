@@ -163,6 +163,14 @@ export interface AuthStepProps {
   webPageNodeId?: string;
   actionId?: string;
   actionItem?: UIEventItem;
+  serviceNodes?: BackendNode[];
+  isProtected?: boolean;
+  incomingPaths?: AvailablePath[];
+  isItemScoped?: boolean;
+  itemKeyField?: string;
+  itemSourceStateName?: string;
+  itemPropSuggestions?: ComboboxOption[];
+  onDeleteStep?: (edgeId: string) => void;
   onChange: (updated: FrontendActionStepDraft) => void;
 }
 

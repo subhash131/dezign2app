@@ -120,10 +120,17 @@ export const FrontendStepRow: React.FC<FrontendStepRowProps> = ({
                   allSteps={allSteps}
                   stepIndex={index}
                   allNodes={allNodes}
+                  serviceNodes={serviceNodes}
                   endpoints={endpoints}
                   webPageNodeId={webPageNodeId}
                   actionId={actionId}
                   actionItem={actionItem}
+                  isProtected={isProtected}
+                  incomingPaths={incomingPaths}
+                  isItemScoped={isItemScoped}
+                  itemKeyField={itemKeyField}
+                  itemSourceStateName={itemSourceStateName}
+                  itemPropSuggestions={itemPropSuggestions}
                   onChange={onChange}
                 />
               )}

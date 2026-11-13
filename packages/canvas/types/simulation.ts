@@ -646,6 +646,10 @@ export type FrontendActionStepDraft = {
   authOrgIdSource?: FrontendFieldSource; // for setActiveOrg, leaveOrg
   authCallbackUrl?: string; // for signInSocial callback
   authOutputVariable?: string; // default e.g. "authResult"
+  enableOnSuccess?: boolean;
+  onSuccessSteps?: FrontendActionStepDraft[];
+  enableOnError?: boolean;
+  onErrorSteps?: FrontendActionStepDraft[];
 };
 
 export interface EffectVariableMapping {
