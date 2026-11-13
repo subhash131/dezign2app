@@ -422,30 +422,27 @@ import { Label } from "@workspace/ui/components/label";
 import { Textarea } from "@workspace/ui/components/textarea";
 ${libImports}${typeDefs.join("\n\n")}
 
-export function ${componentName}({ onTrigger }: ${componentName}Props) {
-  const [isSubmitting, setIsSubmitting] = useState(false);
-${navResult.needsUseRouter ? `  const router = useRouter();\n` : ""}${hasPathParams || transImports.needsUseParams || navResult.needsUseParams ? `  const routeParams = useParams();\n` : ""}${hasQueryParams || transImports.needsUseSearchParams || navResult.needsUseSearchParams ? `  const routeSearchParams = useSearchParams();\n` : ""}${hasPathParams ? `  const [pathParams, setPathParams] = useState<Record<string, string>>(${pathParamsDefault});\n` : ""}${hasQueryParams ? `  const [queryParams, setQueryParams] = useState<Record<string, string>>(${queryParamsDefault});\n` : ""}${hasHeaders ? `  const [customHeaders, setCustomHeaders] = useState<Record<string, string>>(${headersDefault});\n` : ""}${hasBodyFields ? `  const [bodyFields, setBodyFields] = useState<Record<string, string | number | boolean | null | undefined>>(${bodyFieldsDefault});\n` : ""}${hasRawJson ? `  const [rawJsonBody, setRawJsonBody] = useState<string>(${defaultRawJsonString});\n  const [jsonError, setJsonError] = useState<string | null>(null);\n` : ""}
-${hasPathParams ? `  useEffect(() => {
-    if (routeParams) {
-      setPathParams((prev) => {
-        const next = { ...prev };
-        Object.entries(routeParams).forEach(([k, v]) => {
-          if (v !== undefined) next[k] = Array.isArray(v) ? v.join("/") : String(v);
-        });
-        return next;
-      });
-    }
-  }, [routeParams]);\n` : ""}${hasQueryParams ? `  useEffect(() => {
-    if (routeSearchParams) {
-      setQueryParams((prev) => {
-        const next = { ...prev };
-        routeSearchParams.forEach((v, k) => {
-          if (v !== undefined) next[k] = v;
-        });
-        return next;
-      });
-    }
-  }, [routeSearchParams]);\n` : ""}
+export interface ${componentName}ActionContext {
+  onTrigger?: ${componentName}Props["onTrigger"];
+  router?: { push: (href: string) => void; replace?: (href: string) => void };
+  routeParams?: Record<string, string | string[] | undefined>;
+  routeSearchParams?: Record<string, string | string[] | undefined> | URLSearchParams;
+  payload?: Record<string, string | number | boolean | null | undefined>;
+  pathParams?: Record<string, string>;
+  queryParams?: Record<string, string>;
+  headers?: Record<string, string>;
+  bodyFields?: Record<string, string | number | boolean | null | undefined>;
+  rawJsonBody?: string;
+}
+
+export async function handle${componentName}(ctx: ${componentName}ActionContext = {}) {
+  const onTrigger = ctx.onTrigger;
+${navResult.needsUseRouter ? `  const router = ctx.router || (typeof window !== "undefined" ? { push: (url: string) => { window.location.href = url; } } : undefined);\n` : ""}${hasPathParams || transImports.needsUseParams || navResult.needsUseParams ? `  const routeParams = ctx.routeParams;\n` : ""}${hasQueryParams || transImports.needsUseSearchParams || navResult.needsUseSearchParams ? `  const routeSearchParams = ctx.routeSearchParams;\n` : ""}  const pathParams: Record<string, string> = { ...(${pathParamsDefault}), ...(ctx.pathParams || {}) };
+  const queryParams: Record<string, string> = { ...(${queryParamsDefault}), ...(ctx.queryParams || {}) };
+  const customHeaders: Record<string, string> = { ...(${headersDefault}), ...(ctx.headers || {}) };
+  const bodyFields: Record<string, string | number | boolean | null | undefined> = { ...(${bodyFieldsDefault}), ...(ctx.bodyFields || ctx.payload || {}) };
+  const rawJsonBody: string = ctx.rawJsonBody !== undefined ? ctx.rawJsonBody : ${defaultRawJsonString};
+
   const computeFinalUrl = (): string => {
     let currentUrl = "${url}";
     let origin = "";
@@ -472,41 +469,71 @@ ${hasQueryParams ? `    const search = new URLSearchParams();
     }\n` : ""}    return finalUrl;
   };
 
+  const finalUrl = computeFinalUrl();${hasBodyFields || hasRawJson ? `  let payloadBody: Record<string, string | number | boolean | null | undefined> | undefined = undefined;\n` : ""}${hasBodyFields ? `  payloadBody = { ...bodyFields };\n` : ""}${hasRawJson ? `  if (rawJsonBody.trim()) {
+    try {
+      const parsed = JSON.parse(rawJsonBody);
+      payloadBody = typeof parsed === "object" && parsed !== null ? parsed : undefined;
+    } catch {
+      // programmatic trigger continues with raw/undefined
+    }
+  }\n` : ""}${preAuthCode}${preStepsCode}${storeSnippet.preTrigger}  const triggerResult = await onTrigger?.(
+    "${eventName}",
+    "${eventType}",
+    finalUrl,
+    "${upperMethod}",
+    ${Boolean(requireAuth)},
+    ${hasHeaders ? "Object.keys(customHeaders).length > 0 ? customHeaders : undefined" : "undefined"},
+    ${hasQueryParams ? "Object.keys(queryParams).length > 0 ? queryParams : undefined" : "undefined"},
+    ${hasBodyFields || hasRawJson ? "payloadBody" : "undefined"},
+  );
+  const resData =
+    triggerResult && typeof triggerResult === "object" && "data" in triggerResult && triggerResult.data !== undefined
+      ? triggerResult.data
+      : triggerResult;
+${postAuthCode}${postStepsCode}${storeSnippet.postTrigger}${navResult.navigationCode ? `${navResult.navigationCode}\n` : ""}  return resData;
+}
+
+export function ${componentName}({ onTrigger }: ${componentName}Props) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+${navResult.needsUseRouter ? `  const router = useRouter();\n` : ""}${hasPathParams || transImports.needsUseParams || navResult.needsUseParams ? `  const routeParams = useParams();\n` : ""}${hasQueryParams || transImports.needsUseSearchParams || navResult.needsUseSearchParams ? `  const routeSearchParams = useSearchParams();\n` : ""}${hasPathParams ? `  const [pathParams, setPathParams] = useState<Record<string, string>>(${pathParamsDefault});\n` : ""}${hasQueryParams ? `  const [queryParams, setQueryParams] = useState<Record<string, string>>(${queryParamsDefault});\n` : ""}${hasHeaders ? `  const [customHeaders, setCustomHeaders] = useState<Record<string, string>>(${headersDefault});\n` : ""}${hasBodyFields ? `  const [bodyFields, setBodyFields] = useState<Record<string, string | number | boolean | null | undefined>>(${bodyFieldsDefault});\n` : ""}${hasRawJson ? `  const [rawJsonBody, setRawJsonBody] = useState<string>(${defaultRawJsonString});\n  const [jsonError, setJsonError] = useState<string | null>(null);\n` : ""}
+${hasPathParams ? `  useEffect(() => {
+    if (routeParams) {
+      setPathParams((prev) => {
+        const next = { ...prev };
+        Object.entries(routeParams).forEach(([k, v]) => {
+          if (v !== undefined) next[k] = Array.isArray(v) ? v.join("/") : String(v);
+        });
+        return next;
+      });
+    }
+  }, [routeParams]);\n` : ""}${hasQueryParams ? `  useEffect(() => {
+    if (routeSearchParams) {
+      setQueryParams((prev) => {
+        const next = { ...prev };
+        routeSearchParams.forEach((v, k) => {
+          if (v !== undefined) next[k] = v;
+        });
+        return next;
+      });
+    }
+  }, [routeSearchParams]);\n` : ""}
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
-    try {
-      const finalUrl = computeFinalUrl();
-${hasBodyFields || hasRawJson ? `      let payloadBody: Record<string, string | number | boolean | null | undefined> | undefined = undefined;\n` : ""}${hasBodyFields ? `      // Form fields payload
-      payloadBody = { ...bodyFields };
-` : ""}${hasRawJson ? `      // Raw JSON payload
-      if (rawJsonBody.trim()) {
-        try {
-          const parsed = JSON.parse(rawJsonBody);
-          payloadBody = typeof parsed === "object" && parsed !== null ? parsed : undefined;
-          setJsonError(null);
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          setJsonError("Invalid JSON: " + message);
-          setIsSubmitting(false);
-          return;
-        }
+${hasRawJson ? `    if (rawJsonBody && rawJsonBody.trim()) {
+      try {
+        JSON.parse(rawJsonBody);
+        setJsonError(null);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        setJsonError("Invalid JSON: " + message);
+        return;
       }
-` : ""}${preAuthCode}${preStepsCode}${storeSnippet.preTrigger}      const triggerResult = await onTrigger?.(
-        "${eventName}",
-        "${eventType}",
-        finalUrl,
-        "${upperMethod}",
-        ${Boolean(requireAuth)},
-        ${hasHeaders ? "Object.keys(customHeaders).length > 0 ? customHeaders : undefined" : "undefined"},
-        ${hasQueryParams ? "Object.keys(queryParams).length > 0 ? queryParams : undefined" : "undefined"},
-        ${hasBodyFields || hasRawJson ? "payloadBody" : "undefined"},
-      );
-      const resData =
-        triggerResult && typeof triggerResult === "object" && "data" in triggerResult && triggerResult.data !== undefined
-          ? triggerResult.data
-          : triggerResult;
-${postAuthCode}${postStepsCode}${storeSnippet.postTrigger}${navResult.navigationCode ? `${navResult.navigationCode}\n` : ""}    } finally {
+    }\n` : ""}    setIsSubmitting(true);
+    try {
+      await handle${componentName}({
+        onTrigger,
+${navResult.needsUseRouter ? `        router,\n` : ""}${hasPathParams || transImports.needsUseParams || navResult.needsUseParams ? `        routeParams: routeParams ? Object.fromEntries(Object.entries(routeParams).map(([k, v]) => [k, Array.isArray(v) ? v.join("/") : String(v)])) : undefined,\n` : ""}${hasQueryParams || transImports.needsUseSearchParams || navResult.needsUseSearchParams ? `        routeSearchParams,\n` : ""}${hasPathParams ? `        pathParams,\n` : ""}${hasQueryParams ? `        queryParams,\n` : ""}${hasHeaders ? `        headers: customHeaders,\n` : ""}${hasBodyFields ? `        bodyFields,\n` : ""}${hasRawJson ? `        rawJsonBody,\n` : ""}      });
+    } finally {
       setIsSubmitting(false);
     }
   };

@@ -342,6 +342,30 @@ import React, { useState } from "react";
 ${navImportLines}${storeImports}${transformerImportLines}${authImports.importStatement}${libImports}import { Button } from "@workspace/ui/components/button";
 ${typeDefs.join("\n\n")}
 
+export interface ${componentName}ActionContext {
+  onTrigger?: ${componentName}Props["onTrigger"];
+  router?: { push: (href: string) => void; replace?: (href: string) => void };
+  routeParams?: Record<string, string | string[] | undefined>;
+  routeSearchParams?: Record<string, string | string[] | undefined> | URLSearchParams;
+}
+
+export async function handle${componentName}(ctx: ${componentName}ActionContext = {}) {
+  const onTrigger = ctx.onTrigger;
+${navResult.needsUseRouter ? `  const router = ctx.router || (typeof window !== "undefined" ? { push: (url: string) => { window.location.href = url; } } : undefined);\n` : ""}${transImports.needsUseParams || navResult.needsUseParams ? `  const routeParams = ctx.routeParams;\n` : ""}${transImports.needsUseSearchParams || navResult.needsUseSearchParams ? `  const routeSearchParams = ctx.routeSearchParams;\n` : ""}
+${urlInfo.baseUrlDeclaration ? `  ${urlInfo.baseUrlDeclaration}\n` : ""}${preAuthCode}${preStepsCode}${storeSnippet.preTrigger}  const triggerResult = await onTrigger?.(
+    "${eventName}",
+    "${eventType}",
+    ${urlInfo.urlExpression},
+    "${upperMethod}",
+    ${Boolean(requireAuth)},
+  );
+  const resData =
+    triggerResult && typeof triggerResult === "object" && "data" in triggerResult && triggerResult.data !== undefined
+      ? triggerResult.data
+      : triggerResult;
+${postAuthCode}${postStepsCode}${storeSnippet.postTrigger}${navResult.navigationCode ? `${navResult.navigationCode}\n` : ""}  return resData;
+}
+
 export function ${componentName}({ onTrigger }: ${componentName}Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 ${navResult.needsUseRouter ? `  const router = useRouter();\n` : ""}${transImports.needsUseParams || navResult.needsUseParams ? `  const routeParams = useParams();\n` : ""}${transImports.needsUseSearchParams || navResult.needsUseSearchParams ? `  const routeSearchParams = useSearchParams();\n` : ""}
@@ -349,18 +373,10 @@ ${navResult.needsUseRouter ? `  const router = useRouter();\n` : ""}${transImpor
     e.preventDefault();
     setIsSubmitting(true);
     try {
-${urlInfo.baseUrlDeclaration ? `      ${urlInfo.baseUrlDeclaration}\n` : ""}${preAuthCode}${preStepsCode}${storeSnippet.preTrigger}      const triggerResult = await onTrigger?.(
-        "${eventName}",
-        "${eventType}",
-        ${urlInfo.urlExpression},
-        "${upperMethod}",
-        ${Boolean(requireAuth)},
-      );
-      const resData =
-        triggerResult && typeof triggerResult === "object" && "data" in triggerResult && triggerResult.data !== undefined
-          ? triggerResult.data
-          : triggerResult;
-${postAuthCode}${postStepsCode}${storeSnippet.postTrigger}${navResult.navigationCode ? `${navResult.navigationCode}\n` : ""}    } finally {
+      await handle${componentName}({
+        onTrigger,
+${navResult.needsUseRouter ? `        router,\n` : ""}${transImports.needsUseParams || navResult.needsUseParams ? `        routeParams,\n` : ""}${transImports.needsUseSearchParams || navResult.needsUseSearchParams ? `        routeSearchParams,\n` : ""}      });
+    } finally {
       setIsSubmitting(false);
     }
   };
