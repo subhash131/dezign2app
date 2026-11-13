@@ -238,6 +238,15 @@ import { Layers } from "lucide-react";`;
   const staticItemsJsx = staticItems
     .map((sItem, sIdx) => {
       const IconComp = navIconNames[sIdx % navIconNames.length];
+      const isActionButton = sItem.itemType === "action" || Boolean(sItem.actionId || sItem.actionName);
+      if (isActionButton) {
+        return `                      <SidebarMenuItem key="${sItem.id}">
+                        <SidebarMenuButton tooltip="${sItem.name}" className="transition-all duration-150 ease-in-out cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
+                          <${IconComp} className="size-3.5 shrink-0 mr-2 inline-block transition-transform duration-150 group-hover/menu-item:scale-105" />
+                          <span>${sItem.name}</span>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>`;
+      }
       const resolvedHref = resolveSidebarItemHref(sItem);
       return `                      <SidebarMenuItem key="${sItem.id}">
                         <SidebarMenuButton asChild tooltip="${sItem.name}" className="transition-all duration-150 ease-in-out cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
@@ -268,6 +277,15 @@ import { Layers } from "lucide-react";`;
         const groupItemsJsx = grpItems
           .map((sItem, sIdx) => {
             const IconComp = navIconNames[(gIdx * 2 + sIdx) % navIconNames.length];
+            const isActionButton = sItem.itemType === "action" || Boolean(sItem.actionId || sItem.actionName);
+            if (isActionButton) {
+              return `                      <SidebarMenuItem key="${sItem.id}">
+                        <SidebarMenuButton tooltip="${sItem.name}" className="transition-all duration-150 ease-in-out cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
+                          <${IconComp} className="size-3.5 shrink-0 mr-2 inline-block transition-transform duration-150 group-hover/menu-item:scale-105" />
+                          <span>${sItem.name}</span>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>`;
+            }
             const resolvedHref = resolveSidebarItemHref(sItem);
             return `                      <SidebarMenuItem key="${sItem.id}">
                         <SidebarMenuButton asChild tooltip="${sItem.name}" className="transition-all duration-150 ease-in-out cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">

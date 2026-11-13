@@ -36,6 +36,9 @@ export const SidebarPropsConfig: React.FC<SidebarPropsConfigProps> = React.memo(
   effectiveStoreName,
   effectiveStoreId,
   onCreateNavStateVariable,
+  availableActions = [],
+  onOpenEventConfig,
+  onCreateAction,
 }) => {
   // Derive groups from propMappings.sidebarGroups or fallback to legacy single group
   const rawGroups = propMappings.sidebarGroups;
@@ -472,6 +475,9 @@ export const SidebarPropsConfig: React.FC<SidebarPropsConfigProps> = React.memo(
                           item={item}
                           idx={idx}
                           stateStores={stateStores}
+                          availableActions={availableActions}
+                          onOpenEventConfig={onOpenEventConfig}
+                          onCreateAction={onCreateAction}
                           onUpdate={(patch) => handleUpdateItemInGroup(group.id, item.id, patch)}
                           onDelete={() => handleDeleteItemInGroup(group.id, item.id)}
                         />

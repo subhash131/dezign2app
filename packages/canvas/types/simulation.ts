@@ -93,11 +93,22 @@ export interface SidebarStaticItemQueryParam {
 export interface SidebarStaticItem {
   id: string;
   name: string;
-  link: string;
+  link?: string;
   icon?: string;
   badge?: string;
+  itemType?: "link" | "action";
+  actionId?: string;
+  actionName?: string;
+  triggerEvent?: string;
   pathParams?: SidebarStaticItemParam[];
   queryParams?: SidebarStaticItemQueryParam[];
+}
+
+export interface SidebarGroupActionConfig {
+  title?: string;
+  icon?: string;
+  actionId?: string;
+  actionName?: string;
 }
 
 export interface SidebarGroupConfig {
@@ -108,6 +119,7 @@ export interface SidebarGroupConfig {
   navBinding?: string;
   navStoreId?: string;
   navStoreName?: string;
+  action?: SidebarGroupActionConfig;
 }
 
 export type TopbarStaticItem = SidebarStaticItem;

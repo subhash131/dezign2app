@@ -65,6 +65,9 @@ interface SidebarPreviewItem {
   link?: string;
   icon?: string;
   badge?: string;
+  itemType?: "link" | "action";
+  actionId?: string;
+  actionName?: string;
 }
 
 export interface StateComponentPreviewProps {
@@ -634,7 +637,10 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React
               const link = typeof val.link === "string" ? val.link : (typeof val.href === "string" ? val.href : (typeof val.url === "string" ? val.url : undefined));
               const icon = typeof val.icon === "string" ? val.icon : undefined;
               const badge = typeof val.badge === "string" ? val.badge : undefined;
-              return { id, name, link, icon, badge };
+              const itemType = val.itemType === "action" ? "action" : "link";
+              const actionId = typeof val.actionId === "string" ? val.actionId : undefined;
+              const actionName = typeof val.actionName === "string" ? val.actionName : undefined;
+              return { id, name, link, icon, badge, itemType, actionId, actionName };
             }
             return null;
           };
@@ -837,6 +843,36 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React
                                 {group.items.map((item: SidebarPreviewItem, idx: number) => {
                                   const isActive = groupIdx === 0 && idx === 0;
                                   const NavIcon = (navIcons[(groupIdx * 2 + idx) % navIcons.length]) ?? Folder;
+                                  const isActionButton = item.itemType === "action" || Boolean(item.actionId || item.actionName);
+
+                                  if (isActionButton) {
+                                    return (
+                                      <SidebarMenuItem key={item.id || idx}>
+                                        <SidebarMenuButton
+                                          tooltip={item.name}
+                                          isActive={isActive}
+                                          onClick={() => {
+                                            toast.success(`Action Triggered: ${item.actionName || item.name || "Button Action"}`);
+                                          }}
+                                          className={cn(
+                                            "text-xs flex items-center gap-2 cursor-pointer transition-colors hover:text-amber-500",
+                                            isIconMode && "justify-center p-1.5"
+                                          )}
+                                        >
+                                          <NavIcon size={14} className="shrink-0 text-amber-500" />
+                                          {!isIconMode && (
+                                            <span className="flex-1 truncate text-left">{item.name || `Action ${idx + 1}`}</span>
+                                          )}
+                                          {!isIconMode && (
+                                            <span className="text-[7.5px] font-mono text-amber-500 bg-amber-500/10 px-1 py-0.2 rounded border border-amber-500/20">
+                                              action
+                                            </span>
+                                          )}
+                                        </SidebarMenuButton>
+                                      </SidebarMenuItem>
+                                    );
+                                  }
+
                                   return (
                                     <SidebarMenuItem key={item.id || idx}>
                                       <SidebarMenuButton
@@ -958,7 +994,10 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React
               const link = typeof val.link === "string" ? val.link : (typeof val.href === "string" ? val.href : (typeof val.url === "string" ? val.url : undefined));
               const icon = typeof val.icon === "string" ? val.icon : undefined;
               const badge = typeof val.badge === "string" ? val.badge : undefined;
-              return { id, name, link, icon, badge };
+              const itemType = val.itemType === "action" ? "action" : "link";
+              const actionId = typeof val.actionId === "string" ? val.actionId : undefined;
+              const actionName = typeof val.actionName === "string" ? val.actionName : undefined;
+              return { id, name, link, icon, badge, itemType, actionId, actionName };
             }
             return null;
           };

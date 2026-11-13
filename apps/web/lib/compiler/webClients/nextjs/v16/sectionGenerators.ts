@@ -195,6 +195,16 @@ export function generateSectionComponent(
     (section.componentBindings || []).forEach((comp) => {
       if (comp.actionId) boundActionIds.add(comp.actionId);
       if (comp.actionName) boundActionNames.add(comp.actionName.trim().toLowerCase());
+      comp.propMappings?.sidebarStaticItems?.forEach((sItem) => {
+        if (sItem.actionId) boundActionIds.add(sItem.actionId);
+        if (sItem.actionName) boundActionNames.add(sItem.actionName.trim().toLowerCase());
+      });
+      comp.propMappings?.sidebarGroups?.forEach((grp) => {
+        grp.items?.forEach((sItem) => {
+          if (sItem.actionId) boundActionIds.add(sItem.actionId);
+          if (sItem.actionName) boundActionNames.add(sItem.actionName.trim().toLowerCase());
+        });
+      });
       if (comp.elements) {
         comp.elements.forEach((el) => {
           if (el.actionId) boundActionIds.add(el.actionId);
@@ -1138,6 +1148,21 @@ export default ${sectionCompName};
             const groupStaticJsx = grpItems
               .map((sItem, sIdx) => {
                 const IconComp = navIconNames[(gIdx * 2 + sIdx) % navIconNames.length];
+                const isActionButton = sItem.itemType === "action" || Boolean(sItem.actionId || sItem.actionName);
+                if (isActionButton) {
+                  const act = (section.actions || []).find((a) => a.id === sItem.actionId || a.name === sItem.actionName);
+                  const actName = act?.name || sItem.actionName || "action";
+                  const actEvent = act?.event || sItem.triggerEvent || "click";
+                  const actUrl = act?.url || "";
+                  const actMethod = act?.method || "POST";
+                  const clickAttr = ` onClick={() => onTrigger?.("${actName}", "${actEvent}", ${resolveActionTriggerUrl(actUrl, actName, eventComponents)}, "${actMethod}")}`;
+                  return `                      <SidebarMenuItem key="${sItem.id}">
+                        <SidebarMenuButton tooltip="${sItem.name}" className="transition-all duration-150 ease-in-out cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"${clickAttr}>
+                          <${IconComp} className="size-3.5 shrink-0 mr-2 inline-block transition-transform duration-150 group-hover/menu-item:scale-105" />
+                          <span>${sItem.name}</span>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>`;
+                }
                 const resolvedHref = resolveSidebarItemHref(sItem);
                 return `                      <SidebarMenuItem key="${sItem.id}">
                         <SidebarMenuButton asChild tooltip="${sItem.name}" className="transition-all duration-150 ease-in-out cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
@@ -1232,6 +1257,21 @@ ${groupsJsx}
         .map(
           (sItem, sIdx) => {
             const IconComp = navIconNames[sIdx % navIconNames.length];
+            const isActionButton = sItem.itemType === "action" || Boolean(sItem.actionId || sItem.actionName);
+            if (isActionButton) {
+              const act = (section.actions || []).find((a) => a.id === sItem.actionId || a.name === sItem.actionName);
+              const actName = act?.name || sItem.actionName || "action";
+              const actEvent = act?.event || sItem.triggerEvent || "click";
+              const actUrl = act?.url || "";
+              const actMethod = act?.method || "POST";
+              const clickAttr = ` onClick={() => onTrigger?.("${actName}", "${actEvent}", ${resolveActionTriggerUrl(actUrl, actName, eventComponents)}, "${actMethod}")}`;
+              return `                      <SidebarMenuItem key="${sItem.id}">
+                        <SidebarMenuButton tooltip="${sItem.name}" className="transition-all duration-150 ease-in-out cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"${clickAttr}>
+                          <${IconComp} className="size-3.5 shrink-0 mr-2 inline-block transition-transform duration-150 group-hover/menu-item:scale-105" />
+                          <span>${sItem.name}</span>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>`;
+            }
             const resolvedHref = resolveSidebarItemHref(sItem);
             return `                      <SidebarMenuItem key="${sItem.id}">
                         <SidebarMenuButton asChild tooltip="${sItem.name}" className="transition-all duration-150 ease-in-out cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">

@@ -241,6 +241,9 @@ export const ComponentPropMappingsSection: React.FC<ComponentPropMappingsSection
         <SidebarPropsConfig
           {...baseConfigProps}
           onCreateNavStateVariable={onCreateNavStateVariable}
+          availableActions={availableActions}
+          onOpenEventConfig={onOpenEventConfig}
+          onCreateAction={onCreateAction}
         />
       )}
 
