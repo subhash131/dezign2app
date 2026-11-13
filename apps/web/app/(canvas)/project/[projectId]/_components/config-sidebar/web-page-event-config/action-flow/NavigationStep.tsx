@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import { Badge } from "@workspace/ui/components/badge";
@@ -17,6 +17,9 @@ import {
   AlertCircle,
   ArrowRight,
   Layers,
+  ChevronDown,
+  ChevronUp,
+  SlidersHorizontal,
 } from "lucide-react";
 import type {
   BackendNode,
@@ -132,18 +135,27 @@ export const NavigationStep: React.FC<NavigationStepProps> = ({
   onChange,
 }) => {
   const pageNodes = useMemo(() => {
-    return allNodes.filter(
-      (n) =>
-        (n.type === "webPage" || n.type === "page_ref") &&
-        !n.data?.isLayout &&
-        n.data?.label?.trim().toLowerCase() !== "layout",
-    );
+    return allNodes.filter((n) => {
+      if (n.type !== "webPage" && n.type !== "page_ref") return false;
+      if (n.data?.isLayout) return false;
+      const label = (n.data?.label || n.data?.name || "").trim().toLowerCase();
+      if (label === "layout" || label.endsWith(" layout") || label.endsWith("-layout")) return false;
+      const path = (n.data?.path || "").trim().toLowerCase();
+      if (path.includes("layout")) return false;
+      return true;
+    });
   }, [allNodes]);
 
   const navType = draft.navType || "route";
   const targetRoute = draft.targetRoute || "/";
   const navCondition = draft.navCondition || "direct";
   const navMethod: NavigationMethod = draft.navMethod || "router_push";
+  const [showAdvanced, setShowAdvanced] = useState(
+    Boolean(
+      (draft.navMethod && draft.navMethod !== "router_push") ||
+        (draft.navCondition && draft.navCondition !== "direct"),
+    ),
+  );
 
   // Build configured route options from all canvas web pages
   const configuredRouteOptions: ComboboxOption[] = useMemo(() => {
@@ -547,210 +559,147 @@ export const NavigationStep: React.FC<NavigationStepProps> = ({
 
   return (
     <div className="space-y-3 pt-1 text-xs">
-      {/* Target & Condition Selectors */}
-      <div className="grid grid-cols-2 gap-2">
-        <div className="space-y-1">
-          <Label className="text-[10px] text-muted-foreground flex items-center gap-1">
-            <Globe size={11} className="text-primary" />
-            <span>Navigation Target</span>
-          </Label>
-          <Select
-            value={navType}
-            onValueChange={(val: "route" | "page") =>
-              onChange({ ...draft, navType: val })
-            }
-          >
-            <SelectTrigger className="w-full h-7 text-xs bg-background">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="route">Route / URL Path</SelectItem>
-              <SelectItem value="page">Canvas Web Page</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-1">
-          <Label className="text-[10px] text-muted-foreground">
-            Trigger Condition
-          </Label>
-          <Select
-            value={navCondition}
-            onValueChange={(val: "direct" | "on_success" | "on_error") =>
-              onChange({ ...draft, navCondition: val })
-            }
-          >
-            <SelectTrigger className="w-full h-7 text-xs bg-background">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="direct">Immediate</SelectItem>
-              <SelectItem value="on_success">On Prior step Success</SelectItem>
-              <SelectItem value="on_error">On Prior step Error</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      {/* Transition / History Method */}
-      <div className="space-y-1.5 p-2 rounded-lg border bg-secondary/20">
+      {/* Destination Page / Route */}
+      <div className="space-y-1.5">
         <div className="flex items-center justify-between">
-          <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
-            Transition / History Method
-          </Label>
-          <span className="text-[9px] font-mono text-primary font-semibold">
-            {navMethod === "history_push" || navMethod === "history_replace"
-              ? "In-Place (No Reload)"
-              : "Next.js Router"}
-          </span>
-        </div>
-        <Select
-          value={navMethod}
-          onValueChange={(val: string) =>
-            onChange({ ...draft, navMethod: val as NavigationMethod })
-          }
-        >
-          <SelectTrigger className="w-full h-7 text-xs bg-background">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="router_push">
-              router.push() &mdash; Standard route navigation
-            </SelectItem>
-            <SelectItem value="router_replace">
-              router.replace() &mdash; Replace current route
-            </SelectItem>
-            <SelectItem value="history_push">
-              history.pushState() &mdash; Push URL in-place (No reload/re-render)
-            </SelectItem>
-            <SelectItem value="history_replace">
-              history.replaceState() &mdash; Replace URL in-place (No reload/re-render)
-            </SelectItem>
-          </SelectContent>
-        </Select>
-        <p className="text-[10px] text-muted-foreground leading-relaxed">
-          {navMethod === "history_push"
-            ? "Updates browser address bar using window.history.pushState without unmounting or re-rendering the page. Perfect for new chats to bookmark the ID while streaming."
-            : navMethod === "history_replace"
-            ? "Replaces current browser address bar entry using window.history.replaceState without reloading or interrupting active connections."
-            : navMethod === "router_replace"
-            ? "Replaces current history entry via Next.js router.replace() without pushing a new history item."
-            : "Standard Next.js router.push() navigation. Pushes a new entry onto the browser history stack."}
-        </p>
-      </div>
-
-      {/* Target Destination Section */}
-      {navType === "page" ? (
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <Label className="text-[10px] text-muted-foreground">
-              Target Canvas Web Page
-            </Label>
-            {matchedPageNode && (
-              <span className="text-[10px] font-mono text-primary font-medium">
-                {matchedPageNode.data?.isRoot
-                  ? "/"
-                  : pageRouteToUrl(
-                      matchedPageNode.data?.path ||
-                        matchedPageNode.data?.label ||
-                        "/",
-                    )}
-              </span>
+          <Label className="text-[10px] text-muted-foreground flex items-center gap-1.5">
+            <Globe size={11} className="text-primary" />
+            <span className="font-medium text-foreground">Destination Route / Page</span>
+            {detectedDynamicParams.length > 0 && (
+              <Badge
+                variant="outline"
+                className="text-[9px] px-1 py-0 h-4 bg-primary/10 text-primary border-primary/30 font-mono"
+              >
+                {detectedDynamicParams.map((p) => `[${p}]`).join(" ")}
+              </Badge>
             )}
-          </div>
-          <Select
-            value={draft.targetPageId || matchedPageNode?.id || ""}
-            onValueChange={(val) => {
-              const targetNode = pageNodes.find((p) => p.id === val);
-              const path = targetNode?.data?.isRoot
-                ? "/"
-                : pageRouteToUrl(
-                    targetNode?.data?.path || targetNode?.data?.label || "/",
-                  );
-              handleRouteChange(path);
-            }}
-          >
-            <SelectTrigger className="w-full h-7 text-xs bg-background">
-              <SelectValue placeholder="Choose page node..." />
-            </SelectTrigger>
-            <SelectContent>
-              {pageNodes.map((p) => {
-                const label = p.data?.label || p.data?.path || p.id;
-                const r = p.data?.isRoot
-                  ? "/"
-                  : pageRouteToUrl(p.data?.path || p.data?.label || "/");
-                const dynamicParams = extractDynamicRouteParams(r, p);
-                return (
-                  <SelectItem key={p.id} value={p.id}>
-                    <div className="flex items-center justify-between gap-2 w-full">
-                      <span className="font-medium truncate">{label}</span>
-                      <span className="text-[10px] font-mono text-muted-foreground">
-                        {r}
-                        {dynamicParams.length > 0 && ` [${dynamicParams.join(", ")}]`}
-                      </span>
-                    </div>
-                  </SelectItem>
-                );
-              })}
-            </SelectContent>
-          </Select>
-        </div>
-      ) : (
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <Label className="text-[10px] text-muted-foreground flex items-center gap-1">
-              <span>Route Path / Destination</span>
-              {detectedDynamicParams.length > 0 && (
-                <Badge
-                  variant="outline"
-                  className="text-[9px] px-1 py-0 h-4 bg-primary/10 text-primary border-primary/30 font-mono"
-                >
-                  {detectedDynamicParams.map((p) => `[${p}]`).join(" ")}
-                </Badge>
-              )}
-            </Label>
-            <span className="text-[9px] text-muted-foreground">
-              Type or select configured route
+          </Label>
+          {matchedPageNode && (
+            <span className="text-[9.5px] font-mono text-primary font-medium">
+              Page: {matchedPageNode.data?.label || matchedPageNode.data?.name || "Canvas Page"}
             </span>
-          </div>
-
-          <ActionFlowCombobox
-            value={targetRoute}
-            onChange={handleRouteChange}
-            options={configuredRouteOptions}
-            placeholder="e.g. /dashboard, /users/[id], /orders/[orderId]"
-            headerLabel="Configured Page Routes"
-          />
-
-          {/* Quick Route Pills */}
-          {configuredRouteOptions.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1 pt-0.5">
-              <span className="text-[9px] text-muted-foreground mr-0.5">
-                Routes:
-              </span>
-              {configuredRouteOptions.slice(0, 6).map((opt) => {
-                const isSelected = targetRoute === opt.value;
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => handleRouteChange(opt.value)}
-                    className={cn(
-                      "text-[9px] font-mono px-1.5 py-0.5 rounded border transition-colors cursor-pointer",
-                      isSelected
-                        ? "bg-primary text-primary-foreground border-primary font-semibold shadow-2xs"
-                        : "bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border-border/40",
-                    )}
-                    title={opt.description || opt.value}
-                  >
-                    {opt.value}
-                  </button>
-                );
-              })}
-            </div>
           )}
         </div>
-      )}
+
+        <ActionFlowCombobox
+          value={targetRoute}
+          onChange={handleRouteChange}
+          options={configuredRouteOptions}
+          placeholder="Select a canvas page or type /route..."
+          headerLabel="Configured Pages & Routes"
+        />
+
+        {/* Quick Route Pills */}
+        {configuredRouteOptions.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1 pt-0.5">
+            <span className="text-[9px] text-muted-foreground mr-0.5">
+              Quick:
+            </span>
+            {configuredRouteOptions.slice(0, 6).map((opt) => {
+              const isSelected = targetRoute === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => handleRouteChange(opt.value)}
+                  className={cn(
+                    "text-[9px] font-mono px-1.5 py-0.5 rounded border transition-colors cursor-pointer",
+                    isSelected
+                      ? "bg-primary text-primary-foreground border-primary font-semibold shadow-2xs"
+                      : "bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border-border/40",
+                  )}
+                  title={opt.description || opt.value}
+                >
+                  {opt.value}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Advanced Transition & Timing Options */}
+      <div className="pt-0.5">
+        <button
+          type="button"
+          onClick={() => setShowAdvanced(!showAdvanced)}
+          className="flex items-center gap-1.5 text-[10.5px] text-muted-foreground hover:text-foreground transition-colors cursor-pointer select-none py-1"
+        >
+          <SlidersHorizontal size={11} className="text-primary/70" />
+          <span className="font-medium">Advanced Options</span>
+          <span className="text-[9px] text-muted-foreground font-mono">
+            ({navMethod.replace("_", ".")}{navCondition !== "direct" ? `, ${navCondition}` : ""})
+          </span>
+          {showAdvanced ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+        </button>
+
+        {showAdvanced && (
+          <div className="mt-1.5 space-y-2 p-2.5 rounded-lg border border-border/60 bg-secondary/15">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label className="text-[10px] text-muted-foreground">
+                  Transition Method
+                </Label>
+                <Select
+                  value={navMethod}
+                  onValueChange={(val: string) =>
+                    onChange({ ...draft, navMethod: val as NavigationMethod })
+                  }
+                >
+                  <SelectTrigger className="w-full h-7 text-xs bg-background">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="router_push">
+                      router.push() (standard)
+                    </SelectItem>
+                    <SelectItem value="router_replace">
+                      router.replace() (replace history)
+                    </SelectItem>
+                    <SelectItem value="history_push">
+                      history.pushState() (in-place)
+                    </SelectItem>
+                    <SelectItem value="history_replace">
+                      history.replaceState() (in-place)
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-[10px] text-muted-foreground">
+                  Trigger Timing
+                </Label>
+                <Select
+                  value={navCondition}
+                  onValueChange={(val: "direct" | "on_success" | "on_error") =>
+                    onChange({ ...draft, navCondition: val })
+                  }
+                >
+                  <SelectTrigger className="w-full h-7 text-xs bg-background">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="direct">Immediate</SelectItem>
+                    <SelectItem value="on_success">On Prior step Success</SelectItem>
+                    <SelectItem value="on_error">On Prior step Error</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <p className="text-[9.5px] text-muted-foreground leading-relaxed">
+              {navMethod === "history_push"
+                ? "Updates address bar via history.pushState() without unmounting or re-rendering."
+                : navMethod === "history_replace"
+                ? "Replaces address bar in-place via history.replaceState() without reload."
+                : navMethod === "router_replace"
+                ? "Replaces current history entry via Next.js router.replace()."
+                : "Standard Next.js router.push() navigation."}
+            </p>
+          </div>
+        )}
+      </div>
 
       {/* Dynamic Route Parameters Mapping Panel */}
       {detectedDynamicParams.length > 0 ? (
