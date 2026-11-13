@@ -148,7 +148,13 @@ export function generatePageAndComponentFiles({
           return false;
         }
         return act.actionSteps.some((s) => {
-          if (!s || typeof s !== "object" || !("type" in s) || s.type !== "api_call") {
+          if (!s || typeof s !== "object" || !("type" in s)) {
+            return false;
+          }
+          if (s.type === "auth") {
+            return true;
+          }
+          if (s.type !== "api_call") {
             return false;
           }
           const bindings = Array.isArray(s.requestBindings) ? s.requestBindings : [];
@@ -682,6 +688,7 @@ export function generatePageAndComponentFiles({
         const hasExecutionSteps = (evt.actionSteps || []).some(
           (s) =>
             s.type === "api_call" ||
+            s.type === "auth" ||
             s.type === "transform" ||
             s.type === "storage_put" ||
             s.type === "state_mutation" ||

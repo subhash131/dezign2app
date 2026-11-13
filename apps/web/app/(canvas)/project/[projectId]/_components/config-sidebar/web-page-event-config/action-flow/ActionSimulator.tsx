@@ -91,6 +91,16 @@ interface SimulatedStepLog {
       prevValue?: string;
       nextValue?: string;
     };
+    auth?: {
+      operation: string;
+      sessionCleared?: boolean;
+      clearedCookies?: string[];
+      clearedStorage?: string[];
+      user?: Record<string, string>;
+      sessionToken?: string;
+      outputVariable?: string;
+      activeOrgId?: string;
+    };
   };
 }
 
@@ -701,6 +711,76 @@ export const ActionSimulator: React.FC<ActionSimulatorProps> = ({
             },
           },
         });
+      } else if (step.type === "auth") {
+        const op = step.authOperation || "signOut";
+        const outVar = step.authOutputVariable || "authResult";
+
+        if (op === "signOut") {
+          delete runtimeState.cookies["better-auth.session_token"];
+          delete runtimeState.localStorage["auth_token"];
+          logs.push({
+            stepIndex: idx + 1,
+            stepId: step.id,
+            type: "auth",
+            name: stepName || "Sign Out (Better Auth)",
+            status: "success",
+            details: {
+              auth: {
+                operation: "signOut",
+                sessionCleared: true,
+                clearedCookies: ["better-auth.session_token"],
+                clearedStorage: ["auth_token"],
+              },
+            },
+          });
+        } else if (op === "signInEmail" || op === "signUpEmail" || op === "signInSocial") {
+          runtimeState.cookies["better-auth.session_token"] = "session_token_simulated_auth";
+          runtimeState.localStorage["auth_token"] = "Bearer simulated-session-token";
+          const mockUser = { id: "user_simulated_123", email: "user@example.com", name: "Simulated User" };
+          runtimeState.localState[outVar] = { user: mockUser, session: { id: "sess_simulated" } };
+          logs.push({
+            stepIndex: idx + 1,
+            stepId: step.id,
+            type: "auth",
+            name: stepName || `Better Auth ${op}`,
+            status: "success",
+            details: {
+              auth: {
+                operation: op,
+                user: mockUser,
+                sessionToken: "session_token_simulated_auth",
+                outputVariable: outVar,
+              },
+            },
+          });
+        } else if (op === "setActiveOrg") {
+          logs.push({
+            stepIndex: idx + 1,
+            stepId: step.id,
+            type: "auth",
+            name: stepName || "Set Active Organization",
+            status: "success",
+            details: {
+              auth: {
+                operation: "setActiveOrg",
+                activeOrgId: "org_simulated_active",
+              },
+            },
+          });
+        } else {
+          logs.push({
+            stepIndex: idx + 1,
+            stepId: step.id,
+            type: "auth",
+            name: stepName || "Auth Action",
+            status: "success",
+            details: {
+              auth: {
+                operation: op,
+              },
+            },
+          });
+        }
       } else {
         logs.push({
           stepIndex: idx + 1,
