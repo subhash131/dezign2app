@@ -398,7 +398,7 @@ export function generateInteractiveFormEventTemplate({
   const storeSnippet = generateStoreUpdates(hasBodyFields || hasRawJson ? "payloadBody" : "undefined");
 
   const navImports = new Set<string>();
-  if (navResult.needsUseRouter) navImports.add("useRouter");
+  if (navResult.needsUseRouter || authReqs.needsUseRouter) navImports.add("useRouter");
   if (hasPathParams || transImports.needsUseParams || navResult.needsUseParams || authReqs.needsUseParams) navImports.add("useParams");
   if (hasQueryParams || transImports.needsUseSearchParams || navResult.needsUseSearchParams || authReqs.needsUseSearchParams) navImports.add("useSearchParams");
 
@@ -437,7 +437,7 @@ export interface ${componentName}ActionContext {
 
 export async function handle${componentName}(ctx: ${componentName}ActionContext = {}) {
   const onTrigger = ctx.onTrigger;
-${navResult.needsUseRouter ? `  const routerContext = ctx.router;\n  const router = { push: (url: string) => { if (routerContext) { routerContext.push(url); } else if (typeof window !== "undefined") { window.location.href = url; } }, replace: (url: string) => { if (routerContext?.replace) { routerContext.replace(url); } else if (typeof window !== "undefined") { window.location.replace(url); } } };\n` : ""}${hasPathParams || transImports.needsUseParams || navResult.needsUseParams ? `  const routeParams = ctx.routeParams;\n` : ""}${hasQueryParams || transImports.needsUseSearchParams || navResult.needsUseSearchParams ? `  const routeSearchParams = ctx.routeSearchParams;\n` : ""}  const pathParams: Record<string, string> = { ...(${pathParamsDefault}), ...(ctx.pathParams || {}) };
+${navResult.needsUseRouter || authReqs.needsUseRouter ? `  const routerContext = ctx.router;\n  const router = { push: (url: string) => { if (routerContext) { routerContext.push(url); } else if (typeof window !== "undefined") { window.location.href = url; } }, replace: (url: string) => { if (routerContext?.replace) { routerContext.replace(url); } else if (typeof window !== "undefined") { window.location.replace(url); } } };\n` : ""}${hasPathParams || transImports.needsUseParams || navResult.needsUseParams ? `  const routeParams = ctx.routeParams;\n` : ""}${hasQueryParams || transImports.needsUseSearchParams || navResult.needsUseSearchParams ? `  const routeSearchParams = ctx.routeSearchParams;\n` : ""}  const pathParams: Record<string, string> = { ...(${pathParamsDefault}), ...(ctx.pathParams || {}) };
   const queryParams: Record<string, string> = { ...(${queryParamsDefault}), ...(ctx.queryParams || {}) };
   const customHeaders: Record<string, string> = { ...(${headersDefault}), ...(ctx.headers || {}) };
   const bodyFields: Record<string, string | number | boolean | null | undefined> = { ...(${bodyFieldsDefault}), ...(ctx.bodyFields || ctx.payload || {}) };

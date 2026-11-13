@@ -333,4 +333,109 @@ describe("compileAuthActionStep - authStepResolver & event templates", () => {
     // No duplicate unmapped fallback button rendered
     expect(code).not.toContain("<SubmitFormAction onTrigger={onTrigger} />");
   });
+
+  it("compiles Auth action with optional On Error and On Success blocks", () => {
+    const authStep: FrontendActionStepDraft = {
+      id: "step-auth-login",
+      order: 1,
+      type: "auth",
+      authOperation: "signInEmail",
+      authOutputVariable: "authResult",
+      enableOnError: true,
+      onErrorSteps: [
+        {
+          id: "step-err-toast",
+          order: 1,
+          type: "notification",
+          notifyType: "toast",
+          notifyLevel: "error",
+          notifyMessage: "authResult?.error?.message || 'Invalid email or password'",
+        },
+        {
+          id: "step-err-reset",
+          order: 2,
+          type: "reset_form",
+        },
+      ],
+      enableOnSuccess: true,
+      onSuccessSteps: [
+        {
+          id: "step-succ-toast",
+          order: 1,
+          type: "notification",
+          notifyType: "toast",
+          notifyLevel: "success",
+          notifyMessage: "Welcome back!",
+        },
+        {
+          id: "step-succ-nav",
+          order: 2,
+          type: "navigation",
+          targetRoute: "/dashboard",
+        },
+      ],
+    };
+
+    const map = new Map<string, string>();
+    const code = renderAuthStep(authStep, map, {});
+
+    // Generates the authClient signIn call
+    expect(code).toContain("const authResult = await authClient.signIn.email");
+
+    // Generates the On Error branch guard
+    expect(code).toContain("if (authResult?.error) {");
+    expect(code).toContain('toast.error(String(authResult?.error?.message || \'Invalid email or password\'));');
+    expect(code).toContain('(document.querySelector("form") as HTMLFormElement)?.reset?.();');
+    expect(code).toContain("return;");
+
+    // Generates the On Success branch
+    expect(code).toContain("else {");
+    expect(code).toContain('toast.success("Welcome back!");');
+    expect(code).toContain('router.push("/dashboard");');
+
+    // Resolves imports: includes both authClient and toast from sonner
+    const imports = resolveAuthImports([authStep]);
+    expect(imports.importStatement).toContain('import { authClient } from "@/lib/auth-client";');
+    expect(imports.importStatement).toContain('import { toast } from "sonner";');
+
+    // Resolves requirements: includes useRouter for the nested navigation step
+    const reqs = resolveAuthStepRequirements([authStep]);
+    expect(reqs.needsUseRouter).toBe(true);
+    expect(reqs.needsToast).toBe(true);
+  });
+
+  it("compiles simpleButtonEventTemplate with child navigation in Auth On Success block", () => {
+    const code = generateSimpleButtonEventTemplate({
+      componentName: "SignOutButton",
+      eventName: "SignOut",
+      eventType: "click",
+      url: "",
+      upperMethod: "POST",
+      typeDefs: ["export interface SignOutButtonProps { onTrigger?: () => void; }"],
+      actionSteps: [
+        {
+          id: "step-signout",
+          order: 1,
+          type: "auth",
+          authOperation: "signOut",
+          authOutputVariable: "signOutResult",
+          enableOnSuccess: true,
+          onSuccessSteps: [
+            {
+              id: "step-nav-login",
+              order: 1,
+              type: "navigation",
+              targetRoute: "/login",
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(code).toContain('import { authClient } from "@/lib/auth-client";');
+    expect(code).toContain('import { useRouter } from "next/navigation";');
+    expect(code).toContain("const signOutResult = await authClient.signOut();");
+    expect(code).toContain("if (!signOutResult?.error) {");
+    expect(code).toContain('router.push("/login");');
+  });
 });
