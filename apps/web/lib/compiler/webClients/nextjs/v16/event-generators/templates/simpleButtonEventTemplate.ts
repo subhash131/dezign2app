@@ -351,7 +351,7 @@ export interface ${componentName}ActionContext {
 
 export async function handle${componentName}(ctx: ${componentName}ActionContext = {}) {
   const onTrigger = ctx.onTrigger;
-${navResult.needsUseRouter ? `  const router = ctx.router || (typeof window !== "undefined" ? { push: (url: string) => { window.location.href = url; } } : undefined);\n` : ""}${transImports.needsUseParams || navResult.needsUseParams ? `  const routeParams = ctx.routeParams;\n` : ""}${transImports.needsUseSearchParams || navResult.needsUseSearchParams ? `  const routeSearchParams = ctx.routeSearchParams;\n` : ""}
+${navResult.needsUseRouter ? `  const routerContext = ctx.router;\n  const router = { push: (url: string) => { if (routerContext) { routerContext.push(url); } else if (typeof window !== "undefined") { window.location.href = url; } }, replace: (url: string) => { if (routerContext?.replace) { routerContext.replace(url); } else if (typeof window !== "undefined") { window.location.replace(url); } } };\n` : ""}${transImports.needsUseParams || navResult.needsUseParams ? `  const routeParams = ctx.routeParams;\n` : ""}${transImports.needsUseSearchParams || navResult.needsUseSearchParams ? `  const routeSearchParams = ctx.routeSearchParams;\n` : ""}
 ${urlInfo.baseUrlDeclaration ? `  ${urlInfo.baseUrlDeclaration}\n` : ""}${preAuthCode}${preStepsCode}${storeSnippet.preTrigger}  const triggerResult = await onTrigger?.(
     "${eventName}",
     "${eventType}",
