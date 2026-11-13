@@ -77,9 +77,8 @@ export function useAutoDiskSync({
         const safeTargetFiles: CompiledFile[] = [];
         for (const file of targetFiles) {
           const isFrontendPageFile =
-            file.filename.endsWith("/page.tsx") ||
-            file.filename.endsWith("page.tsx") ||
-            (file.filename.includes("/app/") && file.filename.endsWith(".tsx"));
+            (file.filename.endsWith("/page.tsx") || file.filename.endsWith("page.tsx")) &&
+            !file.filename.includes("_components");
 
           if (!isForce && isFrontendPageFile && api.fs.readFile) {
             try {
