@@ -193,7 +193,31 @@ export function generateServiceRouteTypes(
           content: singleRouteCode,
         });
 
-        routeFileExports.push(`export * from "./${routeFileName}";`);
+        // --- Collect explicit export names (types vs Zod value schemas) ---
+        const routeTypeNames: string[] = [
+          `${pascalName}Params`,
+          `${pascalName}Query`,
+          `${pascalName}Body`,
+          `${pascalName}Response`,
+          `${pascalName}ErrorResponse`,
+        ];
+        const routeValueNames: string[] = [];
+        if (queryTypeRes.hasContent) routeValueNames.push(`${schemaVarPrefix}QuerySchema`);
+        if (bodyTypeRes.hasContent) routeValueNames.push(`${schemaVarPrefix}BodySchema`);
+
+        // Build explicit named export line(s) for the service barrel (index.ts)
+        let routeExportLine = `export type { ${routeTypeNames.join(", ")} } from "./${routeFileName}";`;
+        if (routeValueNames.length > 0) {
+          routeExportLine += `\nexport { ${routeValueNames.join(", ")} } from "./${routeFileName}";`;
+        }
+        routeFileExports.push(routeExportLine);
+
+        // For the root barrel, fully-resolve the path (skip intermediate index)
+        const rootTypeExportLine = `export type { ${routeTypeNames.join(", ")} } from "./${serviceFolderName}/${routeFileName}";`;
+        barrelExports.push(rootTypeExportLine);
+        if (routeValueNames.length > 0) {
+          barrelExports.push(`export { ${routeValueNames.join(", ")} } from "./${serviceFolderName}/${routeFileName}";`);
+        }
       });
 
       // Service barrel file: src/<serviceFolderName>/index.ts
@@ -203,7 +227,6 @@ export function generateServiceRouteTypes(
         content: `/**\n * Schemas for ${rawServiceName}\n */\n${routeFileExports.join("\n")}\n`,
       });
 
-      barrelExports.push(`export * from "./${serviceFolderName}";`);
       const serviceNamespace = pascalServiceName.endsWith("Service")
         ? pascalServiceName
         : `${pascalServiceName}Service`;

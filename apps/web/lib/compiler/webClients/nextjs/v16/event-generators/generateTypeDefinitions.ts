@@ -1,7 +1,7 @@
 import { ResolvedEventParameters } from "./types";
 import { typeStrToTsAndZod } from "@/lib/compiler/generators/schemaToTypeScript";
 import { Endpoint } from "@workspace/canvas/types";
-import { deriveRouteFileName, toPascalCase } from "@/lib/compiler/utils";
+import { deriveRouteFileName, toPascalCase, toVarName } from "@/lib/compiler/utils";
 
 function toValidTsIdentifier(name: string): string {
   const clean = name.trim();
@@ -23,7 +23,10 @@ export function generateTypeDefinitions(
   // If action is connected to a backend endpoint, reuse canonical types from @workspace/types (do NOT generate new duplicate types)
   if (endpointLink?.endpoint && effectiveServiceName) {
     const routeFileName = deriveRouteFileName(endpointLink.endpoint, 0, effectiveServiceName);
-    const pascalName = `${toPascalCase(effectiveServiceName)}${toPascalCase(routeFileName)}`;
+    // Normalize service name through toVarName first to match how serviceRoutesGenerator derives
+    // pascalServiceName from folderName (e.g. "AI Service" -> "aiService" -> "AiService", not "AIService")
+    const normalizedServiceName = toVarName(effectiveServiceName);
+    const pascalName = `${toPascalCase(normalizedServiceName)}${toPascalCase(routeFileName)}`;
 
     return [
       `import type {\n  ${pascalName}Params,\n  ${pascalName}Query,\n  ${pascalName}Body,\n  ${pascalName}Response,\n} from "@workspace/types";`,
