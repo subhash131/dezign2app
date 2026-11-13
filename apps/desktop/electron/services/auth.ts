@@ -7,6 +7,10 @@ import { log } from "../logger";
 
 /**
  * Payload structure for authentication deep links (dezign2app://...).
+ *
+ * CRITICAL ARCHITECTURE RULE - DESKTOP AUTHENTICATION (DO NOT MODIFY / DO NOT BYPASS):
+ * NEVER add direct in-app login methods (email/password, social OAuth forms) to the Electron desktop shell.
+ * Desktop authentication must strictly use external browser handoff (shell.openExternal -> deep link ticket exchange).
  */
 export interface PendingAuthPayload {
   token?: string;
