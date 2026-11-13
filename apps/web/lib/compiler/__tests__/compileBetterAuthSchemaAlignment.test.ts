@@ -273,8 +273,9 @@ describe("Better Auth Database Schema Alignment", () => {
 
       // Ensure stmtUpdate doesn't update createdAt
       const prepareMatch = content.match(/const stmtUpdate = db\.prepare<\[([^\]]+)\]>\(\s*"UPDATE [^"]+ SET ([^"]+) WHERE/);
-      if (prepareMatch) {
-        const [, typeArgsStr, setClause] = prepareMatch;
+      if (prepareMatch && prepareMatch[1] && prepareMatch[2]) {
+        const typeArgsStr = prepareMatch[1];
+        const setClause = prepareMatch[2];
         expect(setClause).not.toMatch(/\bcreated_?at\b\s*=\s*\?/i);
 
         // Count expected parameters in db.prepare type tuple:
@@ -283,7 +284,7 @@ describe("Better Auth Database Schema Alignment", () => {
         // Find stmtUpdate.run(...) call
         const runMatch = content.match(/stmtUpdate\.run\(([^)]+)\);/);
         expect(runMatch, `stmtUpdate.run call must exist in ${table}`).toBeDefined();
-        if (runMatch) {
+        if (runMatch && runMatch[1]) {
           const runArgs = runMatch[1].split(",").map((s) => s.trim());
           expect(runArgs.length, `Argument count in stmtUpdate.run for ${table} must match prepared statement type params`).toBe(expectedParamCount);
         }
