@@ -181,7 +181,6 @@ export function generatePageAndComponentFiles({
       pagesInfo.some((p) => p.accessType !== "public") ||
       webClientNodes.some(
         (n) =>
-          (n.data?.authNodeId && allNodes.some((an) => an.id === n.data.authNodeId && an.type === "auth")) ||
           n.data?.requireAuth === true ||
           (n.data?.useZoneDefault === false && n.data?.protectionOverride?.accessType === "protected"),
       ),
@@ -199,11 +198,7 @@ export function generatePageAndComponentFiles({
       hasExplicitRoot = true;
     }
 
-    const effectiveAuthNode =
-      authNode ||
-      (node.data?.authNodeId
-        ? allNodes.find((n) => n.id === node.data.authNodeId && n.type === "auth")
-        : undefined);
+    const effectiveAuthNode = authNode;
 
     const isPageProtected =
       pageMeta.accessType !== "public" ||
@@ -409,7 +404,7 @@ export function generatePageAndComponentFiles({
         evtSuffixMap.set(evt.id, suffix);
 
         if (link) {
-          const requireAuth = (Boolean(effectiveAuthNode) || isPageProtected) && link.requireAuth !== false;
+          const requireAuth = Boolean(effectiveAuthNode) && (isPageProtected ? link.requireAuth !== false : Boolean(link.requireAuth));
           const headersEntries = Object.entries(nodeHeaders)
             .map(([k, v]) => `"${k}": "${v}",`)
             .join("\n          ");
