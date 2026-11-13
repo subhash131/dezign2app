@@ -25,6 +25,10 @@ export function createDefaultFrontendStep(
         name: "Auth Action",
         authOperation: "signOut",
         authOutputVariable: "authResult",
+        enableOnSuccess: false,
+        onSuccessSteps: [],
+        enableOnError: false,
+        onErrorSteps: [],
         ...defaults,
       };
 
