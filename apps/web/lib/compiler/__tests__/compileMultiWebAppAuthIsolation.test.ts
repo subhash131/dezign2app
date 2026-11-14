@@ -366,4 +366,104 @@ describe("Multi-WebApp Auth Isolation & Scoping", () => {
     const standaloneFiles = result.files.filter((f) => f.filename.startsWith("apps/unusedauth/"));
     expect(standaloneFiles).toHaveLength(0);
   });
+
+  it("should not import or check auth-token on public pages when Auth Node is not connected", () => {
+    const webApp: BackendNode = {
+      id: "node-app-public",
+      type: "webApp",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "Public Store",
+        appSlug: "public-store",
+      },
+    };
+
+    const serviceNode: BackendNode = {
+      id: "node-service-public",
+      type: "service",
+      position: { x: 400, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "PublicApi",
+        port: "8080",
+        endpoints: [],
+      },
+    };
+
+    const page: BackendNode = {
+      id: "node-page-public",
+      type: "webPage",
+      position: { x: 200, y: 0 },
+      fractionalIndex: "a2",
+      data: {
+        label: "/",
+        events: [
+          {
+            id: "evt-load-public",
+            name: "pageLoad",
+            event: "pageLoad",
+          },
+        ],
+      },
+    };
+
+    const disconnectedAuth: BackendNode = {
+      id: "node-auth-disconnected-2",
+      type: "auth",
+      position: { x: 600, y: 600 },
+      fractionalIndex: "a3",
+      data: {
+        label: "UnconnectedAuth",
+        framework: "better_auth",
+      },
+    };
+
+    const endpoints = [
+      {
+        id: "ep-public-items",
+        nodeId: "node-service-public",
+        name: "/api/items",
+        type: "GET" as const,
+      },
+    ];
+
+    const edges: BackendEdge[] = [
+      {
+        id: "edge-app-page",
+        source: "node-app-public",
+        sourceHandle: "public-in",
+        target: "node-page-public",
+        type: "connection",
+        fractionalIndex: "a0",
+      },
+      {
+        id: "edge-page-ep",
+        source: "node-page-public",
+        sourceHandle: "events-evt-load-public",
+        target: "node-service-public",
+        targetHandle: "endpoint-in-ep-public-items",
+        type: "connection",
+        fractionalIndex: "a1",
+      },
+    ];
+
+    const result = compileMonorepo(
+      [webApp, page, serviceNode, disconnectedAuth],
+      endpoints,
+      [],
+      edges,
+      [],
+      "PublicStoreProject",
+    );
+
+    const publicPage = result.files.find(
+      (f) => f.filename === "apps/public-store/app/(public)/page.tsx",
+    );
+    expect(publicPage).toBeDefined();
+    expect(publicPage?.content).not.toContain("auth-token");
+    expect(publicPage?.content).not.toContain("getAuthBearerToken");
+
+    expect(result.files.find((f) => f.filename === "apps/public-store/lib/auth-token.ts")).toBeUndefined();
+  });
 });

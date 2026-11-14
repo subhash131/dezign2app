@@ -77,9 +77,9 @@ export function resolveConnectedAuthNode(
   }
 
   // 3. Fallback only if there are NO explicit WebApp nodes on the canvas
-  // and there is a single auth node on the canvas
-  // Fallback: If only 1 auth node exists on the canvas, use it for the web app
-  if (authNodes.length === 1) {
+  // and webAppNode is undefined and there is a single auth node on the canvas
+  const hasExplicitWebAppNodes = allNodes.some((n) => n.type === "webApp");
+  if (!hasExplicitWebAppNodes && webAppNode === undefined && authNodes.length === 1) {
     return authNodes[0];
   }
 

@@ -98,6 +98,7 @@ describe("Auth Redirect Routes Compilation", () => {
       fractionalIndex: "a1",
       data: {
         label: "Web App",
+        authNodeId: "node-auth",
       },
     };
 
