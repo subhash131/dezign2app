@@ -1,6 +1,6 @@
 import { Endpoint, AnyMessagingResource, CompiledFile, ReusableFunction } from "@workspace/canvas/types";
 import { BackendNode, BackendEdge } from "@/types/canvas";
-import { toVarName, toPascalCase, deriveRouteFileName } from "../../utils";
+import { toVarName, toPascalCase, toPascalServiceName, deriveRouteFileName } from "../../utils";
 import { isRouteConnectedToAuthenticatedPage } from "../../traceResolver";
 import { generateDefaultRoute } from "./defaultRouteGenerator";
 import { generateEndpointRouteHandler } from "./endpointHandlerGenerator";
@@ -34,7 +34,7 @@ export function generateRoutes(
   const usedFileNames = new Set<string>();
 
   const nameForTypes = folderName || serviceName;
-  const pascalServiceName = toPascalCase(nameForTypes);
+  const pascalServiceName = toPascalServiceName(nameForTypes);
   const serviceFolderName = toVarName(nameForTypes);
 
   if (nodeEndpoints.length === 0) {
