@@ -696,14 +696,16 @@ describe("compileMonorepo Build Fixes & Consistency", () => {
       (f) => f.filename === "packages/types/src/conversations/index.ts",
     );
     expect(serviceBarrel).toBeDefined();
-    expect(serviceBarrel?.content).toContain('export * from "./getHealthCheck";');
+    expect(serviceBarrel?.content).toContain('from "./getHealthCheck";');
+    expect(serviceBarrel?.content).toContain("ConversationsGetHealthCheckResponse");
 
     // 3. Verify packages/types/src/index.ts exports conversations
     const mainBarrel = result.files.find(
       (f) => f.filename === "packages/types/src/index.ts",
     );
     expect(mainBarrel).toBeDefined();
-    expect(mainBarrel?.content).toContain('export * from "./conversations";');
+    expect(mainBarrel?.content).toContain('from "./conversations/getHealthCheck";');
+    expect(mainBarrel?.content).toContain("ConversationsGetHealthCheckResponse");
 
     // 4. Verify apps/conversations has getHealthCheck.ts route importing from @workspace/types
     const routeFile = result.files.find(
@@ -1064,6 +1066,116 @@ describe("compileMonorepo Build Fixes & Consistency", () => {
     expect(healthRouteFile).toBeDefined();
     expect(healthRouteFile?.content).toContain('message: "Successfully executed GET /health"');
     expect(healthRouteFile?.content).not.toContain("conversationList");
+  });
+
+  it("should synchronize PascalCase types between AI service and Next.js action without casing mismatch", () => {
+    const aiServiceNode: BackendNode = {
+      id: "srv-ai",
+      type: "service",
+      position: { x: 300, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "AI",
+        techStack: "express",
+        port: "8080",
+      },
+    };
+
+    const epCreateConversation: Endpoint & { nodeId: string } = {
+      id: "ep-create-conversation",
+      nodeId: "srv-ai",
+      name: "/create-conversation",
+      type: "POST",
+      summary: "Create conversation",
+      pathParams: [],
+      queryParams: [],
+      requestBody: {
+        id: "rb-1",
+        rawJson: JSON.stringify({ title: "My Chat" }),
+      },
+      responseBody: {
+        id: "res-1",
+        rawJson: JSON.stringify({ id: "conv_123", status: "created" }),
+      },
+    };
+
+    const webPageNode: BackendNode = {
+      id: "page-new",
+      type: "webPage",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "New Conversation",
+        path: "/new",
+        appSlug: "web",
+        sections: [
+          {
+            id: "sec-main",
+            name: "main-section",
+            renderMode: "server",
+            loadStrategy: "eager",
+            actions: [
+              {
+                id: "act-create-conversation",
+                name: "Create Conversation",
+                event: "click",
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const edge: BackendEdge = {
+      id: "edge-web-to-ai",
+      source: "page-new",
+      target: "srv-ai",
+      sourceHandle: "events-act-create-conversation",
+      targetHandle: "endpoint-in-ep-create-conversation",
+      type: "connection",
+      fractionalIndex: "a0",
+    };
+
+    const result = compileMonorepo(
+      [aiServiceNode, webPageNode],
+      [epCreateConversation],
+      [],
+      [edge],
+      [],
+      "AI Project",
+    );
+
+    // 1. Verify @workspace/types generates AiPostCreateConversation... types
+    const typesRouteFile = result.files.find((f) =>
+      f.filename.includes("packages/types/src/ai/postCreateConversation.ts"),
+    );
+    expect(typesRouteFile).toBeDefined();
+    expect(typesRouteFile?.content).toContain("export interface AiPostCreateConversationResponse");
+    expect(typesRouteFile?.content).toContain("export type AiPostCreateConversationParams");
+    expect(typesRouteFile?.content).toContain("export type AiPostCreateConversationQuery");
+    expect(typesRouteFile?.content).toContain("AiPostCreateConversationBody");
+
+    // 2. Verify apps/ai has postCreateConversation.ts importing AiPostCreateConversation...
+    const serviceRouteFile = result.files.find((f) =>
+      f.filename.includes("apps/ai/src/routes/postCreateConversation.ts"),
+    );
+    expect(serviceRouteFile).toBeDefined();
+    expect(serviceRouteFile?.content).toContain("AiPostCreateConversationParams");
+    expect(serviceRouteFile?.content).toContain("AiPostCreateConversationQuery");
+    expect(serviceRouteFile?.content).toContain("AiPostCreateConversationBody");
+    expect(serviceRouteFile?.content).toContain("AiPostCreateConversationResponse");
+
+    // 3. Verify apps/web (Next.js action) imports AiPostCreateConversation... and NOT AIPostCreateConversation...
+    const actionFile = result.files.find((f) =>
+      f.filename.includes("CreateConversationAction.tsx"),
+    );
+    expect(actionFile).toBeDefined();
+    expect(actionFile?.content).toContain("AiPostCreateConversationParams");
+    expect(actionFile?.content).toContain("AiPostCreateConversationQuery");
+    expect(actionFile?.content).toContain("AiPostCreateConversationBody");
+    expect(actionFile?.content).toContain("AiPostCreateConversationResponse");
+    expect(actionFile?.content).not.toContain("AIPostCreateConversationParams");
+    expect(actionFile?.content).not.toContain("AIPostCreateConversationBody");
   });
 });
 

@@ -6,6 +6,8 @@
 //          need to maintain a shared registry.
 // ═══════════════════════════════════════════════════════════════════════════
 
+import { toFolderName } from "../utils";
+
 /** Minimal shape stored in the shared folder-name registries. */
 export interface FolderEntry {
   id: string;
@@ -78,11 +80,7 @@ export function createFolderNameResolvers(): FolderNameResolvers {
    * suffix until the name is unique within `servicesInfo`.
    */
   function getUniqueServiceFolder(label: string, defaultName: string): string {
-    const base =
-      (label || defaultName)
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "") || defaultName;
+    const base = toFolderName(label || defaultName);
 
     let folderName = base;
     let counter = 1;
@@ -102,11 +100,7 @@ export function createFolderNameResolvers(): FolderNameResolvers {
    * until the name is unique within both webClientsInfo and servicesInfo.
    */
   function getUniqueWebAppFolder(slug: string, defaultName: string): string {
-    const base =
-      (slug || defaultName)
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "") || defaultName;
+    const base = toFolderName(slug || defaultName);
 
     let folderName = base;
     let counter = 1;

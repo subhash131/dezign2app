@@ -1,6 +1,6 @@
 import { BackendNode, BackendEdge, SimulationTestCase } from "@/types/canvas";
 import { Endpoint, AnyMessagingResource, UIEventItem, PageSection, CompiledFile } from "@workspace/canvas/types";
-import { toVarName, toPascalCase, deriveRouteFileName } from "../utils";
+import { toVarName, toPascalCase, toPascalServiceName, deriveRouteFileName } from "../utils";
 import { resolveLinkedEndpoint } from "../compileWebPageNode";
 
 /**
@@ -13,7 +13,7 @@ export function generateServiceUnitTests(
   testCases: SimulationTestCase[] = [],
 ): CompiledFile[] {
   const files: CompiledFile[] = [];
-  const pascalServiceName = toPascalCase(toVarName(serviceName));
+  const pascalServiceName = toPascalServiceName(serviceName);
 
   if (nodeEndpoints.length === 0) {
     files.push({
