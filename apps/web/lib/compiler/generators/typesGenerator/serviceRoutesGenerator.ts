@@ -4,6 +4,8 @@ import { syncEndpointRouteWithPathParams, parseEndpointRouteWithParams } from "@
 import {
   toVarName,
   toPascalCase,
+  toPascalServiceName,
+  toFolderName,
   deriveRouteFileName,
   normalizeEndpointRequestBody,
 } from "../../utils";
@@ -39,9 +41,9 @@ export function generateServiceRouteTypes(
     const srvInfo = servicesInfo?.find((s) => s.id === serviceNode.id);
     const rawServiceName =
       srvInfo?.name || serviceNode.data?.label || serviceNode.id || "Service";
-    const folderBase = srvInfo?.folderName || rawServiceName;
+    const folderBase = srvInfo?.folderName || toFolderName(rawServiceName);
     let serviceFolderName = toVarName(folderBase) || "service";
-    let pascalServiceName = toPascalCase(folderBase);
+    let pascalServiceName = toPascalServiceName(folderBase);
 
     let dupCount = 1;
     const baseFolderName = serviceFolderName;

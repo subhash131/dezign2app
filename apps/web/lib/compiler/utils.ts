@@ -219,9 +219,29 @@ export function toServiceBaseUrlEnvName(serviceName: string): { envVarName: stri
 export function toFolderName(label: string): string {
   if (!label) return "item";
   return label
+    .trim()
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1-$2")
+    .replace(/[\s_]+/g, "-")
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/[^a-z0-9-]+/g, "")
     .replace(/^-+|-+$/g, "") || "item";
+}
+
+/**
+ * Normalizes a service label or folder name into a PascalCase service type prefix.
+ * Ensures consistent casing across @workspace/types, microservice routes, unit tests,
+ * and web client action components.
+ * e.g.:
+ *  - "AI" -> "Ai"
+ *  - "AI Service" -> "AiService"
+ *  - "UserService" -> "UserService"
+ *  - "conversations" -> "Conversations"
+ */
+export function toPascalServiceName(serviceName: string): string {
+  if (!serviceName) return "Service";
+  const folder = toFolderName(serviceName);
+  return toPascalCase(folder);
 }
 
 export function toSingular(str: string): string {
