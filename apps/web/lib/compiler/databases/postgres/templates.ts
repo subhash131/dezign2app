@@ -168,7 +168,7 @@ export function generateConnectionFile(
     "}",
     "",
     "/**",
-    " * Coerces or maps any input string to a valid RFC 4122 v4 UUID.",
+    " * Coerces or maps an input string to a valid RFC 4122 v4 UUID.",
     " */",
     "export function toValidUuid(id?: string | null): string {",
     '  if (id && isUuid(id)) return id;',
@@ -287,6 +287,7 @@ export function generateLocalSyncFile(
   packageName: string,
   connEnvKey: string,
   tableDefinitionsJson: string,
+  seedStatementsJson: string = "[]",
 ): string {
   return [
     "/**",
@@ -387,6 +388,8 @@ export function generateLocalSyncFile(
     "}",
     "",
     `export const TABLE_DEFINITIONS: Record<string, TableDefinition> = ${tableDefinitionsJson};`,
+    "",
+    `export const PERSONA_SEED_STATEMENTS: string[] = ${seedStatementsJson};`,
     "",
     "export function mapToPgType(typeStr: string): string {",
     "  const t = typeStr.toLowerCase().trim();",
@@ -838,12 +841,48 @@ export function generateLocalSyncFile(
     "    }",
     "  }",
     "",
+    "  // Automatically seed test personas if configured",
+    "  if (PERSONA_SEED_STATEMENTS.length > 0) {",
+    "    try {",
+    "      await seedAllPersonas(customConnectionString);",
+    "    } catch {",
+    "      // Non-blocking if tables are not yet ready",
+    "    }",
+    "  }",
+    "",
     "  return {",
     "    total: tableNames.length,",
     "    synced,",
     "    errors,",
     "    results,",
     "  };",
+    "}",
+    "",
+    "export async function seedAllPersonas(customConnectionString?: string): Promise<{",
+    "  total: number;",
+    "  seeded: number;",
+    "  errors: number;",
+    "}> {",
+    "  if (PERSONA_SEED_STATEMENTS.length === 0) {",
+    "    return { total: 0, seeded: 0, errors: 0 };",
+    "  }",
+    "  const { client } = createClient(customConnectionString);",
+    "  let seeded = 0;",
+    "  let errors = 0;",
+    "  try {",
+    "    await client.connect();",
+    "    for (const stmt of PERSONA_SEED_STATEMENTS) {",
+    "      try {",
+    "        await client.query(stmt);",
+    "        seeded++;",
+    "      } catch {",
+    "        errors++;",
+    "      }",
+    "    }",
+    "    return { total: PERSONA_SEED_STATEMENTS.length, seeded, errors };",
+    "  } finally {",
+    "    await client.end().catch(() => {});",
+    "  }",
     "}",
   ].join("\n");
 }
@@ -946,6 +985,37 @@ export function generateSyncScript(packageName: string, connEnvKey: string): str
 }
 
 /**
+ * Generates the scripts/seed.ts file for executing persona seeding locally on the developer machine.
+ */
+export function generateSeedScript(packageName: string): string {
+  return [
+    "/**",
+    ` * ${packageName}/scripts/seed.ts — Local Database Seeding CLI`,
+    " *",
+    " * Inserts test personas and Better-Auth session fixtures into your PostgreSQL database.",
+    " * Run via 'pnpm db:seed'.",
+    " */",
+    'import { seedAllPersonas } from "../sync";',
+    "",
+    "async function main() {",
+    "  console.log('🌱 Seeding PostgreSQL database with test personas...');",
+    "  const res = await seedAllPersonas();",
+    "  console.log(`\\nSeeding finished: ${res.seeded}/${res.total} statement(s) executed.`);",
+    "  if (res.errors > 0) {",
+    "    console.log(`  ⚠️  ${res.errors} statement(s) encountered conflicts or errors.`);",
+    "  } else {",
+    "    console.log('  ✅ All test personas and session fixtures successfully seeded.');",
+    "  }",
+    "}",
+    "",
+    "main().catch((err) => {",
+    "  console.error('Seeding failed:', err);",
+    "  process.exit(1);",
+    "});",
+  ].join("\n");
+}
+
+/**
  * Generates the package.json for the compiled PostgreSQL package.
  */
 export function generatePackageJson(packageName: string): string {
@@ -972,6 +1042,7 @@ export function generatePackageJson(packageName: string): string {
         "db:check": "tsx scripts/validate.ts",
         "db:push": "tsx scripts/sync.ts",
         "db:sync": "tsx scripts/sync.ts",
+        "db:seed": "tsx scripts/seed.ts",
       },
       dependencies: {
         "@workspace/logger": "workspace:*",

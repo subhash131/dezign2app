@@ -22,11 +22,13 @@ import {
   generateLocalSyncFile,
   generateValidateScript,
   generateSyncScript,
+  generateSeedScript,
   generatePackageJson,
   generateTsConfig,
   generateIndexBarrel,
   generateHelpersBarrel,
 } from "./templates";
+import { generatePersonaSeedStatements } from "../shared/generatePersonaSeedSql";
 import {
   generateDatabaseConnectionTest,
   generateTableHelperTest,
@@ -254,12 +256,20 @@ export function compilePostgresDatabase(
   });
 
   const tableDefinitionsJson = JSON.stringify(compiledTableDefs, null, 2);
+  const seedStatements =
+    options.personas && options.personas.length > 0
+      ? generatePersonaSeedStatements(options.personas, "postgres", {
+          knownTableNames: createdTableNames,
+          knownTableColumns: BETTERAUTH_PG_SCHEMAS,
+        })
+      : [];
+  const seedStatementsJson = JSON.stringify(seedStatements, null, 2);
 
   // ── 5. sync.ts (Programmatic local validation & migration functions) ──────
   files.push({
     filename: "sync.ts",
     language: "typescript",
-    content: generateLocalSyncFile(packageName, connEnvKey, tableDefinitionsJson),
+    content: generateLocalSyncFile(packageName, connEnvKey, tableDefinitionsJson, seedStatementsJson),
   });
 
   // ── 6. scripts/validate.ts (CLI validation runner: pnpm db:validate) ──────
@@ -274,6 +284,13 @@ export function compilePostgresDatabase(
     filename: "scripts/sync.ts",
     language: "typescript",
     content: generateSyncScript(packageName, connEnvKey),
+  });
+
+  // ── 7.5 scripts/seed.ts (CLI seed runner: pnpm db:seed) ───────────────────
+  files.push({
+    filename: "scripts/seed.ts",
+    language: "typescript",
+    content: generateSeedScript(packageName),
   });
 
   // ── 8. Per-table helpers ──────────────────────────────────────────────────

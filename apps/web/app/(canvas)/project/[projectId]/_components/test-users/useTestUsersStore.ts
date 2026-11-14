@@ -41,17 +41,6 @@ export const DEFAULT_TEST_PERSONAS: TestUserPersona[] = [
           role: "admin",
         },
       },
-      {
-        id: DEFAULT_ADMIN_SESSION_ID,
-        databaseName: "Primary Database",
-        tableName: "session",
-        fields: {
-          id: DEFAULT_ADMIN_SESSION_ID,
-          userId: DEFAULT_ADMIN_USER_ID,
-          token: adminJwt,
-          expiresAt: "2099-01-01T00:00:00.000Z",
-        },
-      },
     ],
   },
 ];
@@ -274,9 +263,9 @@ export const useTestUsersStore = create<TestUsersState>()(
       resetToDefaults: () => set({ personas: DEFAULT_TEST_PERSONAS }),
     }),
     {
-      name: "dezign2app_test_user_personas_v5",
+      name: "dezign2app_test_user_personas_v6",
       storage: createJSONStorage(() => localStorage),
-      version: 5,
+      version: 6,
       onRehydrateStorage: () => (state) => {
         if (state && Array.isArray(state.personas) && state.personas.length > 0) {
           const hasInvalid = state.personas.some((p) => {

@@ -47,6 +47,8 @@ import {
   formatCurlExample,
   DEFAULT_AUTH_SECRET,
 } from "../test-users/tokenGenerator";
+import { seedTestUsers } from "@/lib/services/databaseService";
+import { PersonaRecordsEditor } from "../test-users/PersonaRecordsEditor";
 import { toast } from "sonner";
 import { cn } from "@workspace/ui/lib/utils";
 
@@ -85,7 +87,10 @@ export function TestUsersConfig({ id, nodeId }: TestUsersConfigProps) {
     () => allNodes.find((n) => n.type === "auth"),
     [allNodes],
   );
-  const authSecret = (authNode?.data?.secretKey as string) || DEFAULT_AUTH_SECRET;
+  const authSecret =
+    typeof authNode?.data?.secretKey === "string"
+      ? authNode.data.secretKey
+      : DEFAULT_AUTH_SECRET;
 
   // Check if any personas have legacy placeholder tokens
   const hasLegacyTokens = useMemo(
@@ -199,6 +204,8 @@ export function TestUsersConfig({ id, nodeId }: TestUsersConfigProps) {
   const [copiedRecordId, setCopiedRecordId] = useState<string | null>(null);
   const [copiedCurlId, setCopiedCurlId] = useState<string | null>(null);
   const [showGuide, setShowGuide] = useState(false);
+  const [isSeedingDb, setIsSeedingDb] = useState(false);
+  const [selectedDbId, setSelectedDbId] = useState<string>("");
 
   // Open Edit form
   const handleStartEdit = (persona: TestUserPersona) => {
@@ -241,17 +248,6 @@ export function TestUsersConfig({ id, nodeId }: TestUsersConfigProps) {
           name: "Test Persona",
           email: defaultEmail,
           role: defaultRole,
-        },
-      },
-      {
-        id: sessId,
-        databaseName: databaseNodes[0]?.name || "Primary Database (PostgreSQL)",
-        tableName: "session",
-        fields: {
-          id: sessId,
-          userId: userId,
-          token: realJwt,
-          expiresAt: "2099-01-01T00:00:00.000Z",
         },
       },
     ]);
@@ -421,8 +417,84 @@ export function TestUsersConfig({ id, nodeId }: TestUsersConfigProps) {
     });
   };
 
-  // Save Persona
-  const handleSaveForm = () => {
+  // Extract live connection config from canvas database nodes
+  const getDbNodeConnection = (dbId?: string) => {
+    const dbs = allNodes.filter((n) => n.type === "database");
+    const targetDb = dbId ? dbs.find((d) => d.id === dbId) : dbs[0];
+    const data = targetDb?.data;
+
+    const engine = (data?.dbEngine || "postgres").toLowerCase();
+    const connection = {
+      host: data?.host,
+      port: data?.port,
+      database: data?.database,
+      user: data?.user || data?.username,
+      password: data?.password,
+      connectionString: data?.connectionString || data?.connectionStringPooled,
+      connectionStringEnv: data?.connectionStringEnv,
+      connectionStringPooled: data?.connectionStringPooled,
+      connectionStringPooledEnv: data?.connectionStringPooledEnv,
+      sslMode: data?.sslMode,
+      provider: data?.provider,
+      dbFilePath: data?.dbFilePath,
+      dbFilePathEnv: data?.dbFilePathEnv,
+    };
+
+    return {
+      name: data?.label || "Primary Database",
+      engine,
+      connection,
+    };
+  };
+
+  // Seed / Insert test user fixtures directly into the connected live database
+  const handleSeedTestUsers = async (dbId?: string, singlePersona?: TestUserPersona) => {
+    const targetPersonas = singlePersona ? [singlePersona] : personas;
+    if (targetPersonas.length === 0) {
+      toast.error("No test personas available to insert into database");
+      return;
+    }
+
+    const effectiveDbId = dbId || selectedDbId || databaseNodes[0]?.id;
+    const { name: dbName, engine, connection } = getDbNodeConnection(effectiveDbId);
+
+    setIsSeedingDb(true);
+    const toastId = toast.loading(`Inserting test user(s) into ${dbName}...`);
+    try {
+      const res = await seedTestUsers({
+        engine,
+        connection,
+        personas: targetPersonas,
+      });
+
+      if (res.success) {
+        toast.success(
+          `Successfully inserted ${res.insertedRecords} test user record(s) into ${dbName}!`,
+          {
+            id: toastId,
+            description: singlePersona
+              ? `User & session fixtures for "${singlePersona.name}" are now in the database.`
+              : "User and session records have been inserted into the database. Foreign keys (fk_Conversations_created_by) and bearer tokens are now active.",
+          },
+        );
+      } else {
+        toast.error(`Failed to insert test users: ${res.error || "Unknown database error"}`, {
+          id: toastId,
+          description: "Check that your database is running and reachable.",
+        });
+      }
+    } catch (err) {
+      toast.error(
+        `Database insertion error: ${err instanceof Error ? err.message : String(err)}`,
+        { id: toastId },
+      );
+    } finally {
+      setIsSeedingDb(false);
+    }
+  };
+
+  // Save Persona (with optional direct DB insertion)
+  const handleSaveForm = async (alsoSeedDb: boolean = false) => {
     if (!formName.trim()) {
       toast.error("Please enter a Persona Name");
       return;
@@ -454,6 +526,10 @@ export function TestUsersConfig({ id, nodeId }: TestUsersConfigProps) {
     } else {
       addPersona(personaToSave);
       toast.success(`Created persona: ${personaToSave.name}`);
+    }
+
+    if (alsoSeedDb) {
+      await handleSeedTestUsers(undefined, personaToSave);
     }
 
     handleCancelForm();
@@ -547,21 +623,23 @@ export function TestUsersConfig({ id, nodeId }: TestUsersConfigProps) {
             <span>{showGuide ? "Hide Postman Instructions" : "How to test on Postman / cURL"}</span>
           </button>
 
-          {personas[0] && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => handleCopyHeader(personas[0]!)}
-              className="h-7 text-xs px-2.5 bg-background border-border gap-1.5 font-medium"
-            >
-              {copiedTokenId === personas[0]!.id ? (
-                <Check className="w-3 h-3 text-emerald-500" />
-              ) : (
-                <Copy className="w-3 h-3" />
-              )}
-              <span>Copy {personas[0]!.name} Bearer</span>
-            </Button>
-          )}
+          <div className="flex items-center gap-2 flex-wrap">
+            {personas[0] && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleCopyHeader(personas[0]!)}
+                className="h-7 text-xs px-2.5 bg-background border-border gap-1.5 font-medium"
+              >
+                {copiedTokenId === personas[0]!.id ? (
+                  <Check className="w-3 h-3 text-emerald-500" />
+                ) : (
+                  <Copy className="w-3 h-3" />
+                )}
+                <span>Copy {personas[0]!.name} Bearer</span>
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Collapsible Quick Guide */}
@@ -588,20 +666,40 @@ export function TestUsersConfig({ id, nodeId }: TestUsersConfigProps) {
 
       {/* Actions Toolbar */}
       {!showEditorForm && (
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-2">
           <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Configured Personas ({personas.length})
           </span>
 
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={handleStartCreate}
-            className="h-8 text-xs px-3 bg-secondary/80 hover:bg-secondary text-foreground border border-border/60 gap-1.5 font-medium cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Add Test User</span>
-          </Button>
+          <div className="flex items-center gap-2">
+            {databaseNodes.length > 1 && (
+              <Select
+                value={selectedDbId || databaseNodes[0]?.id}
+                onValueChange={setSelectedDbId}
+              >
+                <SelectTrigger className="h-8 text-xs font-mono bg-background w-[140px]">
+                  <SelectValue placeholder="Select Database" />
+                </SelectTrigger>
+                <SelectContent>
+                  {databaseNodes.map((db) => (
+                    <SelectItem key={db.id} value={db.id} className="text-xs">
+                      {db.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={handleStartCreate}
+              className="h-8 text-xs px-3 bg-secondary/80 hover:bg-secondary text-foreground border border-border/60 gap-1.5 font-medium cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Test User</span>
+            </Button>
+          </div>
         </div>
       )}
 
@@ -950,7 +1048,7 @@ export function TestUsersConfig({ id, nodeId }: TestUsersConfigProps) {
           </div>
 
           {/* Form Submit Footer */}
-          <div className="flex items-center justify-between pt-2 border-t border-border/50">
+          <div className="flex items-center justify-between pt-2 border-t border-border/50 gap-2">
             <Button
               variant="outline"
               size="sm"
@@ -959,14 +1057,31 @@ export function TestUsersConfig({ id, nodeId }: TestUsersConfigProps) {
             >
               Cancel
             </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={handleSaveForm}
-              className="h-8 text-xs px-4 bg-secondary text-foreground font-semibold border border-border/60"
-            >
-              Save Persona & Seed
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => handleSaveForm(false)}
+                className="h-8 text-xs px-3 bg-secondary text-foreground font-medium border border-border/60"
+              >
+                Save Only
+              </Button>
+              <Button
+                size="sm"
+                variant="default"
+                disabled={isSeedingDb}
+                onClick={() => handleSaveForm(true)}
+                className="h-8 text-xs px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold gap-1.5 shadow-xs cursor-pointer"
+                title="Save persona and immediately insert its fixtures into the live database"
+              >
+                {isSeedingDb ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Database className="w-3.5 h-3.5" />
+                )}
+                <span>Save & Insert into DB</span>
+              </Button>
+            </div>
           </div>
         </div>
       ) : (
@@ -1131,49 +1246,8 @@ export function TestUsersConfig({ id, nodeId }: TestUsersConfigProps) {
                   </div>
                 )}
 
-                {/* Seeded Records Summary */}
-                <div className="flex flex-col gap-2 pt-2 border-t border-border/40">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                    Seeded Table Records ({persona.records.length})
-                  </span>
-
-                  <div className="grid grid-cols-1 gap-2">
-                    {persona.records.map((rec, recIdx) => (
-                      <div
-                        key={recIdx}
-                        className="p-2 rounded bg-background/40 border border-border/40 flex flex-col gap-1 text-xs"
-                      >
-                        <div className="flex items-center justify-between text-[11px]">
-                          <div className="flex items-center gap-1.5 font-mono">
-                            <Table2 className="w-3 h-3 text-muted-foreground" />
-                            <span className="font-semibold text-foreground">{rec.tableName}</span>
-                            <span className="text-muted-foreground/60">•</span>
-                            <span className="text-muted-foreground">{rec.databaseName}</span>
-                          </div>
-
-                          <span className="font-mono text-[10px] text-muted-foreground bg-secondary/60 px-1.5 py-0.2 rounded border border-border/40">
-                            _id: {rec.id}
-                          </span>
-                        </div>
-
-                        {/* Preview fields */}
-                        <div className="flex items-center gap-2 flex-wrap text-[10.5px] font-mono text-muted-foreground pt-0.5">
-                          {Object.entries(rec.fields)
-                            .filter(([k]) => k !== "id")
-                            .slice(0, 4)
-                            .map(([k, v]) => (
-                              <span key={k} className="inline-flex items-center gap-1 bg-secondary/30 px-1.5 py-0.5 rounded">
-                                <span className="text-muted-foreground/70">{k}:</span>
-                                <span className="text-foreground font-medium truncate max-w-[120px]">
-                                  {String(v)}
-                                </span>
-                              </span>
-                            ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                {/* Interactive Seeded Table Records Editor (Select DB, Table & edit fields inline) */}
+                <PersonaRecordsEditor persona={persona} />
               </div>
             );
           })}

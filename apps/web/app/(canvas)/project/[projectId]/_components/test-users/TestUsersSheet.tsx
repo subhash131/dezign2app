@@ -22,10 +22,14 @@ import {
   ShieldCheck,
   Sparkles,
   Link2,
+  RefreshCw,
 } from "lucide-react";
+import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { seedTestUsers } from "@/lib/services/databaseService";
 import { useTestUsersStore } from "./useTestUsersStore";
 import { TestUserPersona } from "./types";
 import { TestUserPersonaEditor } from "./TestUserPersonaEditor";
+import { PersonaRecordsEditor } from "./PersonaRecordsEditor";
 import { formatBearerHeader, isRealJwt, inspectJwt } from "./tokenGenerator";
 import { toast } from "sonner";
 import { cn } from "@workspace/ui/lib/utils";
@@ -40,10 +44,76 @@ export function TestUsersSheet({ open, onOpenChange }: TestUsersSheetProps) {
   const addPersona = useTestUsersStore((s) => s.addPersona);
   const updatePersona = useTestUsersStore((s) => s.updatePersona);
   const deletePersona = useTestUsersStore((s) => s.deletePersona);
+  const allNodes = useBackendCanvasStore((s) => s.nodes);
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingPersona, setEditingPersona] = useState<TestUserPersona | null>(null);
   const [copiedTokenId, setCopiedTokenId] = useState<string | null>(null);
+  const [isSeedingDb, setIsSeedingDb] = useState(false);
+
+  const handleSeedTestUsers = async (singlePersona?: TestUserPersona) => {
+    const targetPersonas = singlePersona ? [singlePersona] : personas;
+    if (targetPersonas.length === 0) {
+      toast.error("No test personas available to insert into database");
+      return;
+    }
+
+    const dbs = allNodes.filter((n) => n.type === "database");
+    const targetDb = dbs[0] || null;
+    const dbData = targetDb?.data || {};
+
+    const engine = (dbData.dbEngine || "postgres").toLowerCase();
+    const connection = {
+      host: dbData.host,
+      port: dbData.port,
+      database: dbData.database,
+      user: dbData.user || dbData.username,
+      password: dbData.password,
+      connectionString: dbData.connectionString || dbData.connectionStringPooled,
+      connectionStringEnv: dbData.connectionStringEnv,
+      connectionStringPooled: dbData.connectionStringPooled,
+      connectionStringPooledEnv: dbData.connectionStringPooledEnv,
+      sslMode: dbData.sslMode,
+      provider: dbData.provider,
+      dbFilePath: dbData.dbFilePath,
+      dbFilePathEnv: dbData.dbFilePathEnv,
+    };
+    const dbName = targetDb?.data?.label || targetDb?.data?.name || "Primary Database";
+
+    setIsSeedingDb(true);
+    const toastId = toast.loading(`Inserting test user(s) into ${dbName}...`);
+    try {
+      const res = await seedTestUsers({
+        engine,
+        connection,
+        personas: targetPersonas,
+      });
+
+      if (res.success) {
+        toast.success(
+          `Successfully inserted ${res.insertedRecords} test user record(s) into ${dbName}!`,
+          {
+            id: toastId,
+            description: singlePersona
+              ? `User & session fixtures for "${singlePersona.name}" are now in the database.`
+              : "User and session records have been inserted into the database. Foreign keys and bearer tokens are now active.",
+          },
+        );
+      } else {
+        toast.error(`Failed to insert test users: ${res.error || "Unknown database error"}`, {
+          id: toastId,
+          description: "Check that your database is running and reachable.",
+        });
+      }
+    } catch (err) {
+      toast.error(
+        `Database insertion error: ${err instanceof Error ? err.message : String(err)}`,
+        { id: toastId },
+      );
+    } finally {
+      setIsSeedingDb(false);
+    }
+  };
 
   const handleCreateNew = () => {
     setEditingPersona(null);
@@ -112,15 +182,17 @@ export function TestUsersSheet({ open, onOpenChange }: TestUsersSheetProps) {
               Configured Personas
             </span>
 
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={handleCreateNew}
-              className="h-7 text-xs px-2.5 bg-secondary/80 hover:bg-secondary text-muted-foreground hover:text-foreground border border-border/50 gap-1.5 font-medium shadow-none cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Add Test User</span>
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={handleCreateNew}
+                className="h-7 text-xs px-2.5 bg-secondary/80 hover:bg-secondary text-muted-foreground hover:text-foreground border border-border/50 gap-1.5 font-medium shadow-none cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Test User</span>
+              </Button>
+            </div>
           </div>
 
           {/* List of Personas */}
@@ -201,49 +273,8 @@ export function TestUsersSheet({ open, onOpenChange }: TestUsersSheetProps) {
                     </div>
                   </div>
 
-                  {/* Seeded Records Summary */}
-                  <div className="flex flex-col gap-2 pt-2 border-t border-border/40">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                      Seeded Table Records ({persona.records.length})
-                    </span>
-
-                    <div className="grid grid-cols-1 gap-2">
-                      {persona.records.map((rec, recIdx) => (
-                        <div
-                          key={recIdx}
-                          className="p-2.5 rounded-lg bg-background/50 border border-border/50 flex flex-col gap-1 text-xs"
-                        >
-                          <div className="flex items-center justify-between text-[11px]">
-                            <div className="flex items-center gap-1.5 font-mono">
-                              <Table2 className="w-3 h-3 text-muted-foreground" />
-                              <span className="font-semibold text-foreground">{rec.tableName}</span>
-                              <span className="text-muted-foreground/60">•</span>
-                              <span className="text-muted-foreground">{rec.databaseName}</span>
-                            </div>
-
-                            <span className="font-mono text-[10px] text-muted-foreground bg-secondary/60 px-1.5 py-0.2 rounded border border-border/40">
-                              _id: {rec.id}
-                            </span>
-                          </div>
-
-                          {/* Field Values preview */}
-                          <div className="flex items-center gap-2 flex-wrap text-[11px] font-mono text-muted-foreground pt-0.5">
-                            {Object.entries(rec.fields)
-                              .filter(([k]) => k !== "id")
-                              .slice(0, 4)
-                              .map(([k, v]) => (
-                                <span key={k} className="inline-flex items-center gap-1 bg-secondary/30 px-1.5 py-0.5 rounded">
-                                  <span className="text-muted-foreground/70">{k}:</span>
-                                  <span className="text-foreground font-medium truncate max-w-[120px]">
-                                    {String(v)}
-                                  </span>
-                                </span>
-                              ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                  {/* Interactive Seeded Table Records Editor (Select DB, Table & edit fields inline) */}
+                  <PersonaRecordsEditor persona={persona} />
                 </div>
               );
             })}

@@ -84,10 +84,24 @@ export function generatePersonaSeedStatements(
     : null;
 
   for (const persona of personas) {
-    if (!persona.records || persona.records.length === 0) continue;
+    const effectiveRecords =
+      persona.records && persona.records.length > 0
+        ? persona.records
+        : [
+            {
+              id: persona.id,
+              tableName: "user",
+              fields: {
+                id: persona.id,
+                name: persona.name,
+                email: `${persona.name ? persona.name.toLowerCase().replace(/\s+/g, ".") : "user"}@example.com`,
+                role: (persona.name || "").toLowerCase().includes("admin") ? "admin" : "user",
+              },
+            },
+          ];
 
     // Find persona's user record id for session userId linkage
-    const userRec = persona.records.find((r) => {
+    const userRec = effectiveRecords.find((r) => {
       const l = (r.tableName || "").toLowerCase();
       return l === "user" || l === "users";
     });
@@ -100,7 +114,7 @@ export function generatePersonaSeedStatements(
         ? toValidUuid(String(rawPersonaUserId))
         : rawPersonaUserId;
 
-    for (const record of persona.records) {
+    for (const record of effectiveRecords) {
       const rawTableName = record.tableName || "";
       if (!rawTableName) continue;
 
@@ -163,17 +177,30 @@ export function generatePersonaSeedStatements(
         if (!fields.name && persona.name) {
           fields.name = persona.name;
         }
+        if (!fields.email) {
+          fields.email = `${(persona.name || "user").toLowerCase().replace(/\s+/g, ".")}@example.com`;
+        }
+        if (!fields.role) {
+          fields.role = (persona.name || "").toLowerCase().includes("admin") ? "admin" : "user";
+        }
         if (!fields.createdAt) {
           fields.createdAt = "2026-01-01T00:00:00.000Z";
         }
       }
 
-      // For any other record in Postgres, coerce foreign keys like userId to valid UUID if needed
+      // For any other record in Postgres, coerce foreign keys like userId/created_by to valid UUID if needed
       if (dialect === "postgres") {
         for (const [colKey, colVal] of Object.entries(fields)) {
           const lCol = colKey.toLowerCase();
           if (
-            (lCol === "userid" || lCol === "user_id" || lCol === "sessionid" || lCol === "session_id") &&
+            (lCol === "userid" ||
+              lCol === "user_id" ||
+              lCol === "sessionid" ||
+              lCol === "session_id" ||
+              lCol === "created_by" ||
+              lCol === "createdby" ||
+              lCol === "author_id" ||
+              lCol === "authorid") &&
             typeof colVal === "string" &&
             !isUuid(colVal)
           ) {
