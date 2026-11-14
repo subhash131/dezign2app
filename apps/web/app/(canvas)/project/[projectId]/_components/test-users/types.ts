@@ -1,3 +1,7 @@
+import { v4 as uuidv4, v5 as uuidv5, validate as uuidValidate } from "uuid";
+
+export const UUID_NAMESPACE = "6ba7b810-9dad-11d1-80b4-00c04fd430c8";
+
 export interface TableSeedRecord {
   id: string; // The generated record _id (e.g. "user_a1b2c3")
   databaseNodeId?: string;
@@ -17,25 +21,54 @@ export interface TestUserPersona {
   updatedAt?: string;
 }
 
-export function isUuid(id?: string | null): id is string {
+export function isUuid(id?: string | null): boolean {
   if (!id) return false;
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+  return uuidValidate(id);
 }
 
 export function generateUuid(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === "x" ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
+  return uuidv4();
 }
 
-export function generateRecordId(tableName: string): string {
-  const lower = (tableName || "").toLowerCase();
-  if (lower === "user" || lower === "session" || lower === "account" || lower === "verification") {
+/**
+ * Deterministically converts any string into a valid RFC4122 v5 UUID using uuid package.
+ * Preserves existing valid UUIDs.
+ */
+export function toValidUuid(str?: string | null): string {
+  if (!str) return uuidv4();
+  if (uuidValidate(str)) return str;
+  return uuidv5(str, UUID_NAMESPACE);
+}
+
+export const BETTER_AUTH_TABLES = new Set([
+  "user", "users",
+  "session", "sessions",
+  "account", "accounts",
+  "verification", "verifications",
+  "organization", "organizations",
+  "member", "members",
+  "team", "teams",
+  "teammember", "teammembers",
+  "invitation", "invitations",
+  "subscription", "subscriptions",
+  "twofactor", "twofactors",
+  "passkey", "passkeys",
+  "jwks",
+]);
+
+export function generateRecordId(
+  tableName: string,
+  dbEngine?: string,
+  isUuidPk?: boolean,
+): string {
+  const lower = (tableName || "").toLowerCase().trim();
+  const engine = (dbEngine || "").toLowerCase().trim();
+  if (
+    engine === "postgres" ||
+    engine === "postgresql" ||
+    isUuidPk === true ||
+    BETTER_AUTH_TABLES.has(lower)
+  ) {
     return generateUuid();
   }
   const prefix = (tableName || "rec").toLowerCase().replace(/[^a-z0-9]/g, "_").slice(0, 8);

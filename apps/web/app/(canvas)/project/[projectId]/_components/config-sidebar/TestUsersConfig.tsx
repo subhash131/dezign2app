@@ -36,6 +36,7 @@ import {
   TableSeedRecord,
   generateRecordId,
   generatePersonaId,
+  toValidUuid,
 } from "../test-users/types";
 import {
   generateRealBearerJwtSync,
@@ -265,8 +266,12 @@ export function TestUsersConfig({ id, nodeId }: TestUsersConfigProps) {
   // Generate a fresh Real JWT for the current form
   const handleGenerateFreshJwtForForm = () => {
     const userRec =
-      formRecords.find((r) => r.tableName.toLowerCase() === "user") || formRecords[0];
-    const userId = userRec?.fields?.id ? String(userRec.fields.id) : generateRecordId("user");
+      formRecords.find((r) => {
+        const l = (r.tableName || "").toLowerCase();
+        return l === "user" || l === "users";
+      }) || formRecords[0];
+    const rawUserId = userRec?.fields?.id ? String(userRec.fields.id) : undefined;
+    const userId = toValidUuid(rawUserId);
     const email = userRec?.fields?.email
       ? String(userRec.fields.email)
       : `${(formName || "user").toLowerCase().replace(/\s+/g, ".")}@example.com`;
@@ -275,8 +280,12 @@ export function TestUsersConfig({ id, nodeId }: TestUsersConfigProps) {
       : formName.toLowerCase().includes("admin")
       ? "admin"
       : "user";
-    const sessRec = formRecords.find((r) => r.tableName.toLowerCase() === "session");
-    const sessId = sessRec?.fields?.id ? String(sessRec.fields.id) : `sess_${userId}`;
+    const sessRec = formRecords.find((r) => {
+      const l = (r.tableName || "").toLowerCase();
+      return l === "session" || l === "sessions";
+    });
+    const rawSessId = sessRec?.fields?.id ? String(sessRec.fields.id) : undefined;
+    const sessId = toValidUuid(rawSessId);
 
     const freshJwt = generateRealBearerJwtSync({
       userId,

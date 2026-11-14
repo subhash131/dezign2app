@@ -38,6 +38,7 @@ import {
   TableSeedRecord,
   generateRecordId,
   generatePersonaId,
+  toValidUuid,
 } from "./types";
 import {
   generateRealBearerJwtSync,
@@ -407,8 +408,12 @@ export function TestUserPersonaEditor({
                     size="sm"
                     variant="outline"
                     onClick={() => {
-                      const userRec = records.find((r) => r.tableName.toLowerCase() === "user") || records[0];
-                      const userId = userRec?.fields?.id ? String(userRec.fields.id) : generateRecordId("user");
+                      const userRec = records.find((r) => {
+                        const l = (r.tableName || "").toLowerCase();
+                        return l === "user" || l === "users";
+                      }) || records[0];
+                      const rawUserId = userRec?.fields?.id ? String(userRec.fields.id) : undefined;
+                      const userId = toValidUuid(rawUserId);
                       const email = userRec?.fields?.email
                         ? String(userRec.fields.email)
                         : `${(personaName || "user").toLowerCase().replace(/\s+/g, ".")}@example.com`;
@@ -417,8 +422,12 @@ export function TestUserPersonaEditor({
                         : personaName.toLowerCase().includes("admin")
                         ? "admin"
                         : "user";
-                      const sessRec = records.find((r) => r.tableName.toLowerCase() === "session");
-                      const sessId = sessRec?.fields?.id ? String(sessRec.fields.id) : `sess_${userId}`;
+                      const sessRec = records.find((r) => {
+                        const l = (r.tableName || "").toLowerCase();
+                        return l === "session" || l === "sessions";
+                      });
+                      const rawSessId = sessRec?.fields?.id ? String(sessRec.fields.id) : undefined;
+                      const sessId = toValidUuid(rawSessId);
 
                       const freshJwt = generateRealBearerJwtSync({
                         userId,

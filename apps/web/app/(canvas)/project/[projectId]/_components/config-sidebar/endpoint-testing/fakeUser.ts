@@ -1,6 +1,10 @@
 "use client";
 
-import { useTestUsersStore, DEFAULT_TEST_PERSONAS } from "../../test-users/useTestUsersStore";
+import {
+  useTestUsersStore,
+  DEFAULT_TEST_PERSONAS,
+  ensureRealPersonaToken,
+} from "../../test-users/useTestUsersStore";
 import { TestUserPersona } from "../../test-users/types";
 
 export interface FakeUserProfile {
@@ -21,7 +25,8 @@ export function useActiveFakeUsers(): FakeUserProfile[] {
   const personas = useTestUsersStore((s) => s.personas);
   const effectivePersonas = personas.length > 0 ? personas : DEFAULT_TEST_PERSONAS;
 
-  const userProfiles: FakeUserProfile[] = effectivePersonas.map((p) => {
+  const userProfiles: FakeUserProfile[] = effectivePersonas.map((rawP) => {
+    const p = ensureRealPersonaToken(rawP);
     const userRecord = p.records.find((r) => r.tableName.toLowerCase() === "user") || p.records[0];
     const rawEmail = userRecord?.fields?.email;
     const email: string =
@@ -42,7 +47,7 @@ export function useActiveFakeUsers(): FakeUserProfile[] {
       name: p.name,
       email,
       role,
-      token: p.activeAuthToken || `token_${p.id}`,
+      token: p.activeAuthToken || "",
       description: p.description || `${p.name} (Role: ${role})`,
       badge: role.toUpperCase(),
     };
