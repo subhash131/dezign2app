@@ -457,10 +457,38 @@ export const SignInView = () => {
     }
   };
 
-  // Desktop Application View:
-  // In desktop mode, users can sign in directly using email & password, or use
-  // browser-based authentication (OAuth / web session -> deep link ticket exchange).
-  if (mounted && inDesktop) {
+  if (!mounted) {
+    return (
+      <div className="flex items-center justify-center p-4 min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  /**
+   * =========================================================================================
+   * CRITICAL ARCHITECTURE RULE - DESKTOP AUTHENTICATION (DO NOT MODIFY / DO NOT BYPASS):
+   * =========================================================================================
+   * NEVER add direct in-app login methods (such as email/password forms, embedded social OAuth,
+   * SMS/OTP inputs, or third-party auth widgets) to the desktop application.
+   *
+   * Desktop authentication MUST exclusively and strictly occur via the system web browser:
+   * 1. User clicks "Continue with Web Browser" (or pastes the signed ticket code from browser).
+   * 2. Electron opens the system's default browser to authenticate on dezign2app.com.
+   * 3. dezign2app.com issues a signed, single-use HMAC ticket and redirects to dezign2app://.
+   * 4. Electron catches the deep link and exchanges the ticket for the authenticated session token.
+   *
+   * WHY DIRECT/IN-APP LOGIN METHODS MUST NEVER BE ADDED TO DESKTOP:
+   * - Security & BCP (RFC 8252): Embedded browser views/Chromium shells must never handle raw
+   *   user credentials or OAuth flows directly due to risks of credential interception, lack of
+   *   hardware passkey/FIDO2 support, and strict OAuth provider policies against embedded webviews.
+   * - Identity & State Isolation: The web browser is the single source of truth for user identity,
+   *   social logins (Google, GitHub), multi-factor authentication, and password management.
+   * - Tamper Resistance: Ticket-based deep linking guarantees desktop sessions are tied to a verified
+   *   web login without storing or prompting for passwords inside the Electron environment.
+   * =========================================================================================
+   */
+  if (inDesktop) {
     return (
       <div className="flex w-full items-center justify-center p-4 min-h-[400px]">
         <Card className="w-full max-w-md border-border bg-card text-card-foreground shadow-2xl">
@@ -483,7 +511,7 @@ export const SignInView = () => {
             </CardDescription>
           </CardHeader>
 
-          <CardContent className="space-y-4 pt-0 pb-4">
+          <CardContent className="space-y-4 pt-0 pb-6">
             {/* Primary Browser Sign-In */}
             <Button
               onClick={handleBrowserLogin}
@@ -508,6 +536,12 @@ export const SignInView = () => {
                 </>
               )}
             </Button>
+
+            {error && (
+              <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2.5 text-xs text-destructive text-center">
+                {error}
+              </div>
+            )}
 
             {waitingForAuth && !isExchanging && (
               <form
@@ -535,89 +569,7 @@ export const SignInView = () => {
                 </div>
               </form>
             )}
-
-            <div className="relative my-3">
-              <div className="absolute inset-0 flex items-center">
-                <Separator />
-              </div>
-              <div className="relative flex justify-center text-[10px] uppercase">
-                <span className="bg-card px-2 text-muted-foreground font-medium">
-                  Or sign in directly
-                </span>
-              </div>
-            </div>
-
-            {/* Direct In-App Email & Password Sign In */}
-            <form onSubmit={handleEmailSignIn} className="space-y-3 text-left">
-              <div className="space-y-1.5">
-                <Label htmlFor="email" className="text-xs font-medium">
-                  Email
-                </Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="name@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  disabled={loading || isExchanging}
-                  className="h-9 text-xs"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="password" className="text-xs font-medium">
-                    Password
-                  </Label>
-                </div>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  disabled={loading || isExchanging}
-                  className="h-9 text-xs"
-                />
-              </div>
-
-              <Button
-                type="submit"
-                size="sm"
-                disabled={loading || isExchanging}
-                className="w-full gap-2 text-xs font-medium"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Signing In...
-                  </>
-                ) : (
-                  "Sign In with Password"
-                )}
-              </Button>
-            </form>
-
-            {error && (
-              <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2.5 text-xs text-destructive text-center">
-                {error}
-              </div>
-            )}
           </CardContent>
-
-          <CardFooter className="flex flex-col gap-2 pt-0 pb-6 text-center text-xs text-muted-foreground">
-            <div>
-              Don&apos;t have an account?{" "}
-              <Link
-                href="/sign-up"
-                className="font-medium text-primary hover:underline"
-              >
-                Sign up
-              </Link>
-            </div>
-          </CardFooter>
         </Card>
       </div>
     );

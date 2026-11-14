@@ -43,7 +43,7 @@ describe("Authentication Views", () => {
       expect(screen.getByRole("button", { name: /Sign In/i })).toBeInTheDocument();
     });
 
-    it("should render both browser auth and direct login options in desktop mode", () => {
+    it("should render browser auth and not show email signin in desktop mode", () => {
       // Mock window.electronAPI to simulate desktop app
       (window as any).electronAPI = {
         auth: {
@@ -57,11 +57,11 @@ describe("Authentication Views", () => {
       expect(screen.getByText(/Sign In to Dezign2App/i)).toBeInTheDocument();
       expect(screen.getByRole("button", { name: /Continue with Web Browser/i })).toBeInTheDocument();
 
-      // Ensure direct login inputs/options ARE rendered in desktop mode
-      expect(screen.getByLabelText(/^Email$/i)).toBeInTheDocument();
-      expect(screen.getByLabelText(/^Password$/i)).toBeInTheDocument();
-      expect(screen.getByText(/Or sign in directly/i)).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: /Sign In with Password/i })).toBeInTheDocument();
+      // Ensure direct email signin inputs/options are NOT rendered in desktop mode
+      expect(screen.queryByLabelText(/^Email$/i)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/^Password$/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Or sign in directly/i)).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /Sign In with Password/i })).not.toBeInTheDocument();
 
       // Cleanup
       delete (window as any).electronAPI;
@@ -69,13 +69,32 @@ describe("Authentication Views", () => {
   });
 
   describe("SignUpView", () => {
-    it("should render the Sign Up card and fields", () => {
+    it("should render the Sign Up card and fields in web mode", () => {
       render(<SignUpView />);
       expect(screen.getByText(/Create your account/i)).toBeInTheDocument();
       expect(screen.getByLabelText(/Full Name/i)).toBeInTheDocument();
       expect(screen.getByLabelText(/Email/i)).toBeInTheDocument();
       expect(screen.getByLabelText(/Password/i)).toBeInTheDocument();
       expect(screen.getByRole("button", { name: /Create Account/i })).toBeInTheDocument();
+    });
+
+    it("should delegate to desktop browser auth in desktop mode without email sign up fields", () => {
+      // Mock window.electronAPI to simulate desktop app
+      (window as any).electronAPI = {
+        auth: {
+          openBrowserLogin: vi.fn(),
+          onAuthCallback: vi.fn(() => vi.fn()),
+        },
+      };
+
+      render(<SignUpView />);
+      expect(screen.getByText(/Desktop Workspace/i)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Continue with Web Browser/i })).toBeInTheDocument();
+      expect(screen.queryByLabelText(/^Full Name$/i)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/^Email$/i)).not.toBeInTheDocument();
+
+      // Cleanup
+      delete (window as any).electronAPI;
     });
   });
 });
