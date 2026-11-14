@@ -25,7 +25,7 @@ import {
 import { isAuthPage, isAuthLoginPage, isAuthRegisterPage } from "../../../compileAuth";
 import { typeStrToTsAndZod } from "../../../generators/schemaToTypeScript";
 import { generateApiClientFile } from "./apiClientTemplate";
-import { deriveRouteFileName, toPascalCase } from "../../../utils";
+import { deriveRouteFileName, toPascalCase, toVarName } from "../../../utils";
 
 export interface GeneratePageAndComponentFilesParams {
   webClientNodes: BackendNode[];
@@ -304,7 +304,10 @@ export function generatePageAndComponentFiles({
           0,
           effectiveServiceName,
         );
-        const pascalName = `${toPascalCase(effectiveServiceName)}${toPascalCase(routeFileName)}`;
+        // Normalize service name through toVarName first to match how serviceRoutesGenerator derives
+        // pascalServiceName from folderName (e.g. "AI Service" -> "aiService" -> "AiService", not "AIService")
+        const normalizedServiceName = toVarName(effectiveServiceName);
+        const pascalName = `${toPascalCase(normalizedServiceName)}${toPascalCase(routeFileName)}`;
         pageLoadDataType = `${pascalName}Response | null`;
         pageLoadDataTypeDecl = `import type { ${pascalName}Response } from "@workspace/types";`;
       } else {
