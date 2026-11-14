@@ -25,7 +25,7 @@ import {
 import { isAuthPage, isAuthLoginPage, isAuthRegisterPage } from "../../../compileAuth";
 import { typeStrToTsAndZod } from "../../../generators/schemaToTypeScript";
 import { generateApiClientFile } from "./apiClientTemplate";
-import { deriveRouteFileName, toPascalCase } from "../../../utils";
+import { deriveRouteFileName, toPascalCase, toVarName } from "../../../utils";
 
 export interface GeneratePageAndComponentFilesParams {
   webClientNodes: BackendNode[];
@@ -181,7 +181,6 @@ export function generatePageAndComponentFiles({
       pagesInfo.some((p) => p.accessType !== "public") ||
       webClientNodes.some(
         (n) =>
-          (n.data?.authNodeId && allNodes.some((an) => an.id === n.data.authNodeId && an.type === "auth")) ||
           n.data?.requireAuth === true ||
           (n.data?.useZoneDefault === false && n.data?.protectionOverride?.accessType === "protected"),
       ),
@@ -199,11 +198,7 @@ export function generatePageAndComponentFiles({
       hasExplicitRoot = true;
     }
 
-    const effectiveAuthNode =
-      authNode ||
-      (node.data?.authNodeId
-        ? allNodes.find((n) => n.id === node.data.authNodeId && n.type === "auth")
-        : undefined);
+    const effectiveAuthNode = authNode;
 
     const isPageProtected =
       pageMeta.accessType !== "public" ||
@@ -304,7 +299,10 @@ export function generatePageAndComponentFiles({
           0,
           effectiveServiceName,
         );
-        const pascalName = `${toPascalCase(effectiveServiceName)}${toPascalCase(routeFileName)}`;
+        // Normalize service name through toVarName first to match how serviceRoutesGenerator derives
+        // pascalServiceName from folderName (e.g. "AI Service" -> "aiService" -> "AiService", not "AIService")
+        const normalizedServiceName = toVarName(effectiveServiceName);
+        const pascalName = `${toPascalCase(normalizedServiceName)}${toPascalCase(routeFileName)}`;
         pageLoadDataType = `${pascalName}Response | null`;
         pageLoadDataTypeDecl = `import type { ${pascalName}Response } from "@workspace/types";`;
       } else {
@@ -406,7 +404,7 @@ export function generatePageAndComponentFiles({
         evtSuffixMap.set(evt.id, suffix);
 
         if (link) {
-          const requireAuth = (Boolean(effectiveAuthNode) || isPageProtected) && link.requireAuth !== false;
+          const requireAuth = Boolean(effectiveAuthNode) && (isPageProtected ? link.requireAuth !== false : Boolean(link.requireAuth));
           const headersEntries = Object.entries(nodeHeaders)
             .map(([k, v]) => `"${k}": "${v}",`)
             .join("\n          ");

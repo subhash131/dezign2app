@@ -13,7 +13,7 @@ export function generateServiceUnitTests(
   testCases: SimulationTestCase[] = [],
 ): CompiledFile[] {
   const files: CompiledFile[] = [];
-  const pascalServiceName = toPascalCase(serviceName);
+  const pascalServiceName = toPascalCase(toVarName(serviceName));
 
   if (nodeEndpoints.length === 0) {
     files.push({

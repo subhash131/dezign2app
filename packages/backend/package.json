@@ -23,8 +23,8 @@
     "@workspace/canvas": "workspace:*",
     "@workspace/logger": "workspace:*",
     "better-auth": "1.6.15",
-    "convex": "^1.31.6",
-    "convex-helpers": "^0.1.120",
+    "convex": "^1.50.0",
+    "convex-helpers": "^0.1.135",
     "cron-parser": "^5.5.0",
     "uuid": "^9.0.1",
     "zod": "^3.25.76"

@@ -173,6 +173,20 @@ export const SignUpView = () => {
     }
   };
 
+  if (!mounted) {
+    return (
+      <div className="flex items-center justify-center p-4 min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // CRITICAL: Desktop app MUST NOT provide in-app signup/login forms.
+  // Delegate strictly to SignInView which routes through the external system web browser.
+  if (inDesktop) {
+    return <SignInView />;
+  }
+
   return (
     <div className="flex w-full items-center justify-center p-4">
       <Card className="w-full max-w-md border-border bg-card text-card-foreground shadow-2xl">

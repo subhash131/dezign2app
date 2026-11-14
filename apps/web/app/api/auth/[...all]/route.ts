@@ -69,10 +69,13 @@ async function handleProxy(req: NextRequest) {
     }
   }
 
+  const isLocalHost =
+    requestUrl.hostname === "127.0.0.1" ||
+    requestUrl.hostname === "localhost";
+
   // Handle host forwarding for local loopback (Electron desktop)
   const isLoopback =
-    requestUrl.hostname === "127.0.0.1" ||
-    requestUrl.hostname === "localhost" ||
+    isLocalHost ||
     req.headers.get("x-electron-app") === "1";
 
   log("[auth proxy]  isLoopback?       :", isLoopback);
@@ -141,7 +144,19 @@ async function handleProxy(req: NextRequest) {
   if (setCookieHeaders.length > 0) {
     response.headers.delete("set-cookie");
     for (const cookieStr of setCookieHeaders) {
-      response.headers.append("set-cookie", cookieStr);
+      let cookie = cookieStr;
+      if (isLocalHost) {
+        // Strip production domain attribute so localhost / 127.0.0.1 accepts the cookie
+        cookie = cookie.replace(/;\s*Domain=[^;]+/gi, "");
+        // Strip Secure flag on plain HTTP dev so browsers don't reject cookies
+        if (requestUrl.protocol === "http:") {
+          cookie = cookie.replace(/;\s*Secure/gi, "");
+          if (cookie.includes("__Secure-")) {
+            cookie = cookie.replace(/__Secure-/g, "");
+          }
+        }
+      }
+      response.headers.append("set-cookie", cookie);
       if (cookieStr.includes("__Secure-better-auth.session_token=")) {
         const plainCookie = cookieStr
           .replace("__Secure-better-auth.session_token=", "better-auth.session_token=")

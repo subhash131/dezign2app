@@ -230,7 +230,8 @@ export function generatePageCode(
   if (hasRealtime || hasLogsSection) {
     uiImports.push(`import { Badge } from "@workspace/ui/components/badge";`);
   }
-  if (hasAuth && (hasPageLoad || hasWs || hasWebRtc)) {
+  const pageLoadNeedsAuth = pageLoadFetchStatements.includes("getAuthBearerToken");
+  if (hasAuth && (pageLoadNeedsAuth || hasWs || hasWebRtc)) {
     uiImports.push(`import { getAuthBearerToken } from "@/lib/auth-token";`);
   }
 
