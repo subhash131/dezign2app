@@ -125,6 +125,7 @@ export interface SeedTestUsersResult {
   success: boolean;
   insertedRecords: number;
   statements: string[];
+  errors?: string[];
   error?: string;
 }
 
@@ -902,20 +903,44 @@ export async function seedTestUsersAction(
         `);
 
         const statements = generatePersonaSeedStatements(personas, "postgres");
+        if (statements.length === 0) {
+          return {
+            success: false,
+            insertedRecords: 0,
+            statements: [],
+            error: "No SQL statements could be generated for the specified records. Check that tableName and fields are filled in.",
+          };
+        }
+
         let inserted = 0;
+        const stmtErrors: string[] = [];
         for (const stmt of statements) {
           try {
             await client.query(stmt);
             inserted++;
           } catch (stmtErr) {
-            console.warn("[seedTestUsersAction] Postgres seed notice:", stmtErr);
+            const msg = stmtErr instanceof Error ? stmtErr.message : String(stmtErr);
+            console.error("[seedTestUsersAction] Postgres seed error:", msg, "\nQuery:", stmt);
+            stmtErrors.push(msg);
           }
         }
 
+        if (stmtErrors.length > 0 && inserted === 0) {
+          return {
+            success: false,
+            insertedRecords: 0,
+            statements,
+            errors: stmtErrors,
+            error: stmtErrors.join("; "),
+          };
+        }
+
         return {
-          success: true,
+          success: stmtErrors.length === 0,
           insertedRecords: inserted,
           statements,
+          errors: stmtErrors.length > 0 ? stmtErrors : undefined,
+          error: stmtErrors.length > 0 ? `Partial error (${inserted}/${statements.length} inserted): ${stmtErrors.join("; ")}` : undefined,
         };
       } finally {
         await client.end().catch(() => {});
@@ -962,20 +987,44 @@ export async function seedTestUsersAction(
         `);
 
         const statements = generatePersonaSeedStatements(personas, "sqlite");
+        if (statements.length === 0) {
+          return {
+            success: false,
+            insertedRecords: 0,
+            statements: [],
+            error: "No SQL statements could be generated for the specified records. Check that tableName and fields are filled in.",
+          };
+        }
+
         let inserted = 0;
+        const stmtErrors: string[] = [];
         for (const stmt of statements) {
           try {
             db.exec(stmt);
             inserted++;
           } catch (stmtErr) {
-            console.warn("[seedTestUsersAction] SQLite seed notice:", stmtErr);
+            const msg = stmtErr instanceof Error ? stmtErr.message : String(stmtErr);
+            console.error("[seedTestUsersAction] SQLite seed error:", msg, "\nQuery:", stmt);
+            stmtErrors.push(msg);
           }
         }
 
+        if (stmtErrors.length > 0 && inserted === 0) {
+          return {
+            success: false,
+            insertedRecords: 0,
+            statements,
+            errors: stmtErrors,
+            error: stmtErrors.join("; "),
+          };
+        }
+
         return {
-          success: true,
+          success: stmtErrors.length === 0,
           insertedRecords: inserted,
           statements,
+          errors: stmtErrors.length > 0 ? stmtErrors : undefined,
+          error: stmtErrors.length > 0 ? `Partial error (${inserted}/${statements.length} inserted): ${stmtErrors.join("; ")}` : undefined,
         };
       } finally {
         db.close();
@@ -995,6 +1044,7 @@ export async function seedTestUsersAction(
       success: false,
       insertedRecords: 0,
       statements: [],
+      errors: [errorMsg],
       error: errorMsg,
     };
   }

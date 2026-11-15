@@ -3,6 +3,7 @@ import {
   toPascalCase,
   toSingular,
   toPlural,
+  toVarName,
 } from "../../utils";
 
 export function generateEntitiesModule(
@@ -43,7 +44,9 @@ export function generateEntitiesModule(
         code += `export interface ${pascal} {\n  id: string;\n}\n`;
       }
     } else {
-      const fieldLines = cols.map((col) => {
+      const seenProps = new Set<string>();
+      const fieldLines: string[] = [];
+      cols.forEach((col) => {
         const fieldName = col.name || "field";
         const isReq =
           col.isPrimaryKey ||
@@ -72,7 +75,15 @@ export function generateEntitiesModule(
           default:
             tsType = "string";
         }
-        return `  ${fieldName}${isReq ? "" : "?"}: ${tsType};`;
+        if (!seenProps.has(fieldName)) {
+          fieldLines.push(`  ${fieldName}${isReq ? "" : "?"}: ${tsType};`);
+          seenProps.add(fieldName);
+        }
+        const camel = toVarName(fieldName);
+        if (camel !== fieldName && !seenProps.has(camel)) {
+          fieldLines.push(`  ${camel}?: ${tsType};`);
+          seenProps.add(camel);
+        }
       });
 
       if (isJsonArray) {
@@ -120,7 +131,9 @@ export function generateEntitiesModule(
           (c.name || "").toLowerCase() === "id"
         ),
     );
-    const writableLines = writableCols.map((c) => {
+    const seenWritableProps = new Set<string>();
+    const writableLines: string[] = [];
+    writableCols.forEach((c) => {
       const fieldName = c.name || "field";
       const isReq = c.isNotNull || c.required;
       let tsType = "string";
@@ -144,7 +157,15 @@ export function generateEntitiesModule(
         default:
           tsType = "string";
       }
-      return `  ${fieldName}${isReq ? "" : "?"}: ${tsType};`;
+      if (!seenWritableProps.has(fieldName)) {
+        writableLines.push(`  ${fieldName}${isReq ? "" : "?"}: ${tsType};`);
+        seenWritableProps.add(fieldName);
+      }
+      const camel = toVarName(fieldName);
+      if (camel !== fieldName && !seenWritableProps.has(camel)) {
+        writableLines.push(`  ${camel}?: ${tsType};`);
+        seenWritableProps.add(camel);
+      }
     });
 
     const createFields = [`  id?: string;`, ...writableLines].join("\n");

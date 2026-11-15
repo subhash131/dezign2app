@@ -46,34 +46,48 @@ export function generatePostgresDbOperations(
     .map((c) => {
       if (c.isPrimaryKey) return "_id";
       const v = toVarName(c.name);
+      const colName = c.name;
+      const valExpr = v !== colName ? `(${v} ?? ${colName})` : v;
       if (isCreatedAt(c.name) || isUpdatedAt(c.name)) {
-        return `${v} || new Date().toISOString()`;
+        return `${valExpr} || new Date().toISOString()`;
       }
       const isColUuid = (c.type || "").toLowerCase().includes("uuid");
       if (isColUuid) {
-        return `(${v} && isUuid(${v})) ? ${v} : (${v} ? toValidUuid(${v}) : null)`;
+        return `(${valExpr} && isUuid(${valExpr})) ? ${valExpr} : (${valExpr} ? toValidUuid(${valExpr}) : null)`;
       }
-      return `${v} ?? null`;
+      return `${valExpr} ?? null`;
     })
     .join(", ");
 
-  const destructuredFields = insertColList.map((c) => toVarName(c.name)).join(", ") || pkVarName;
+  const destructuredFields = insertColList
+    .flatMap((c) => {
+      const v = toVarName(c.name);
+      return v !== c.name ? [v, c.name] : [v];
+    })
+    .join(", ") || pkVarName;
   const createDestructuredParam = `{ ${destructuredFields} }`;
 
   const updateCols = writableCols.filter((c) => !isCreatedAt(c.name));
   const setClauses = updateCols.map((c, i) => `"${c.name}" = $${i + 2}`).join(", ");
-  const updateDestructured = updateCols.map((c) => toVarName(c.name)).join(", ");
+  const updateDestructured = updateCols
+    .flatMap((c) => {
+      const v = toVarName(c.name);
+      return v !== c.name ? [v, c.name] : [v];
+    })
+    .join(", ");
   const updateArgVals = updateCols
     .map((c) => {
       const v = toVarName(c.name);
+      const colName = c.name;
+      const valExpr = v !== colName ? `(${v} ?? ${colName})` : v;
       if (isUpdatedAt(c.name)) {
-        return `${v} || new Date().toISOString()`;
+        return `${valExpr} || new Date().toISOString()`;
       }
       const isColUuid = (c.type || "").toLowerCase().includes("uuid");
       if (isColUuid) {
-        return `(${v} && isUuid(${v})) ? ${v} : (${v} ? toValidUuid(${v}) : null)`;
+        return `(${valExpr} && isUuid(${valExpr})) ? ${valExpr} : (${valExpr} ? toValidUuid(${valExpr}) : null)`;
       }
-      return `${v} ?? null`;
+      return `${valExpr} ?? null`;
     })
     .join(", ");
 

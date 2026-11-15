@@ -114,4 +114,33 @@ describe("seedTestUsersAction", () => {
     expect(isUuid(expectedUuid)).toBe(true);
     expect(expectedUuid).toBe("de7a57c3-232e-56bb-8db4-839a1e491c68");
   });
+
+  it("should capture and return errors when table record insert fails", async () => {
+    const invalidPersona: PersonaSeed = {
+      id: "persona_invalid",
+      name: "Invalid Persona",
+      records: [
+        {
+          id: "rec_1",
+          tableName: "NonExistentTable",
+          fields: {
+            id: "rec_1",
+            data: "test",
+          },
+        },
+      ],
+    };
+
+    const res = await seedTestUsersAction({
+      engine: "sqlite",
+      connection: { dbFilePath: testDbPath },
+      personas: [invalidPersona],
+    });
+
+    expect(res.success).toBe(false);
+    expect(res.insertedRecords).toBe(0);
+    expect(res.error).toBeDefined();
+    expect(res.errors && res.errors.length > 0).toBe(true);
+    expect(res.error).toContain("no such table: NonExistentTable");
+  });
 });

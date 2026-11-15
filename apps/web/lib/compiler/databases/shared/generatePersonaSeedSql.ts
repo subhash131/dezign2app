@@ -183,8 +183,14 @@ export function generatePersonaSeedStatements(
         if (!fields.role) {
           fields.role = (persona.name || "").toLowerCase().includes("admin") ? "admin" : "user";
         }
+        if (fields.emailVerified === undefined) {
+          fields.emailVerified = true;
+        }
         if (!fields.createdAt) {
           fields.createdAt = "2026-01-01T00:00:00.000Z";
+        }
+        if (!fields.updatedAt) {
+          fields.updatedAt = "2026-01-01T00:00:00.000Z";
         }
       }
 

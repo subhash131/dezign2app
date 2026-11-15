@@ -1529,5 +1529,160 @@ app.use(express.json());
 
     expect(response).toBe("Hello! How can I assist you today?");
   });
+
+  it("compiles getConversationsByUser endpoint with snake_case column (created_by) and ensures exact type compatibility without TS2322", () => {
+    const serviceNode: BackendNode = {
+      id: "srv-ai",
+      type: "service",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "aiService",
+        techStack: "express",
+        port: "8080",
+      },
+    };
+
+    const entityNode: BackendNode = {
+      id: "entity-conversations",
+      type: "entity",
+      position: { x: 200, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "conversations",
+        columns: [
+          { name: "id", type: "string", isPrimaryKey: true },
+          { name: "created_at", type: "string" },
+          { name: "updated_at", type: "string" },
+          { name: "title", type: "string" },
+          { name: "created_by", type: "string", isNotNull: true },
+        ],
+      },
+    };
+
+    const dbRefNode: BackendNode = {
+      id: "db-ref-conversations",
+      type: "db_ref",
+      position: { x: 100, y: 0 },
+      fractionalIndex: "a2",
+      data: {
+        label: "conversations",
+        tableRef: "entity-conversations",
+      },
+    };
+
+    const allNodes: BackendNode[] = [serviceNode, entityNode, dbRefNode];
+    const allEdges: BackendEdge[] = [
+      {
+        id: "e1",
+        type: "database-connection",
+        fractionalIndex: "a0",
+        source: "srv-ai",
+        target: "db-ref-conversations",
+      },
+    ];
+
+    const endpoint: Endpoint & { nodeId: string } = {
+      id: "ep-get-conversations-by-user",
+      nodeId: "srv-ai",
+      name: "/conversations-by-user",
+      type: "GET",
+      summary: "Get conversations by user",
+      requireAuth: true,
+      queryParams: [
+        { id: "q1", name: "limit", type: "number", required: false },
+        { id: "q2", name: "offset", type: "number", required: false },
+      ],
+      pipelineSteps: [
+        {
+          id: "step-db",
+          name: "findAllConversationsByCreatorResult",
+          outputVariable: "findAllConversationsByCreatorResult",
+          type: "db_operation",
+          tableNodeId: "entity-conversations",
+          functionRef: {
+            name: "findAllConversationsByCreator",
+            signature: "findAllConversationsByCreator(createdBy: string, limit?: number, offset?: number): Promise<Conversations[]>",
+            importPath: "@workspace/db/helpers/conversations",
+          },
+          inputBindings: [
+            {
+              argName: "createdBy",
+              source: { kind: "auth", field: "userId" },
+            },
+            {
+              argName: "limit",
+              source: { kind: "req_query", field: "limit" },
+            },
+            {
+              argName: "offset",
+              source: { kind: "req_query", field: "offset" },
+            },
+          ],
+        },
+        {
+          id: "step-ret",
+          name: "Return Response",
+          type: "return_response",
+          statusCode: 200,
+          inputBindings: [
+            {
+              argName: "data",
+              source: { kind: "step_output", stepId: "step-db" },
+            },
+          ],
+        },
+      ],
+    };
+
+    // 1. Database helpers compilation
+    const pgDb = compilePostgresDatabase([entityNode], []);
+    const pgHelper = pgDb.files.find((f) => f.filename === "helpers/conversation.ts");
+    expect(pgHelper).toBeDefined();
+    expect(pgHelper!.content).toContain("created_by: string;");
+    expect(pgHelper!.content).toContain("createdBy?: string;");
+    expect(pgHelper!.content).toContain("created_at?: string;");
+    expect(pgHelper!.content).toContain("createdAt?: string;");
+    expect(pgHelper!.content).toContain("export interface CreateConversationsData");
+    expect(pgHelper!.content).toContain("created_by: string;");
+    expect(pgHelper!.content).toContain("createdBy?: string;");
+
+    // 2. Types package compilation
+    const typesFiles = generateTypesPackage(
+      allNodes,
+      [endpoint],
+      [],
+      [{ id: serviceNode.id, name: "aiService", folderName: "aiService" }],
+      allEdges,
+    );
+    const entitiesFile = typesFiles.find((f) => f.filename === "src/entities/index.ts");
+    expect(entitiesFile).toBeDefined();
+    expect(entitiesFile!.content).toContain("created_by: string;");
+    expect(entitiesFile!.content).toContain("createdBy?: string;");
+    expect(entitiesFile!.content).toContain("export type CreateConversationsData");
+    expect(entitiesFile!.content).toContain("created_by: string;");
+    expect(entitiesFile!.content).toContain("createdBy?: string;");
+
+    const routeTypesFile = typesFiles.find((f) => f.filename.includes("getConversationsByUser.ts"));
+    expect(routeTypesFile).toBeDefined();
+    expect(routeTypesFile!.content).toContain("data: Conversations[];");
+
+    // 3. Service Node compilation
+    const serviceResult = compileServiceNode(
+      serviceNode,
+      [endpoint],
+      [],
+      allNodes,
+      allEdges,
+      [],
+      [],
+      [],
+      "aiService",
+    );
+    const routeFile = serviceResult.files.find((f) => f.filename.includes("getConversationsByUser.ts"));
+    expect(routeFile).toBeDefined();
+    expect(routeFile!.content).toContain("data: findAllConversationsByCreatorResult");
+    expect(routeFile!.content).toContain("await findAllConversationsByCreator(");
+  });
 });
 

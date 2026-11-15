@@ -60,23 +60,23 @@ export function TestUsersSheet({ open, onOpenChange }: TestUsersSheetProps) {
 
     const dbs = allNodes.filter((n) => n.type === "database");
     const targetDb = dbs[0] || null;
-    const dbData = targetDb?.data || {};
+    const dbData = targetDb?.data;
 
-    const engine = (dbData.dbEngine || "postgres").toLowerCase();
+    const engine = (dbData?.dbEngine || "postgres").toLowerCase();
     const connection = {
-      host: dbData.host,
-      port: dbData.port,
-      database: dbData.database,
-      user: dbData.user || dbData.username,
-      password: dbData.password,
-      connectionString: dbData.connectionString || dbData.connectionStringPooled,
-      connectionStringEnv: dbData.connectionStringEnv,
-      connectionStringPooled: dbData.connectionStringPooled,
-      connectionStringPooledEnv: dbData.connectionStringPooledEnv,
-      sslMode: dbData.sslMode,
-      provider: dbData.provider,
-      dbFilePath: dbData.dbFilePath,
-      dbFilePathEnv: dbData.dbFilePathEnv,
+      host: dbData?.host,
+      port: dbData?.port,
+      database: dbData?.database,
+      user: dbData?.user || dbData?.username,
+      password: dbData?.password,
+      connectionString: dbData?.connectionString || dbData?.connectionStringPooled,
+      connectionStringEnv: dbData?.connectionStringEnv,
+      connectionStringPooled: dbData?.connectionStringPooled,
+      connectionStringPooledEnv: dbData?.connectionStringPooledEnv,
+      sslMode: dbData?.sslMode,
+      provider: dbData?.provider,
+      dbFilePath: dbData?.dbFilePath,
+      dbFilePathEnv: dbData?.dbFilePathEnv,
     };
     const dbName = targetDb?.data?.label || targetDb?.data?.name || "Primary Database";
 

@@ -148,7 +148,7 @@ export interface ElectronAPI {
     dropTable?(payload: ElectronDropDbTablePayload): Promise<ElectronDropDbTableResult>;
     renameTable?(payload: ElectronRenameDbTablePayload): Promise<ElectronRenameDbTableResult>;
     renameColumn?(payload: ElectronRenameDbColumnPayload): Promise<ElectronRenameDbColumnResult>;
-    seedTestUsers?(payload: any): Promise<{ success: boolean; insertedRecords: number; statements: string[]; error?: string }>;
+    seedTestUsers?(payload: any): Promise<{ success: boolean; insertedRecords: number; statements: string[]; errors?: string[]; error?: string }>;
   };
 
   workspace?: {
