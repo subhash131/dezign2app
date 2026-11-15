@@ -37,25 +37,31 @@ export async function executePostgresLiveOperation(
     await client.connect();
 
     // 1. Discover the real schema and exact table name casing.
-    let resolvedSchema = hintedSchema;
+    let resolvedSchema = hintedSchema || "public";
     let actualTableName = safeTable;
 
     const discoverRes = await client.query<{ table_schema: string; table_name: string }>(
       `SELECT table_schema, table_name FROM information_schema.tables
        WHERE LOWER(table_name) = LOWER($1)
-         AND table_schema NOT IN (
-           'information_schema','pg_catalog','pg_toast',
-           'auth','storage','realtime','supabase_functions','vault','extensions'
-         )
-       ORDER BY (table_schema = 'public') DESC, table_schema`,
-      [safeTable],
+         AND table_schema = $2`,
+      [safeTable, resolvedSchema],
     );
     if (discoverRes.rows.length > 0) {
-      const publicRow = discoverRes.rows.find((r) => r.table_schema === "public");
-      const matched = publicRow ?? discoverRes.rows[0];
-      if (matched) {
-        resolvedSchema = matched.table_schema || hintedSchema;
-        actualTableName = matched.table_name || safeTable;
+      actualTableName = discoverRes.rows[0]?.table_name || safeTable;
+    } else {
+      const anyRes = await client.query<{ table_schema: string; table_name: string }>(
+        `SELECT table_schema, table_name FROM information_schema.tables
+         WHERE LOWER(table_name) = LOWER($1)
+           AND table_schema NOT IN (
+             'information_schema','pg_catalog','pg_toast',
+             'auth','storage','realtime','supabase_functions','vault','extensions'
+           )
+         ORDER BY (table_schema = $2) DESC, (table_schema = 'public') DESC, table_schema`,
+        [safeTable, resolvedSchema],
+      );
+      if (anyRes.rows.length > 0) {
+        resolvedSchema = anyRes.rows[0]?.table_schema || resolvedSchema;
+        actualTableName = anyRes.rows[0]?.table_name || safeTable;
       }
     }
 
@@ -74,31 +80,44 @@ export async function executePostgresLiveOperation(
 
     const opCode = (op.code || "").trim();
     const opQuery = (op.query || "").trim();
+
+    const isSqlStatement = (text: string): boolean => {
+      if (!text || typeof text !== "string") return false;
+      const stripped = text
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/--[^\r\n]*/g, "")
+        .replace(/\/\/[^\r\n]*/g, "")
+        .trim();
+      return /^\s*(SELECT|INSERT|UPDATE|DELETE|WITH|CREATE|ALTER|DROP)\b/i.test(stripped);
+    };
+
     const queryMatch = opCode.match(
-      /query(?:<[^>]+>)?\s*\(\s*(['"`])([\s\S]*?)\1\s*(?:,\s*\[([\s\S]*?)\])?\s*\)/m,
+      /(?:client\.|db\.|await\s+)?query(?:<[^>]+>)?\s*\(\s*(['"`])([\s\S]*?)\1\s*(?:,\s*\[([\s\S]*?)\])?\s*\)/m,
     );
 
     if (
       opQuery &&
       !opQuery.startsWith("Query function for") &&
-      !opQuery.startsWith("Auto-generated")
+      !opQuery.startsWith("Auto-generated") &&
+      !opQuery.startsWith("//") &&
+      isSqlStatement(opQuery)
     ) {
       rawSql = opQuery;
-    } else if (
-      opCode &&
-      /^\s*(SELECT|INSERT|UPDATE|DELETE|WITH|CREATE|ALTER|DROP)\b/i.test(opCode)
-    ) {
+    } else if (isSqlStatement(opCode)) {
       rawSql = opCode;
     } else if (
       queryMatch &&
       queryMatch[2] &&
-      /^\s*(SELECT|INSERT|UPDATE|DELETE)\b/i.test(queryMatch[2].trim())
+      isSqlStatement(queryMatch[2].trim())
     ) {
       rawSql = queryMatch[2].trim();
     } else {
       const plan = planSqlCommand(op, args, "postgres");
       rawSql = plan.rawSql.replaceAll(`"${safeTable}"`, qualifiedTable);
     }
+
+    // Convert any JS-style '//' comment lines into SQL '--' comments to avoid PostgreSQL syntax errors
+    rawSql = rawSql.replace(/^\s*\/\/[^\r\n]*/gm, (match) => match.replace(/^\s*\/\//, "--"));
 
     const escapedSchema = (resolvedSchema || "public").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const escapedTable = safeTable.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -191,7 +210,9 @@ export async function executePostgresLiveOperation(
             const offsetVal = payloadObj["offset"];
             return typeof offsetVal === "number" ? offsetVal : 0;
           }
-          return payloadObj[cleanArg] ?? null;
+          const snakeArg = cleanArg.replace(/([A-Z])/g, "_$1").toLowerCase();
+          const camelArg = cleanArg.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+          return payloadObj[cleanArg] ?? payloadObj[snakeArg] ?? payloadObj[camelArg] ?? null;
         });
       } else {
         const opParams = op.params || [];

@@ -386,13 +386,25 @@ export async function executeSqliteLiveOperation(
       };
     }
 
+    const isSqlStatement = (text: string): boolean => {
+      if (!text || typeof text !== "string") return false;
+      const stripped = text
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/--[^\r\n]*/g, "")
+        .replace(/\/\/[^\r\n]*/g, "")
+        .trim();
+      return /^\s*(SELECT|INSERT|UPDATE|DELETE|WITH|CREATE|ALTER|DROP|PRAGMA)\b/i.test(stripped);
+    };
+
     // 1. Custom raw SQL query
     if (
       customQuery &&
       !customQuery.startsWith("Query function for") &&
-      !customQuery.startsWith("Auto-generated")
+      !customQuery.startsWith("Auto-generated") &&
+      !customQuery.startsWith("//") &&
+      isSqlStatement(customQuery)
     ) {
-      const trimmed = customQuery.trim();
+      const trimmed = customQuery.trim().replace(/^\s*\/\/[^\r\n]*/gm, (match) => match.replace(/^\s*\/\//, "--"));
       if (/^SELECT|^PRAGMA/i.test(trimmed)) {
         const stmt = db.prepare(trimmed);
         const rows = stmt.all();

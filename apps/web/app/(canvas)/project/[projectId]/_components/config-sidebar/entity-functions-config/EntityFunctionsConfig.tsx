@@ -6,6 +6,7 @@ import {
   generateRedisOperations,
   getEntityDbOperations,
 } from "@/lib/utils/entityOperationsHelper";
+import { getEntityDbConnectionInfo } from "@/lib/stores/dbSyncStore";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -48,13 +49,17 @@ const EntityFunctionsConfigContent: React.FC<{
     node.data?.dbEngine === "redis";
 
   const label = node.data.label || (isRedis ? "Cache" : "Table");
-  const schema: string | undefined = node.data.schema as string | undefined;
   const columns = node.data.columns || [];
   const indexes = node.data.indexes || [];
   const pascalLabel = label.charAt(0).toUpperCase() + label.slice(1);
 
-  // Resolve parent database / redis_instance node
+  // Resolve parent database / redis_instance node and connection info using the same logic as Validate DB and DDL execution
+  const dbInfo = useMemo(() => {
+    return getEntityDbConnectionInfo(node, allNodes);
+  }, [node, allNodes]);
+
   const parentDb = useMemo(() => {
+    if (dbInfo?.dbNode) return dbInfo.dbNode;
     return (
       allNodes.find((n) => n.id === node.data.databaseId) ||
       allNodes.find((n) =>
@@ -71,11 +76,13 @@ const EntityFunctionsConfigContent: React.FC<{
           : n.type === "database",
       )
     );
-  }, [allNodes, edges, nodeId, node.data.databaseId, isRedis]);
+  }, [dbInfo, allNodes, edges, nodeId, node.data.databaseId, isRedis]);
 
-  const dbType = isRedis
+  const dbType = dbInfo?.engine || (isRedis
     ? "redis"
-    : (parentDb?.data?.dbEngine || parentDb?.data?.dbType || "postgres");
+    : (parentDb?.data?.dbEngine || parentDb?.data?.dbType || "postgres"));
+
+  const schema = dbInfo?.schema || node.data.schema || parentDb?.data?.schema || "public";
 
   const currentOps: DbOperationFunction[] =
     node.data.dbOperations && node.data.dbOperations.length > 0

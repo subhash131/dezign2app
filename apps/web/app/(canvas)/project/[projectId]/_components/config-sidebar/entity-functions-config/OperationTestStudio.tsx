@@ -48,15 +48,33 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = React.mem
 
   const engine = isRedis ? "redis" : parentDb?.data?.dbEngine || "postgres";
   const isSqlite = engine === "sqlite";
-  const host = parentDb?.data?.host || "localhost";
-  const port: number | string = parentDb?.data?.port ?? (isRedis ? 6379 : isSqlite ? 0 : 5432);
-  const dbFilePath = parentDb?.data?.dbFilePath || "dev.db";
-  const dbFilePathEnv = parentDb?.data?.dbFilePathEnv || "DB_FILE_PATH";
-  const database = parentDb?.data?.database;
-  const user = parentDb?.data?.user || parentDb?.data?.username;
-  const password = parentDb?.data?.password;
+  const dbData = parentDb?.data;
+  const effectiveSchema = schema || dbData?.schema || "public";
+  const host = dbData?.host || "localhost";
+  const port: number | string = dbData?.port ?? (isRedis ? 6379 : isSqlite ? 0 : 5432);
+  const dbFilePath = dbData?.dbFilePath || "dev.db";
+  const dbFilePathEnv = dbData?.dbFilePathEnv || "DB_FILE_PATH";
+  const database = dbData?.database;
+  const user = dbData?.user || dbData?.username;
+  const password = dbData?.password;
   const isPostgres = engine === "postgres";
-  const rawConnString = parentDb?.data?.connectionString || parentDb?.data?.connectionStringPooled;
+  const rawConnString = dbData?.connectionString || dbData?.connectionStringPooled;
+
+  const connectionConfig = useMemo(() => ({
+    host: dbData?.host,
+    port: dbData?.port ?? (isRedis ? 6379 : isSqlite ? 0 : 5432),
+    database: dbData?.database,
+    user: dbData?.user || dbData?.username,
+    password: dbData?.password,
+    connectionString: dbData?.connectionString || dbData?.connectionStringPooled,
+    connectionStringEnv: dbData?.connectionStringEnv,
+    connectionStringPooled: dbData?.connectionStringPooled,
+    connectionStringPooledEnv: dbData?.connectionStringPooledEnv,
+    sslMode: dbData?.sslMode,
+    provider: dbData?.provider,
+    dbFilePath: dbData?.dbFilePath || "dev.db",
+    dbFilePathEnv: dbData?.dbFilePathEnv || "DB_FILE_PATH",
+  }), [dbData, isRedis, isSqlite]);
   const connUri = isRedis
     ? `redis://${host}:${port}`
     : isSqlite
@@ -302,21 +320,7 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = React.mem
     try {
       const data = await checkDatabaseConnection({
         engine,
-        connection: {
-          host,
-          port,
-          database,
-          user,
-          password,
-          connectionString: parentDb?.data?.connectionString || parentDb?.data?.connectionStringPooled,
-          connectionStringEnv: parentDb?.data?.connectionStringEnv,
-          connectionStringPooled: parentDb?.data?.connectionStringPooled,
-          connectionStringPooledEnv: parentDb?.data?.connectionStringPooledEnv,
-          sslMode: parentDb?.data?.sslMode,
-          provider: parentDb?.data?.provider,
-          dbFilePath,
-          dbFilePathEnv,
-        },
+        connection: connectionConfig,
       });
       updateNode(parentDb.id, {
         data: {
@@ -360,24 +364,10 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = React.mem
     try {
       const data = await testDatabaseOperation({
         engine,
-        connection: {
-          host,
-          port,
-          database,
-          user,
-          password,
-          connectionString: parentDb?.data?.connectionString || parentDb?.data?.connectionStringPooled,
-          connectionStringEnv: parentDb?.data?.connectionStringEnv,
-          connectionStringPooled: parentDb?.data?.connectionStringPooled,
-          connectionStringPooledEnv: parentDb?.data?.connectionStringPooledEnv,
-          sslMode: parentDb?.data?.sslMode,
-          provider: parentDb?.data?.provider,
-          dbFilePath,
-          dbFilePathEnv,
-        },
+        connection: connectionConfig,
         entity: {
           name: label,
-          schema,
+          schema: effectiveSchema,
           columns,
         },
         operation: {
@@ -385,7 +375,10 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = React.mem
           name: selectedOp.name,
           kind: selectedOp.kind,
           code: selectedOp.code,
-          query: selectedOp.query,
+          query:
+            selectedOp.query && !selectedOp.query.startsWith("//")
+              ? selectedOp.query
+              : undefined,
           signature: selectedOp.signature,
           params: selectedOp.params,
         },
