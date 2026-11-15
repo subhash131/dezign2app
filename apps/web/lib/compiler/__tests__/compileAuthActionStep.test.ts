@@ -275,12 +275,12 @@ describe("compileAuthActionStep - authStepResolver & event templates", () => {
     const sidebarActionBtnFile = files.find((f) => f.filename === "app/(private)/_components/SidebarActionButton.tsx");
     expect(sidebarActionBtnFile).toBeDefined();
     expect(sidebarActionBtnFile?.content).toContain('import { handleLogoutAction } from "./LogoutAction";');
-    expect(sidebarActionBtnFile?.content).toContain('"logout": () => handleLogoutAction()');
+    expect(sidebarActionBtnFile?.content).toContain('"logout": (ctx?: SidebarActionContext) => handleLogoutAction(ctx)');
 
     // 3. Emits layout.tsx using <SidebarActionButton actionName="logout"
     const layoutFile = files.find((f) => f.filename === "app/(private)/layout.tsx");
     expect(layoutFile).toBeDefined();
-    expect(layoutFile?.content).toContain('<SidebarActionButton actionName="logout" actionId="" tooltip="Logout"');
+    expect(layoutFile?.content).toContain('<SidebarActionButton actionName="logout" actionId="" eventType="click" tooltip="Logout"');
   });
 
   it("generateSectionComponent generates decoupled action handlers and binds them to mapped UI components", () => {
