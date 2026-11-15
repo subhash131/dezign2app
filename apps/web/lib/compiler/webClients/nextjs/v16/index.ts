@@ -4,6 +4,8 @@ import {
   AnyMessagingResource,
   CompiledFile,
   CompiledWebPageResult,
+  PageSection,
+  UIEventItem,
 } from "@workspace/canvas/types";
 import { generateWebClientE2ETests } from "../../../generators/testGenerator";
 
@@ -484,8 +486,31 @@ export function compileNextjsV16WebClient(
   const rootLayoutPageInfo = pagesInfo.find(
     (p) => p.isLayout && (p.isRoot || p.routePath === "app/layout.tsx"),
   );
-  const rootRealtimeConns = rootLayoutPageInfo?.realtimeConnections || [];
-  const hasRootEventsDrawer = rootRealtimeConns.length > 0;
+  const rootLayoutNode = allNodes.find(
+    (n) =>
+      n.type === "webPage" &&
+      (Boolean(n.data?.isLayout) || n.data?.label?.trim().toLowerCase() === "layout") &&
+      (n.data?.isRoot || n.data?.path === "app/layout.tsx"),
+  );
+  const fallbackRootConns: LinkedRealtimeConnectionInfo[] = (
+    rootLayoutNode?.data?.realtimeConnections || []
+  ).map((c) => ({
+    ...c,
+    connectionId: c.id,
+    sourceServiceNodeId: c.sourceServiceNodeId,
+    sourceServiceName: c.sourceServiceLabel,
+  }));
+  const rootRealtimeConns: LinkedRealtimeConnectionInfo[] =
+    rootLayoutPageInfo?.realtimeConnections || fallbackRootConns;
+  const rootSections: PageSection[] = rootLayoutNode?.data?.sections ?? [];
+  const rootActions: UIEventItem[] = rootSections.flatMap((s) => s.actions || []);
+  const hasRootStoreActions =
+    Array.isArray(rootLayoutNode?.data?.actions) &&
+    rootLayoutNode.data.actions.length > 0;
+  const hasRootEventsDrawer =
+    rootRealtimeConns.length > 0 ||
+    rootActions.length > 0 ||
+    hasRootStoreActions;
 
   if (hasRootEventsDrawer) {
     files.push({

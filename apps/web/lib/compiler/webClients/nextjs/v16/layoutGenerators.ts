@@ -1,4 +1,4 @@
-import { PageInfo } from "./types";
+import { PageInfo, LinkedRealtimeConnectionInfo } from "./types";
 import {
   CompiledFile,
   BackendNode,
@@ -258,9 +258,10 @@ import { Layers } from "lucide-react";`;
     .map((sItem, sIdx) => {
       const IconComp = navIconNames[sIdx % navIconNames.length];
       const isActionButton = sItem.itemType === "action" || Boolean(sItem.actionId || sItem.actionName);
+      const actionEventType = "triggerEvent" in sItem && typeof sItem.triggerEvent === "string" ? sItem.triggerEvent : "click";
       if (isActionButton) {
         return `                      <SidebarMenuItem key="${sItem.id}">
-                        <SidebarActionButton actionName="${sItem.actionName || sItem.name}" actionId="${sItem.actionId || ""}" tooltip="${sItem.name}" className="transition-all duration-150 ease-in-out cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
+                        <SidebarActionButton actionName="${sItem.actionName || sItem.name}" actionId="${sItem.actionId || ""}" eventType="${actionEventType}" tooltip="${sItem.name}" className="transition-all duration-150 ease-in-out cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
                           <${IconComp} className="size-3.5 shrink-0 mr-2 inline-block transition-transform duration-150 group-hover/menu-item:scale-105" />
                           <span>${sItem.name}</span>
                         </SidebarActionButton>
@@ -294,9 +295,10 @@ import { Layers } from "lucide-react";`;
           .map((sItem, sIdx) => {
             const IconComp = navIconNames[(gIdx * 2 + sIdx) % navIconNames.length];
             const isActionButton = sItem.itemType === "action" || Boolean(sItem.actionId || sItem.actionName);
+            const actionEventType = "triggerEvent" in sItem && typeof sItem.triggerEvent === "string" ? sItem.triggerEvent : "click";
             if (isActionButton) {
               return `                      <SidebarMenuItem key="${sItem.id}">
-                        <SidebarActionButton actionName="${sItem.actionName || sItem.name}" actionId="${sItem.actionId || ""}" tooltip="${sItem.name}" className="transition-all duration-150 ease-in-out cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
+                        <SidebarActionButton actionName="${sItem.actionName || sItem.name}" actionId="${sItem.actionId || ""}" eventType="${actionEventType}" tooltip="${sItem.name}" className="transition-all duration-150 ease-in-out cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
                           <${IconComp} className="size-3.5 shrink-0 mr-2 inline-block transition-transform duration-150 group-hover/menu-item:scale-105" />
                           <span>${sItem.name}</span>
                         </SidebarActionButton>
@@ -539,6 +541,7 @@ export function generateServerGuardLayout(
   guard: ServerGuardConfig,
   layoutDescription?: string,
   authNode?: BackendNode,
+  hasEventsDrawer: boolean = false,
 ): string {
   const componentName = slugToComponentName(groupName).replace(/Page$/, "") + "Layout";
   const entityLabel = guard.entityLabel || "Entity";
@@ -551,6 +554,7 @@ export function generateServerGuardLayout(
     : "";
 
   const sessionImport = requireSession ? `import { auth } from "@/lib/auth";\n` : "";
+  const drawerImport = hasEventsDrawer ? `\nimport { LayoutEventsDrawer } from "./_components/LayoutEventsDrawer";` : "";
 
   const sessionBlock = requireSession
     ? `  const session = await auth.api.getSession({ headers: await headers() });
@@ -588,7 +592,7 @@ export function generateServerGuardLayout(
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@workspace/db";
-${sessionImport}${descriptionDoc}
+${sessionImport}${descriptionDoc}${drawerImport}
 /**
  * Next.js Server Guard Layout — ${groupName}
  * Runs a real DB check on every request (Node.js runtime, not Edge).
@@ -602,7 +606,7 @@ export default async function ${componentName}({
 ${sessionBlock}${guardBlock}
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
-      <div className="flex-1">{children}</div>
+      <div className="flex-1">{children}</div>${hasEventsDrawer ? `\n      <LayoutEventsDrawer />` : ""}
     </div>
   );
 }
@@ -694,48 +698,23 @@ export function generateRouteGroupLayouts(
       return false;
     });
 
-    const layoutRealtimeConns = layoutPageInfo?.realtimeConnections ?? [];
-    const hasEventsDrawer = Array.isArray(layoutRealtimeConns) && layoutRealtimeConns.length > 0;
+    const resolvedLayoutPageInfo =
+      layoutPageInfo ||
+      (connectedLayoutNode ? pagesInfo.find((p) => p.isLayout && p.nodeId === connectedLayoutNode.id) : undefined);
 
-    if (hasEventsDrawer) {
-      files.push({
-        filename: `app/${folderPath}/_components/LayoutEventsDrawer.tsx`,
-        language: "typescript",
-        content: generateLayoutEventsDrawer(
-          layoutRealtimeConns,
-          Boolean(authNode),
-          leafGroup,
-        ),
-      });
-    }
+    const fallbackLayoutConns: LinkedRealtimeConnectionInfo[] = (
+      connectedLayoutNode?.data?.realtimeConnections || []
+    ).map((c) => ({
+      ...c,
+      connectionId: c.id,
+      sourceServiceNodeId: c.sourceServiceNodeId,
+      sourceServiceName: c.sourceServiceLabel,
+    }));
 
-    // If layout node has custom source code written in Studio or AI, use it directly
-    if (connectedLayoutNode?.data?.pageSourceCode) {
-      files.push({
-        filename: `app/${folderPath}/layout.tsx`,
-        language: "typescript",
-        content: connectedLayoutNode.data.pageSourceCode,
-      });
-      return;
-    }
-
-    // Server-guard zones get a DB-check layout instead of the JWT requireSession() layout
-    if (
-      matchedZone?.protectionMode === "server-guard" &&
-      matchedZone.serverGuard?.entityNodeId
-    ) {
-      files.push({
-        filename: `app/${folderPath}/layout.tsx`,
-        language: "typescript",
-        content: generateServerGuardLayout(
-          leafGroup,
-          matchedZone.serverGuard,
-          connectedLayoutNode?.data?.description || matchedZone.layoutDescription,
-          authNode,
-        ),
-      });
-      return; // don't fall through to generateSectionLayout
-    }
+    const layoutRealtimeConns: LinkedRealtimeConnectionInfo[] =
+      resolvedLayoutPageInfo?.realtimeConnections?.length
+        ? resolvedLayoutPageInfo.realtimeConnections
+        : fallbackLayoutConns;
 
     // Default: JWT-based middleware + requireSession() layout
     const layoutSections: PageSection[] = connectedLayoutNode?.data?.sections ?? [];
@@ -787,6 +766,10 @@ export function generateRouteGroupLayouts(
       });
     });
 
+    const hasStoreActions =
+      Array.isArray(connectedLayoutNode?.data?.actions) &&
+      connectedLayoutNode.data.actions.length > 0;
+
     const isActionItem = (sItem: { itemType?: string; actionId?: string; actionName?: string; name?: string }) =>
       sItem.itemType === "action" ||
       Boolean(sItem.actionId || sItem.actionName) ||
@@ -799,12 +782,59 @@ export function generateRouteGroupLayouts(
       ) ||
       layoutActions.length > 0;
 
+    const hasEventsDrawer =
+      (Array.isArray(layoutRealtimeConns) && layoutRealtimeConns.length > 0) ||
+      layoutActions.length > 0 ||
+      hasSidebarActionBtns ||
+      hasStoreActions;
+
+    if (hasEventsDrawer) {
+      files.push({
+        filename: `app/${folderPath}/_components/LayoutEventsDrawer.tsx`,
+        language: "typescript",
+        content: generateLayoutEventsDrawer(
+          layoutRealtimeConns,
+          Boolean(authNode),
+          leafGroup,
+        ),
+      });
+    }
+
     if (hasSidebarActionBtns) {
       files.push({
         filename: `app/${folderPath}/_components/SidebarActionButton.tsx`,
         language: "typescript",
         content: generateSidebarActionButtonCode(layoutActions),
       });
+    }
+
+    // If layout node has custom source code written in Studio or AI, use it directly
+    if (connectedLayoutNode?.data?.pageSourceCode) {
+      files.push({
+        filename: `app/${folderPath}/layout.tsx`,
+        language: "typescript",
+        content: connectedLayoutNode.data.pageSourceCode,
+      });
+      return;
+    }
+
+    // Server-guard zones get a DB-check layout instead of the JWT requireSession() layout
+    if (
+      matchedZone?.protectionMode === "server-guard" &&
+      matchedZone.serverGuard?.entityNodeId
+    ) {
+      files.push({
+        filename: `app/${folderPath}/layout.tsx`,
+        language: "typescript",
+        content: generateServerGuardLayout(
+          leafGroup,
+          matchedZone.serverGuard,
+          connectedLayoutNode?.data?.description || matchedZone.layoutDescription,
+          authNode,
+          hasEventsDrawer,
+        ),
+      });
+      return; // don't fall through to generateSectionLayout
     }
 
     files.push({
@@ -839,16 +869,16 @@ export function generateSidebarActionButtonCode(
 
     const cleanName = (a.evt.name || "").trim().toLowerCase();
     if (cleanName) {
-      handlerMap.set(cleanName, `  "${cleanName}": () => handle${a.compName}(),`);
+      handlerMap.set(cleanName, `  "${cleanName}": (ctx?: SidebarActionContext) => handle${a.compName}(ctx),`);
     }
     if (a.evt.name) {
-      handlerMap.set(a.evt.name, `  "${a.evt.name}": () => handle${a.compName}(),`);
+      handlerMap.set(a.evt.name, `  "${a.evt.name}": (ctx?: SidebarActionContext) => handle${a.compName}(ctx),`);
     }
     if (a.evt.id) {
-      handlerMap.set(a.evt.id, `  "${a.evt.id}": () => handle${a.compName}(),`);
+      handlerMap.set(a.evt.id, `  "${a.evt.id}": (ctx?: SidebarActionContext) => handle${a.compName}(ctx),`);
     }
-    handlerMap.set(a.compName, `  "${a.compName}": () => handle${a.compName}(),`);
-    handlerMap.set(a.compName.toLowerCase(), `  "${a.compName.toLowerCase()}": () => handle${a.compName}(),`);
+    handlerMap.set(a.compName, `  "${a.compName}": (ctx?: SidebarActionContext) => handle${a.compName}(ctx),`);
+    handlerMap.set(a.compName.toLowerCase(), `  "${a.compName.toLowerCase()}": (ctx?: SidebarActionContext) => handle${a.compName}(ctx),`);
   });
 
   const actionImports = Array.from(uniqueImports.values()).join("\n");
@@ -858,22 +888,43 @@ export function generateSidebarActionButtonCode(
 
 import React, { useState } from "react";
 import { SidebarMenuButton } from "@workspace/ui/components/sidebar";
+import { executeApiAction } from "@/lib/api-client";
 ${actionImports ? `${actionImports}\n` : ""}
+export type SidebarActionTrigger = (
+  name: string,
+  type: string,
+  url: string,
+  method: string,
+  requireAuth?: boolean,
+  customHeaders?: Record<string, string>,
+  queryParams?: Record<string, string>,
+  requestBody?: Record<string, string | number | boolean | null | undefined>,
+) => Promise<string | number | boolean | Record<string, string | number | boolean | null | undefined> | void | null>;
+
+export interface SidebarActionContext {
+  onTrigger?: SidebarActionTrigger;
+  router?: { push: (href: string) => void; replace?: (href: string) => void };
+  routeParams?: Record<string, string | string[] | undefined>;
+  routeSearchParams?: Record<string, string | string[] | undefined> | URLSearchParams;
+}
+
 export interface SidebarActionButtonProps {
   actionName?: string;
   actionId?: string;
+  eventType?: string;
   tooltip?: string;
   className?: string;
   children?: React.ReactNode;
 }
 
-const actionHandlers: Record<string, () => Promise<string | number | boolean | void | Record<string, string | number | boolean | null | undefined> | null>> = {
+const actionHandlers: Record<string, (ctx?: SidebarActionContext) => Promise<string | number | boolean | void | Record<string, string | number | boolean | null | undefined> | null>> = {
 ${handlerEntries}
 };
 
 export function SidebarActionButton({
   actionName = "action",
   actionId,
+  eventType = "click",
   tooltip,
   className,
   children,
@@ -883,6 +934,74 @@ export function SidebarActionButton({
   const handleClick = async (e: React.MouseEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    const timestamp = new Date().toLocaleTimeString();
+    const logId = Math.random().toString(36).substring(2, 9);
+    const resolvedEventType = (eventType || "click").toUpperCase();
+    let loggedViaTrigger = false;
+
+    const onTrigger = async (
+      name: string,
+      type: string,
+      url: string,
+      method: string,
+      requireAuth?: boolean,
+      customHeaders?: Record<string, string>,
+      queryParams?: Record<string, string>,
+      requestBody?: Record<string, string | number | boolean | null | undefined>,
+    ) => {
+      loggedViaTrigger = true;
+      try {
+        const result = await executeApiAction({
+          eventName: name,
+          eventType: type,
+          url,
+          method,
+          requireAuth,
+          customHeaders,
+          queryParams,
+          requestBody,
+        });
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("dezign:layout-log", {
+              detail: {
+                id: logId,
+                eventName: name,
+                eventType: type || resolvedEventType,
+                timestamp,
+                url: result.url || result.targetUrl || url || "N/A",
+                method: method || "TRIGGER",
+                status: result.status,
+                payload: requestBody,
+                data: result.data,
+                error: result.error,
+              },
+            })
+          );
+        }
+        return result.data;
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Request failed";
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("dezign:layout-log", {
+              detail: {
+                id: logId,
+                eventName: name,
+                eventType: type || resolvedEventType,
+                timestamp,
+                url: url || "N/A",
+                method: method || "TRIGGER",
+                error: errorMessage,
+                data: null,
+              },
+            })
+          );
+        }
+        return { error: errorMessage };
+      }
+    };
+
     try {
       const clean = actionName.trim().toLowerCase();
       const handler =
@@ -891,17 +1010,58 @@ export function SidebarActionButton({
         (clean && actionHandlers[clean]);
 
       if (handler) {
-        await handler();
+        const result = await handler({ onTrigger });
+        if (!loggedViaTrigger && typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("dezign:layout-log", {
+              detail: {
+                id: logId,
+                eventName: actionName,
+                eventType: resolvedEventType,
+                timestamp,
+                status: 200,
+                data: result !== undefined ? result : { success: true },
+              },
+            })
+          );
+        }
         return;
       }
 
       window.dispatchEvent(
         new CustomEvent("dezign:action", {
-          detail: { actionName, actionId },
+          detail: { actionName, actionId, eventType: resolvedEventType },
         })
       );
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("dezign:layout-log", {
+            detail: {
+              id: logId,
+              eventName: actionName,
+              eventType: resolvedEventType,
+              timestamp,
+              data: { actionName, actionId },
+            },
+          })
+        );
+      }
     } catch (err) {
       console.error(\`Failed to execute action \${actionName}:\`, err);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("dezign:layout-log", {
+            detail: {
+              id: logId,
+              eventName: actionName,
+              eventType: resolvedEventType,
+              timestamp,
+              error: err instanceof Error ? err.message : String(err),
+              data: null,
+            },
+          })
+        );
+      }
     } finally {
       setIsSubmitting(false);
     }
