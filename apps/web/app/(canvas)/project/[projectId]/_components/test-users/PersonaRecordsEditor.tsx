@@ -24,6 +24,9 @@ import {
   Code2,
   LayoutGrid,
   Sparkles,
+  ChevronDown,
+  ChevronUp,
+  ChevronRight,
 } from "lucide-react";
 import {
   TestUserPersona,
@@ -149,6 +152,25 @@ export function PersonaRecordsEditor({ persona, className }: PersonaRecordsEdito
   const [newFieldName, setNewFieldName] = useState("");
   const [newFieldValue, setNewFieldValue] = useState("");
 
+  // Collapsed state for fields per record
+  const [collapsedFields, setCollapsedFields] = useState<Record<number, boolean>>({});
+
+  const toggleCollapse = (recIdx: number, defaultState: boolean) => {
+    setCollapsedFields((prev) => {
+      const current = prev[recIdx] ?? defaultState;
+      return { ...prev, [recIdx]: !current };
+    });
+  };
+
+  const toggleCollapseAll = () => {
+    const anyExpanded = persona.records.some((_, idx) => !(collapsedFields[idx] ?? true));
+    const nextMap: Record<number, boolean> = {};
+    persona.records.forEach((_, idx) => {
+      nextMap[idx] = anyExpanded; // if any is expanded, collapse all; otherwise expand all
+    });
+    setCollapsedFields(nextMap);
+  };
+
   // 1. Discover all databases
   const databaseNodes = useMemo(() => {
     const dbs = allNodes.filter((n) => n.type === "database");
@@ -261,21 +283,47 @@ export function PersonaRecordsEditor({ persona, className }: PersonaRecordsEdito
   }, [allNodes, databaseNodes]);
 
   // Helper to resolve live database connection config
-  const getDbConnection = (dbNameOrId?: string) => {
+  const getDbConnection = (dbNameOrId?: string, tableName?: string) => {
     const dbs = allNodes.filter((n) => n.type === "database");
-    let targetDb = dbNameOrId ? dbs.find((d) => d.id === dbNameOrId) : undefined;
-    if (!targetDb && dbNameOrId) {
-      targetDb = dbs.find(
-        (d) =>
-          (d.data?.label || "").toLowerCase() ===
-          dbNameOrId.toLowerCase(),
-      );
+    let targetDb: (typeof allNodes)[0] | undefined;
+
+    if (dbNameOrId) {
+      targetDb = dbs.find((d) => d.id === dbNameOrId);
+      if (!targetDb) {
+        targetDb = dbs.find(
+          (d) =>
+            (d.data?.label || "").toLowerCase() === dbNameOrId.toLowerCase() ||
+            (d.data?.name || "").toLowerCase() === dbNameOrId.toLowerCase(),
+        );
+      }
     }
+
+    if (!targetDb && tableName) {
+      const entityNode = allNodes.find(
+        (n) =>
+          n.type === "entity" &&
+          (n.data?.label || "").toLowerCase() === tableName.toLowerCase(),
+      );
+      if (entityNode?.data?.databaseId) {
+        targetDb = dbs.find((d) => d.id === entityNode.data.databaseId);
+      }
+    }
+
     if (!targetDb) {
       targetDb = dbs[0];
     }
+
     const data = targetDb?.data;
     const engine = (data?.dbEngine || "postgres").toLowerCase();
+    const hasConfig = Boolean(
+      data?.connectionString ||
+        data?.connectionStringEnv ||
+        data?.connectionStringPooled ||
+        data?.connectionStringPooledEnv ||
+        data?.host ||
+        data?.dbFilePath ||
+        data?.dbFilePathEnv,
+    );
     const connection = {
       host: data?.host,
       port: data?.port,
@@ -283,7 +331,7 @@ export function PersonaRecordsEditor({ persona, className }: PersonaRecordsEdito
       user: data?.user || data?.username,
       password: data?.password,
       connectionString: data?.connectionString || data?.connectionStringPooled,
-      connectionStringEnv: data?.connectionStringEnv || "DATABASE_URL",
+      connectionStringEnv: data?.connectionStringEnv,
       connectionStringPooled: data?.connectionStringPooled,
       connectionStringPooledEnv: data?.connectionStringPooledEnv,
       sslMode: data?.sslMode,
@@ -295,6 +343,7 @@ export function PersonaRecordsEditor({ persona, className }: PersonaRecordsEdito
       name: data?.label || "Primary Database",
       engine,
       connection,
+      hasConfig,
     };
   };
 
@@ -672,9 +721,20 @@ export function PersonaRecordsEditor({ persona, className }: PersonaRecordsEdito
     if (!rec) return;
 
     setRecordErrors((prev) => ({ ...prev, [recIdx]: null }));
-    const { name: dbName, engine, connection } = getDbConnection(rec.databaseName);
+    const { name: dbName, engine, connection, hasConfig } = getDbConnection(rec.databaseName, rec.tableName);
+
+    if (!hasConfig) {
+      const msg = `Database "${dbName}" has no active connection details configured.\n\nPlease open SchemaView, select the "${dbName}" node on the canvas, and configure its connection settings (Host, Port, Database, User, Password, or Connection String).`;
+      setRecordErrors((prev) => ({ ...prev, [recIdx]: msg }));
+      toast.error(`Database "${dbName}" is not configured:`, {
+        description: "Please configure your database connection settings on the canvas node in SchemaView.",
+        duration: 8000,
+      });
+      return;
+    }
+
     setSeedingRecordIndex(recIdx);
-    const toastId = toast.loading(`Inserting record into ${rec.tableName} (${dbName})...`);
+    const toastId = toast.loading(`Inserting record into "${rec.tableName}" (${dbName})...`);
 
     try {
       // Ensure emailVerified default if missing on user table
@@ -702,9 +762,9 @@ export function PersonaRecordsEditor({ persona, className }: PersonaRecordsEdito
 
       if (res.success && res.insertedRecords > 0) {
         setRecordErrors((prev) => ({ ...prev, [recIdx]: null }));
-        toast.success(`Inserted ${res.insertedRecords} record into "${rec.tableName}" in ${dbName}!`, {
+        toast.success(`Successfully inserted ${res.insertedRecords} record into "${rec.tableName}" in ${dbName}!`, {
           id: toastId,
-          description: `Key id=${rec.id} is now live in the database.`,
+          description: `Key id=${rec.id} is now live and queryable in your database.`,
         });
       } else {
         const detail =
@@ -715,9 +775,9 @@ export function PersonaRecordsEditor({ persona, className }: PersonaRecordsEdito
             : "Unknown database insertion failure.");
 
         setRecordErrors((prev) => ({ ...prev, [recIdx]: detail }));
-        toast.error(`Failed to insert into ${rec.tableName}:`, {
+        toast.error(`Database Insert Error ("${rec.tableName}"):`, {
           id: toastId,
-          description: detail,
+          description: `${detail}. Please check your database connection and schema configuration in SchemaView.`,
           duration: 10000,
         });
       }
@@ -726,6 +786,7 @@ export function PersonaRecordsEditor({ persona, className }: PersonaRecordsEdito
       setRecordErrors((prev) => ({ ...prev, [recIdx]: errMsg }));
       toast.error(`Database error: ${errMsg}`, {
         id: toastId,
+        description: `Please verify that the database "${dbName}" is running and configured properly in SchemaView.`,
         duration: 10000,
       });
     } finally {
@@ -745,6 +806,20 @@ export function PersonaRecordsEditor({ persona, className }: PersonaRecordsEdito
         </div>
 
         <div className="flex items-center gap-1.5">
+          {persona.records.length > 0 && (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={toggleCollapseAll}
+              className="h-6 text-[10.5px] px-2 text-muted-foreground hover:text-foreground gap-1 cursor-pointer"
+              title="Toggle collapsing all record fields to save sidebar space"
+            >
+              <ChevronDown className="w-3 h-3 text-muted-foreground" />
+              <span>Toggle Fields</span>
+            </Button>
+          )}
+
           <Button
             type="button"
             size="sm"
@@ -784,6 +859,8 @@ export function PersonaRecordsEditor({ persona, className }: PersonaRecordsEdito
 
           const hasMissingSchemaCols = tableColumns.some((c) => !(c.name in rec.fields));
           const currentMode = recordViewMode[recIdx] || "form";
+          const defaultCollapsed = mergedFieldKeys.size > 3;
+          const isCollapsed = collapsedFields[recIdx] ?? defaultCollapsed;
 
           // Current commented JSON text
           const currentJsonText =
@@ -886,14 +963,14 @@ export function PersonaRecordsEditor({ persona, className }: PersonaRecordsEdito
                     disabled={seedingRecordIndex === recIdx}
                     onClick={() => handleSeedSingleRecord(recIdx)}
                     className="h-7 text-[10.5px] px-2.5 bg-secondary/80 hover:bg-secondary text-foreground border-border/60 gap-1.5 cursor-pointer font-medium"
-                    title={`Insert only this record into table "${rec.tableName}"`}
+                    title={`Upsert this record into table "${rec.tableName}" in ${rec.databaseName || "database"} (INSERT ... ON CONFLICT DO UPDATE)`}
                   >
                     {seedingRecordIndex === recIdx ? (
                       <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
                     ) : (
                       <Database className="w-3 h-3 text-muted-foreground" />
                     )}
-                    <span>Insert Record</span>
+                    <span>Upsert Record</span>
                   </Button>
 
                   {persona.records.length > 1 && (
@@ -911,15 +988,28 @@ export function PersonaRecordsEditor({ persona, className }: PersonaRecordsEdito
                 </div>
               </div>
 
-              {/* Sub-Header: Fields vs JSON Mode Switcher & Schema Helpers */}
+              {/* Sub-Header: Fields Collapsible Header & JSON Mode Switcher */}
               <div className="flex items-center justify-between gap-2 flex-wrap pt-0.5">
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
-                    Fields to insert into "{rec.tableName}":
-                  </span>
-                  <span className="text-[9.5px] text-muted-foreground/70 font-mono">
-                    ({mergedFieldKeys.size} column{mergedFieldKeys.size === 1 ? "" : "s"})
-                  </span>
+                  <button
+                    type="button"
+                    onClick={() => toggleCollapse(recIdx, defaultCollapsed)}
+                    className="flex items-center gap-1.5 text-[10px] text-muted-foreground hover:text-foreground font-semibold uppercase tracking-wider cursor-pointer select-none transition-colors"
+                    title={isCollapsed ? "Expand all columns" : "Collapse columns to save sidebar space"}
+                  >
+                    {isCollapsed ? (
+                      <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                    ) : (
+                      <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                    )}
+                    <span>Fields for "{rec.tableName}":</span>
+                    <span className="text-[9.5px] text-muted-foreground/70 font-mono normal-case">
+                      ({mergedFieldKeys.size} column{mergedFieldKeys.size === 1 ? "" : "s"})
+                    </span>
+                    <span className="text-[9.5px] text-primary/80 font-mono normal-case underline ml-1">
+                      {isCollapsed ? "Expand" : "Collapse"}
+                    </span>
+                  </button>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -932,7 +1022,7 @@ export function PersonaRecordsEditor({ persona, className }: PersonaRecordsEdito
                       title="Fill all table columns with schema default values"
                     >
                       <Sparkles className="w-3 h-3 text-muted-foreground" />
-                      <span>Populate All Schema Columns</span>
+                      <span>Populate Schema</span>
                     </button>
                   )}
 
@@ -940,7 +1030,10 @@ export function PersonaRecordsEditor({ persona, className }: PersonaRecordsEdito
                   <div className="flex items-center gap-0.5 p-0.5 rounded-md bg-secondary/60 border border-border/40">
                     <button
                       type="button"
-                      onClick={() => setRecordViewMode((prev) => ({ ...prev, [recIdx]: "form" }))}
+                      onClick={() => {
+                        setRecordViewMode((prev) => ({ ...prev, [recIdx]: "form" }));
+                        if (isCollapsed) toggleCollapse(recIdx, defaultCollapsed);
+                      }}
                       className={cn(
                         "px-2 py-0.5 text-[10px] rounded font-medium transition-colors cursor-pointer flex items-center gap-1",
                         currentMode === "form"
@@ -959,6 +1052,7 @@ export function PersonaRecordsEditor({ persona, className }: PersonaRecordsEdito
                           ...prev,
                           [recIdx]: generateCommentedJson(rec.fields, tableColumns, rec.tableName),
                         }));
+                        if (isCollapsed) toggleCollapse(recIdx, defaultCollapsed);
                       }}
                       className={cn(
                         "px-2 py-0.5 text-[10px] rounded font-medium transition-colors cursor-pointer flex items-center gap-1",
@@ -968,16 +1062,45 @@ export function PersonaRecordsEditor({ persona, className }: PersonaRecordsEdito
                       )}
                     >
                       <Code2 className="w-3 h-3 text-muted-foreground" />
-                      <span>JSON (Commented)</span>
+                      <span>JSON</span>
                     </button>
                   </div>
                 </div>
               </div>
 
-              {/* ── View 1: Form Fields View ── */}
-              {currentMode === "form" ? (
+              {/* ── View Body: Collapsed Preview vs Expanded Form/JSON ── */}
+              {isCollapsed ? (
+                <div
+                  onClick={() => toggleCollapse(recIdx, defaultCollapsed)}
+                  className="flex items-center justify-between gap-2 p-2 rounded-md bg-secondary/25 border border-border/40 hover:bg-secondary/40 cursor-pointer transition-colors"
+                  title="Click to expand and edit table fields"
+                >
+                  <div className="flex items-center gap-2 flex-wrap text-[11px] font-mono text-muted-foreground">
+                    {Array.from(mergedFieldKeys).slice(0, 4).map((k) => {
+                      const val = rec.fields[k];
+                      return (
+                        <span key={k} className="flex items-center gap-1">
+                          <span className="text-foreground/90 font-semibold">{k}:</span>
+                          <span className="text-muted-foreground/80 truncate max-w-[120px]">
+                            {val !== undefined && val !== null ? String(val) : "—"}
+                          </span>
+                          <span className="text-border/60">|</span>
+                        </span>
+                      );
+                    })}
+                    {mergedFieldKeys.size > 4 && (
+                      <span className="text-[10px] text-muted-foreground/70">
+                        +{mergedFieldKeys.size - 4} more
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[10.5px] font-sans text-primary hover:underline shrink-0">
+                    Expand ({mergedFieldKeys.size})
+                  </span>
+                </div>
+              ) : currentMode === "form" ? (
                 <div className="flex flex-col gap-2 pt-0.5">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1 max-h-[360px] overflow-y-auto pr-1">
                     {Array.from(mergedFieldKeys).map((fieldName) => {
                       const colDef = colMap.get(fieldName.toLowerCase());
                       const isId = fieldName === "id" || fieldName === "_id" || colDef?.isPrimaryKey;
@@ -1222,8 +1345,8 @@ export function PersonaRecordsEditor({ persona, className }: PersonaRecordsEdito
                   <textarea
                     value={currentJsonText}
                     onChange={(e) => handleJsonChange(recIdx, e.target.value)}
-                    rows={12}
-                    className="w-full font-mono text-[11px] leading-relaxed p-3 rounded-lg bg-zinc-950/80 border border-zinc-800 text-zinc-200 focus:border-zinc-500 focus:outline-none resize-y selection:bg-zinc-800"
+                    rows={7}
+                    className="w-full font-mono text-[11px] leading-relaxed p-2.5 rounded-lg bg-zinc-950/80 border border-zinc-800 text-zinc-200 focus:border-zinc-500 focus:outline-none resize-y selection:bg-zinc-800 max-h-[260px]"
                     placeholder="Edit JSON..."
                     spellCheck={false}
                   />
@@ -1238,7 +1361,7 @@ export function PersonaRecordsEditor({ persona, className }: PersonaRecordsEdito
 
               {/* Inline Insertion Error Alert */}
               {recordErrors[recIdx] && (
-                <div className="p-2.5 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive text-xs flex flex-col gap-1.5 font-mono">
+                <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive text-xs flex flex-col gap-2 font-mono">
                   <div className="flex items-center justify-between font-semibold font-sans text-destructive">
                     <span className="flex items-center gap-1.5">
                       <AlertCircle className="w-4 h-4 shrink-0 text-destructive" />
@@ -1252,8 +1375,14 @@ export function PersonaRecordsEditor({ persona, className }: PersonaRecordsEdito
                       Dismiss
                     </button>
                   </div>
-                  <div className="text-[11px] whitespace-pre-wrap break-all leading-relaxed p-2 rounded bg-background/70 border border-destructive/20 text-destructive font-mono select-all">
+                  <div className="text-[11px] whitespace-pre-wrap break-all leading-relaxed p-2.5 rounded bg-background/80 border border-destructive/25 text-destructive font-mono select-all">
                     {recordErrors[recIdx]}
+                  </div>
+                  <div className="flex items-start gap-1.5 text-[11px] font-sans text-muted-foreground pt-1 border-t border-destructive/20 leading-normal">
+                    <span className="font-semibold text-foreground shrink-0">💡 How to resolve:</span>
+                    <span>
+                      Ensure your database server is running. Then open <strong>SchemaView</strong>, click the <strong>"{rec.databaseName || "Primary Database"}"</strong> node in the canvas, and verify its Host, Port, User, Password, or Connection String.
+                    </span>
                   </div>
                 </div>
               )}

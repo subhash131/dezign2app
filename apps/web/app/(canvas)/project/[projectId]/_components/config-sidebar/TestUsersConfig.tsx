@@ -480,13 +480,18 @@ export function TestUsersConfig({ id, nodeId }: TestUsersConfigProps) {
       } else {
         toast.error(`Failed to insert test users: ${res.error || "Unknown database error"}`, {
           id: toastId,
-          description: "Check that your database is running and reachable.",
+          description: "Please check your database connection and verify its settings on the database node in SchemaView.",
+          duration: 9000,
         });
       }
     } catch (err) {
       toast.error(
         `Database insertion error: ${err instanceof Error ? err.message : String(err)}`,
-        { id: toastId },
+        {
+          id: toastId,
+          description: "Please check your database connection in SchemaView.",
+          duration: 9000,
+        },
       );
     } finally {
       setIsSeedingDb(false);
