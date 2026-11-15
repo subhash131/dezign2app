@@ -502,8 +502,18 @@ export function compileNextjsV16WebClient(
   }));
   const rootRealtimeConns: LinkedRealtimeConnectionInfo[] =
     rootLayoutPageInfo?.realtimeConnections || fallbackRootConns;
-  const rootSections: PageSection[] = rootLayoutNode?.data?.sections ?? [];
-  const rootActions: UIEventItem[] = rootSections.flatMap((s) => s.actions || []);
+  const rawRootSections: PageSection[] = rootLayoutNode?.data?.sections ?? [];
+  const rawRootEvents: UIEventItem[] = rootLayoutNode?.data?.events ?? [];
+  const rootSections: PageSection[] =
+    rawRootSections.length > 0
+      ? rawRootSections
+      : rawRootEvents.length > 0
+      ? [{ id: "sec-default", name: "Default", actions: rawRootEvents }]
+      : [];
+  const rootActions: UIEventItem[] = [
+    ...rootSections.flatMap((s) => s.actions || []),
+    ...rawRootEvents.filter((e) => !rootSections.some((s) => (s.actions || []).some((act) => act.id === e.id))),
+  ];
   const hasRootStoreActions =
     Array.isArray(rootLayoutNode?.data?.actions) &&
     rootLayoutNode.data.actions.length > 0;

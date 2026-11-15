@@ -199,19 +199,23 @@ ${cleanupBlock}
         if (isMounted) {
           const errorMessage = err instanceof Error ? err.message : "Failed to load page data";
           setPageLoadError(errorMessage);
+          const errLogEntry = {
+            id: Math.random().toString(36).substring(2, 9),
+            eventName: "pageLoad",
+            eventType: "pageLoad",
+            timestamp: new Date().toLocaleTimeString(),
+            url: "N/A",
+            method: "LOAD",
+            error: errorMessage,
+            data: null,
+          };
           setTriggerLogs((prev) => [
-            {
-              id: Math.random().toString(36).substring(2, 9),
-              eventName: "pageLoad",
-              eventType: "pageLoad",
-              timestamp: new Date().toLocaleTimeString(),
-              url: "N/A",
-              method: "LOAD",
-              error: errorMessage,
-              data: null,
-            },
+            errLogEntry,
             ...prev,
           ]);
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("dezign:layout-log", { detail: errLogEntry }));
+          }
         }
       } finally {
         if (isMounted) {

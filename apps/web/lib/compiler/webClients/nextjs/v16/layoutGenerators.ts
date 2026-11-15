@@ -717,7 +717,19 @@ export function generateRouteGroupLayouts(
         : fallbackLayoutConns;
 
     // Default: JWT-based middleware + requireSession() layout
-    const layoutSections: PageSection[] = connectedLayoutNode?.data?.sections ?? [];
+    const rawSections: PageSection[] = connectedLayoutNode?.data?.sections ?? [];
+    const rawEvents: UIEventItem[] = connectedLayoutNode?.data?.events ?? [];
+    const layoutSections: PageSection[] =
+      rawSections.length > 0
+        ? rawSections
+        : rawEvents.length > 0
+        ? [{ id: "sec-default", name: "Default", actions: rawEvents }]
+        : [];
+
+    const extraEvents: UIEventItem[] = rawEvents.filter(
+      (e) => !layoutSections.some((sec) => (sec.actions || []).some((act) => act.id === e.id || act.name === e.name)),
+    );
+
     const layoutSidebarSection = layoutSections.find((s: PageSection) =>
       (s.componentBindings || []).some((cb) => cb.componentType === "sidebar"),
     );
@@ -730,41 +742,50 @@ export function generateRouteGroupLayouts(
     // Compile every action configured in layout sections into standalone action files
     // and compile the exact configured pipeline steps (auth, API, storage, navigation, etc.)
     const layoutActions: { evt: UIEventItem; compName: string }[] = [];
-    layoutSections.forEach((sec) => {
-      (sec.actions || []).forEach((evt, evtIdx) => {
-        const evtName = evt.name || "Action";
-        const evtType = evt.event || "click";
-        const compName = slugToComponentName(labelToSlug(evtName, evtIdx)).replace(/Page$/, "Action");
-        layoutActions.push({ evt, compName });
+    const allActionsToCompile = [
+      ...layoutSections.flatMap((s) => s.actions || []),
+      ...extraEvents,
+    ];
+    allActionsToCompile.forEach((evt, evtIdx) => {
+      const evtName = evt.name || "Action";
+      const evtType = evt.event || "click";
+      const compName = slugToComponentName(labelToSlug(evtName, evtIdx)).replace(/Page$/, "Action");
+      layoutActions.push({ evt, compName });
 
-        const link = connectedLayoutNode
-          ? resolveLinkedEndpoint(connectedLayoutNode.id, evt.id, allNodes, allEdges, endpoints)
-          : null;
+      const link = connectedLayoutNode
+        ? resolveLinkedEndpoint(connectedLayoutNode.id, evt.id, allNodes, allEdges, endpoints)
+        : null;
 
-        const actionCode = generateEventComponent(
-          evtName,
-          evtType,
-          link?.fullUrl || evt.url || "",
-          link?.method || evt.method || "POST",
-          compName,
-          evt.targetRoute,
-          undefined,
-          Boolean(authNode),
-          undefined,
-          undefined,
-          undefined,
-          evt,
-          link?.endpoint,
-          link?.serviceName,
-        );
+      const actionCode = generateEventComponent(
+        evtName,
+        evtType,
+        link?.fullUrl || evt.url || "",
+        link?.method || evt.method || "POST",
+        compName,
+        evt.targetRoute,
+        undefined,
+        Boolean(authNode),
+        undefined,
+        undefined,
+        undefined,
+        evt,
+        link?.endpoint,
+        link?.serviceName,
+      );
 
-        files.push({
-          filename: `app/${folderPath}/_components/${compName}.tsx`,
-          language: "typescript",
-          content: actionCode,
-        });
+      files.push({
+        filename: `app/${folderPath}/_components/${compName}.tsx`,
+        language: "typescript",
+        content: actionCode,
       });
     });
+
+    const LIFECYCLE_EVENT_NAMES = new Set(["onMount", "mount", "pageLoad"]);
+    const layoutOnMountActions = layoutActions.filter(
+      (a) =>
+        LIFECYCLE_EVENT_NAMES.has(a.evt.event || "") ||
+        LIFECYCLE_EVENT_NAMES.has(a.evt.name || ""),
+    );
 
     const hasStoreActions =
       Array.isArray(connectedLayoutNode?.data?.actions) &&
@@ -780,13 +801,14 @@ export function generateRouteGroupLayouts(
       layoutSidebarGroups.some((grp: { items?: Array<{ itemType?: string; actionId?: string; actionName?: string; name?: string }> }) =>
         (grp.items || []).some(isActionItem),
       ) ||
-      layoutActions.length > 0;
+      layoutActions.some((a) => !LIFECYCLE_EVENT_NAMES.has(a.evt.event || "") && !LIFECYCLE_EVENT_NAMES.has(a.evt.name || ""));
 
     const hasEventsDrawer =
       (Array.isArray(layoutRealtimeConns) && layoutRealtimeConns.length > 0) ||
       layoutActions.length > 0 ||
       hasSidebarActionBtns ||
-      hasStoreActions;
+      hasStoreActions ||
+      layoutOnMountActions.length > 0;
 
     if (hasEventsDrawer) {
       files.push({
@@ -796,6 +818,7 @@ export function generateRouteGroupLayouts(
           layoutRealtimeConns,
           Boolean(authNode),
           leafGroup,
+          layoutOnMountActions,
         ),
       });
     }
