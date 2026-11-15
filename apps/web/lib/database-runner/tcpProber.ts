@@ -19,7 +19,14 @@ export function resolveEnvValue(envKey: string, projectDir?: string): string | u
       if (trimmed.startsWith("#") || !trimmed.includes("=")) continue;
       const key = trimmed.substring(0, trimmed.indexOf("=")).trim();
       if (key === envKey) {
-        return trimmed.substring(trimmed.indexOf("=") + 1).trim();
+        let val = trimmed.substring(trimmed.indexOf("=") + 1).trim();
+        if (
+          (val.startsWith('"') && val.endsWith('"')) ||
+          (val.startsWith("'") && val.endsWith("'"))
+        ) {
+          val = val.slice(1, -1);
+        }
+        return val;
       }
     }
   } catch {}

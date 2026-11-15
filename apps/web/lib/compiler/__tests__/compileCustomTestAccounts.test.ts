@@ -3,6 +3,7 @@ import { compileDatabaseNodes } from "../compileDatabaseNodes";
 import { compileMonorepo } from "../compileMonorepo";
 import { BackendNode, BackendEdge } from "@/types/canvas";
 import { PersonaSeed } from "../types/testPersona";
+import { toValidUuid } from "../utils";
 
 describe("Custom Test Accounts Seeding Integration", () => {
   const authNode: BackendNode = {
@@ -110,9 +111,9 @@ describe("Custom Test Accounts Seeding Integration", () => {
     const schemaFile = dbResult.files.find((f) => f.filename.endsWith("schema.sql"));
     expect(schemaFile).toBeDefined();
 
-    // Check custom persona in schema.sql
+    // Check custom persona in schema.sql (converted to valid UUID for Postgres)
     expect(schemaFile!.content).toContain('INSERT INTO "user"');
-    expect(schemaFile!.content).toContain("mgr_123");
+    expect(schemaFile!.content).toContain(toValidUuid("mgr_123"));
     expect(schemaFile!.content).toContain("jane@company.com");
     expect(schemaFile!.content).toContain("manager");
     expect(schemaFile!.content).toContain('ON CONFLICT ("id") DO NOTHING');

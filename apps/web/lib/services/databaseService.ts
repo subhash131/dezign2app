@@ -7,6 +7,7 @@ import {
   dropDbTableAction,
   renameDbTableAction,
   renameDbColumnAction,
+  seedTestUsersAction,
   type TestDbOperationPayload,
   type TestDbOperationResult,
   type CheckDbConnectionPayload,
@@ -21,6 +22,8 @@ import {
   type RenameDbTableResult,
   type RenameDbColumnPayload,
   type RenameDbColumnResult,
+  type SeedTestUsersPayload,
+  type SeedTestUsersResult,
   type CanvasForeignKey,
   type PrerequisiteTableDefinition,
   type AlteredColumnDefinition,
@@ -44,6 +47,8 @@ export type {
   RenameDbTableResult,
   RenameDbColumnPayload,
   RenameDbColumnResult,
+  SeedTestUsersPayload,
+  SeedTestUsersResult,
   CanvasForeignKey,
   PrerequisiteTableDefinition,
   AlteredColumnDefinition,
@@ -250,3 +255,31 @@ export async function renameDbColumn(
 
   return renameDbColumnAction(payload);
 }
+
+/**
+ * Insert / seed test users and authentication session records into the connected live database.
+ *
+ * Automatically routes:
+ * 1. In Electron desktop app -> Native IPC pipe (`window.electronAPI.db.seedTestUsers`)
+ * 2. In Browser cloud mode -> Next.js Server Action (`seedTestUsersAction`)
+ */
+export async function seedTestUsers(
+  payload: SeedTestUsersPayload,
+): Promise<SeedTestUsersResult> {
+  const electron = getElectronAPI();
+  if (electron?.db?.seedTestUsers) {
+    try {
+      return await electron.db.seedTestUsers(payload);
+    } catch (err) {
+      return {
+        success: false,
+        insertedRecords: 0,
+        statements: [],
+        error: `Desktop IPC error: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+  }
+
+  return seedTestUsersAction(payload);
+}
+

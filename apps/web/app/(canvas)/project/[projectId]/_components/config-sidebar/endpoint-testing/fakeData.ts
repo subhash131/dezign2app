@@ -93,8 +93,15 @@ export function generateFakeDataForField(
   if (name.includes("url") || name.includes("link") || name.includes("website")) {
     return "https://example.com";
   }
-  if (name.includes("uuid") || name.includes("guid")) {
-    return "550e8400-e29b-41d4-a716-446655440000";
+  if (
+    name.includes("uuid") ||
+    name.includes("guid") ||
+    name === "userid" ||
+    name === "createdby" ||
+    name === "authorid" ||
+    name === "creatorid"
+  ) {
+    return "a0000000-0000-4000-8000-000000000001";
   }
   if (name.endsWith("id") || name.startsWith("id")) {
     return "rec_test_101";

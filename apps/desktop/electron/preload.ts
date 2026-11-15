@@ -134,6 +134,7 @@ export interface ElectronAPI {
     dropTable(payload: DropDbTablePayload): Promise<DropDbTableResult>;
     renameTable(payload: RenameDbTablePayload): Promise<RenameDbTableResult>;
     renameColumn(payload: RenameDbColumnPayload): Promise<RenameDbColumnResult>;
+    seedTestUsers(payload: any): Promise<{ success: boolean; insertedRecords: number; statements: string[]; error?: string }>;
   };
 
   /** Background auto-updater service */
@@ -265,6 +266,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.invoke("db:rename-table", payload),
     renameColumn: (payload: RenameDbColumnPayload) =>
       ipcRenderer.invoke("db:rename-column", payload),
+    seedTestUsers: (payload: any) =>
+      ipcRenderer.invoke("db:seed-test-users", payload),
   },
 
   updater: {

@@ -117,6 +117,12 @@ function buildSessionBlock(strategy: AuthStrategy): string {
 function buildDbSessionBlock(): string {
   return `      // Fast path: Stateless HS256 JWT Verification (instant for Postman & external test tokens)
       const secret = process.env.BETTER_AUTH_SECRET ?? "default_super_secret_key_change_in_production";
+      const _toValidUuid = (str?: string | null): string => {
+        if (!str) return "a0000000-0000-4000-8000-000000000001";
+        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str)) return str;
+        const hex = crypto.createHash("md5").update(str).digest("hex");
+        return \`\${hex.slice(0, 8)}-\${hex.slice(8, 12)}-4\${hex.slice(13, 16)}-8\${hex.slice(17, 20)}-\${hex.slice(20, 32)}\`;
+      };
       let resolvedUserId: string | undefined;
       let resolvedRole: string = "user";
       let resolvedUserClaims: Record<string, string | number | boolean | null | undefined> = {};
@@ -142,7 +148,7 @@ function buildDbSessionBlock(): string {
               if (!payload.exp || payload.exp * 1000 > Date.now()) {
                 const sub = payload.sub ?? payload.userId ?? payload.id;
                 if (sub) {
-                  resolvedUserId = String(sub);
+                  resolvedUserId = _toValidUuid(String(sub));
                   resolvedRole = String(payload.role ?? "user");
                   resolvedUserClaims = { ...payload };
                   logger.info("Auth: token resolved via stateless HS256 JWT verification", { userId: resolvedUserId, role: resolvedRole });
@@ -159,7 +165,7 @@ function buildDbSessionBlock(): string {
       if (!resolvedUserId) {
         const session = await findAuthSessionByToken(token);
 
-        resolvedUserId = session?.userId;
+        resolvedUserId = session?.userId ? _toValidUuid(String(session.userId)) : undefined;
         const resolvedExpiresAt = session?.expiresAt;
 
         if (!resolvedUserId) {
@@ -181,8 +187,8 @@ function buildDbSessionBlock(): string {
 
       req.user = {
         ...resolvedUserClaims,
-        id: String(resolvedUserId),
-        userId: String(resolvedUserId),
+        id: _toValidUuid(String(resolvedUserId)),
+        userId: _toValidUuid(String(resolvedUserId)),
         username: String(resolvedUserClaims.username ?? resolvedUserRecord?.username ?? resolvedUserClaims.name ?? resolvedUserRecord?.name ?? resolvedUserId),
         role: resolvedRole,
         ...(resolvedUserClaims.email ? { email: String(resolvedUserClaims.email) } : resolvedUserRecord?.email ? { email: String(resolvedUserRecord.email) } : {}),

@@ -112,7 +112,7 @@ function generateTableHelpers(
   const insertPlaceholders = insertColList.map(() => "?").join(", ");
 
   const recordFields = writableCols
-    .map((c) => {
+    .flatMap((c) => {
       const nameLower = c.name.toLowerCase().replace(/[^a-z0-9]/g, "");
       const isTimestampCol =
         nameLower === "createdat" ||
@@ -120,7 +120,12 @@ function generateTableHelpers(
         nameLower === "created_at" ||
         nameLower === "updated_at";
       const isOptional = !c.isNotNull || isTimestampCol;
-      return `  ${toVarName(c.name)}${isOptional ? "?" : ""}: ${toTsType(c.type)};`;
+      const lines = [`  ${c.name}${isOptional ? "?" : ""}: ${toTsType(c.type)};`];
+      const camel = toVarName(c.name);
+      if (camel !== c.name) {
+        lines.push(`  ${camel}?: ${toTsType(c.type)};`);
+      }
+      return lines;
     })
     .join("\n");
   const createPkField = isStringPk ? `  ${pkVarName}?: ${pkTs};\n` : "";
@@ -149,14 +154,26 @@ function generateTableHelpers(
   // Types
   code += `// ── Types ────────────────────────────────────────────────────────────────────\n\n`;
   code += `export interface ${Pascal} {\n`;
+  const emittedSqliteProps = new Set<string>();
   cols.forEach((c) => {
-    code += `  ${toVarName(c.name)}: ${toTsType(c.type)};\n`;
+    const isOptional = !c.isNotNull && !c.isPrimaryKey;
+    if (!emittedSqliteProps.has(c.name)) {
+      code += `  ${c.name}${isOptional ? "?" : ""}: ${toTsType(c.type)};\n`;
+      emittedSqliteProps.add(c.name);
+    }
+    const camel = toVarName(c.name);
+    if (camel !== c.name && !emittedSqliteProps.has(camel)) {
+      code += `  ${camel}?: ${toTsType(c.type)};\n`;
+      emittedSqliteProps.add(camel);
+    }
   });
-  if (!colVarNames.has("message")) {
+  if (!emittedSqliteProps.has("message")) {
     code += `  message?: string;\n`;
+    emittedSqliteProps.add("message");
   }
-  if (!colVarNames.has("success")) {
+  if (!emittedSqliteProps.has("success")) {
     code += `  success?: boolean;\n`;
+    emittedSqliteProps.add("success");
   }
   code += `};\n\n`;
   code += `export type Create${Pascal}Data = ${dataType};\n\n`;

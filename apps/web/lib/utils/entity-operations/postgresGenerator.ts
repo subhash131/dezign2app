@@ -31,6 +31,9 @@ export function generatePostgresDbOperations(
   const pkVarName = toVarName(pkColName);
   const pkType = sqlColumnToTsType(pkCol.type);
   const isStringPk = pkType === "string";
+  const isUuidPk =
+    (pkCol.type || "").toLowerCase().includes("uuid") ||
+    pkCol.type?.toUpperCase() === "UUID";
   const writableCols = columns.filter((c) => !c.isPrimaryKey);
   const isCreatedAt = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, "") === "createdat";
   const isUpdatedAt = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, "") === "updatedat";
@@ -43,26 +46,48 @@ export function generatePostgresDbOperations(
     .map((c) => {
       if (c.isPrimaryKey) return "_id";
       const v = toVarName(c.name);
+      const colName = c.name;
+      const valExpr = v !== colName ? `(${v} ?? ${colName})` : v;
       if (isCreatedAt(c.name) || isUpdatedAt(c.name)) {
-        return `${v} || new Date().toISOString()`;
+        return `${valExpr} || new Date().toISOString()`;
       }
-      return `${v} ?? null`;
+      const isColUuid = (c.type || "").toLowerCase().includes("uuid");
+      if (isColUuid) {
+        return `(${valExpr} && isUuid(${valExpr})) ? ${valExpr} : (${valExpr} ? toValidUuid(${valExpr}) : null)`;
+      }
+      return `${valExpr} ?? null`;
     })
     .join(", ");
 
-  const destructuredFields = insertColList.map((c) => toVarName(c.name)).join(", ") || pkVarName;
+  const destructuredFields = insertColList
+    .flatMap((c) => {
+      const v = toVarName(c.name);
+      return v !== c.name ? [v, c.name] : [v];
+    })
+    .join(", ") || pkVarName;
   const createDestructuredParam = `{ ${destructuredFields} }`;
 
   const updateCols = writableCols.filter((c) => !isCreatedAt(c.name));
   const setClauses = updateCols.map((c, i) => `"${c.name}" = $${i + 2}`).join(", ");
-  const updateDestructured = updateCols.map((c) => toVarName(c.name)).join(", ");
+  const updateDestructured = updateCols
+    .flatMap((c) => {
+      const v = toVarName(c.name);
+      return v !== c.name ? [v, c.name] : [v];
+    })
+    .join(", ");
   const updateArgVals = updateCols
     .map((c) => {
       const v = toVarName(c.name);
+      const colName = c.name;
+      const valExpr = v !== colName ? `(${v} ?? ${colName})` : v;
       if (isUpdatedAt(c.name)) {
-        return `${v} || new Date().toISOString()`;
+        return `${valExpr} || new Date().toISOString()`;
       }
-      return `${v} ?? null`;
+      const isColUuid = (c.type || "").toLowerCase().includes("uuid");
+      if (isColUuid) {
+        return `(${valExpr} && isUuid(${valExpr})) ? ${valExpr} : (${valExpr} ? toValidUuid(${valExpr}) : null)`;
+      }
+      return `${valExpr} ?? null`;
     })
     .join(", ");
 
@@ -76,18 +101,31 @@ export function generatePostgresDbOperations(
     createCode = `export async function create${pascalSingular}({ ${pkVarName} }: Create${pascal}Data = {}): Promise<${pascal}> {\n  const res = ${pkVarName} !== undefined\n    ? await query<${pascal}>(\n        'INSERT INTO "${tableName}" ("${pkColName}") VALUES ($1) RETURNING *',\n        [${pkVarName}]\n      )\n    : await query<${pascal}>(\n        'INSERT INTO "${tableName}" DEFAULT VALUES RETURNING *',\n        []\n      );\n  const row = res.rows[0];\n  if (!row) {\n    throw new Error("Failed to insert record into ${tableName}");\n  }\n  return row;\n}`;
     upsertCode = `export async function upsert${pascalSingular}({ ${pkVarName} }: Upsert${pascal}Data = {}): Promise<${pascal}> {\n  const res = ${pkVarName} !== undefined\n    ? await query<${pascal}>(\n        'INSERT INTO "${tableName}" ("${pkColName}") VALUES ($1) ON CONFLICT ("${pkColName}") ${pgConflictSets} RETURNING *',\n        [${pkVarName}]\n      )\n    : await query<${pascal}>(\n        'INSERT INTO "${tableName}" DEFAULT VALUES RETURNING *',\n        []\n      );\n  const row = res.rows[0];\n  if (!row) {\n    throw new Error("Failed to upsert record into ${tableName}");\n  }\n  return row;\n}`;
   } else if (isStringPk) {
-    createCode = `export async function create${pascalSingular}({ ${destructuredFields} }: Create${pascal}Data): Promise<${pascal}> {\n  const _id = ${pkVarName} || randomUUID();\n  const res = await query<${pascal}>(\n    'INSERT INTO "${tableName}" (${insertColNames}) VALUES (${insertParams}) RETURNING *',\n    [${insertArgVals}]\n  );\n  const row = res.rows[0];\n  if (!row) {\n    throw new Error("Failed to insert record into ${tableName}");\n  }\n  return row;\n}`;
-    upsertCode = `export async function upsert${pascalSingular}({ ${destructuredFields} }: Upsert${pascal}Data): Promise<${pascal}> {\n  const _id = ${pkVarName} || randomUUID();\n  const res = await query<${pascal}>(\n    'INSERT INTO "${tableName}" (${insertColNames}) VALUES (${insertParams}) ON CONFLICT ("${pkColName}") ${pgConflictSets} RETURNING *',\n    [${insertArgVals}]\n  );\n  const row = res.rows[0];\n  if (!row) {\n    throw new Error("Failed to upsert record into ${tableName}");\n  }\n  return row;\n}`;
+    const idAssignment = isUuidPk
+      ? `  const _id = (${pkVarName} && isUuid(${pkVarName})) ? ${pkVarName} : randomUUID();\n`
+      : `  const _id = ${pkVarName} || randomUUID();\n`;
+    createCode = `export async function create${pascalSingular}({ ${destructuredFields} }: Create${pascal}Data): Promise<${pascal}> {\n${idAssignment}  const res = await query<${pascal}>(\n    'INSERT INTO "${tableName}" (${insertColNames}) VALUES (${insertParams}) RETURNING *',\n    [${insertArgVals}]\n  );\n  const row = res.rows[0];\n  if (!row) {\n    throw new Error("Failed to insert record into ${tableName}");\n  }\n  return row;\n}`;
+    upsertCode = `export async function upsert${pascalSingular}({ ${destructuredFields} }: Upsert${pascal}Data): Promise<${pascal}> {\n${idAssignment}  const res = await query<${pascal}>(\n    'INSERT INTO "${tableName}" (${insertColNames}) VALUES (${insertParams}) ON CONFLICT ("${pkColName}") ${pgConflictSets} RETURNING *',\n    [${insertArgVals}]\n  );\n  const row = res.rows[0];\n  if (!row) {\n    throw new Error("Failed to upsert record into ${tableName}");\n  }\n  return row;\n}`;
   } else {
     createCode = `export async function create${pascalSingular}({ ${destructuredFields} }: Create${pascal}Data): Promise<${pascal}> {\n  const res = await query<${pascal}>(\n    'INSERT INTO "${tableName}" (${insertColNames}) VALUES (${insertParams}) RETURNING *',\n    [${insertArgVals}]\n  );\n  const row = res.rows[0];\n  if (!row) {\n    throw new Error("Failed to insert record into ${tableName}");\n  }\n  return row;\n}`;
     upsertCode = `export async function upsert${pascalSingular}({ ${destructuredFields} }: Upsert${pascal}Data): Promise<${pascal}> {\n  const res = await query<${pascal}>(\n    'INSERT INTO "${tableName}" (${insertColNames}) VALUES (${insertParams}) ON CONFLICT ("${pkColName}") ${pgConflictSets} RETURNING *',\n    [${insertArgVals}]\n  );\n  const row = res.rows[0];\n  if (!row) {\n    throw new Error("Failed to upsert record into ${tableName}");\n  }\n  return row;\n}`;
   }
 
   const updateCode = updateCols.length > 0
-    ? `export async function update${pascalSingular}(${pkVarName}: ${pkType}, { ${updateDestructured} }: Update${pascal}Data): Promise<${pascal} | null> {\n  const res = await query<${pascal}>(\n    'UPDATE "${tableName}" SET ${setClauses} WHERE "${pkColName}" = $1 RETURNING *',\n    [${pkVarName}, ${updateArgVals}]\n  );\n  return res.rows[0] || null;\n}`
+    ? isUuidPk
+      ? `export async function update${pascalSingular}(${pkVarName}: ${pkType}, { ${updateDestructured} }: Update${pascal}Data): Promise<${pascal} | null> {\n  if (!isUuid(${pkVarName})) {\n    return null;\n  }\n  const res = await query<${pascal}>(\n    'UPDATE "${tableName}" SET ${setClauses} WHERE "${pkColName}" = $1 RETURNING *',\n    [${pkVarName}, ${updateArgVals}]\n  );\n  return res.rows[0] || null;\n}`
+      : `export async function update${pascalSingular}(${pkVarName}: ${pkType}, { ${updateDestructured} }: Update${pascal}Data): Promise<${pascal} | null> {\n  const res = await query<${pascal}>(\n    'UPDATE "${tableName}" SET ${setClauses} WHERE "${pkColName}" = $1 RETURNING *',\n    [${pkVarName}, ${updateArgVals}]\n  );\n  return res.rows[0] || null;\n}`
+    : isUuidPk
+    ? `export async function update${pascalSingular}(${pkVarName}: ${pkType}): Promise<${pascal} | null> {\n  if (!isUuid(${pkVarName})) {\n    return null;\n  }\n  const res = await query<${pascal}>('SELECT * FROM "${tableName}" WHERE "${pkColName}" = $1 LIMIT 1', [${pkVarName}]);\n  return res.rows[0] || null;\n}`
     : `export async function update${pascalSingular}(${pkVarName}: ${pkType}): Promise<${pascal} | null> {\n  const res = await query<${pascal}>('SELECT * FROM "${tableName}" WHERE "${pkColName}" = $1 LIMIT 1', [${pkVarName}]);\n  return res.rows[0] || null;\n}`;
 
-  const deleteCode = `export async function delete${pascalSingular}ById(${pkVarName}: ${pkType}): Promise<{ success: boolean; message: string }> {\n  await query('DELETE FROM "${tableName}" WHERE "${pkColName}" = $1', [${pkVarName}]);\n  return { success: true, message: "${pascalSingular} deleted successfully" };\n}`;
+  const deleteCode = isUuidPk
+    ? `export async function delete${pascalSingular}ById(${pkVarName}: ${pkType}): Promise<{ success: boolean; message: string }> {\n  if (!isUuid(${pkVarName})) {\n    return { success: false, message: "Record not found (invalid UUID)" };\n  }\n  await query('DELETE FROM "${tableName}" WHERE "${pkColName}" = $1', [${pkVarName}]);\n  return { success: true, message: "${pascalSingular} deleted successfully" };\n}`
+    : `export async function delete${pascalSingular}ById(${pkVarName}: ${pkType}): Promise<{ success: boolean; message: string }> {\n  await query('DELETE FROM "${tableName}" WHERE "${pkColName}" = $1', [${pkVarName}]);\n  return { success: true, message: "${pascalSingular} deleted successfully" };\n}`;
+
+  const findByIdCode = isUuidPk
+    ? `export async function find${pascalSingular}ById(${pkVarName}: ${pkType}): Promise<${pascal} | null> {\n  if (!isUuid(${pkVarName})) {\n    return null;\n  }\n  const res = await query<${pascal}>('SELECT * FROM "${tableName}" WHERE "${pkColName}" = $1 LIMIT 1', [${pkVarName}]);\n  return res.rows[0] || null;\n}`
+    : `export async function find${pascalSingular}ById(${pkVarName}: ${pkType}): Promise<${pascal} | null> {\n  const res = await query<${pascal}>('SELECT * FROM "${tableName}" WHERE "${pkColName}" = $1 LIMIT 1', [${pkVarName}]);\n  return res.rows[0] || null;\n}`;
 
   const ops: DbOperationFunction[] = [
     {
@@ -118,7 +156,7 @@ export function generatePostgresDbOperations(
       returnType: `Promise<${pascal} | null>`,
       logicMode: "code",
       prompt: `Find a single record from the ${tableName} table by primary key (${pkColName}).`,
-      code: `export async function find${pascalSingular}ById(${pkVarName}: ${pkType}): Promise<${pascal} | null> {\n  const res = await query<${pascal}>('SELECT * FROM "${tableName}" WHERE "${pkColName}" = $1 LIMIT 1', [${pkVarName}]);\n  return res.rows[0] || null;\n}`,
+      code: findByIdCode,
       enabled: true,
       isAutoGenerated: true,
     },
