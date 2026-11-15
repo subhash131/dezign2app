@@ -48,7 +48,7 @@ export function getDbOperationExpectedArgs(
   ) {
     if (writableCols.length > 0) {
       return writableCols.map((c) => ({
-        name: toVarName(c.name),
+        name: c.name,
         type: c.type || "string",
         required: Boolean(c.isNotNull),
       }));
@@ -60,7 +60,7 @@ export function getDbOperationExpectedArgs(
     return [
       { name: toVarName(pkName), type: pkType, required: true },
       ...writableCols.map((c) => ({
-        name: toVarName(c.name),
+        name: c.name,
         type: c.type || "string",
         required: false,
       })),

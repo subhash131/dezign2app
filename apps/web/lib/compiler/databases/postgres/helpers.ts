@@ -102,21 +102,16 @@ export function generateInlinePostgresOp(
         .join(", ");
       const destructuredFields = [
         ...(isStringPk ? [pkVarName] : []),
-        ...writableCols.flatMap((c) => {
-          const varN = toVarName(c.name);
-          return varN !== c.name ? [varN, c.name] : [varN];
-        }),
+        ...writableCols.map((c) => c.name),
       ].join(", ") || pkVarName;
       const insertArgVals = writableCols
         .map((c) => {
-          const varN = toVarName(c.name);
           const colName = c.name;
           const isColUuid = (c.type || "").toLowerCase().includes("uuid");
-          const valExpr = varN !== colName ? `(${varN} ?? ${colName})` : varN;
           if (isColUuid) {
-            return `(${valExpr} && isUuid(${valExpr})) ? ${valExpr} : (${valExpr} ? toValidUuid(${valExpr}) : null)`;
+            return `(${colName} && isUuid(${colName})) ? ${colName} : (${colName} ? toValidUuid(${colName}) : null)`;
           }
-          return `${valExpr} ?? null`;
+          return `${colName} ?? null`;
         })
         .join(", ");
       if (isStringPk) {
@@ -154,22 +149,18 @@ export function generateInlinePostgresOp(
     }
     case "update": {
       if (writableCols.length > 0) {
-        const updateDestructured = writableCols
-          .flatMap((c) => (toVarName(c.name) !== c.name ? [toVarName(c.name), c.name] : [toVarName(c.name)]))
-          .join(", ");
+        const updateDestructured = writableCols.map((c) => c.name).join(", ");
         const setClauses = writableCols
           .map((c, i) => `"${c.name}" = $${i + 2}`)
           .join(", ");
         const setArgs = writableCols
           .map((c) => {
-            const varN = toVarName(c.name);
             const colName = c.name;
             const isColUuid = (c.type || "").toLowerCase().includes("uuid");
-            const valExpr = varN !== colName ? `(${varN} ?? ${colName})` : varN;
             if (isColUuid) {
-              return `(${valExpr} && isUuid(${valExpr})) ? ${valExpr} : (${valExpr} ? toValidUuid(${valExpr}) : null)`;
+              return `(${colName} && isUuid(${colName})) ? ${colName} : (${colName} ? toValidUuid(${colName}) : null)`;
             }
-            return `${valExpr} ?? null`;
+            return `${colName} ?? null`;
           })
           .join(", ");
         if (isUuidPk) {
@@ -247,21 +238,16 @@ export function generateInlinePostgresOp(
         .join(", ");
       const destructuredFields = [
         ...(isStringPk ? [pkVarName] : []),
-        ...writableCols.flatMap((c) => {
-          const varN = toVarName(c.name);
-          return varN !== c.name ? [varN, c.name] : [varN];
-        }),
+        ...writableCols.map((c) => c.name),
       ].join(", ") || pkVarName;
       const insertArgVals = writableCols
         .map((c) => {
-          const varN = toVarName(c.name);
           const colName = c.name;
           const isColUuid = (c.type || "").toLowerCase().includes("uuid");
-          const valExpr = varN !== colName ? `(${varN} ?? ${colName})` : varN;
           if (isColUuid) {
-            return `(${valExpr} && isUuid(${valExpr})) ? ${valExpr} : (${valExpr} ? toValidUuid(${valExpr}) : null)`;
+            return `(${colName} && isUuid(${colName})) ? ${colName} : (${colName} ? toValidUuid(${colName}) : null)`;
           }
-          return `${valExpr} ?? null`;
+          return `${colName} ?? null`;
         })
         .join(", ");
       const pgConflictSets = writableCols.length > 0
@@ -386,47 +372,26 @@ export function generatePostgresTableHelpers(
   // Type declarations
   code += `// ── Types ────────────────────────────────────────────────────────────────────\n\n`;
   code += `export interface ${pascal} {\n`;
-  const emittedPropNames = new Set<string>();
   cols.forEach((c) => {
     const tsType = toTsType(c.type);
     const opt = c.isPrimaryKey || c.isNotNull ? "" : "?";
-    if (!emittedPropNames.has(c.name)) {
-      code += `  ${c.name}${opt}: ${tsType};\n`;
-      emittedPropNames.add(c.name);
-    }
-    const varName = toVarName(c.name);
-    if (varName !== c.name && !emittedPropNames.has(varName)) {
-      code += `  ${varName}?: ${tsType};\n`;
-      emittedPropNames.add(varName);
-    }
+    code += `  ${c.name}${opt}: ${tsType};\n`;
   });
-  if (!emittedPropNames.has("message")) {
+  if (!cols.some((c) => c.name === "message")) {
     code += `  message?: string;\n`;
-    emittedPropNames.add("message");
   }
-  if (!emittedPropNames.has("success")) {
+  if (!cols.some((c) => c.name === "success")) {
     code += `  success?: boolean;\n`;
-    emittedPropNames.add("success");
   }
   code += `}\n\n`;
 
   // Create data type
-  const emittedCreateProps = new Set<string>();
-  const createFieldLines: string[] = [];
-  writableCols.forEach((c) => {
-    const opt = c.isNotNull ? "" : "?";
-    const tsType = toTsType(c.type);
-    if (!emittedCreateProps.has(c.name)) {
-      createFieldLines.push(`  ${c.name}${opt}: ${tsType};`);
-      emittedCreateProps.add(c.name);
-    }
-    const varName = toVarName(c.name);
-    if (varName !== c.name && !emittedCreateProps.has(varName)) {
-      createFieldLines.push(`  ${varName}?: ${tsType};`);
-      emittedCreateProps.add(varName);
-    }
-  });
-  const createFields = createFieldLines.join("\n");
+  const createFields = writableCols
+    .map((c) => {
+      const opt = c.isNotNull ? "" : "?";
+      return `  ${c.name}${opt}: ${toTsType(c.type)};`;
+    })
+    .join("\n");
   code += `export interface Create${pascal}Data {\n  ${pkVarName}?: ${pkTsType};\n${createFields ? `${createFields}\n` : ""}}\n\n`;
 
   code += `export type Update${pascal}Data = Partial<Create${pascal}Data>;\n\n`;

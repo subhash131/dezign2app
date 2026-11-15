@@ -112,7 +112,7 @@ function generateTableHelpers(
   const insertPlaceholders = insertColList.map(() => "?").join(", ");
 
   const recordFields = writableCols
-    .flatMap((c) => {
+    .map((c) => {
       const nameLower = c.name.toLowerCase().replace(/[^a-z0-9]/g, "");
       const isTimestampCol =
         nameLower === "createdat" ||
@@ -120,12 +120,7 @@ function generateTableHelpers(
         nameLower === "created_at" ||
         nameLower === "updated_at";
       const isOptional = !c.isNotNull || isTimestampCol;
-      const lines = [`  ${c.name}${isOptional ? "?" : ""}: ${toTsType(c.type)};`];
-      const camel = toVarName(c.name);
-      if (camel !== c.name) {
-        lines.push(`  ${camel}?: ${toTsType(c.type)};`);
-      }
-      return lines;
+      return `  ${c.name}${isOptional ? "?" : ""}: ${toTsType(c.type)};`;
     })
     .join("\n");
   const createPkField = isStringPk ? `  ${pkVarName}?: ${pkTs};\n` : "";
@@ -154,26 +149,15 @@ function generateTableHelpers(
   // Types
   code += `// ── Types ────────────────────────────────────────────────────────────────────\n\n`;
   code += `export interface ${Pascal} {\n`;
-  const emittedSqliteProps = new Set<string>();
   cols.forEach((c) => {
     const isOptional = !c.isNotNull && !c.isPrimaryKey;
-    if (!emittedSqliteProps.has(c.name)) {
-      code += `  ${c.name}${isOptional ? "?" : ""}: ${toTsType(c.type)};\n`;
-      emittedSqliteProps.add(c.name);
-    }
-    const camel = toVarName(c.name);
-    if (camel !== c.name && !emittedSqliteProps.has(camel)) {
-      code += `  ${camel}?: ${toTsType(c.type)};\n`;
-      emittedSqliteProps.add(camel);
-    }
+    code += `  ${c.name}${isOptional ? "?" : ""}: ${toTsType(c.type)};\n`;
   });
-  if (!emittedSqliteProps.has("message")) {
+  if (!cols.some((c) => c.name === "message")) {
     code += `  message?: string;\n`;
-    emittedSqliteProps.add("message");
   }
-  if (!emittedSqliteProps.has("success")) {
+  if (!cols.some((c) => c.name === "success")) {
     code += `  success?: boolean;\n`;
-    emittedSqliteProps.add("success");
   }
   code += `};\n\n`;
   code += `export type Create${Pascal}Data = ${dataType};\n\n`;
@@ -492,9 +476,9 @@ function generateTableHelpers(
             nameLower === "created_at" ||
             nameLower === "updated_at"
           ) {
-            return `data.${varName} ?? now`;
+            return `data[${JSON.stringify(c.name)}] ?? now`;
           }
-          return `data.${varName} ?? null`;
+          return `data[${JSON.stringify(c.name)}] ?? null`;
         })
         .join(", ");
       code += `  const info = stmtInsert.run(${insertRunArgs});\n`;
@@ -511,8 +495,7 @@ function generateTableHelpers(
         const nameLower = c.name.toLowerCase().replace(/[^a-z0-9]/g, "");
         return nameLower === "createdat" || nameLower === "updatedat" || nameLower === "created_at" || nameLower === "updated_at";
       }).map((c) => {
-        const varName = toVarName(c.name);
-        return `${varName}: data.${varName} ?? now`;
+        return `${JSON.stringify(c.name)}: data[${JSON.stringify(c.name)}] ?? now`;
       }).join(", ")} } as unknown as ${Pascal};\n`;
       code += `}\n\n`;
     } else if (op.kind === "create") {
@@ -541,7 +524,7 @@ function generateTableHelpers(
       code += `  const updated = { ...current, ...data };\n`;
       const fallbackUpdateArgs = updateCols
         .map((c) => {
-          const v = `updated.${toVarName(c.name)}`;
+          const v = `updated[${JSON.stringify(c.name)}]`;
           if (isUpdatedAt(c.name)) {
             return `(${v} || new Date().toISOString())`;
           }
@@ -572,7 +555,6 @@ function generateTableHelpers(
       const insertRunArgs = insertColList
         .map((c) => {
           if (c.isPrimaryKey) return `_rowId`;
-          const varName = toVarName(c.name);
           const nameLower = c.name.toLowerCase().replace(/[^a-z0-9]/g, "");
           if (
             nameLower === "createdat" ||
@@ -580,9 +562,9 @@ function generateTableHelpers(
             nameLower === "created_at" ||
             nameLower === "updated_at"
           ) {
-            return `data.${varName} ?? now`;
+            return `data[${JSON.stringify(c.name)}] ?? now`;
           }
-          return `data.${varName} ?? null`;
+          return `data[${JSON.stringify(c.name)}] ?? null`;
         })
         .join(", ");
       code += `  const info = stmtUpsert.run(${insertRunArgs});\n`;
@@ -599,8 +581,7 @@ function generateTableHelpers(
         const nameLower = c.name.toLowerCase().replace(/[^a-z0-9]/g, "");
         return nameLower === "createdat" || nameLower === "updatedat" || nameLower === "created_at" || nameLower === "updated_at";
       }).map((c) => {
-        const varName = toVarName(c.name);
-        return `${varName}: data.${varName} ?? now`;
+        return `${JSON.stringify(c.name)}: data[${JSON.stringify(c.name)}] ?? now`;
       }).join(", ")} } as unknown as ${Pascal};\n`;
       code += `}\n\n`;
     } else if (op.kind === "delete") {
