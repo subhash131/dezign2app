@@ -265,4 +265,94 @@ describe("compileNextjsV16 Layout Realtime Events and Output Log Drawer", () => 
     expect(layoutFile).toBeDefined();
     expect(layoutFile!.content).not.toContain("LayoutEventsDrawer");
   });
+
+  it("generates LayoutEventsDrawer and mounts it in layout.tsx when layout has UI events (e.g. click actions) without realtime connections", () => {
+    const webAppNode: BackendNode = {
+      id: "node-webapp-actions",
+      type: "webApp",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "ActionsApp",
+        zones: [
+          { id: "zone-private", handleId: "private-in", name: "Private Section", accessType: "protected" },
+        ],
+      },
+    };
+
+    const layoutNode: BackendNode = {
+      id: "node-layout-actions",
+      type: "webPage",
+      position: { x: 300, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "layout",
+        isLayout: true,
+        zoneId: "zone-private",
+        sections: [
+          {
+            id: "sec-sidebar",
+            name: "Sidebar Section",
+            actions: [
+              {
+                id: "act-click",
+                name: "Quick Action",
+                event: "click",
+                url: "/api/quick-action",
+                method: "POST",
+              },
+            ],
+            componentBindings: [
+              {
+                id: "bind-sidebar",
+                name: "Sidebar",
+                componentType: "sidebar",
+                propMappings: {
+                  sidebarStaticItems: [
+                    { id: "item-1", name: "Run Quick Action", itemType: "action", actionId: "act-click" },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const edge: BackendEdge = {
+      id: "edge-actions",
+      type: "connection",
+      fractionalIndex: "a0",
+      source: "node-webapp-actions",
+      sourceHandle: "private-in",
+      target: "node-layout-actions",
+      targetHandle: "page-in",
+    };
+
+    const result = compileWebPageNodes(
+      [webAppNode, layoutNode],
+      [],
+      [],
+      [webAppNode, layoutNode],
+      [edge],
+      "ActionsApp",
+    );
+
+    // Verify LayoutEventsDrawer.tsx is generated even without realtime connections
+    const drawerFile = result.files.find((f) => f.filename.includes("LayoutEventsDrawer.tsx"));
+    expect(drawerFile).toBeDefined();
+    expect(drawerFile!.content).toContain("Layout Output Log");
+
+    // Verify layout.tsx mounts LayoutEventsDrawer
+    const layoutFile = result.files.find((f) => f.filename === "app/(private)/layout.tsx");
+    expect(layoutFile).toBeDefined();
+    expect(layoutFile!.content).toContain('import { LayoutEventsDrawer } from "./_components/LayoutEventsDrawer";');
+    expect(layoutFile!.content).toContain("<LayoutEventsDrawer />");
+
+    // Verify SidebarActionButton is generated and dispatches dezign:layout-log
+    const sidebarActionFile = result.files.find((f) => f.filename.includes("SidebarActionButton.tsx"));
+    expect(sidebarActionFile).toBeDefined();
+    expect(sidebarActionFile!.content).toContain("dezign:layout-log");
+    expect(sidebarActionFile!.content).toContain("executeApiAction");
+  });
 });
