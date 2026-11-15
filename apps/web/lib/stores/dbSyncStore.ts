@@ -73,15 +73,42 @@ export function getEntityDbConnectionInfo(
   entityNode: BackendNode,
   allNodes: BackendNode[],
 ) {
-  const databaseId = entityNode.data?.databaseId;
+  let databaseId = entityNode.data?.databaseId;
+  if (!databaseId) {
+    try {
+      const edges = useBackendCanvasStore.getState().edges;
+      const connectedEdge = edges.find(
+        (e) =>
+          e.target === entityNode.id &&
+          allNodes.some(
+            (n) =>
+              n.id === e.source &&
+              (n.type === "database" || n.type === "redis_instance"),
+          ),
+      );
+      if (connectedEdge) {
+        databaseId = connectedEdge.source;
+      }
+    } catch {}
+  }
   if (!databaseId) return null;
 
   const dbNode = allNodes.find((n) => n.id === databaseId);
-  if (!dbNode || dbNode.type !== "database") return null;
+  if (!dbNode || (dbNode.type !== "database" && dbNode.type !== "redis_instance")) return null;
 
-  const dbData = (dbNode.data || {}) as NonNullable<BackendNode["data"]>;
-  const engine = (dbData.dbEngine || "postgres").toLowerCase();
-  const isSupportedEngine = engine === "postgres" || engine === "sqlite";
+  const dbData = dbNode.data;
+  if (!dbData) return null;
+  const engine = (
+    dbData.dbEngine ||
+    (dbNode.type === "redis_instance" ? "redis" : "postgres")
+  ).toLowerCase();
+  const isSupportedEngine =
+    engine === "postgres" ||
+    engine === "postgresql" ||
+    engine === "pg" ||
+    engine === "cockroachdb" ||
+    engine === "sqlite" ||
+    engine === "redis";
   if (!isSupportedEngine) return null;
 
   const hasConnectionConfig = Boolean(
@@ -98,7 +125,7 @@ export function getEntityDbConnectionInfo(
   return {
     dbNode,
     engine,
-    dbLabel: dbData.label || "Database",
+    dbLabel: dbData.label || (engine === "redis" ? "Redis Instance" : "Database"),
     connection: {
       host: dbData.host,
       port: dbData.port,
