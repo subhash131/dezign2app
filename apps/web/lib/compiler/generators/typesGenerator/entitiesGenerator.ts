@@ -79,11 +79,6 @@ export function generateEntitiesModule(
           fieldLines.push(`  ${fieldName}${isReq ? "" : "?"}: ${tsType};`);
           seenProps.add(fieldName);
         }
-        const camel = toVarName(fieldName);
-        if (camel !== fieldName && !seenProps.has(camel)) {
-          fieldLines.push(`  ${camel}?: ${tsType};`);
-          seenProps.add(camel);
-        }
       });
 
       if (isJsonArray) {
@@ -160,11 +155,6 @@ export function generateEntitiesModule(
       if (!seenWritableProps.has(fieldName)) {
         writableLines.push(`  ${fieldName}${isReq ? "" : "?"}: ${tsType};`);
         seenWritableProps.add(fieldName);
-      }
-      const camel = toVarName(fieldName);
-      if (camel !== fieldName && !seenWritableProps.has(camel)) {
-        writableLines.push(`  ${camel}?: ${tsType};`);
-        seenWritableProps.add(camel);
       }
     });
 

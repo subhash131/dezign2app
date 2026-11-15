@@ -45,49 +45,35 @@ export function generatePostgresDbOperations(
   const insertArgVals = insertColList
     .map((c) => {
       if (c.isPrimaryKey) return "_id";
-      const v = toVarName(c.name);
       const colName = c.name;
-      const valExpr = v !== colName ? `(${v} ?? ${colName})` : v;
       if (isCreatedAt(c.name) || isUpdatedAt(c.name)) {
-        return `${valExpr} || new Date().toISOString()`;
+        return `${colName} || new Date().toISOString()`;
       }
       const isColUuid = (c.type || "").toLowerCase().includes("uuid");
       if (isColUuid) {
-        return `(${valExpr} && isUuid(${valExpr})) ? ${valExpr} : (${valExpr} ? toValidUuid(${valExpr}) : null)`;
+        return `(${colName} && isUuid(${colName})) ? ${colName} : (${colName} ? toValidUuid(${colName}) : null)`;
       }
-      return `${valExpr} ?? null`;
+      return `${colName} ?? null`;
     })
     .join(", ");
 
-  const destructuredFields = insertColList
-    .flatMap((c) => {
-      const v = toVarName(c.name);
-      return v !== c.name ? [v, c.name] : [v];
-    })
-    .join(", ") || pkVarName;
+  const destructuredFields = insertColList.map((c) => c.name).join(", ") || pkVarName;
   const createDestructuredParam = `{ ${destructuredFields} }`;
 
   const updateCols = writableCols.filter((c) => !isCreatedAt(c.name));
   const setClauses = updateCols.map((c, i) => `"${c.name}" = $${i + 2}`).join(", ");
-  const updateDestructured = updateCols
-    .flatMap((c) => {
-      const v = toVarName(c.name);
-      return v !== c.name ? [v, c.name] : [v];
-    })
-    .join(", ");
+  const updateDestructured = updateCols.map((c) => c.name).join(", ");
   const updateArgVals = updateCols
     .map((c) => {
-      const v = toVarName(c.name);
       const colName = c.name;
-      const valExpr = v !== colName ? `(${v} ?? ${colName})` : v;
       if (isUpdatedAt(c.name)) {
-        return `${valExpr} || new Date().toISOString()`;
+        return `${colName} || new Date().toISOString()`;
       }
       const isColUuid = (c.type || "").toLowerCase().includes("uuid");
       if (isColUuid) {
-        return `(${valExpr} && isUuid(${valExpr})) ? ${valExpr} : (${valExpr} ? toValidUuid(${valExpr}) : null)`;
+        return `(${colName} && isUuid(${colName})) ? ${colName} : (${colName} ? toValidUuid(${colName}) : null)`;
       }
-      return `${valExpr} ?? null`;
+      return `${colName} ?? null`;
     })
     .join(", ");
 

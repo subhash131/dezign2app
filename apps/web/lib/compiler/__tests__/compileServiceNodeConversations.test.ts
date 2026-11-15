@@ -1640,12 +1640,12 @@ app.use(express.json());
     const pgHelper = pgDb.files.find((f) => f.filename === "helpers/conversation.ts");
     expect(pgHelper).toBeDefined();
     expect(pgHelper!.content).toContain("created_by: string;");
-    expect(pgHelper!.content).toContain("createdBy?: string;");
+    expect(pgHelper!.content).not.toContain("createdBy?: string;");
     expect(pgHelper!.content).toContain("created_at?: string;");
-    expect(pgHelper!.content).toContain("createdAt?: string;");
+    expect(pgHelper!.content).not.toContain("createdAt?: string;");
     expect(pgHelper!.content).toContain("export interface CreateConversationsData");
     expect(pgHelper!.content).toContain("created_by: string;");
-    expect(pgHelper!.content).toContain("createdBy?: string;");
+    expect(pgHelper!.content).not.toContain("createdBy?: string;");
 
     // 2. Types package compilation
     const typesFiles = generateTypesPackage(
@@ -1658,10 +1658,10 @@ app.use(express.json());
     const entitiesFile = typesFiles.find((f) => f.filename === "src/entities/index.ts");
     expect(entitiesFile).toBeDefined();
     expect(entitiesFile!.content).toContain("created_by: string;");
-    expect(entitiesFile!.content).toContain("createdBy?: string;");
+    expect(entitiesFile!.content).not.toContain("createdBy?: string;");
     expect(entitiesFile!.content).toContain("export type CreateConversationsData");
     expect(entitiesFile!.content).toContain("created_by: string;");
-    expect(entitiesFile!.content).toContain("createdBy?: string;");
+    expect(entitiesFile!.content).not.toContain("createdBy?: string;");
 
     const routeTypesFile = typesFiles.find((f) => f.filename.includes("getConversationsByUser.ts"));
     expect(routeTypesFile).toBeDefined();
@@ -1683,6 +1683,115 @@ app.use(express.json());
     expect(routeFile).toBeDefined();
     expect(routeFile!.content).toContain("data: findAllConversationsByCreatorResult");
     expect(routeFile!.content).toContain("await findAllConversationsByCreator(");
+  });
+
+  it("compiles postCreateConversation with camelCase createdBy binding and ensures assignability to CreateConversationsData without TS2345", () => {
+    const entityNode: BackendNode = {
+      id: "ent-conv",
+      type: "entity",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "Conversations",
+        columns: [
+          { name: "id", type: "uuid", isPrimaryKey: true, isNotNull: true },
+          { name: "created_at", type: "timestamptz", isPrimaryKey: false, isNotNull: false },
+          { name: "updated_at", type: "timestamptz", isPrimaryKey: false, isNotNull: false },
+          { name: "title", type: "text", isPrimaryKey: false, isNotNull: false },
+          { name: "created_by", type: "uuid", isPrimaryKey: false, isNotNull: true },
+        ],
+      },
+    };
+
+    const serviceNode: BackendNode = {
+      id: "srv-ai",
+      type: "service",
+      position: { x: 300, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "aiService",
+        techStack: "express",
+        port: "8080",
+      },
+    };
+
+    const postEndpoint: Endpoint & { nodeId: string } = {
+      id: "ep-post-conv",
+      nodeId: serviceNode.id,
+      name: "/create-conversation",
+      type: "POST",
+      requireAuth: true,
+      requestBody: {
+        id: "rb-1",
+        fields: [{ id: "f1", name: "title", type: "string", required: true }],
+      },
+      pipelineSteps: [
+        {
+          id: "step-create",
+          name: "Create Conversation",
+          type: "db_operation",
+          operationId: "create",
+          tableNodeId: entityNode.id,
+          outputVariable: "createConversationResult",
+          functionRef: {
+            name: "createConversation",
+            importPath: "@workspace/db/helpers/conversation",
+            signature: "createConversation(data: CreateConversationsData): Promise<Conversations>",
+          },
+          inputBindings: [
+            {
+              argName: "title",
+              source: { kind: "req_body", field: "title" },
+            },
+            {
+              argName: "createdBy",
+              source: { kind: "auth", field: "userId" },
+            },
+          ],
+        },
+        {
+          id: "step-resp",
+          name: "Return Response",
+          type: "return_response",
+          statusCode: 201,
+          inputBindings: [
+            {
+              argName: "message",
+              source: { kind: "inline", value: "Success" },
+            },
+          ],
+        },
+      ],
+    };
+
+    const allNodes: BackendNode[] = [entityNode, serviceNode];
+    const allEdges: BackendEdge[] = [
+      { id: "e1", source: serviceNode.id, target: entityNode.id, type: "connection", fractionalIndex: "a0" },
+    ];
+
+    const pgDb = compilePostgresDatabase([entityNode], []);
+    const pgHelper = pgDb.files.find((f) => f.filename === "helpers/conversation.ts");
+    expect(pgHelper).toBeDefined();
+    expect(pgHelper!.content).toContain("export interface CreateConversationsData");
+    expect(pgHelper!.content).toContain("created_by: string;");
+    expect(pgHelper!.content).not.toContain("createdBy?: string;");
+
+    const serviceResult = compileServiceNode(
+      serviceNode,
+      [postEndpoint],
+      [],
+      allNodes,
+      allEdges,
+      [],
+      [],
+      [],
+      "aiService",
+    );
+    const routeFile = serviceResult.files.find((f) => f.filename.includes("postCreateConversation.ts"));
+    expect(routeFile).toBeDefined();
+    expect(routeFile!.content).toContain("await createConversation(");
+    expect(routeFile!.content).toContain("created_by: auth?.userId");
+    expect(routeFile!.content).not.toContain("createdBy: auth?.userId");
   });
 });
 

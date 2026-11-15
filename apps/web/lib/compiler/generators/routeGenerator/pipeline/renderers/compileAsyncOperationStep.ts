@@ -326,7 +326,29 @@ export function renderAsyncOperationStep(
       }
       args = resolvedList.join(", ");
     } else {
-      args = buildArgList(inputBindings, ctx);
+      const targetTableNode = ctx.allNodes?.find(
+        (n) =>
+          n.id === step.tableNodeId ||
+          (step.tableNodeId &&
+            (n.data?.label === step.tableNodeId ||
+              n.data?.name === step.tableNodeId ||
+              (n.data?.label && n.data.label.toLowerCase() === step.tableNodeId.toLowerCase()))),
+      );
+      const tableCols: Array<{ name: string }> = targetTableNode?.data?.columns || [];
+      const normalizedDbBindings = inputBindings.map((b) => {
+        const match = tableCols.find(
+          (c) =>
+            c.name === b.argName ||
+            toVarName(c.name) === b.argName ||
+            c.name.toLowerCase().replace(/[^a-z0-9]/g, "") ===
+              b.argName.toLowerCase().replace(/[^a-z0-9]/g, ""),
+        );
+        if (match && match.name !== b.argName) {
+          return { ...b, argName: match.name };
+        }
+        return b;
+      });
+      args = buildArgList(normalizedDbBindings, ctx);
     }
   } else if (type === "storage_operation" && inputBindings.length > 0) {
     const allPositional = inputBindings.every((b) => /^\d+$/.test(b.argName));
