@@ -241,7 +241,7 @@ export function resolveTableAndSchema(
     table = parts.slice(1).join(".");
   }
 
-  const safeSchema = (schema || "public").replace(/["\0;\\]/g, "").trim() || "public";
+  const safeSchema = (schema || "public").toLowerCase().replace(/["\0;\\]/g, "").trim() || "public";
   const safeTable = table.replace(/["\0;\\]/g, "").trim();
 
   return { safeTable, targetSchema: safeSchema };

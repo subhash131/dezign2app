@@ -15,6 +15,11 @@ export function extractTableName(op: TestDbOperationPayload["operation"]): strin
   const query = op.query || "";
 
   // 1. Check auto-generated operation ID, e.g. auto-find-by-id-conversations -> conversations
+  const indexMatch = id.match(/^auto-index-([a-zA-Z0-9_]+)-/i);
+  if (indexMatch && indexMatch[1]) {
+    return indexMatch[1].toLowerCase();
+  }
+
   const idMatch = id.match(
     /^auto-(?:find-all|find-by-id|create|update|delete)-(?:by-[a-z0-9_]+-)?(.+)$/i,
   );
@@ -30,12 +35,13 @@ export function extractTableName(op: TestDbOperationPayload["operation"]): strin
     return fromMatch[1].toLowerCase();
   }
 
-  // 3. Parse from function name, e.g. findAllConversations / findConversationById
+  // 3. Parse from function name, e.g. findAllConversations / findAllConversationsByCreator / findConversationById
   const clean = name
     .replace(
       /^(findAll|findById|findBy|find|create|update|deleteById|delete|insert|select|remove)/i,
       "",
     )
+    .replace(/By[A-Z][a-zA-Z0-9_]*$/i, "")
     .replace(/ById$/i, "")
     .trim();
 
@@ -45,6 +51,16 @@ export function extractTableName(op: TestDbOperationPayload["operation"]): strin
   }
 
   return "records";
+}
+
+function isSqlStatement(text: string): boolean {
+  if (!text || typeof text !== "string") return false;
+  const stripped = text
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/--[^\r\n]*/g, "")
+    .replace(/\/\/[^\r\n]*/g, "")
+    .trim();
+  return /^\s*(SELECT|INSERT|UPDATE|DELETE|WITH|CREATE|ALTER|DROP|PRAGMA)\b/i.test(stripped);
 }
 
 /**
@@ -63,9 +79,38 @@ export function planSqlCommand(
   if (
     query &&
     !query.startsWith("Query function for") &&
-    !query.startsWith("Auto-generated")
+    !query.startsWith("Auto-generated") &&
+    !query.startsWith("//") &&
+    isSqlStatement(query)
   ) {
     return { rawSql: query, tableName, kind };
+  }
+
+  const code = (op.code || "").trim();
+  const queryMatch = code.match(
+    /(?:client\.|db\.|await\s+)?query(?:<[^>]+>)?\s*\(\s*(['"`])([\s\S]*?)\1\s*(?:,\s*\[([\s\S]*?)\])?\s*\)/m,
+  );
+  if (queryMatch && queryMatch[2] && isSqlStatement(queryMatch[2].trim())) {
+    let extracted = queryMatch[2].trim();
+    if (queryMatch[3]) {
+      const explicitArgs = queryMatch[3]
+        .split(",")
+        .map((s) => s.trim().replace(/^data\./, ""))
+        .filter(Boolean);
+      explicitArgs.forEach((argName, idx) => {
+        const ph = `$${idx + 1}`;
+        const snakeArg = argName.replace(/([A-Z])/g, "_$1").toLowerCase();
+        const camelArg = argName.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+        const val = args[argName] ?? args[snakeArg] ?? args[camelArg];
+        if (val !== undefined) {
+          extracted = extracted.replaceAll(
+            ph,
+            typeof val === "number" ? String(val) : `'${String(val).replace(/'/g, "''")}'`,
+          );
+        }
+      });
+    }
+    return { rawSql: extracted, tableName, kind: kind || "custom" };
   }
 
   const idVal = args.id !== undefined ? String(args.id) : "1";
@@ -74,10 +119,13 @@ export function planSqlCommand(
     name.toLowerCase().startsWith("findall") ||
     name.toLowerCase().startsWith("getall") ||
     name.toLowerCase().startsWith("list");
+  const isFetchByIndex =
+    kind === "fetchByIndex" ||
+    (name.toLowerCase().startsWith("find") && name.includes("By"));
   const isFindById =
     kind === "findById" ||
     name.toLowerCase().includes("byid") ||
-    (name.toLowerCase().startsWith("find") && args.id !== undefined);
+    (name.toLowerCase().startsWith("find") && args.id !== undefined && !isFetchByIndex);
   const isCreate =
     kind === "create" ||
     name.toLowerCase().startsWith("create") ||
@@ -91,6 +139,37 @@ export function planSqlCommand(
     kind === "delete" ||
     name.toLowerCase().startsWith("delete") ||
     name.toLowerCase().startsWith("remove");
+
+  if (isFetchByIndex) {
+    const limit = args.limit !== undefined ? Number(args.limit) : 20;
+    const offset = args.offset !== undefined ? Number(args.offset) : 0;
+    const filterParams = (op.params || []).filter(
+      (p) => p.name !== "limit" && p.name !== "offset" && p.name !== "sort" && p.name !== "order",
+    );
+    const whereParts: string[] = [];
+    for (const p of filterParams) {
+      const colName = p.name.replace(/([A-Z])/g, "_$1").toLowerCase();
+      const val = args[p.name] ?? args[colName] ?? "";
+      if (_engine === "postgres") {
+        whereParts.push(`"${colName}" = '${String(val).replace(/'/g, "''")}'`);
+      } else {
+        whereParts.push(`${colName} = '${String(val).replace(/'/g, "''")}'`);
+      }
+    }
+    const whereClause = whereParts.length > 0 ? `WHERE ${whereParts.join(" AND ")} ` : "";
+    if (_engine === "postgres") {
+      return {
+        rawSql: `SELECT * FROM "${tableName}" ${whereClause}LIMIT ${limit} OFFSET ${offset};`,
+        tableName,
+        kind: "fetchByIndex",
+      };
+    }
+    return {
+      rawSql: `SELECT * FROM ${tableName} ${whereClause}LIMIT ${limit} OFFSET ${offset};`,
+      tableName,
+      kind: "fetchByIndex",
+    };
+  }
 
   if (isFindAll) {
     const limit = args.limit !== undefined ? Number(args.limit) : 20;

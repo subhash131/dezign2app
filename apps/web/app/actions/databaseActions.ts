@@ -274,9 +274,10 @@ export async function testDbOperationAction(
     if (normalizedEngine === "postgres" || normalizedEngine === "postgresql" || normalizedEngine === "pg" || normalizedEngine === "cockroachdb") {
       const pgResult = await executePostgresLiveOperation({
         connection: {
-          host,
-          port,
-          connectionString: connection.connectionString,
+          ...connection,
+          host: connection.host || host,
+          port: connection.port || port,
+          connectionString: connection.connectionString || connection.connectionStringPooled,
           connectionStringEnv: connection.connectionStringEnv,
           connectionStringPooled: connection.connectionStringPooled,
           connectionStringPooledEnv: connection.connectionStringPooledEnv,
