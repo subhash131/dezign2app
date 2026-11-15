@@ -32,6 +32,7 @@ export interface InlinePgOpContext {
   pkVarName: string;
   pkTsType: string;
   isStringPk: boolean;
+  isUuidPk?: boolean;
   writableCols: PgColumnMeta[];
   colVarNames: Set<string>;
   effectiveName: string;

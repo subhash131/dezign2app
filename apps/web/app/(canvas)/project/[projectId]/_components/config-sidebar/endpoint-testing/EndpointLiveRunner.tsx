@@ -132,14 +132,24 @@ export function EndpointLiveRunner({
     try {
       const headers = { ...(testCase.request?.headers || {}) };
 
-      if (!isExternal && endpoint.requireAuth !== false && selectedPersonaId) {
-        const selectedPersona = fakeUsers.find((u) => u.id === selectedPersonaId);
-        if (selectedPersona) {
-          if (selectedPersona.isAnonymous) {
-            delete headers["authorization"];
-          } else if (selectedPersona.token) {
-            headers["authorization"] = `Bearer ${selectedPersona.token}`;
-          }
+      // Strip all existing auth headers case-insensitively to prevent duplicates or stale tokens
+      for (const k of Object.keys(headers)) {
+        if (k.toLowerCase() === "authorization") {
+          delete headers[k];
+        }
+      }
+
+      if (customAuthTokenOverride) {
+        headers["authorization"] = customAuthTokenOverride.startsWith("Bearer ")
+          ? customAuthTokenOverride
+          : `Bearer ${customAuthTokenOverride}`;
+      } else if (!isExternal && endpoint.requireAuth !== false) {
+        const selectedPersona =
+          fakeUsers.find((u) => u.id === selectedPersonaId) ||
+          fakeUsers.find((u) => !u.isAnonymous) ||
+          fakeUsers[0];
+        if (selectedPersona && !selectedPersona.isAnonymous && selectedPersona.token) {
+          headers["authorization"] = `Bearer ${selectedPersona.token}`;
         }
       }
 

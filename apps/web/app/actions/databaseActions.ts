@@ -1,6 +1,9 @@
 "use server";
 
 import { sanitizeForConvex } from "@/lib/utils/convexSanitizer";
+import path from "path";
+import { generatePersonaSeedStatements } from "@/lib/compiler/databases/shared/generatePersonaSeedSql";
+import type { PersonaSeed } from "@/lib/compiler/types/testPersona";
 import {
   executeSqliteLiveOperation,
   checkSqliteConnection,
@@ -9,6 +12,7 @@ import {
   dropSqliteTable,
   renameSqliteTable,
   renameSqliteColumn,
+  resolveSqlitePath,
 } from "@/lib/utils/sqliteRunner";
 import {
   type CanvasForeignKey,
@@ -21,6 +25,7 @@ import {
   dropPostgresTable,
   renamePostgresTable,
   renamePostgresColumn,
+  createPostgresClient,
 } from "@/lib/utils/postgresRunner";
 import {
   type TestDbOperationPayload,
@@ -107,6 +112,20 @@ export interface ApplyDbTableSyncResult {
   droppedForeignKeys?: string[];
   appliedPrerequisiteTables?: string[];
   foreignKeyErrors?: string[];
+  error?: string;
+}
+
+export interface SeedTestUsersPayload {
+  engine?: string;
+  connection?: DbConnectionConfig;
+  personas?: PersonaSeed[];
+}
+
+export interface SeedTestUsersResult {
+  success: boolean;
+  insertedRecords: number;
+  statements: string[];
+  errors?: string[];
   error?: string;
 }
 
@@ -813,5 +832,223 @@ export async function renameDbColumnAction(
     };
   }
 }
+
+/**
+ * Server action to insert / seed test users and authentication session fixtures into the live DB.
+ */
+export async function seedTestUsersAction(
+  payload: SeedTestUsersPayload,
+): Promise<SeedTestUsersResult> {
+  const {
+    engine = "postgres",
+    connection = {},
+    personas = [],
+  } = payload;
+
+  if (!personas || personas.length === 0) {
+    return {
+      success: true,
+      insertedRecords: 0,
+      statements: [],
+    };
+  }
+
+  const isPostgres =
+    engine === "postgres" ||
+    engine === "postgresql" ||
+    engine === "pg" ||
+    engine === "cockroachdb";
+  const isSqlite = engine === "sqlite";
+
+  try {
+    if (isPostgres) {
+      const { client } = await createPostgresClient(connection);
+      await client.connect();
+      try {
+        // Ensure BetterAuth user and session tables exist before inserting fixtures
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS "user" (
+            "id" UUID PRIMARY KEY NOT NULL,
+            "name" TEXT,
+            "email" TEXT UNIQUE,
+            "emailVerified" BOOLEAN,
+            "image" TEXT,
+            "role" TEXT,
+            "banned" BOOLEAN,
+            "banReason" TEXT,
+            "banExpires" TIMESTAMPTZ,
+            "twoFactorEnabled" BOOLEAN DEFAULT FALSE,
+            "plan" TEXT,
+            "creemCustomerId" TEXT,
+            "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+            "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+          );
+          CREATE UNIQUE INDEX IF NOT EXISTS "idx_user_email" ON "user" ("email");
+
+          CREATE TABLE IF NOT EXISTS "session" (
+            "id" UUID PRIMARY KEY NOT NULL,
+            "userId" UUID,
+            "token" TEXT UNIQUE,
+            "expiresAt" TIMESTAMPTZ,
+            "ipAddress" TEXT,
+            "userAgent" TEXT,
+            "impersonatedBy" TEXT,
+            "activeOrganizationId" UUID,
+            "activeTeamId" UUID,
+            "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+            "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+          );
+          CREATE INDEX IF NOT EXISTS "idx_session_userId" ON "session" ("userId");
+          CREATE UNIQUE INDEX IF NOT EXISTS "idx_session_token" ON "session" ("token");
+        `);
+
+        const statements = generatePersonaSeedStatements(personas, "postgres");
+        if (statements.length === 0) {
+          return {
+            success: false,
+            insertedRecords: 0,
+            statements: [],
+            error: "No SQL statements could be generated for the specified records. Check that tableName and fields are filled in.",
+          };
+        }
+
+        let inserted = 0;
+        const stmtErrors: string[] = [];
+        for (const stmt of statements) {
+          try {
+            await client.query(stmt);
+            inserted++;
+          } catch (stmtErr) {
+            const msg = stmtErr instanceof Error ? stmtErr.message : String(stmtErr);
+            console.error("[seedTestUsersAction] Postgres seed error:", msg, "\nQuery:", stmt);
+            stmtErrors.push(msg);
+          }
+        }
+
+        if (stmtErrors.length > 0 && inserted === 0) {
+          return {
+            success: false,
+            insertedRecords: 0,
+            statements,
+            errors: stmtErrors,
+            error: stmtErrors.join("; "),
+          };
+        }
+
+        return {
+          success: stmtErrors.length === 0,
+          insertedRecords: inserted,
+          statements,
+          errors: stmtErrors.length > 0 ? stmtErrors : undefined,
+          error: stmtErrors.length > 0 ? `Partial error (${inserted}/${statements.length} inserted): ${stmtErrors.join("; ")}` : undefined,
+        };
+      } finally {
+        await client.end().catch(() => {});
+      }
+    }
+
+    if (isSqlite) {
+      let dbFilePath = connection.dbFilePath || "dev.db";
+      if (connection.dbFilePathEnv) {
+        const envVal = resolveEnvValue(connection.dbFilePathEnv);
+        if (envVal) dbFilePath = envVal;
+      }
+      const fullPath = resolveSqlitePath(dbFilePath);
+      const fs = await import("fs");
+      const dir = path.dirname(fullPath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+
+      const { DatabaseSync } = await import("node:sqlite");
+      const db = new DatabaseSync(fullPath);
+      try {
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS "user" (
+            "id" TEXT PRIMARY KEY NOT NULL,
+            "name" TEXT,
+            "email" TEXT UNIQUE,
+            "emailVerified" INTEGER,
+            "image" TEXT,
+            "role" TEXT,
+            "createdAt" TEXT,
+            "updatedAt" TEXT
+          );
+          CREATE TABLE IF NOT EXISTS "session" (
+            "id" TEXT PRIMARY KEY NOT NULL,
+            "userId" TEXT,
+            "token" TEXT UNIQUE,
+            "expiresAt" TEXT,
+            "ipAddress" TEXT,
+            "userAgent" TEXT,
+            "createdAt" TEXT,
+            "updatedAt" TEXT
+          );
+        `);
+
+        const statements = generatePersonaSeedStatements(personas, "sqlite");
+        if (statements.length === 0) {
+          return {
+            success: false,
+            insertedRecords: 0,
+            statements: [],
+            error: "No SQL statements could be generated for the specified records. Check that tableName and fields are filled in.",
+          };
+        }
+
+        let inserted = 0;
+        const stmtErrors: string[] = [];
+        for (const stmt of statements) {
+          try {
+            db.exec(stmt);
+            inserted++;
+          } catch (stmtErr) {
+            const msg = stmtErr instanceof Error ? stmtErr.message : String(stmtErr);
+            console.error("[seedTestUsersAction] SQLite seed error:", msg, "\nQuery:", stmt);
+            stmtErrors.push(msg);
+          }
+        }
+
+        if (stmtErrors.length > 0 && inserted === 0) {
+          return {
+            success: false,
+            insertedRecords: 0,
+            statements,
+            errors: stmtErrors,
+            error: stmtErrors.join("; "),
+          };
+        }
+
+        return {
+          success: stmtErrors.length === 0,
+          insertedRecords: inserted,
+          statements,
+          errors: stmtErrors.length > 0 ? stmtErrors : undefined,
+          error: stmtErrors.length > 0 ? `Partial error (${inserted}/${statements.length} inserted): ${stmtErrors.join("; ")}` : undefined,
+        };
+      } finally {
+        db.close();
+      }
+    }
+
+    return {
+      success: false,
+      insertedRecords: 0,
+      statements: [],
+      error: `Unsupported database engine: ${engine}`,
+    };
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    console.error("[seedTestUsersAction] Failed to seed test users:", errorMsg);
+    return {
+      success: false,
+      insertedRecords: 0,
+      statements: [],
+      errors: [errorMsg],
+      error: errorMsg,
+    };
+  }
+}
+
 
 

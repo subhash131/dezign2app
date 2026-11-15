@@ -38,6 +38,7 @@ import {
   TableSeedRecord,
   generateRecordId,
   generatePersonaId,
+  toValidUuid,
 } from "./types";
 import {
   generateRealBearerJwtSync,
@@ -46,6 +47,7 @@ import {
   isRealJwt,
   DEFAULT_AUTH_SECRET,
 } from "./tokenGenerator";
+import { seedTestUsers } from "@/lib/services/databaseService";
 import { toast } from "sonner";
 import { cn } from "@workspace/ui/lib/utils";
 
@@ -232,17 +234,6 @@ export function TestUserPersonaEditor({
               role: defaultRole,
             },
           },
-          {
-            id: sessId,
-            databaseName: "Primary Database (PostgreSQL)",
-            tableName: "session",
-            fields: {
-              id: sessId,
-              userId: userId,
-              token: realJwt,
-              expiresAt: "2099-01-01T00:00:00.000Z",
-            },
-          },
         ]);
       }
     }
@@ -330,8 +321,10 @@ export function TestUserPersonaEditor({
     });
   };
 
+  const [isSeedingDb, setIsSeedingDb] = useState(false);
+
   // Save Persona
-  const handleSave = () => {
+  const handleSave = async (alsoSeedDb: boolean = false) => {
     if (!personaName.trim()) {
       toast.error("Please provide a Test User / Persona Name");
       return;
@@ -354,8 +347,58 @@ export function TestUserPersonaEditor({
     };
 
     onSave(persona);
+
+    if (alsoSeedDb) {
+      const dbs = allNodes.filter((n) => n.type === "database");
+      const targetDb = dbs[0] || null;
+      const dbData = targetDb?.data;
+
+      const engine = (dbData?.dbEngine || "postgres").toLowerCase();
+      const connection = {
+        host: dbData?.host,
+        port: dbData?.port,
+        database: dbData?.database,
+        user: dbData?.user || dbData?.username,
+        password: dbData?.password,
+        connectionString: dbData?.connectionString || dbData?.connectionStringPooled,
+        connectionStringEnv: dbData?.connectionStringEnv,
+        connectionStringPooled: dbData?.connectionStringPooled,
+        connectionStringPooledEnv: dbData?.connectionStringPooledEnv,
+        sslMode: dbData?.sslMode,
+        provider: dbData?.provider,
+        dbFilePath: dbData?.dbFilePath,
+        dbFilePathEnv: dbData?.dbFilePathEnv,
+      };
+      const dbName = targetDb?.data?.label || targetDb?.data?.name || "Primary Database";
+
+      setIsSeedingDb(true);
+      const toastId = toast.loading(`Inserting ${persona.name} into ${dbName}...`);
+      try {
+        const res = await seedTestUsers({
+          engine,
+          connection,
+          personas: [persona],
+        });
+        if (res.success) {
+          toast.success(
+            `Inserted ${res.insertedRecords} record(s) for "${persona.name}" into ${dbName}!`,
+            { id: toastId },
+          );
+        } else {
+          toast.error(`Database seeding error: ${res.error}`, { id: toastId });
+        }
+      } catch (err) {
+        toast.error(`Error: ${err instanceof Error ? err.message : String(err)}`, {
+          id: toastId,
+        });
+      } finally {
+        setIsSeedingDb(false);
+      }
+    } else {
+      toast.success(`Saved test persona: ${persona.name}`);
+    }
+
     onOpenChange(false);
-    toast.success(`Saved test persona: ${persona.name}`);
   };
 
   // List of all generated record IDs available for Foreign Key referencing
@@ -407,8 +450,12 @@ export function TestUserPersonaEditor({
                     size="sm"
                     variant="outline"
                     onClick={() => {
-                      const userRec = records.find((r) => r.tableName.toLowerCase() === "user") || records[0];
-                      const userId = userRec?.fields?.id ? String(userRec.fields.id) : generateRecordId("user");
+                      const userRec = records.find((r) => {
+                        const l = (r.tableName || "").toLowerCase();
+                        return l === "user" || l === "users";
+                      }) || records[0];
+                      const rawUserId = userRec?.fields?.id ? String(userRec.fields.id) : undefined;
+                      const userId = toValidUuid(rawUserId);
                       const email = userRec?.fields?.email
                         ? String(userRec.fields.email)
                         : `${(personaName || "user").toLowerCase().replace(/\s+/g, ".")}@example.com`;
@@ -417,8 +464,12 @@ export function TestUserPersonaEditor({
                         : personaName.toLowerCase().includes("admin")
                         ? "admin"
                         : "user";
-                      const sessRec = records.find((r) => r.tableName.toLowerCase() === "session");
-                      const sessId = sessRec?.fields?.id ? String(sessRec.fields.id) : `sess_${userId}`;
+                      const sessRec = records.find((r) => {
+                        const l = (r.tableName || "").toLowerCase();
+                        return l === "session" || l === "sessions";
+                      });
+                      const rawSessId = sessRec?.fields?.id ? String(sessRec.fields.id) : undefined;
+                      const sessId = toValidUuid(rawSessId);
 
                       const freshJwt = generateRealBearerJwtSync({
                         userId,
@@ -712,21 +763,39 @@ export function TestUserPersonaEditor({
           </div>
         </div>
 
-        <DialogFooter className="p-3.5 border-t border-border/50 bg-secondary/10 flex items-center justify-between">
+        <DialogFooter className="p-3.5 border-t border-border/50 bg-secondary/10 flex items-center justify-between gap-2">
           <DialogClose asChild>
             <Button variant="outline" size="sm" className="h-8 text-xs">
               Cancel
             </Button>
           </DialogClose>
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            onClick={handleSave}
-            className="h-8 text-xs px-4 bg-secondary text-foreground font-semibold border border-border/60"
-          >
-            Save Persona & Seed Records
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => handleSave(false)}
+              className="h-8 text-xs px-3 bg-secondary/70 text-foreground border border-border/60"
+            >
+              Save Only
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="default"
+              disabled={isSeedingDb}
+              onClick={() => handleSave(true)}
+              className="h-8 text-xs px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold gap-1.5 shadow-xs cursor-pointer"
+              title="Save persona and immediately insert its fixtures into the live database"
+            >
+              {isSeedingDb ? (
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Database className="w-3.5 h-3.5" />
+              )}
+              <span>Save & Insert into DB</span>
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

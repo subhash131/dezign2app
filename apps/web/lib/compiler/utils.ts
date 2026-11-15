@@ -6,7 +6,10 @@ import {
   JSONValue,
   JSONObject,
 } from "@workspace/canvas/types";
+import { v4 as uuidv4, v5 as uuidv5, validate as uuidValidate } from "uuid";
 import { parseRelaxedJson } from "./generators/routeGenerator/jsonInterpolation";
+
+export const UUID_NAMESPACE = "6ba7b810-9dad-11d1-80b4-00c04fd430c8";
 
 /**
  * Derives a stable, human-readable camelCase file name for a route/type file.
@@ -691,5 +694,24 @@ export function normalizeEndpointRequestBody<T extends Endpoint>(ep: T): T {
     requestBody: nextReqBody,
   };
 }
+
+/**
+ * Validates RFC4122 UUID syntax.
+ */
+export function isUuid(id?: string | null): boolean {
+  if (!id) return false;
+  return uuidValidate(id);
+}
+
+/**
+ * Deterministically converts any string into a valid RFC4122 v5 UUID.
+ * If the input is already a valid UUID, returns it unchanged.
+ */
+export function toValidUuid(str?: string | null): string {
+  if (!str) return uuidv4();
+  if (uuidValidate(str)) return str;
+  return uuidv5(str, UUID_NAMESPACE);
+}
+
 
 

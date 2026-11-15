@@ -1,9 +1,10 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import { TableSeedRecord, TestUserPersona, generatePersonaId, isUuid, generateUuid } from "./types";
+import { TableSeedRecord, TestUserPersona, generatePersonaId, isUuid, generateUuid, toValidUuid } from "./types";
 import {
   generateRealBearerJwtSync,
   isRealJwt,
+  decodeJwtPayload,
   DEFAULT_AUTH_SECRET,
 } from "./tokenGenerator";
 
@@ -40,17 +41,6 @@ export const DEFAULT_TEST_PERSONAS: TestUserPersona[] = [
           role: "admin",
         },
       },
-      {
-        id: DEFAULT_ADMIN_SESSION_ID,
-        databaseName: "Primary Database",
-        tableName: "session",
-        fields: {
-          id: DEFAULT_ADMIN_SESSION_ID,
-          userId: DEFAULT_ADMIN_USER_ID,
-          token: adminJwt,
-          expiresAt: "2099-01-01T00:00:00.000Z",
-        },
-      },
     ],
   },
 ];
@@ -65,16 +55,31 @@ interface TestUsersState {
   resetToDefaults: () => void;
 }
 
-function ensureRealPersonaToken(p: TestUserPersona, secret = DEFAULT_AUTH_SECRET): TestUserPersona {
-  const userRec = p.records.find((r) => r.tableName.toLowerCase() === "user") || p.records[0];
+export function ensureRealPersonaToken(p: TestUserPersona, secret = DEFAULT_AUTH_SECRET): TestUserPersona {
+  const userRec = p.records.find((r) => {
+    const l = (r.tableName || "").toLowerCase();
+    return l === "user" || l === "users";
+  }) || p.records[0];
   const rawUserId = userRec?.fields?.id ? String(userRec.fields.id) : p.id;
-  const userId: string = isUuid(rawUserId) ? rawUserId : generateUuid();
+  const userId: string = toValidUuid(rawUserId);
 
-  const sessRec = p.records.find((r) => r.tableName.toLowerCase() === "session");
+  const sessRec = p.records.find((r) => {
+    const l = (r.tableName || "").toLowerCase();
+    return l === "session" || l === "sessions";
+  });
   const rawSessionId = sessRec?.fields?.id ? String(sessRec.fields.id) : undefined;
-  const sessionId: string = (rawSessionId && isUuid(rawSessionId)) ? rawSessionId : generateUuid();
+  const sessionId: string = toValidUuid(rawSessionId);
 
-  const needNewToken = !p.activeAuthToken || !isRealJwt(p.activeAuthToken) || rawUserId !== userId;
+  const decoded = p.activeAuthToken ? decodeJwtPayload(p.activeAuthToken) : null;
+  const decodedSub = decoded && typeof decoded.sub === "string" ? decoded.sub : undefined;
+  const decodedUserId = decoded && typeof decoded.userId === "string" ? decoded.userId : undefined;
+
+  const needNewToken =
+    !p.activeAuthToken ||
+    !isRealJwt(p.activeAuthToken) ||
+    !isUuid(rawUserId) ||
+    !isUuid(decodedSub) ||
+    !isUuid(decodedUserId);
 
   if (!needNewToken && isUuid(rawUserId) && isUuid(rawSessionId)) {
     return p;
@@ -96,8 +101,8 @@ function ensureRealPersonaToken(p: TestUserPersona, secret = DEFAULT_AUTH_SECRET
     ...p,
     activeAuthToken: realJwt,
     records: p.records.map((r): TableSeedRecord => {
-      const lower = r.tableName.toLowerCase();
-      if (lower === "user") {
+      const lower = (r.tableName || "").toLowerCase();
+      if (lower === "user" || lower === "users") {
         return {
           ...r,
           id: userId,
@@ -107,7 +112,7 @@ function ensureRealPersonaToken(p: TestUserPersona, secret = DEFAULT_AUTH_SECRET
           },
         };
       }
-      if (lower === "session") {
+      if (lower === "session" || lower === "sessions") {
         return {
           ...r,
           id: sessionId,
@@ -119,7 +124,33 @@ function ensureRealPersonaToken(p: TestUserPersona, secret = DEFAULT_AUTH_SECRET
           },
         };
       }
-      return r;
+      const updatedFields = { ...r.fields };
+      for (const [k, v] of Object.entries(updatedFields)) {
+        if (typeof v === "string" && !isUuid(v)) {
+          const kLower = k.toLowerCase().replace(/[^a-z0-9]/g, "");
+          if (
+            kLower === "userid" ||
+            kLower === "createdby" ||
+            kLower === "authorid" ||
+            kLower === "creatorid" ||
+            v === rawUserId ||
+            v.startsWith("user_")
+          ) {
+            updatedFields[k] = userId;
+          }
+        }
+      }
+      const recordId = (!isUuid(r.id) && (lower.includes("user") || r.id.startsWith("user_")))
+        ? toValidUuid(r.id)
+        : r.id;
+      if (updatedFields.id && (!isUuid(String(updatedFields.id)) && (lower.includes("user") || String(updatedFields.id).startsWith("user_")))) {
+        updatedFields.id = recordId;
+      }
+      return {
+        ...r,
+        id: recordId,
+        fields: updatedFields,
+      };
     }),
   };
 }
@@ -154,7 +185,7 @@ export const useTestUsersStore = create<TestUsersState>()(
                 return r;
               });
             }
-            return updated;
+            return ensureRealPersonaToken(updated);
           }),
         })),
       deletePersona: (id) =>
@@ -166,16 +197,22 @@ export const useTestUsersStore = create<TestUsersState>()(
         const persona = state.personas.find((p) => p.id === id);
         if (!persona) return null;
 
-        const userRec = persona.records.find((r) => r.tableName.toLowerCase() === "user") || persona.records[0];
+        const userRec = persona.records.find((r) => {
+          const l = (r.tableName || "").toLowerCase();
+          return l === "user" || l === "users";
+        }) || persona.records[0];
         const rawUserId = userRec?.fields?.id ? String(userRec.fields.id) : persona.id;
-        const userId: string = isUuid(rawUserId) ? rawUserId : generateUuid();
+        const userId: string = toValidUuid(rawUserId);
 
         const email = userRec?.fields?.email ? String(userRec.fields.email) : `${persona.name.toLowerCase().replace(/\s+/g, ".")}@example.com`;
         const role = userRec?.fields?.role ? String(userRec.fields.role) : (persona.name.toLowerCase().includes("admin") ? "admin" : "user");
 
-        const sessRec = persona.records.find((r) => r.tableName.toLowerCase() === "session");
+        const sessRec = persona.records.find((r) => {
+          const l = (r.tableName || "").toLowerCase();
+          return l === "session" || l === "sessions";
+        });
         const rawSessionId = sessRec?.fields?.id ? String(sessRec.fields.id) : undefined;
-        const sessionId: string = (rawSessionId && isUuid(rawSessionId)) ? rawSessionId : generateUuid();
+        const sessionId: string = toValidUuid(rawSessionId);
 
         const freshJwt = generateRealBearerJwtSync({
           userId,
@@ -193,15 +230,15 @@ export const useTestUsersStore = create<TestUsersState>()(
                   ...p,
                   activeAuthToken: freshJwt,
                   records: p.records.map((r): TableSeedRecord => {
-                    const lower = r.tableName.toLowerCase();
-                    if (lower === "user") {
+                    const lower = (r.tableName || "").toLowerCase();
+                    if (lower === "user" || lower === "users") {
                       return {
                         ...r,
                         id: userId,
                         fields: { ...r.fields, id: userId },
                       };
                     }
-                    if (lower === "session") {
+                    if (lower === "session" || lower === "sessions") {
                       return {
                         ...r,
                         id: sessionId,
@@ -226,19 +263,32 @@ export const useTestUsersStore = create<TestUsersState>()(
       resetToDefaults: () => set({ personas: DEFAULT_TEST_PERSONAS }),
     }),
     {
-      name: "dezign2app_test_user_personas_v3",
+      name: "dezign2app_test_user_personas_v6",
       storage: createJSONStorage(() => localStorage),
-      version: 3,
-      migrate: (persistedState: unknown) => {
+      version: 6,
+      onRehydrateStorage: () => (state) => {
+        if (state && Array.isArray(state.personas) && state.personas.length > 0) {
+          const hasInvalid = state.personas.some((p) => {
+            const uRec = p.records.find((r) => ["user", "users"].includes((r.tableName || "").toLowerCase())) || p.records[0];
+            const rawId = uRec?.fields?.id ? String(uRec.fields.id) : p.id;
+            const decoded = p.activeAuthToken ? decodeJwtPayload(p.activeAuthToken) : null;
+            const decodedSub = decoded && typeof decoded.sub === "string" ? decoded.sub : undefined;
+            return !isUuid(rawId) || !isUuid(decodedSub);
+          });
+          if (hasInvalid) {
+            state.upgradeAllToRealTokens();
+          }
+        }
+      },
+      migrate: (persistedState) => {
         if (!persistedState || typeof persistedState !== "object") {
           return { personas: DEFAULT_TEST_PERSONAS };
         }
-        const state = persistedState as { personas?: TestUserPersona[] };
-        if (!Array.isArray(state.personas) || state.personas.length === 0) {
-          return { personas: DEFAULT_TEST_PERSONAS };
+        if ("personas" in persistedState && Array.isArray(persistedState.personas) && persistedState.personas.length > 0) {
+          const upgraded = persistedState.personas.map((p) => ensureRealPersonaToken(p));
+          return { personas: upgraded };
         }
-        const upgraded = state.personas.map((p) => ensureRealPersonaToken(p));
-        return { personas: upgraded };
+        return { personas: DEFAULT_TEST_PERSONAS };
       },
     },
   ),

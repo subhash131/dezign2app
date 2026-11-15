@@ -26,6 +26,7 @@ export function generateInlinePostgresOp(
     pkVarName,
     pkTsType,
     isStringPk,
+    isUuidPk = isStringPk,
     writableCols,
     colVarNames,
     effectiveName,
@@ -49,7 +50,21 @@ export function generateInlinePostgresOp(
         `  return res.rows;\n` +
         `}`
       );
-    case "findById":
+    case "findById": {
+      if (isUuidPk) {
+        return (
+          `export async function ${effectiveName}(${pkVarName}: ${pkTsType}): Promise<${pascal} | null> {\n` +
+          `  if (!isUuid(${pkVarName})) {\n` +
+          `    return null;\n` +
+          `  }\n` +
+          `  const res = await query<${pascal}>(\n` +
+          `    'SELECT * FROM "${tableName}" WHERE "${pkColName}" = $1 LIMIT 1',\n` +
+          `    [${pkVarName}]\n` +
+          `  );\n` +
+          `  return res.rows[0] || null;\n` +
+          `}`
+        );
+      }
       return (
         `export async function ${effectiveName}(${pkVarName}: ${pkTsType}): Promise<${pascal} | null> {\n` +
         `  const res = await query<${pascal}>(\n` +
@@ -59,6 +74,7 @@ export function generateInlinePostgresOp(
         `  return res.rows[0] || null;\n` +
         `}`
       );
+    }
     case "create": {
       if (writableCols.length === 0 && !isStringPk) {
         return (
@@ -86,15 +102,30 @@ export function generateInlinePostgresOp(
         .join(", ");
       const destructuredFields = [
         ...(isStringPk ? [pkVarName] : []),
-        ...writableCols.map((c) => toVarName(c.name)),
+        ...writableCols.flatMap((c) => {
+          const varN = toVarName(c.name);
+          return varN !== c.name ? [varN, c.name] : [varN];
+        }),
       ].join(", ") || pkVarName;
       const insertArgVals = writableCols
-        .map((c) => `${toVarName(c.name)} ?? null`)
+        .map((c) => {
+          const varN = toVarName(c.name);
+          const colName = c.name;
+          const isColUuid = (c.type || "").toLowerCase().includes("uuid");
+          const valExpr = varN !== colName ? `(${varN} ?? ${colName})` : varN;
+          if (isColUuid) {
+            return `(${valExpr} && isUuid(${valExpr})) ? ${valExpr} : (${valExpr} ? toValidUuid(${valExpr}) : null)`;
+          }
+          return `${valExpr} ?? null`;
+        })
         .join(", ");
       if (isStringPk) {
+        const idAssign = isUuidPk
+          ? `  const _id = (${pkVarName} && isUuid(${pkVarName})) ? ${pkVarName} : randomUUID();\n`
+          : `  const _id = ${pkVarName} || randomUUID();\n`;
         return (
           `export async function ${effectiveName}({ ${destructuredFields} }: Create${pascal}Data): Promise<${pascal}> {\n` +
-          `  const _id = ${pkVarName} || randomUUID();\n` +
+          idAssign +
           `  const res = await query<${pascal}>(\n` +
           `    'INSERT INTO "${tableName}" ("${pkColName}"${insertCols ? `, ${insertCols}` : ""}) VALUES ($1${insertParams ? `, ${insertParams}` : ""}) RETURNING *',\n` +
           `    [_id${insertArgVals ? `, ${insertArgVals}` : ""}]\n` +
@@ -123,18 +154,57 @@ export function generateInlinePostgresOp(
     }
     case "update": {
       if (writableCols.length > 0) {
-        const updateDestructured = writableCols.map((c) => toVarName(c.name)).join(", ");
+        const updateDestructured = writableCols
+          .flatMap((c) => (toVarName(c.name) !== c.name ? [toVarName(c.name), c.name] : [toVarName(c.name)]))
+          .join(", ");
         const setClauses = writableCols
           .map((c, i) => `"${c.name}" = $${i + 2}`)
           .join(", ");
         const setArgs = writableCols
-          .map((c) => `${toVarName(c.name)} ?? null`)
+          .map((c) => {
+            const varN = toVarName(c.name);
+            const colName = c.name;
+            const isColUuid = (c.type || "").toLowerCase().includes("uuid");
+            const valExpr = varN !== colName ? `(${varN} ?? ${colName})` : varN;
+            if (isColUuid) {
+              return `(${valExpr} && isUuid(${valExpr})) ? ${valExpr} : (${valExpr} ? toValidUuid(${valExpr}) : null)`;
+            }
+            return `${valExpr} ?? null`;
+          })
           .join(", ");
+        if (isUuidPk) {
+          return (
+            `export async function ${effectiveName}(${pkVarName}: ${pkTsType}, { ${updateDestructured} }: Update${pascal}Data): Promise<${pascal} | null> {\n` +
+            `  if (!isUuid(${pkVarName})) {\n` +
+            `    return null;\n` +
+            `  }\n` +
+            `  const res = await query<${pascal}>(\n` +
+            `    'UPDATE "${tableName}" SET ${setClauses} WHERE "${pkColName}" = $1 RETURNING *',\n` +
+            `    [${pkVarName}, ${setArgs}]\n` +
+            `  );\n` +
+            `  return res.rows[0] || null;\n` +
+            `}`
+          );
+        }
         return (
           `export async function ${effectiveName}(${pkVarName}: ${pkTsType}, { ${updateDestructured} }: Update${pascal}Data): Promise<${pascal} | null> {\n` +
           `  const res = await query<${pascal}>(\n` +
           `    'UPDATE "${tableName}" SET ${setClauses} WHERE "${pkColName}" = $1 RETURNING *',\n` +
           `    [${pkVarName}, ${setArgs}]\n` +
+          `  );\n` +
+          `  return res.rows[0] || null;\n` +
+          `}`
+        );
+      }
+      if (isUuidPk) {
+        return (
+          `export async function ${effectiveName}(${pkVarName}: ${pkTsType}): Promise<${pascal} | null> {\n` +
+          `  if (!isUuid(${pkVarName})) {\n` +
+          `    return null;\n` +
+          `  }\n` +
+          `  const res = await query<${pascal}>(\n` +
+          `    'SELECT * FROM "${tableName}" WHERE "${pkColName}" = $1 LIMIT 1',\n` +
+          `    [${pkVarName}]\n` +
           `  );\n` +
           `  return res.rows[0] || null;\n` +
           `}`
@@ -177,19 +247,34 @@ export function generateInlinePostgresOp(
         .join(", ");
       const destructuredFields = [
         ...(isStringPk ? [pkVarName] : []),
-        ...writableCols.map((c) => toVarName(c.name)),
+        ...writableCols.flatMap((c) => {
+          const varN = toVarName(c.name);
+          return varN !== c.name ? [varN, c.name] : [varN];
+        }),
       ].join(", ") || pkVarName;
       const insertArgVals = writableCols
-        .map((c) => `${toVarName(c.name)} ?? null`)
+        .map((c) => {
+          const varN = toVarName(c.name);
+          const colName = c.name;
+          const isColUuid = (c.type || "").toLowerCase().includes("uuid");
+          const valExpr = varN !== colName ? `(${varN} ?? ${colName})` : varN;
+          if (isColUuid) {
+            return `(${valExpr} && isUuid(${valExpr})) ? ${valExpr} : (${valExpr} ? toValidUuid(${valExpr}) : null)`;
+          }
+          return `${valExpr} ?? null`;
+        })
         .join(", ");
       const pgConflictSets = writableCols.length > 0
         ? `DO UPDATE SET ` + writableCols.map((c) => `"${c.name}" = EXCLUDED."${c.name}"`).join(", ")
         : `DO NOTHING`;
 
       if (isStringPk) {
+        const idAssign = isUuidPk
+          ? `  const _id = (${pkVarName} && isUuid(${pkVarName})) ? ${pkVarName} : randomUUID();\n`
+          : `  const _id = ${pkVarName} || randomUUID();\n`;
         return (
           `export async function ${effectiveName}({ ${destructuredFields} }: Upsert${pascal}Data): Promise<${pascal}> {\n` +
-          `  const _id = ${pkVarName} || randomUUID();\n` +
+          idAssign +
           `  const res = await query<${pascal}>(\n` +
           `    'INSERT INTO "${tableName}" ("${pkColName}"${insertCols ? `, ${insertCols}` : ""}) VALUES ($1${insertParams ? `, ${insertParams}` : ""}) ON CONFLICT ("${pkColName}") ${pgConflictSets} RETURNING *',\n` +
           `    [_id${insertArgVals ? `, ${insertArgVals}` : ""}]\n` +
@@ -216,7 +301,21 @@ export function generateInlinePostgresOp(
         `}`
       );
     }
-    case "delete":
+    case "delete": {
+      if (isUuidPk) {
+        return (
+          `export async function ${effectiveName}(${pkVarName}: ${pkTsType}): Promise<{ success: boolean; message: string }> {\n` +
+          `  if (!isUuid(${pkVarName})) {\n` +
+          `    return { success: false, message: "Record not found (invalid UUID)" };\n` +
+          `  }\n` +
+          `  await query(\n` +
+          `    'DELETE FROM "${tableName}" WHERE "${pkColName}" = $1',\n` +
+          `    [${pkVarName}]\n` +
+          `  );\n` +
+          `  return { success: true, message: "${pascalSingular} deleted successfully" };\n` +
+          `}`
+        );
+      }
       return (
         `export async function ${effectiveName}(${pkVarName}: ${pkTsType}): Promise<{ success: boolean; message: string }> {\n` +
         `  await query(\n` +
@@ -226,6 +325,7 @@ export function generateInlinePostgresOp(
         `  return { success: true, message: "${pascalSingular} deleted successfully" };\n` +
         `}`
       );
+    }
     default:
       return (
         `export async function ${effectiveName}(): Promise<void> {\n` +
@@ -266,6 +366,9 @@ export function generatePostgresTableHelpers(
   const pkVarName = toVarName(pkColName);
   const pkTsType = toTsType(pkCol.type);
   const isStringPk = pkTsType === "string";
+  const isUuidPk =
+    (pkCol.type || "").toLowerCase().includes("uuid") ||
+    pkCol.type?.toUpperCase() === "UUID";
   const writableCols = cols.filter((c) => !c.isPrimaryKey);
   const colVarNames = new Set(cols.map((c) => toVarName(c.name)));
 
@@ -274,7 +377,7 @@ export function generatePostgresTableHelpers(
 
   // ── Types ─────────────────────────────────────────────────────────────────
   let code = `/**\n * Auto-generated async PostgreSQL helpers for table: "${tableName}"\n *\n * ALL queries use parameterized $1, $2, ... placeholders — safe from SQL injection.\n * Never concatenate user-supplied values into query strings.\n */\n`;
-  code += `import { query, withTransaction } from "../connection";\n`;
+  code += `import { query, withTransaction, isUuid, toValidUuid } from "../connection";\n`;
   if (isStringPk) {
     code += `import { randomUUID } from "node:crypto";\n`;
   }
@@ -283,26 +386,47 @@ export function generatePostgresTableHelpers(
   // Type declarations
   code += `// ── Types ────────────────────────────────────────────────────────────────────\n\n`;
   code += `export interface ${pascal} {\n`;
+  const emittedPropNames = new Set<string>();
   cols.forEach((c) => {
     const tsType = toTsType(c.type);
     const opt = c.isPrimaryKey || c.isNotNull ? "" : "?";
-    code += `  ${toVarName(c.name)}${opt}: ${tsType};\n`;
+    if (!emittedPropNames.has(c.name)) {
+      code += `  ${c.name}${opt}: ${tsType};\n`;
+      emittedPropNames.add(c.name);
+    }
+    const varName = toVarName(c.name);
+    if (varName !== c.name && !emittedPropNames.has(varName)) {
+      code += `  ${varName}?: ${tsType};\n`;
+      emittedPropNames.add(varName);
+    }
   });
-  if (!colVarNames.has("message")) {
+  if (!emittedPropNames.has("message")) {
     code += `  message?: string;\n`;
+    emittedPropNames.add("message");
   }
-  if (!colVarNames.has("success")) {
+  if (!emittedPropNames.has("success")) {
     code += `  success?: boolean;\n`;
+    emittedPropNames.add("success");
   }
   code += `}\n\n`;
 
   // Create data type
-  const createFields = writableCols
-    .map((c) => {
-      const opt = c.isNotNull ? "" : "?";
-      return `  ${toVarName(c.name)}${opt}: ${toTsType(c.type)};`;
-    })
-    .join("\n");
+  const emittedCreateProps = new Set<string>();
+  const createFieldLines: string[] = [];
+  writableCols.forEach((c) => {
+    const opt = c.isNotNull ? "" : "?";
+    const tsType = toTsType(c.type);
+    if (!emittedCreateProps.has(c.name)) {
+      createFieldLines.push(`  ${c.name}${opt}: ${tsType};`);
+      emittedCreateProps.add(c.name);
+    }
+    const varName = toVarName(c.name);
+    if (varName !== c.name && !emittedCreateProps.has(varName)) {
+      createFieldLines.push(`  ${varName}?: ${tsType};`);
+      emittedCreateProps.add(varName);
+    }
+  });
+  const createFields = createFieldLines.join("\n");
   code += `export interface Create${pascal}Data {\n  ${pkVarName}?: ${pkTsType};\n${createFields ? `${createFields}\n` : ""}}\n\n`;
 
   code += `export type Update${pascal}Data = Partial<Create${pascal}Data>;\n\n`;
@@ -396,6 +520,7 @@ export function generatePostgresTableHelpers(
         pkVarName,
         pkTsType,
         isStringPk,
+        isUuidPk,
         writableCols,
         colVarNames,
         effectiveName,

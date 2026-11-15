@@ -1,4 +1,5 @@
 import { DbOperationFunction, CanvasEntityColumn } from "@workspace/canvas/types";
+import { v4 as uuidv4 } from "uuid";
 
 /**
  * Generate sensible default sample value for a single column based on name & type
@@ -8,9 +9,16 @@ function sampleValueForColumn(col: CanvasEntityColumn, cleanLabel: string): unkn
   const colType = (col.type || "text").toLowerCase();
 
   if (col.isPrimaryKey) {
-    return colType.includes("int") || colType.includes("num") || colType.includes("serial")
-      ? 1
-      : `${cleanLabel}_1`;
+    if (colType.includes("int") || colType.includes("num") || colType.includes("serial")) {
+      return 1;
+    }
+    if (colType.includes("uuid") || col.type?.toUpperCase() === "UUID") {
+      return uuidv4();
+    }
+    return `${cleanLabel}_1`;
+  }
+  if (colType.includes("uuid") || col.type?.toUpperCase() === "UUID") {
+    return uuidv4();
   }
   if (
     colType.includes("int") ||
@@ -98,7 +106,10 @@ export function generateDefaultParams(
     if (name === "key") {
       result[p.name] = `${cleanLabel}:1001`;
     } else if (name === "id") {
-      result[p.name] = type.includes("number") ? 1 : `${cleanLabel}_1`;
+      const isUuidParam =
+        type.includes("uuid") ||
+        (columns && columns.some((c) => c.isPrimaryKey && (c.type?.toLowerCase().includes("uuid") || c.type?.toUpperCase() === "UUID")));
+      result[p.name] = type.includes("number") ? 1 : isUuidParam ? uuidv4() : `${cleanLabel}_1`;
     } else if (
       name === "item" ||
       name === "data" ||
