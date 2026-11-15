@@ -887,19 +887,20 @@ export function generateSidebarActionButtonCode(
   return `"use client";
 
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
 import { SidebarMenuButton } from "@workspace/ui/components/sidebar";
 import { executeApiAction } from "@/lib/api-client";
 ${actionImports ? `${actionImports}\n` : ""}
 export type SidebarActionTrigger = (
-  name: string,
-  type: string,
+  eventName: string,
+  eventType: string,
   url: string,
   method: string,
   requireAuth?: boolean,
   customHeaders?: Record<string, string>,
   queryParams?: Record<string, string>,
   requestBody?: Record<string, string | number | boolean | null | undefined>,
-) => Promise<string | number | boolean | Record<string, string | number | boolean | null | undefined> | void | null>;
+) => Promise<Record<string, string | number | boolean | null | undefined> | void> | void;
 
 export interface SidebarActionContext {
   onTrigger?: SidebarActionTrigger;
@@ -929,6 +930,7 @@ export function SidebarActionButton({
   className,
   children,
 }: SidebarActionButtonProps) {
+  const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleClick = async (e: React.MouseEvent) => {
@@ -939,21 +941,21 @@ export function SidebarActionButton({
     const resolvedEventType = (eventType || "click").toUpperCase();
     let loggedViaTrigger = false;
 
-    const onTrigger = async (
-      name: string,
-      type: string,
+    const onTrigger: SidebarActionTrigger = async (
+      eventName: string,
+      eventType: string,
       url: string,
       method: string,
       requireAuth?: boolean,
       customHeaders?: Record<string, string>,
       queryParams?: Record<string, string>,
       requestBody?: Record<string, string | number | boolean | null | undefined>,
-    ) => {
+    ): Promise<Record<string, string | number | boolean | null | undefined> | void> => {
       loggedViaTrigger = true;
       try {
-        const result = await executeApiAction({
-          eventName: name,
-          eventType: type,
+        const result = await executeApiAction<Record<string, string | number | boolean | null | undefined>>({
+          eventName,
+          eventType,
           url,
           method,
           requireAuth,
@@ -966,8 +968,8 @@ export function SidebarActionButton({
             new CustomEvent("dezign:layout-log", {
               detail: {
                 id: logId,
-                eventName: name,
-                eventType: type || resolvedEventType,
+                eventName,
+                eventType: eventType || resolvedEventType,
                 timestamp,
                 url: result.url || result.targetUrl || url || "N/A",
                 method: method || "TRIGGER",
@@ -987,8 +989,8 @@ export function SidebarActionButton({
             new CustomEvent("dezign:layout-log", {
               detail: {
                 id: logId,
-                eventName: name,
-                eventType: type || resolvedEventType,
+                eventName,
+                eventType: eventType || resolvedEventType,
                 timestamp,
                 url: url || "N/A",
                 method: method || "TRIGGER",
@@ -1010,7 +1012,7 @@ export function SidebarActionButton({
         (clean && actionHandlers[clean]);
 
       if (handler) {
-        const result = await handler({ onTrigger });
+        const result = await handler({ onTrigger, router });
         if (!loggedViaTrigger && typeof window !== "undefined") {
           window.dispatchEvent(
             new CustomEvent("dezign:layout-log", {
