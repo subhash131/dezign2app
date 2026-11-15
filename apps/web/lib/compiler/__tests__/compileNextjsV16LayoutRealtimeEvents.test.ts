@@ -355,4 +355,145 @@ describe("compileNextjsV16 Layout Realtime Events and Output Log Drawer", () => 
     expect(sidebarActionFile!.content).toContain("dezign:layout-log");
     expect(sidebarActionFile!.content).toContain("executeApiAction");
   });
+
+  it("generates LayoutEventsDrawer and executes onMount actions when layout node has onMount lifecycle events", () => {
+    const webAppNode: BackendNode = {
+      id: "node-webapp-mount",
+      type: "webApp",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "MountApp",
+        zones: [
+          { id: "zone-private", handleId: "private-in", name: "Private Section", accessType: "protected" },
+        ],
+      },
+    };
+
+    const layoutNode: BackendNode = {
+      id: "node-layout-mount",
+      type: "webPage",
+      position: { x: 300, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "layout",
+        isLayout: true,
+        zoneId: "zone-private",
+        sections: [
+          {
+            id: "sec-init",
+            name: "Init",
+            actions: [
+              {
+                id: "act-init",
+                name: "InitLayoutData",
+                event: "onMount",
+                url: "/api/layout-init",
+                method: "POST",
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const edge: BackendEdge = {
+      id: "edge-mount",
+      type: "connection",
+      fractionalIndex: "a0",
+      source: "node-webapp-mount",
+      sourceHandle: "private-in",
+      target: "node-layout-mount",
+      targetHandle: "page-in",
+    };
+
+    const result = compileWebPageNodes(
+      [webAppNode, layoutNode],
+      [],
+      [],
+      [webAppNode, layoutNode],
+      [edge],
+      "MountApp",
+    );
+
+    // 1. Verify layout.tsx mounts LayoutEventsDrawer
+    const layoutFile = result.files.find((f) => f.filename === "app/(private)/layout.tsx");
+    expect(layoutFile).toBeDefined();
+    expect(layoutFile!.content).toContain("<LayoutEventsDrawer />");
+
+    // 2. Verify LayoutEventsDrawer.tsx executes layout onMount
+    const drawerFile = result.files.find((f) => f.filename.includes("LayoutEventsDrawer.tsx"));
+    expect(drawerFile).toBeDefined();
+    expect(drawerFile!.content).toContain("handleInitlayoutdataAction");
+    expect(drawerFile!.content).toContain("runOnMount");
+    expect(drawerFile!.content).toContain("dezign:layout-log");
+
+    // 3. Verify action component file was created
+    const actionFile = result.files.find((f) => f.filename.includes("InitlayoutdataAction.tsx"));
+    expect(actionFile).toBeDefined();
+  });
+
+  it("compiles child page with pageLoad / onMount event that dispatches dezign:layout-log to layout logs", () => {
+    const webAppNode: BackendNode = {
+      id: "node-webapp-pageload",
+      type: "webApp",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "PageLoadApp",
+        zones: [
+          { id: "zone-private", handleId: "private-in", name: "Private Section", accessType: "protected" },
+        ],
+      },
+    };
+
+    const pageNode: BackendNode = {
+      id: "node-page-items",
+      type: "webPage",
+      position: { x: 500, y: 0 },
+      fractionalIndex: "a2",
+      data: {
+        label: "/items",
+        zoneId: "zone-private",
+        sections: [
+          {
+            id: "sec-list",
+            name: "List",
+            actions: [
+              {
+                id: "act-load",
+                name: "onMount",
+                event: "onMount",
+                url: "/api/items",
+                method: "GET",
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const edge: BackendEdge = {
+      id: "edge-pageload",
+      type: "connection",
+      fractionalIndex: "a0",
+      source: "node-webapp-pageload",
+      sourceHandle: "private-in",
+      target: "node-page-items",
+      targetHandle: "page-in",
+    };
+
+    const result = compileWebPageNodes(
+      [webAppNode, pageNode],
+      [],
+      [],
+      [webAppNode, pageNode],
+      [edge],
+      "PageLoadApp",
+    );
+
+    const pageFile = result.files.find((f) => f.filename.includes("items/page.tsx"));
+    expect(pageFile).toBeDefined();
+    expect(pageFile!.content).toContain("dezign:layout-log");
+  });
 });

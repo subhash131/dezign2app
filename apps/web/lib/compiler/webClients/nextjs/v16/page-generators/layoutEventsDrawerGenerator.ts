@@ -1,4 +1,5 @@
 import type { LinkedRealtimeConnectionInfo } from "../types";
+import type { UIEventItem } from "@workspace/canvas/types";
 import { generateSseEffects } from "./sseEffectGenerator";
 import { generateWebSocketEffects } from "./webSocketEffectGenerator";
 
@@ -12,12 +13,14 @@ export function generateLayoutEventsDrawer(
   realtimeConnections: LinkedRealtimeConnectionInfo[] = [],
   hasAuth: boolean = false,
   groupName: string = "Layout",
+  onMountActions: { evt: UIEventItem; compName: string }[] = [],
 ): string {
   const sseConns = realtimeConnections.filter((c) => c.protocol === "SSE" || !c.protocol);
   const wsConns = realtimeConnections.filter((c) => c.protocol === "WEBSOCKET");
   const hasRealtime = realtimeConnections.length > 0;
   const hasSse = sseConns.length > 0;
   const hasWs = wsConns.length > 0;
+  const hasOnMount = onMountActions.length > 0;
 
   // Collect any referenced store names from bindings
   const storeNames = new Set<string>();
@@ -37,6 +40,14 @@ export function generateLayoutEventsDrawer(
     storeNames.size > 0
       ? `import { ${Array.from(storeNames).sort().join(", ")} } from "@/lib/stores";\n`
       : "";
+
+  const onMountImports = hasOnMount
+    ? `import { executeApiAction } from "@/lib/api-client";\n` +
+      onMountActions
+        .map((a) => `import { handle${a.compName} } from "./${a.compName}";`)
+        .join("\n") +
+      "\n"
+    : "";
 
   const hasDynamicRoute = realtimeConnections.some(
     (c) =>
@@ -59,12 +70,108 @@ export function generateLayoutEventsDrawer(
   const sseEffectsJsx = generateSseEffects(sseConns);
   const wsEffectsJsx = generateWebSocketEffects(wsConns, hasAuth);
 
+  const onMountInvocations = onMountActions
+    .map(
+      (a) =>
+        `      try {\n        await handle${a.compName}({ onTrigger });\n      } catch (err) {\n        console.error("Failed to execute onMount action ${a.compName}:", err);\n      }`,
+    )
+    .join("\n");
+
+  const onMountEffectsJsx = hasOnMount
+    ? `  // Run layout onMount lifecycle actions
+  useEffect(() => {
+    let isMounted = true;
+    const runOnMount = async () => {
+      const timestamp = new Date().toLocaleTimeString();
+      const onTrigger = async (
+        eventName: string,
+        eventType: string,
+        url: string,
+        method: string,
+        requireAuth?: boolean,
+        customHeaders?: Record<string, string>,
+        queryParams?: Record<string, string>,
+        requestBody?: Record<string, string | number | boolean | null | undefined>,
+      ) => {
+        const logId = Math.random().toString(36).substring(2, 9);
+        const resolvedEventType = (eventType || "onMount").toUpperCase();
+        try {
+          const result = await executeApiAction<Record<string, string | number | boolean | null | undefined>>({
+            eventName,
+            eventType: resolvedEventType,
+            url,
+            method,
+            requireAuth,
+            customHeaders,
+            queryParams,
+            requestBody,
+          });
+          if (isMounted) {
+            const entry: LayoutLogEntry = {
+              id: logId,
+              eventName,
+              eventType: resolvedEventType,
+              timestamp,
+              url: result.url || result.targetUrl || url || "N/A",
+              method: method || "TRIGGER",
+              status: result.status,
+              payload: requestBody,
+              data: result.data,
+              error: result.error,
+            };
+            lastDispatchedIdRef.current = logId;
+            setTriggerLogs((prev) => [entry, ...prev]);
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(new CustomEvent("dezign:layout-log", { detail: entry }));
+            }
+          }
+          return result.data;
+        } catch (err) {
+          const errorMessage = err instanceof Error ? err.message : "Request failed";
+          if (isMounted) {
+            const entry: LayoutLogEntry = {
+              id: logId,
+              eventName,
+              eventType: resolvedEventType,
+              timestamp,
+              url: url || "N/A",
+              method: method || "TRIGGER",
+              error: errorMessage,
+              data: null,
+            };
+            lastDispatchedIdRef.current = logId;
+            setTriggerLogs((prev) => [entry, ...prev]);
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(new CustomEvent("dezign:layout-log", { detail: entry }));
+            }
+          }
+          return { error: errorMessage };
+        }
+      };
+
+${onMountInvocations}
+    };
+    runOnMount();
+    return () => {
+      isMounted = false;
+    };
+  }, []);\n\n`
+    : "";
+
   return `"use client";
 
 import React, { useState, useEffect } from "react";
-${navigationImports}${authImport}${storeImports}import { Button } from "@workspace/ui/components/button";
+${navigationImports}${authImport}${storeImports}${onMountImports}import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
 import { Activity, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
+
+export type LayoutLogData =
+  | Record<string, string | number | boolean | null | undefined>
+  | string
+  | number
+  | boolean
+  | null
+  | Array<Record<string, string | number | boolean | null | undefined> | string | number | boolean | null>;
 
 export interface LayoutLogEntry {
   id: string;
@@ -74,8 +181,8 @@ export interface LayoutLogEntry {
   url?: string;
   method?: string;
   status?: number;
-  payload?: unknown;
-  data: unknown;
+  payload?: LayoutLogData;
+  data: LayoutLogData;
   error?: string;
   isStreaming?: boolean;
 }
@@ -101,7 +208,7 @@ export function LayoutEventsDrawer() {
     }
   }, [triggerLogs]);
 
-${routeParamsHook}${sseEffectsJsx}${wsEffectsJsx}  // Listen for layout-level custom log events from buttons or child components
+${routeParamsHook}${sseEffectsJsx}${wsEffectsJsx}${onMountEffectsJsx}  // Listen for layout-level custom log events from buttons or child components
   useEffect(() => {
     const handleLogEvent = (e: Event) => {
       if (
@@ -115,6 +222,7 @@ ${routeParamsHook}${sseEffectsJsx}${wsEffectsJsx}  // Listen for layout-level cu
         typeof e.detail.eventName === "string"
       ) {
         const detailObj = e.detail;
+        lastDispatchedIdRef.current = detailObj.id;
         const entry: LayoutLogEntry = {
           id: detailObj.id,
           eventName: detailObj.eventName,
@@ -139,6 +247,16 @@ ${routeParamsHook}${sseEffectsJsx}${wsEffectsJsx}  // Listen for layout-level cu
     return () => window.removeEventListener("dezign:layout-log", handleLogEvent);
   }, []);
 
+  useEffect(() => {
+    const handleOtherDrawer = (e: Event) => {
+      if (e instanceof CustomEvent && e.detail === "page") {
+        setIsOpen(false);
+      }
+    };
+    window.addEventListener("dezign:drawer-opened", handleOtherDrawer);
+    return () => window.removeEventListener("dezign:drawer-opened", handleOtherDrawer);
+  }, []);
+
   if (!showDebugLogs) {
     return null;
   }
@@ -148,15 +266,15 @@ ${routeParamsHook}${sseEffectsJsx}${wsEffectsJsx}  // Listen for layout-level cu
   return (
     <aside
       aria-label="Layout Output Log"
-      className="fixed bottom-3 right-4 z-50 pointer-events-auto flex flex-col items-end"
+      className="fixed bottom-3 right-4 z-50 pointer-events-none flex flex-col items-end"
     >
       {/* Drawer Panel */}
       <div
         className={
-          "w-[520px] max-w-[calc(100vw-2rem)] shadow-2xl rounded-xl border border-border bg-card/95 backdrop-blur overflow-hidden flex flex-col transition-all duration-150 ease-out origin-bottom-right mb-2 " +
+          "max-w-[calc(100vw-2rem)] shadow-2xl rounded-xl border border-border bg-card/95 backdrop-blur overflow-hidden flex flex-col transition-all duration-150 ease-out origin-bottom-right " +
           (isOpen
-            ? "opacity-100 scale-100 translate-y-0 max-h-[420px] pointer-events-auto"
-            : "opacity-0 scale-95 translate-y-1 max-h-0 pointer-events-none border-transparent p-0 m-0")
+            ? "w-[520px] opacity-100 scale-100 translate-y-0 max-h-[420px] pointer-events-auto mb-2"
+            : "w-0 opacity-0 scale-95 translate-y-1 max-h-0 pointer-events-none border-transparent p-0 m-0")
         }
       >
         <div className="flex items-center justify-between px-4 py-2.5 bg-muted/40 border-b border-border shrink-0">
@@ -241,8 +359,16 @@ ${routeParamsHook}${sseEffectsJsx}${wsEffectsJsx}  // Listen for layout-level cu
       {/* Persistent Dock Toggle Pill */}
       <button
         type="button"
-        onClick={() => setIsOpen((prev) => !prev)}
-        className="flex items-center gap-2 bg-card/95 border border-border shadow-xl rounded-full px-3 py-1.5 text-xs backdrop-blur font-mono text-foreground hover:bg-muted/40 transition-colors cursor-pointer select-none"
+        onClick={() => {
+          setIsOpen((prev) => {
+            const next = !prev;
+            if (next && typeof window !== "undefined") {
+              window.dispatchEvent(new CustomEvent("dezign:drawer-opened", { detail: "layout" }));
+            }
+            return next;
+          });
+        }}
+        className="pointer-events-auto flex items-center gap-2 bg-card/95 border border-border shadow-xl rounded-full px-3 py-1.5 text-xs backdrop-blur font-mono text-foreground hover:bg-muted/40 transition-colors cursor-pointer select-none"
         title={isOpen ? "Collapse Layout Output Log" : "Open Layout Output Log"}
       >
         <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />

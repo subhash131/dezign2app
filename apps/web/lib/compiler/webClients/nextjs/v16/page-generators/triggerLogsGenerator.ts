@@ -14,8 +14,8 @@ export function generateTriggerLogsState(hasLogsSection: boolean, hasStreamingAc
     url?: string;
     method?: string;
     status?: number;
-    payload?: unknown;
-    data: unknown;
+    payload?: Record<string, string | number | boolean | null | undefined> | string | number | boolean | null | Array<Record<string, string | number | boolean | null | undefined> | string | number | boolean | null>;
+    data: Record<string, string | number | boolean | null | undefined> | string | number | boolean | null | Array<Record<string, string | number | boolean | null | undefined> | string | number | boolean | null>;
     error?: string;${streamingField}
   }>>([]);
 
@@ -67,6 +67,16 @@ export function generateTriggerLogsState(hasLogsSection: boolean, hasStreamingAc
     return () => window.removeEventListener("dezign:layout-log", handleLayoutLog);
   }, []);
 
+  useEffect(() => {
+    const handleOtherDrawer = (e: Event) => {
+      if (e instanceof CustomEvent && e.detail === "layout") {
+        setIsLogsOpen(false);
+      }
+    };
+    window.addEventListener("dezign:drawer-opened", handleOtherDrawer);
+    return () => window.removeEventListener("dezign:drawer-opened", handleOtherDrawer);
+  }, []);
+
 `;
 }
 
@@ -88,7 +98,7 @@ export function generateTriggerHandler(hasApiActions: boolean, hasStreamingActio
     const timestamp = new Date().toLocaleTimeString();
     const logId = Math.random().toString(36).substring(2, 9);
     try {
-      const result = await executeApiAction({
+      const result = await executeApiAction<Record<string, string | number | boolean | null | undefined>>({
         eventName,
         eventType,
         url,
@@ -98,24 +108,28 @@ export function generateTriggerHandler(hasApiActions: boolean, hasStreamingActio
         queryParams,
         requestBody,
       });
+      const logEntry = {
+        id: logId,
+        eventName,
+        eventType,
+        timestamp,
+        url: result.url || result.targetUrl || url || "N/A",
+        method: method || "TRIGGER",
+        status: result.status,
+        payload: requestBody,
+        data: result.data,
+        error: result.error,
+      };
       setTriggerLogs((prev) => [
-        {
-          id: logId,
-          eventName,
-          eventType,
-          timestamp,
-          url: result.url || result.targetUrl || url || "N/A",
-          method: method || "TRIGGER",
-          status: result.status,
-          payload: requestBody,
-          data: result.data,
-          error: result.error,
-        },
+        logEntry,
         ...prev,
       ]);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("dezign:layout-log", { detail: logEntry }));
+      }
       const dataObj: Record<string, string | number | boolean | null | undefined> =
         result.data && typeof result.data === "object" && !Array.isArray(result.data)
-          ? (result.data as Record<string, string | number | boolean | null | undefined>)
+          ? result.data
           : {};
       return {
         id: result.id,
@@ -130,19 +144,23 @@ export function generateTriggerHandler(hasApiActions: boolean, hasStreamingActio
       };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Request failed";
+      const errEntry = {
+        id: logId,
+        eventName,
+        eventType,
+        timestamp,
+        url: url || "N/A",
+        method: method || "TRIGGER",
+        error: errorMessage,
+        data: null,
+      };
       setTriggerLogs((prev) => [
-        {
-          id: logId,
-          eventName,
-          eventType,
-          timestamp,
-          url: url || "N/A",
-          method: method || "TRIGGER",
-          error: errorMessage,
-          data: null,
-        },
+        errEntry,
         ...prev,
       ]);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("dezign:layout-log", { detail: errEntry }));
+      }
       return { error: errorMessage };
     }
   };
@@ -165,7 +183,7 @@ export function generateTriggerHandler(hasApiActions: boolean, hasStreamingActio
     const logId = Math.random().toString(36).substring(2, 9);
     try {
       let streamInitialized = false;
-      const result = await executeApiAction({
+      const result = await executeApiAction<Record<string, string | number | boolean | null | undefined>>({
         eventName,
         eventType,
         url,
@@ -258,27 +276,48 @@ export function generateTriggerHandler(hasApiActions: boolean, hasStreamingActio
               : log,
           ),
         );
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("dezign:layout-log", {
+              detail: {
+                id: logId,
+                eventName,
+                eventType: "SSE",
+                timestamp,
+                url: result.url || result.targetUrl || url || "N/A",
+                method: method || "TRIGGER",
+                status: result.status,
+                data: result.data,
+                error: result.error,
+              },
+            }),
+          );
+        }
       } else {
+        const streamFinalEntry = {
+          id: logId,
+          eventName,
+          eventType: result.data && typeof result.data === "object" && "streamed" in result.data && Boolean(result.data.streamed) ? "SSE" : eventType,
+          timestamp,
+          url: result.url || result.targetUrl || "N/A",
+          method: method || "TRIGGER",
+          status: result.status,
+          payload: requestBody,
+          data: result.data,
+          error: result.error,
+          isStreaming: false,
+        };
         setTriggerLogs((prev) => [
-          {
-            id: logId,
-            eventName,
-            eventType: result.data && typeof result.data === "object" && "streamed" in result.data && Boolean(result.data.streamed) ? "SSE" : eventType,
-            timestamp,
-            url: result.url || result.targetUrl || "N/A",
-            method: method || "TRIGGER",
-            status: result.status,
-            payload: requestBody,
-            data: result.data,
-            error: result.error,
-            isStreaming: false,
-          },
+          streamFinalEntry,
           ...prev,
         ]);
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("dezign:layout-log", { detail: streamFinalEntry }));
+        }
       }
       const dataObj: Record<string, string | number | boolean | null | undefined> =
         result.data && typeof result.data === "object" && !Array.isArray(result.data)
-          ? (result.data as Record<string, string | number | boolean | null | undefined>)
+          ? result.data
           : {};
       return {
         id: result.id,
@@ -293,20 +332,24 @@ export function generateTriggerHandler(hasApiActions: boolean, hasStreamingActio
       };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Request failed";
+      const errEntry = {
+        id: logId,
+        eventName,
+        eventType,
+        timestamp,
+        url: url || "N/A",
+        method: method || "TRIGGER",
+        error: errorMessage,
+        data: null,
+        isStreaming: false,
+      };
       setTriggerLogs((prev) => [
-        {
-          id: logId,
-          eventName,
-          eventType,
-          timestamp,
-          url: url || "N/A",
-          method: method || "TRIGGER",
-          error: errorMessage,
-          data: null,
-          isStreaming: false,
-        },
+        errEntry,
         ...prev,
       ]);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("dezign:layout-log", { detail: errEntry }));
+      }
       return { error: errorMessage };
     }
   };
@@ -384,17 +427,17 @@ export function generateTriggerLogsSection(options: {
         {showDebugLogs && (
         <aside
           aria-label="Page Output Log"
-          className={\`fixed bottom-3 z-50 pointer-events-auto flex flex-col items-end transition-all duration-200 \${
+          className={\`fixed bottom-3 z-50 pointer-events-none flex flex-col items-end transition-all duration-200 \${
             hasLayoutDrawer ? "right-[230px]" : "right-4"
           }\`}
         >
           {/* Drawer Panel */}
           <div
             className={
-              "w-[520px] max-w-[calc(100vw-2rem)] shadow-2xl rounded-xl border border-border bg-card/95 backdrop-blur overflow-hidden flex flex-col transition-all duration-150 ease-out origin-bottom-right mb-2 " +
+              "max-w-[calc(100vw-2rem)] shadow-2xl rounded-xl border border-border bg-card/95 backdrop-blur overflow-hidden flex flex-col transition-all duration-150 ease-out origin-bottom-right " +
               (isLogsOpen
-                ? "opacity-100 scale-100 translate-y-0 max-h-[420px] pointer-events-auto"
-                : "opacity-0 scale-95 translate-y-1 max-h-0 pointer-events-none border-transparent p-0 m-0")
+                ? "w-[520px] opacity-100 scale-100 translate-y-0 max-h-[420px] pointer-events-auto mb-2"
+                : "w-0 opacity-0 scale-95 translate-y-1 max-h-0 pointer-events-none border-transparent p-0 m-0")
             }
           >
             <div className="flex items-center justify-between px-4 py-2.5 bg-muted/40 border-b border-border shrink-0">
@@ -477,8 +520,16 @@ export function generateTriggerLogsSection(options: {
           {/* Persistent Dock Toggle Pill */}
           <button
             type="button"
-            onClick={() => setIsLogsOpen((prev) => !prev)}
-            className="flex items-center gap-2 bg-card/95 border border-border shadow-xl rounded-full px-3 py-1.5 text-xs backdrop-blur font-mono text-foreground hover:bg-muted/40 transition-colors cursor-pointer select-none"
+            onClick={() => {
+              setIsLogsOpen((prev) => {
+                const next = !prev;
+                if (next && typeof window !== "undefined") {
+                  window.dispatchEvent(new CustomEvent("dezign:drawer-opened", { detail: "page" }));
+                }
+                return next;
+              });
+            }}
+            className="pointer-events-auto flex items-center gap-2 bg-card/95 border border-border shadow-xl rounded-full px-3 py-1.5 text-xs backdrop-blur font-mono text-foreground hover:bg-muted/40 transition-colors cursor-pointer select-none"
             title={isLogsOpen ? "Collapse Output Log" : "Open Output Log"}
           >
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
