@@ -7,6 +7,8 @@ export interface GeneratePersonaSeedOptions {
     | Map<string, Set<string>>
     | Record<string, Array<{ name: string }>>
     | Record<string, Set<string>>;
+  /** If true, generates ON CONFLICT ("id") DO UPDATE SET ... for idempotent upsert */
+  upsert?: boolean;
 }
 
 /**
@@ -237,16 +239,45 @@ export function generatePersonaSeedStatements(
       const cleanTableName = rawTableName.replace(/"/g, "");
 
       if (dialect === "sqlite") {
-        statements.push(
-          `INSERT OR IGNORE INTO "${cleanTableName}" (${colNames}) VALUES (${colValues});`,
-        );
+        if (options.upsert) {
+          const hasId = entries.some(([col]) => col.toLowerCase() === "id");
+          const updateCols = entries
+            .filter(([col]) => col.toLowerCase() !== "id")
+            .map(([col]) => `"${col}" = EXCLUDED."${col}"`);
+          const conflictClause =
+            hasId && updateCols.length > 0
+              ? `ON CONFLICT ("id") DO UPDATE SET ${updateCols.join(", ")}`
+              : `ON CONFLICT DO NOTHING`;
+          statements.push(
+            `INSERT INTO "${cleanTableName}" (${colNames}) VALUES (${colValues}) ${conflictClause};`,
+          );
+        } else {
+          statements.push(
+            `INSERT OR IGNORE INTO "${cleanTableName}" (${colNames}) VALUES (${colValues});`,
+          );
+        }
       } else {
         // Postgres
         const hasId = entries.some(([col]) => col.toLowerCase() === "id");
-        const conflictClause = hasId ? `ON CONFLICT ("id") DO NOTHING` : `ON CONFLICT DO NOTHING`;
-        statements.push(
-          `INSERT INTO "${cleanTableName}" (${colNames}) VALUES (${colValues}) ${conflictClause};`,
-        );
+        if (options.upsert) {
+          const updateCols = entries
+            .filter(([col]) => col.toLowerCase() !== "id")
+            .map(([col]) => `"${col}" = EXCLUDED."${col}"`);
+          const conflictClause =
+            hasId && updateCols.length > 0
+              ? `ON CONFLICT ("id") DO UPDATE SET ${updateCols.join(", ")}`
+              : hasId
+              ? `ON CONFLICT ("id") DO NOTHING`
+              : `ON CONFLICT DO NOTHING`;
+          statements.push(
+            `INSERT INTO "${cleanTableName}" (${colNames}) VALUES (${colValues}) ${conflictClause};`,
+          );
+        } else {
+          const conflictClause = hasId ? `ON CONFLICT ("id") DO NOTHING` : `ON CONFLICT DO NOTHING`;
+          statements.push(
+            `INSERT INTO "${cleanTableName}" (${colNames}) VALUES (${colValues}) ${conflictClause};`,
+          );
+        }
       }
     }
   }

@@ -92,6 +92,19 @@ describe("generatePersonaSeedSql", () => {
     expect(sql).toContain("'admin@example.com'");
   });
 
+  it("generates PostgreSQL and SQLite UPSERT statements when upsert is true", () => {
+    const pgStmts = generatePersonaSeedStatements(samplePersonas, "postgres", { upsert: true });
+    expect(pgStmts[0]).toContain('INSERT INTO "user"');
+    expect(pgStmts[0]).toContain('ON CONFLICT ("id") DO UPDATE SET');
+    expect(pgStmts[0]).toContain('"name" = EXCLUDED."name"');
+    expect(pgStmts[0]).toContain('"email" = EXCLUDED."email"');
+
+    const sqliteStmts = generatePersonaSeedStatements(samplePersonas, "sqlite", { upsert: true });
+    expect(sqliteStmts[0]).toContain('INSERT INTO "user"');
+    expect(sqliteStmts[0]).toContain('ON CONFLICT ("id") DO UPDATE SET');
+    expect(sqliteStmts[0]).toContain('"name" = EXCLUDED."name"');
+  });
+
   it("filters unknown tables if knownTableNames is provided", () => {
     const personasWithCustomTable: PersonaSeed[] = [
       {

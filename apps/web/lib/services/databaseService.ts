@@ -269,14 +269,12 @@ export async function seedTestUsers(
   const electron = getElectronAPI();
   if (electron?.db?.seedTestUsers) {
     try {
-      return await electron.db.seedTestUsers(payload);
+      const res = await electron.db.seedTestUsers(payload);
+      if (res && res.success !== undefined) {
+        return res;
+      }
     } catch (err) {
-      return {
-        success: false,
-        insertedRecords: 0,
-        statements: [],
-        error: `Desktop IPC error: ${err instanceof Error ? err.message : String(err)}`,
-      };
+      console.warn("[seedTestUsers] Electron IPC invocation failed, falling back to server action:", err);
     }
   }
 

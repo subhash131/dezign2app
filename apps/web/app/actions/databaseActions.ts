@@ -26,6 +26,7 @@ import {
   renamePostgresTable,
   renamePostgresColumn,
   createPostgresClient,
+  enhancePostgresError,
 } from "@/lib/utils/postgresRunner";
 import {
   type TestDbOperationPayload,
@@ -860,49 +861,58 @@ export async function seedTestUsersAction(
     engine === "cockroachdb";
   const isSqlite = engine === "sqlite";
 
+  let activePostgresConnStr: string | undefined;
+  let activeIsHyperdrive: boolean | undefined;
+
   try {
     if (isPostgres) {
-      const { client } = await createPostgresClient(connection);
+      const { client, connectionString, isHyperdrive } = await createPostgresClient(connection);
+      activePostgresConnStr = connectionString;
+      activeIsHyperdrive = isHyperdrive;
       await client.connect();
       try {
         // Ensure BetterAuth user and session tables exist before inserting fixtures
-        await client.query(`
-          CREATE TABLE IF NOT EXISTS "user" (
-            "id" UUID PRIMARY KEY NOT NULL,
-            "name" TEXT,
-            "email" TEXT UNIQUE,
-            "emailVerified" BOOLEAN,
-            "image" TEXT,
-            "role" TEXT,
-            "banned" BOOLEAN,
-            "banReason" TEXT,
-            "banExpires" TIMESTAMPTZ,
-            "twoFactorEnabled" BOOLEAN DEFAULT FALSE,
-            "plan" TEXT,
-            "creemCustomerId" TEXT,
-            "createdAt" TIMESTAMPTZ DEFAULT NOW(),
-            "updatedAt" TIMESTAMPTZ DEFAULT NOW()
-          );
-          CREATE UNIQUE INDEX IF NOT EXISTS "idx_user_email" ON "user" ("email");
+        try {
+          await client.query(`
+            CREATE TABLE IF NOT EXISTS "user" (
+              "id" UUID PRIMARY KEY NOT NULL,
+              "name" TEXT,
+              "email" TEXT UNIQUE,
+              "emailVerified" BOOLEAN,
+              "image" TEXT,
+              "role" TEXT,
+              "banned" BOOLEAN,
+              "banReason" TEXT,
+              "banExpires" TIMESTAMPTZ,
+              "twoFactorEnabled" BOOLEAN DEFAULT FALSE,
+              "plan" TEXT,
+              "creemCustomerId" TEXT,
+              "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+              "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS "idx_user_email" ON "user" ("email");
 
-          CREATE TABLE IF NOT EXISTS "session" (
-            "id" UUID PRIMARY KEY NOT NULL,
-            "userId" UUID,
-            "token" TEXT UNIQUE,
-            "expiresAt" TIMESTAMPTZ,
-            "ipAddress" TEXT,
-            "userAgent" TEXT,
-            "impersonatedBy" TEXT,
-            "activeOrganizationId" UUID,
-            "activeTeamId" UUID,
-            "createdAt" TIMESTAMPTZ DEFAULT NOW(),
-            "updatedAt" TIMESTAMPTZ DEFAULT NOW()
-          );
-          CREATE INDEX IF NOT EXISTS "idx_session_userId" ON "session" ("userId");
-          CREATE UNIQUE INDEX IF NOT EXISTS "idx_session_token" ON "session" ("token");
-        `);
+            CREATE TABLE IF NOT EXISTS "session" (
+              "id" UUID PRIMARY KEY NOT NULL,
+              "userId" UUID,
+              "token" TEXT UNIQUE,
+              "expiresAt" TIMESTAMPTZ,
+              "ipAddress" TEXT,
+              "userAgent" TEXT,
+              "impersonatedBy" TEXT,
+              "activeOrganizationId" UUID,
+              "activeTeamId" UUID,
+              "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+              "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+            );
+            CREATE INDEX IF NOT EXISTS "idx_session_userId" ON "session" ("userId");
+            CREATE UNIQUE INDEX IF NOT EXISTS "idx_session_token" ON "session" ("token");
+          `);
+        } catch (ddlErr) {
+          console.warn("[seedTestUsersAction] DDL check notice:", ddlErr instanceof Error ? ddlErr.message : String(ddlErr));
+        }
 
-        const statements = generatePersonaSeedStatements(personas, "postgres");
+        const statements = generatePersonaSeedStatements(personas, "postgres", { upsert: true });
         if (statements.length === 0) {
           return {
             success: false,
@@ -986,7 +996,7 @@ export async function seedTestUsersAction(
           );
         `);
 
-        const statements = generatePersonaSeedStatements(personas, "sqlite");
+        const statements = generatePersonaSeedStatements(personas, "sqlite", { upsert: true });
         if (statements.length === 0) {
           return {
             success: false,
@@ -1038,7 +1048,14 @@ export async function seedTestUsersAction(
       error: `Unsupported database engine: ${engine}`,
     };
   } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
+    let errorMsg = err instanceof Error ? err.message : String(err);
+    if (isPostgres && activePostgresConnStr) {
+      errorMsg = enhancePostgresError(
+        err instanceof Error ? err : new Error(errorMsg),
+        activePostgresConnStr,
+        activeIsHyperdrive,
+      );
+    }
     console.error("[seedTestUsersAction] Failed to seed test users:", errorMsg);
     return {
       success: false,
