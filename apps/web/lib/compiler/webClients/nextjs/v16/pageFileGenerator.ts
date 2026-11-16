@@ -771,8 +771,8 @@ export function generatePageAndComponentFiles({
             }
           }
 
-          url = link ? link.fullUrl : "";
-          method = link ? link.method : "POST";
+          url = link ? link.fullUrl : (evt.url || "");
+          method = link ? link.method : (evt.method || "POST");
           const hasStepAuth = (evt.actionSteps || []).some(
             (s) =>
               s.type === "api_call" &&
