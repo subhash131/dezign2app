@@ -16,6 +16,12 @@ export const SERVICE_STEP_NODE_TYPES = new Set<string>([
   "storage_operation_ref",
 ]);
 
+export interface ServiceStepHandItem {
+  cardIndex: number;
+  totalCards: number;
+  isStacked: boolean;
+}
+
 export interface ServiceStepHandLayoutInfo {
   connectedServiceNode: BackendNode | null;
   targetEndpointId: string | null;
@@ -42,9 +48,14 @@ export function sortServiceStepNodes(
   serviceNode?: BackendNode | null,
   endpointId?: string | null,
 ): BackendNode[] {
-  const endpoint = endpointId && serviceNode?.data?.endpoints
-    ? (serviceNode.data.endpoints as Endpoint[]).find((e) => e.id === endpointId)
-    : undefined;
+  const rawEndpoints = serviceNode?.data?.endpoints;
+  const endpoint =
+    endpointId && Array.isArray(rawEndpoints)
+      ? rawEndpoints.find(
+          (e): e is Endpoint =>
+            Boolean(e && typeof e === "object" && "id" in e && e.id === endpointId),
+        )
+      : undefined;
   const pipelineSteps = endpoint?.pipelineSteps || [];
 
   return [...steps].sort((a, b) => {
@@ -87,6 +98,86 @@ export function sortServiceStepNodes(
     const labelB = (b.data?.label || "").trim().toLowerCase();
     return labelA.localeCompare(labelB);
   });
+}
+
+/**
+ * Builds a map of stacked hand info for all service step nodes (langgraph, transformer_ref, db_ref, etc.)
+ * connected to service or webPage nodes.
+ */
+export function buildServiceStepHandMap(
+  nodes: BackendNode[],
+  edges: BackendEdge[],
+): Map<string, ServiceStepHandItem> {
+  const serviceNodes = nodes.filter(
+    (n) => n.type === "service" || n.type === "webPage",
+  );
+  const stepHandMap = new Map<string, ServiceStepHandItem>();
+
+  serviceNodes.forEach((serviceNode) => {
+    const rawExpanded = serviceNode.data?.expandedStepStacks;
+    const expandedStepStacks: string[] = Array.isArray(rawExpanded)
+      ? rawExpanded.filter((item): item is string => typeof item === "string")
+      : [];
+
+    const connectedEdges = edges.filter((e) => {
+      const isSrc = e.source === serviceNode.id;
+      const isTgt = e.target === serviceNode.id;
+      if (!isSrc && !isTgt) return false;
+      const otherId = isSrc ? e.target : e.source;
+      const otherNode = nodes.find((n) => n.id === otherId);
+      return otherNode && SERVICE_STEP_NODE_TYPES.has(otherNode.type || "");
+    });
+
+    const endpointGroups = new Map<string, BackendNode[]>();
+    connectedEdges.forEach((e) => {
+      const isSrc = e.source === serviceNode.id;
+      const otherId = isSrc ? e.target : e.source;
+      const otherNode = nodes.find((n) => n.id === otherId);
+      if (!otherNode) return;
+
+      const handle = isSrc ? e.sourceHandle : e.targetHandle;
+      const targetEndpointId = handle
+        ? handle.replace(
+            /^(endpoint-in-|endpoint-out-|consumedEvents-in-|consumedEvents-out-|events-|event-in-|pageload-in-|action-in-|rtc-out-|rtc-in-)/,
+            "",
+          )
+        : null;
+      const stackKey = targetEndpointId || serviceNode.id || "default";
+
+      const existingGroup = endpointGroups.get(stackKey);
+      if (existingGroup) {
+        if (!existingGroup.some((n) => n.id === otherNode.id)) {
+          existingGroup.push(otherNode);
+        }
+      } else {
+        endpointGroups.set(stackKey, [otherNode]);
+      }
+    });
+
+    endpointGroups.forEach((stepNodes, stackKey) => {
+      if (stepNodes.length > 1) {
+        const isStacked = !expandedStepStacks.includes(stackKey);
+        const targetEndpointId =
+          stackKey === serviceNode.id || stackKey === "default"
+            ? null
+            : stackKey;
+        const sorted = sortServiceStepNodes(
+          stepNodes,
+          serviceNode,
+          targetEndpointId,
+        );
+        sorted.forEach((step, idx) => {
+          stepHandMap.set(step.id, {
+            cardIndex: idx,
+            totalCards: sorted.length,
+            isStacked,
+          });
+        });
+      }
+    });
+  });
+
+  return stepHandMap;
 }
 
 /**

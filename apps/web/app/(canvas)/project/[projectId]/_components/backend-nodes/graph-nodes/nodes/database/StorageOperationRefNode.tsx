@@ -357,7 +357,7 @@ export const StorageOperationRefNode = ({
       onMouseLeave={() => setIsHovered(false)}
       style={{
         zIndex: isStacked
-          ? selected
+          ? cardIndex === totalCards - 1 && selected
             ? 1000
             : 10 + cardIndex
           : selected
