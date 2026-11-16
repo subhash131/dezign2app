@@ -319,7 +319,7 @@ export function generateSimpleButtonEventTemplate({
 
         let passedExpr = extractionExpr;
         if (isArrayTarget) {
-          passedExpr = `Array.isArray(${extractionExpr}) ? ${extractionExpr} : (${extractionExpr} !== null && ${extractionExpr} !== undefined ? [${extractionExpr}] : [])`;
+          passedExpr = `Array.isArray(${extractionExpr}) ? ${extractionExpr} : []`;
         } else if (isNumberTarget) {
           passedExpr = `typeof ${extractionExpr} === "number" ? ${extractionExpr} : (Number(${extractionExpr}) || 0)`;
         } else if (isBooleanTarget) {
@@ -380,7 +380,7 @@ export function generateSimpleButtonEventTemplate({
 
       let passedExpr = "resData";
       if (isArrayTarget) {
-        passedExpr = `Array.isArray(resData) ? resData : (resData !== null && resData !== undefined ? [resData] : [])`;
+        passedExpr = `Array.isArray(resData) ? resData : []`;
       } else if (isNumberTarget) {
         passedExpr = `typeof resData === "number" ? resData : (Number(resData) || 0)`;
       } else if (isBooleanTarget) {
