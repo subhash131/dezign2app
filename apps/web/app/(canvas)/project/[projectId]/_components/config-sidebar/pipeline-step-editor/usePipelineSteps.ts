@@ -133,7 +133,7 @@ export function usePipelineSteps({
       serviceNodeId,
     });
 
-    if (isConsumer || isNested || hasStreaming) {
+    if (isConsumer || isNested) {
       onChange([...executableSteps, newStep]);
     } else {
       onChange([...executableSteps, newStep, returnStep]);
@@ -169,14 +169,7 @@ export function usePipelineSteps({
 
     const next = [...executableSteps];
     next[index] = finalUpdated;
-    const nextHasStreaming = next.some(
-      (s) =>
-        s.type === "langgraph_invoke" &&
-        s.langGraphStreamingEnabled &&
-        (!s.langGraphStreamingProtocol || s.langGraphStreamingProtocol === "sse" || s.langGraphStreamingProtocol === "raw") &&
-        s.enabled !== false,
-    );
-    if (isConsumer || isNested || nextHasStreaming) {
+    if (isConsumer || isNested) {
       onChange(next);
     } else {
       onChange([...next, returnStep]);
@@ -199,14 +192,7 @@ export function usePipelineSteps({
       isNested,
     });
 
-    const nextHasStreaming = remainingSteps.some(
-      (s) =>
-        s.type === "langgraph_invoke" &&
-        s.langGraphStreamingEnabled &&
-        (!s.langGraphStreamingProtocol || s.langGraphStreamingProtocol === "sse" || s.langGraphStreamingProtocol === "raw") &&
-        s.enabled !== false,
-    );
-    if (isConsumer || isNested || nextHasStreaming) {
+    if (isConsumer || isNested) {
       onChange(remainingSteps);
     } else {
       onChange([...remainingSteps, returnStep]);
@@ -242,7 +228,7 @@ export function usePipelineSteps({
     const [moved] = reordered.splice(fromIndex, 1);
     if (!moved) return;
     reordered.splice(toIndex, 0, moved);
-    if (isConsumer || isNested || hasStreaming) {
+    if (isConsumer || isNested) {
       onChange(reordered);
     } else {
       onChange([...reordered, returnStep]);
@@ -250,7 +236,7 @@ export function usePipelineSteps({
   };
 
   const updateReturnStep = (updated: PipelineStepDraft) => {
-    if (isConsumer || isNested || hasStreaming) return;
+    if (isConsumer || isNested) return;
     onChange([...executableSteps, updated]);
   };
 

@@ -1,6 +1,6 @@
 import React from "react";
 import { DragDropContext, Droppable } from "@hello-pangea/dnd";
-import { AlertTriangle, Radio } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import {
   Endpoint,
   BackendNode,
@@ -179,47 +179,19 @@ export const PipelineStepEditor: React.FC<PipelineStepEditorProps> = ({
       {/* Add step buttons / Depth Limit Guard */}
       <AddStepToolbar depth={depth} onAddStep={addStep} />
 
-      {/* Mandatory Pinned Return Response Step (Only for top-level HTTP Endpoints when not streaming) */}
+      {/* Mandatory Pinned Return Response Step (Always pinned for top-level HTTP Endpoints) */}
       {!isConsumer && !isNested && (
         <div className="pt-2 border-t border-border/40">
-          {hasStreaming ? (
-            (() => {
-              const streamingStep = executableSteps.find(
-                (s) => s.type === "langgraph_invoke" && s.langGraphStreamingEnabled,
-              );
-              const isRaw = streamingStep?.langGraphStreamingProtocol === "raw";
-              return (
-                <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 p-3.5 flex items-start gap-3">
-                  <Radio className="w-4 h-4 text-sky-400 mt-0.5 shrink-0 animate-pulse" />
-                  <div className="flex flex-col gap-1">
-                    <span className="text-xs font-semibold text-sky-200">
-                      {isRaw
-                        ? "Response Streamed as Raw Plaintext"
-                        : "Response Streamed via Server-Sent Events (SSE)"}
-                    </span>
-                    <p className="text-[11px] text-sky-300/80 leading-relaxed">
-                      {isRaw ? (
-                        <>Tokens are streamed in real time as raw plaintext chunks directly to the caller (<code className="text-sky-200 bg-sky-950/60 px-1 py-0.5 rounded text-[10px]">res.write(token)</code>). The HTTP connection closes automatically when generation completes.</>
-                      ) : (
-                        <>Tokens are streamed in real time to the caller over HTTP SSE. The HTTP connection closes automatically with <code className="text-sky-200 bg-sky-950/60 px-1 py-0.5 rounded text-[10px]">data: [DONE]</code> when generation completes.</>
-                      )}
-                    </p>
-                  </div>
-                </div>
-              );
-            })()
-          ) : (
-            <ReturnResponseStepRow
-              step={returnStep}
-              priorSteps={executableSteps}
-              endpoint={endpoint}
-              allNodes={allNodes}
-              serviceNodeId={serviceNodeId}
-              extraSources={[...extraSources, envSource]}
-              onChange={updateReturnStep}
-              onEndpointChange={onEndpointChange}
-            />
-          )}
+          <ReturnResponseStepRow
+            step={returnStep}
+            priorSteps={executableSteps}
+            endpoint={endpoint}
+            allNodes={allNodes}
+            serviceNodeId={serviceNodeId}
+            extraSources={[...extraSources, envSource]}
+            onChange={updateReturnStep}
+            onEndpointChange={onEndpointChange}
+          />
         </div>
       )}
     </div>
