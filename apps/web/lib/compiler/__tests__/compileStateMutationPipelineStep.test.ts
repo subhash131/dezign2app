@@ -111,7 +111,7 @@ describe("compileStateMutationPipelineStep", () => {
     // 4. State mutation code block is present in handleFetchConversationsAction
     expect(actionContent).toContain("useAppStore.getState().setConversations");
     expect(actionContent).toContain(
-      "useAppStore.getState().setConversations(Array.isArray(resData) ? resData : (resData !== null && resData !== undefined ? [resData] : []));",
+      "useAppStore.getState().setConversations(Array.isArray(resData) ? resData : []);",
     );
     expect(actionContent).not.toContain('resData?.["data"]');
   });
@@ -241,7 +241,7 @@ describe("compileStateMutationPipelineStep", () => {
     expect(actionContent).toContain('import { useAppStore } from "@/lib/stores";');
     expect(actionContent).toContain("useAppStore.getState().setConversations");
     expect(actionContent).toContain(
-      "useAppStore.getState().setConversations(Array.isArray(resData) ? resData : (resData !== null && resData !== undefined ? [resData] : []));",
+      "useAppStore.getState().setConversations(Array.isArray(resData) ? resData : []);",
     );
     expect(actionContent).not.toContain('resData?.["data"]');
 
