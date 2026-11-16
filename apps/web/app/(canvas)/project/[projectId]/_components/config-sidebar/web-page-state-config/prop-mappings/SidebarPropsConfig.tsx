@@ -11,6 +11,12 @@ import {
   FolderKanban,
   Layers,
   Sparkles,
+  Link2,
+  Tag,
+  Key,
+  Database,
+  Type,
+  Braces,
 } from "lucide-react";
 import { Badge } from "@workspace/ui/components/badge";
 import { Button } from "@workspace/ui/components/button";
@@ -28,6 +34,494 @@ import { isSidebarCollapsible, isSidebarVariant, isSidebarSide } from "../consta
 import { SidebarPropsConfigProps, SidebarGroupConfig } from "./types";
 import { SidebarStaticItemRow } from "./SidebarStaticItemRow";
 import { SidebarStaticItem } from "@/types/canvas";
+import type { BackendNode } from "@workspace/canvas/types";
+import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
+import { resolveItemPropsFromType } from "../../web-page-event-config/action-flow/itemPropUtils";
+import type { ComboboxOption } from "../../web-page-event-config/action-flow/ActionFlowCombobox";
+import { cn } from "@workspace/ui/lib/utils";
+
+interface DynamicFieldMappingControlProps {
+  label: string;
+  propKey: string;
+  icon: React.ReactNode;
+  mode: "field" | "inline";
+  value: string;
+  typeFields: ComboboxOption[];
+  dropdownPlaceholder: string;
+  inlinePlaceholder: string;
+  suggestions?: string[];
+  patternPresets?: string[];
+  onModeChange: (nextMode: "field" | "inline") => void;
+  onValueChange: (nextVal: string) => void;
+  description?: string;
+}
+
+const DynamicFieldMappingControl: React.FC<DynamicFieldMappingControlProps> = ({
+  label,
+  propKey,
+  icon,
+  mode,
+  value,
+  typeFields,
+  dropdownPlaceholder,
+  inlinePlaceholder,
+  suggestions = [],
+  patternPresets = [],
+  onModeChange,
+  onValueChange,
+  description,
+}) => {
+  const optionsWithCurrent: ComboboxOption[] = useMemo(() => {
+    const list: ComboboxOption[] = [...typeFields];
+    if (value && !list.some((opt) => opt.value === value)) {
+      list.unshift({
+        value,
+        label: value,
+        type: "current",
+      });
+    }
+    return list;
+  }, [typeFields, value]);
+
+  const handleInsertToken = (token: string) => {
+    const tokenStr = `\${${token}}`;
+    if (!value) {
+      onValueChange(tokenStr);
+    } else {
+      onValueChange(`${value}${tokenStr}`);
+    }
+  };
+
+  return (
+    <div className="space-y-1.5 p-2 rounded-lg bg-background/95 border border-border/50">
+      {/* Header: Label + PropKey + Dual Mode Switcher */}
+      <div className="flex items-center justify-between">
+        <Label className="text-[10px] text-muted-foreground flex items-center gap-1 font-medium">
+          {icon}
+          <span className="text-foreground font-semibold">{label}</span>
+          <code className="font-mono text-[9px] text-sky-500 font-semibold">{propKey}</code>
+        </Label>
+
+        {/* Dual Mode Switcher: Dropdown (Field) vs Inline (Pattern/Static) */}
+        <div className="flex items-center gap-0.5 bg-muted/60 p-0.5 rounded border border-border/40">
+          <button
+            type="button"
+            onClick={() => onModeChange("field")}
+            className={cn(
+              "px-1.5 py-0.5 rounded text-[9px] font-medium transition-colors cursor-pointer flex items-center gap-1",
+              mode === "field"
+                ? "bg-background text-foreground shadow-2xs font-semibold text-sky-500"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+            title="Select field from bound type schema dropdown"
+          >
+            <Database size={9} />
+            <span>Dropdown</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onModeChange("inline")}
+            className={cn(
+              "px-1.5 py-0.5 rounded text-[9px] font-medium transition-colors cursor-pointer flex items-center gap-1",
+              mode === "inline"
+                ? "bg-background text-foreground shadow-2xs font-semibold text-primary"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+            title="Specify inline static text or template pattern with ${field}"
+          >
+            <Type size={9} />
+            <span>Inline</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Editor: Field Dropdown or Inline Pattern Input */}
+      {mode === "field" ? (
+        <div className="space-y-1">
+          <Select value={value || ""} onValueChange={onValueChange}>
+            <SelectTrigger className="h-7 text-xs bg-background font-mono w-full">
+              <SelectValue placeholder={dropdownPlaceholder} />
+            </SelectTrigger>
+            <SelectContent className="z-[110]">
+              {optionsWithCurrent.length > 0 ? (
+                optionsWithCurrent.map((f) => (
+                  <SelectItem key={f.value} value={f.value} className="text-xs font-mono">
+                    <div className="flex items-center justify-between gap-2 w-full">
+                      <span className="font-semibold text-foreground flex items-center gap-1">
+                        <Database size={10} className="text-sky-500" />
+                        {f.label || f.value}
+                      </span>
+                      {f.type && (
+                        <span className="text-[9px] text-muted-foreground font-sans px-1 py-0.2 bg-muted rounded">
+                          {f.type}
+                        </span>
+                      )}
+                    </div>
+                  </SelectItem>
+                ))
+              ) : (
+                <SelectItem value="__none__" disabled className="text-xs text-muted-foreground italic">
+                  (No type fields found)
+                </SelectItem>
+              )}
+            </SelectContent>
+          </Select>
+        </div>
+      ) : (
+        <div className="space-y-1">
+          <LocalInput
+            value={value}
+            onChange={(e) => onValueChange(e.target.value)}
+            placeholder={inlinePlaceholder}
+            className="h-7 text-xs font-mono bg-background"
+          />
+
+          {/* Quick Suggestions for Inline Mode: Top 5 available fields (except createdat/updatedat) */}
+          {suggestions.length > 0 && (
+            <div className="flex items-center gap-1 text-[9px] text-muted-foreground pt-0.5 flex-wrap">
+              <span>Suggestions:</span>
+              {suggestions.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => handleInsertToken(s)}
+                  className={cn(
+                    "px-1.5 py-0.5 rounded bg-muted hover:bg-muted/80 text-foreground font-mono cursor-pointer transition-colors text-[9px]",
+                    value.includes(`\${${s}}`) && "border border-sky-500/40 bg-sky-500/10 text-sky-400 font-semibold",
+                  )}
+                  title={`Insert \${${s}}`}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Pattern Presets (e.g. for routes) */}
+          {patternPresets.length > 0 && (
+            <div className="flex items-center gap-1 text-[9px] text-muted-foreground pt-0.5 flex-wrap">
+              <span>Presets:</span>
+              {patternPresets.map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => onValueChange(preset)}
+                  className={cn(
+                    "px-1.5 py-0.5 rounded bg-muted hover:bg-muted/80 text-foreground font-mono cursor-pointer transition-colors text-[9px]",
+                    value === preset && "border border-emerald-500/40 bg-emerald-500/10 text-emerald-400 font-semibold",
+                  )}
+                >
+                  {preset}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {description && (
+        <p className="text-[9px] text-muted-foreground/80 leading-normal">
+          {description}
+        </p>
+      )}
+    </div>
+  );
+};
+
+interface SidebarDynamicGroupConfigSectionProps {
+  group: SidebarGroupConfig;
+  stateStores: SidebarPropsConfigProps["stateStores"];
+  effectiveStoreId?: string;
+  effectiveStoreName?: string;
+  nodes: BackendNode[];
+  onCreateNavStateVariable?: (preferredStoreId?: string) => void;
+  onUpdateGroup: (groupId: string, patch: Partial<SidebarGroupConfig>) => void;
+}
+
+const SidebarDynamicGroupConfigSection: React.FC<SidebarDynamicGroupConfigSectionProps> = ({
+  group,
+  stateStores,
+  effectiveStoreId,
+  effectiveStoreName,
+  nodes,
+  onCreateNavStateVariable,
+  onUpdateGroup,
+}) => {
+  const groupTypeFields: ComboboxOption[] = useMemo(() => {
+    const targetStore = stateStores.find(
+      (s) => s.id === group.navStoreId || s.name === group.navStoreName,
+    ) || stateStores[0];
+
+    const targetField = targetStore?.fields?.find(
+      (f) => f.name === group.navBinding || f.id === group.navBinding,
+    );
+
+    const rawType = targetField?.type || group.navBinding || "";
+
+    let resolved = resolveItemPropsFromType(rawType, nodes);
+    if (resolved.length === 0 && group.navBinding) {
+      resolved = resolveItemPropsFromType(group.navBinding, nodes);
+      if (resolved.length === 0 && group.navBinding.endsWith("s")) {
+        resolved = resolveItemPropsFromType(group.navBinding.slice(0, -1), nodes);
+      }
+    }
+
+    if (resolved.length > 0) {
+      return resolved;
+    }
+
+    // Generic fallbacks only if type cannot be resolved from canvas nodes
+    return [
+      { value: "id", label: "id", type: "string" },
+      { value: "title", label: "title", type: "string" },
+      { value: "name", label: "name", type: "string" },
+      { value: "label", label: "label", type: "string" },
+      { value: "link", label: "link", type: "string" },
+    ];
+  }, [stateStores, group.navStoreId, group.navStoreName, group.navBinding, nodes]);
+
+  const availableFieldNames = useMemo(
+    () => groupTypeFields.map((f) => f.value),
+    [groupTypeFields],
+  );
+
+  const isExcludedField = (name: string): boolean => {
+    const n = name.toLowerCase().replace(/[\-_]/g, "");
+    return n === "createdat" || n === "updatedat";
+  };
+
+  // Top 5 available fields excluding createdat and updatedat
+  const topAvailableFields = useMemo(() => {
+    return availableFieldNames
+      .filter((f) => !isExcludedField(f))
+      .slice(0, 5);
+  }, [availableFieldNames]);
+
+  const dynamicPresets = useMemo(() => {
+    const idField =
+      topAvailableFields.find((f) => f.toLowerCase().includes("id")) ||
+      topAvailableFields[0] ||
+      "id";
+    const binding = group.navBinding?.replace(/^\//, "").trim() || "";
+    const presets: string[] = [];
+    if (binding) {
+      presets.push(`/${binding}/\${${idField}}`);
+    }
+    presets.push(`/\${${idField}}`);
+    return presets;
+  }, [topAvailableFields, group.navBinding]);
+
+  const linkMode: "field" | "inline" = group.linkMode ?? (group.linkPattern?.includes("/") || group.linkPattern?.includes("${") ? "inline" : "field");
+
+  const cleanFieldLinkValue = useMemo(() => {
+    if (!group.linkPattern) {
+      return topAvailableFields.find((f) => f.toLowerCase().includes("id")) || topAvailableFields[0] || "id";
+    }
+    if (group.linkPattern.includes("/") || group.linkPattern.includes("${")) {
+      const match = group.linkPattern.match(/\$\{([^}]+)\}|\{([^}]+)\}/);
+      const extracted = match ? (match[1] || match[2]) : group.linkPattern.replace(/^\/chat\/?/i, "").replace(/^\//, "").split("/")[0];
+      if (extracted && availableFieldNames.includes(extracted)) return extracted;
+      return topAvailableFields.find((f) => f.toLowerCase().includes("id")) || topAvailableFields[0] || "id";
+    }
+    return group.linkPattern.replace(/^\/chat\/?/i, "");
+  }, [group.linkPattern, availableFieldNames, topAvailableFields]);
+
+  const cleanInlineLinkValue = useMemo(() => {
+    if (!group.linkPattern) return dynamicPresets[0] ?? `/\${${topAvailableFields[0] ?? "id"}}`;
+    if (group.linkPattern.startsWith("/chat/")) {
+      return group.linkPattern.replace(/^\/chat\/?/i, "/");
+    }
+    if (!group.linkPattern.includes("/") && !group.linkPattern.includes("${")) {
+      return `/\${${group.linkPattern}}`;
+    }
+    return group.linkPattern;
+  }, [group.linkPattern, dynamicPresets, topAvailableFields]);
+
+  const previewLabel = useMemo(() => {
+    const mode = group.labelMode || "field";
+    const val = group.labelField || (topAvailableFields.find((f) => ["title", "name", "label"].includes(f.toLowerCase())) ?? topAvailableFields[0] ?? "title");
+    if (mode === "inline") {
+      return val.replace(/\$\{([^}]+)\}|\{([^}]+)\}/g, "Item 1");
+    }
+    return `item.${val}`;
+  }, [group.labelMode, group.labelField, topAvailableFields]);
+
+  const previewLink = useMemo(() => {
+    if (linkMode === "field") {
+      const clean = cleanFieldLinkValue.replace(/^\/chat\/?/i, "");
+      return clean.startsWith("/") || clean.startsWith("http") ? clean : `/${clean}`;
+    }
+    const clean = cleanInlineLinkValue.replace(/^\/chat\/?/i, "/");
+    const u = clean.replace(/\$\{([^}]+)\}|\{([^}]+)\}/g, "123");
+    return u.startsWith("/") || u.startsWith("http") ? u : "/" + u;
+  }, [linkMode, cleanFieldLinkValue, cleanInlineLinkValue]);
+
+  const previewKey = useMemo(() => {
+    const mode = group.keyMode || "field";
+    const val = group.keyField || (topAvailableFields.find((f) => f.toLowerCase().includes("id")) ?? topAvailableFields[0] ?? "id");
+    if (mode === "inline") {
+      return val.replace(/\$\{([^}]+)\}|\{([^}]+)\}/g, "123");
+    }
+    return `item.${val}`;
+  }, [group.keyMode, group.keyField, topAvailableFields]);
+
+  return (
+    <div className="flex flex-col gap-2.5 pt-1">
+      {/* 1-Click State Store Shortcut Banner for this group */}
+      <div className="flex items-center justify-between p-2 rounded-lg bg-sky-500/[0.06] border border-sky-500/20">
+        <div className="flex items-center gap-2">
+          <div className="p-1 rounded bg-sky-500/20 text-sky-600 dark:text-sky-400 shrink-0">
+            <Zap size={12} />
+          </div>
+          <div className="text-[11px] text-muted-foreground">
+            Auto-bind <span className="font-mono font-medium text-foreground">{group.label ? `${group.label.toLowerCase().replace(/[^a-z0-9]/g, "")}Items` : "navItems"}</span> variable in State Store
+          </div>
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          onClick={() => onCreateNavStateVariable?.(group.navStoreId || effectiveStoreId)}
+          className="h-6 text-[10px] font-medium bg-sky-600 hover:bg-sky-500 text-white cursor-pointer shrink-0 ml-2"
+        >
+          <Zap size={10} className="mr-1" />
+          Create & Bind
+        </Button>
+      </div>
+
+      {/* State Store Variable Picker for this Group */}
+      <StateStoreVariablePicker
+        label={`"${group.label || "Group"}" Items Variable`}
+        propName={group.label ? `${group.label.toLowerCase().replace(/[^a-z0-9]/g, "")}Items` : "navItems"}
+        valueBinding={group.navBinding || "navItems"}
+        storeName={group.navStoreName || effectiveStoreName}
+        storeId={group.navStoreId || effectiveStoreId}
+        mode="store_var"
+        stateStores={stateStores}
+        expectedType="any"
+        placeholder="navItems"
+        description={`State store variable containing navigation items (NavItem[]) for ${group.label || "this group"}.`}
+        onChange={(res) => {
+          onUpdateGroup(group.id, {
+            navBinding: res.valueBinding,
+            navStoreName: res.storeName,
+            navStoreId: res.storeId,
+          });
+        }}
+      />
+
+      {/* Dynamic Item Field & Route Mapping Section */}
+      <div className="p-2.5 rounded-lg bg-background/90 border border-border/60 shadow-xs space-y-2.5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <Tag size={12} className="text-sky-500" />
+            <span className="text-[11px] font-semibold text-foreground">
+              Dynamic Item Field Mappings
+            </span>
+          </div>
+          <Badge variant="outline" className="text-[9px] font-mono px-1.5 py-0 text-sky-500 border-sky-500/30">
+            Field Mapping
+          </Badge>
+        </div>
+        <p className="text-[10px] text-muted-foreground leading-relaxed">
+          Map properties from each item in <span className="font-mono text-foreground font-medium">{group.navBinding || "array"}</span> to sidebar title and route URL. Select each from the type dropdown or use an inline pattern.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+          {/* 1. Label / Title Field */}
+          <DynamicFieldMappingControl
+            label="Title / Label Field"
+            propKey="text"
+            icon={<Tag size={10} className="text-sky-400" />}
+            mode={group.labelMode || "field"}
+            value={group.labelField ?? (group.labelMode === "inline" ? `\${${topAvailableFields[0] ?? "title"}}` : (topAvailableFields[0] ?? "title"))}
+            typeFields={groupTypeFields}
+            dropdownPlaceholder="Select label field..."
+            inlinePlaceholder="e.g. ${title} or Item: ${title}"
+            suggestions={topAvailableFields}
+            onModeChange={(nextMode) => {
+              const nextVal = nextMode === "inline"
+                ? (group.labelField && !group.labelField.includes("${") ? `\${${group.labelField}}` : (group.labelField || `\${${topAvailableFields[0] ?? "title"}}`))
+                : (group.labelField ? group.labelField.replace(/[\${}]/g, "") : (topAvailableFields[0] ?? "title"));
+              onUpdateGroup(group.id, { labelMode: nextMode, labelField: nextVal });
+            }}
+            onValueChange={(nextVal) => onUpdateGroup(group.id, { labelField: nextVal })}
+            description="Display title shown in navigation item button."
+          />
+
+          {/* 2. Key / ID Field */}
+          <DynamicFieldMappingControl
+            label="Item Key / ID Field"
+            propKey="key"
+            icon={<Key size={10} className="text-amber-400" />}
+            mode={group.keyMode || "field"}
+            value={group.keyField ?? (group.keyMode === "inline" ? `\${${topAvailableFields.find(f => f.toLowerCase().includes("id")) ?? topAvailableFields[0] ?? "id"}}` : (topAvailableFields.find(f => f.toLowerCase().includes("id")) ?? topAvailableFields[0] ?? "id"))}
+            typeFields={groupTypeFields}
+            dropdownPlaceholder="Select ID field..."
+            inlinePlaceholder="e.g. ${id}"
+            suggestions={topAvailableFields}
+            onModeChange={(nextMode) => {
+              const defaultIdField = topAvailableFields.find((f) => f.toLowerCase().includes("id")) || topAvailableFields[0] || "id";
+              const nextVal = nextMode === "inline"
+                ? (group.keyField && !group.keyField.includes("${") ? `\${${group.keyField}}` : (group.keyField || `\${${defaultIdField}}`))
+                : (group.keyField ? group.keyField.replace(/[\${}]/g, "") : defaultIdField);
+              onUpdateGroup(group.id, { keyMode: nextMode, keyField: nextVal });
+            }}
+            onValueChange={(nextVal) => onUpdateGroup(group.id, { keyField: nextVal })}
+            description="Unique key for item identification."
+          />
+        </div>
+
+        {/* 3. Link Pattern */}
+        <DynamicFieldMappingControl
+          label="Navigation Link / Route URL"
+          propKey="href"
+          icon={<Link2 size={10} className="text-emerald-400" />}
+          mode={linkMode}
+          value={linkMode === "field" ? cleanFieldLinkValue : cleanInlineLinkValue}
+          typeFields={groupTypeFields}
+          dropdownPlaceholder="Select route field..."
+          inlinePlaceholder="e.g. /items/${id} or /${id}"
+          suggestions={topAvailableFields}
+          patternPresets={dynamicPresets}
+          onModeChange={(nextMode) => {
+            if (nextMode === "field") {
+              onUpdateGroup(group.id, {
+                linkMode: "field",
+                linkPattern: cleanFieldLinkValue,
+              });
+            } else {
+              onUpdateGroup(group.id, {
+                linkMode: "inline",
+                linkPattern: cleanInlineLinkValue,
+              });
+            }
+          }}
+          onValueChange={(nextVal) => {
+            const cleaned = linkMode === "inline" && nextVal.startsWith("/chat/")
+              ? nextVal.replace(/^\/chat\/?/i, "/")
+              : nextVal;
+            onUpdateGroup(group.id, { linkPattern: cleaned, linkMode });
+          }}
+          description="Target route URL path when clicking this item."
+        />
+
+        {/* Live Resolution Preview */}
+        <div className="p-2.5 rounded-lg bg-muted/40 border border-border/40 text-[10px] flex items-center justify-between font-mono">
+          <span className="text-muted-foreground flex items-center gap-1">
+            <Sparkles size={11} className="text-primary" />
+            <span>Live Preview:</span>
+          </span>
+          <div className="flex items-center gap-1.5 truncate">
+            <span className="text-foreground font-semibold">{previewLabel}</span>
+            <span className="text-muted-foreground">➔</span>
+            <span className="text-emerald-400 font-semibold">{previewLink}</span>
+            <span className="text-muted-foreground/60 text-[9px]">({previewKey})</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export const SidebarPropsConfig: React.FC<SidebarPropsConfigProps> = React.memo(({
   propMappings,
@@ -40,6 +534,8 @@ export const SidebarPropsConfig: React.FC<SidebarPropsConfigProps> = React.memo(
   onOpenEventConfig,
   onCreateAction,
 }) => {
+  const nodes = useBackendCanvasStore((s) => s.nodes);
+
   // Derive groups from propMappings.sidebarGroups or fallback to legacy single group
   const rawGroups = propMappings.sidebarGroups;
   const groups: SidebarGroupConfig[] = useMemo(() => {
@@ -397,59 +893,15 @@ export const SidebarPropsConfig: React.FC<SidebarPropsConfigProps> = React.memo(
 
                 {/* Group Body: Dynamic vs Static */}
                 {isDynamic ? (
-                  <div className="flex flex-col gap-2.5 pt-1">
-                    {/* 1-Click State Store Shortcut Banner for this group */}
-                    <div className="flex items-center justify-between p-2 rounded-lg bg-sky-500/[0.06] border border-sky-500/20">
-                      <div className="flex items-center gap-2">
-                        <div className="p-1 rounded bg-sky-500/20 text-sky-600 dark:text-sky-400 shrink-0">
-                          <Zap size={12} />
-                        </div>
-                        <div className="text-[11px] text-muted-foreground">
-                          Auto-bind <span className="font-mono font-medium text-foreground">{group.label ? `${group.label.toLowerCase().replace(/[^a-z0-9]/g, "")}Items` : "navItems"}</span> variable in State Store
-                        </div>
-                      </div>
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => onCreateNavStateVariable?.(group.navStoreId || effectiveStoreId)}
-                        className="h-6 text-[10px] font-medium bg-sky-600 hover:bg-sky-500 text-white cursor-pointer shrink-0 ml-2"
-                      >
-                        <Zap size={10} className="mr-1" />
-                        Create & Bind
-                      </Button>
-                    </div>
-
-                    {/* State Store Variable Picker for this Group */}
-                    <StateStoreVariablePicker
-                      label={`"${group.label || "Group"}" Items Variable`}
-                      propName={group.label ? `${group.label.toLowerCase().replace(/[^a-z0-9]/g, "")}Items` : "navItems"}
-                      valueBinding={group.navBinding || "navItems"}
-                      storeName={group.navStoreName || effectiveStoreName}
-                      storeId={group.navStoreId || effectiveStoreId}
-                      mode="store_var"
-                      stateStores={stateStores}
-                      expectedType="any"
-                      placeholder="navItems"
-                      description={`State store variable containing navigation items (NavItem[]) for ${group.label || "this group"}.`}
-                      onChange={(res) => {
-                        handleUpdateGroup(group.id, {
-                          navBinding: res.valueBinding,
-                          navStoreName: res.storeName,
-                          navStoreId: res.storeId,
-                        });
-                      }}
-                    />
-
-                    {/* Field contract hint */}
-                    <div className="p-2 rounded bg-background/80 border border-border/30 text-[10px] space-y-0.5">
-                      <span className="font-semibold text-muted-foreground uppercase text-[9px] tracking-wider">
-                        Expected Item Fields:
-                      </span>
-                      <span className="font-mono text-muted-foreground ml-1.5">
-                        <span className="text-foreground">id</span>, <span className="text-foreground">name</span>, <span className="text-foreground">link</span>, <span className="text-foreground">icon?</span>
-                      </span>
-                    </div>
-                  </div>
+                  <SidebarDynamicGroupConfigSection
+                    group={group}
+                    stateStores={stateStores}
+                    effectiveStoreId={effectiveStoreId}
+                    effectiveStoreName={effectiveStoreName}
+                    nodes={nodes}
+                    onCreateNavStateVariable={onCreateNavStateVariable}
+                    onUpdateGroup={handleUpdateGroup}
+                  />
                 ) : (
                   <div className="flex flex-col gap-2 pt-1">
                     <div className="flex items-center justify-between">

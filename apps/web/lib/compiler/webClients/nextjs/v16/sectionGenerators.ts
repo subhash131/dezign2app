@@ -1164,18 +1164,57 @@ export default ${sectionCompName};
             const groupLabel = grp.label || `Section ${gIdx + 1}`;
             if (grp.mode === "dynamic") {
               const dynVar = grp.navBinding ? toCamelCase(grp.navBinding) : valVar || "navItems";
+              const labelField = grp.labelField || "title";
+              const labelMode = grp.labelMode || "field";
+              const keyField = grp.keyField || "id";
+              const keyMode = grp.keyMode || "field";
+              const linkPattern = grp.linkPattern || "";
+              const linkMode = grp.linkMode || (linkPattern.includes("${") || linkPattern.includes("/") ? "inline" : "field");
+
+              const hrefExpression = linkMode === "field" && linkPattern && !linkPattern.includes("${") && !linkPattern.includes("/")
+                ? `navItem?.${linkPattern} ? (String(navItem?.${linkPattern}).startsWith("/") || String(navItem?.${linkPattern}).startsWith("http") ? String(navItem?.${linkPattern}) : "/" + String(navItem?.${linkPattern})) : "#"`
+                : linkPattern
+                ? "`" +
+                  linkPattern.replace(
+                    /\$\{([^}]+)\}|\{([^}]+)\}|\[([^\]]+)\]|:([a-zA-Z0-9_]+)/g,
+                    (_match, a, b, c, d) => "${navItem?." + (a || b || c || d) + ' ?? ""}',
+                  ) +
+                  "`"
+                : `navItem?.link || navItem?.href || "#"`;
+
+              const labelExpression = labelMode === "inline" && labelField.includes("${")
+                ? "`" +
+                  labelField.replace(
+                    /\$\{([^}]+)\}|\{([^}]+)\}/g,
+                    (_match, a, b) => "${navItem?." + (a || b) + ' ?? ""}',
+                  ) +
+                  "`"
+                : `navItem?.${labelField} ?? navItem?.name ?? navItem?.title ?? "Nav"`;
+
+              const keyExpression = keyMode === "inline" && keyField.includes("${")
+                ? "`" +
+                  keyField.replace(
+                    /\$\{([^}]+)\}|\{([^}]+)\}/g,
+                    (_match, a, b) => "${navItem?." + (a || b) + ' ?? ""}',
+                  ) +
+                  "`"
+                : `navItem?.${keyField} ?? navItem?.id ?? idx`;
+
               return `                <SidebarGroup key="${grp.id || gIdx}">
                   <SidebarGroupLabel className="text-[10px]">${groupLabel}</SidebarGroupLabel>
                   <SidebarGroupContent>
                     <SidebarMenu>
                       {(${dynVar} || []).map((navItem, idx: number) => {
                         const NavIcon = ([LayoutDashboard, BarChart2, Folder, Settings][(gIdx * 2 + idx) % 4]) ?? Folder;
+                        const itemLabel = ${labelExpression};
+                        const itemKey = ${keyExpression};
+                        const itemHref = ${hrefExpression};
                         return (
-                          <SidebarMenuItem key={navItem?.id || idx}>
-                            <SidebarMenuButton asChild tooltip={navItem?.name} className="transition-all duration-150 ease-in-out cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
-                              <Link href={navItem?.link || "#"} className="text-xs">
+                          <SidebarMenuItem key={itemKey}>
+                            <SidebarMenuButton asChild tooltip={itemLabel} className="transition-all duration-150 ease-in-out cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
+                              <Link href={itemHref} className="text-xs">
                                 <NavIcon className="size-3.5 shrink-0 mr-2 inline-block transition-transform duration-150 group-hover/menu-item:scale-105" />
-                                <span>{navItem?.name || "Nav"}</span>
+                                <span>{itemLabel}</span>
                               </Link>
                             </SidebarMenuButton>
                           </SidebarMenuItem>
