@@ -70,7 +70,9 @@ export function generateTriggerLogsState(hasLogsSection: boolean, hasStreamingAc
   useEffect(() => {
     const handleOtherDrawer = (e: Event) => {
       if (e instanceof CustomEvent && e.detail === "layout") {
-        setIsLogsOpen(false);
+        queueMicrotask(() => {
+          setIsLogsOpen(false);
+        });
       }
     };
     window.addEventListener("dezign:drawer-opened", handleOtherDrawer);
@@ -524,7 +526,9 @@ export function generateTriggerLogsSection(options: {
               setIsLogsOpen((prev) => {
                 const next = !prev;
                 if (next && typeof window !== "undefined") {
-                  window.dispatchEvent(new CustomEvent("dezign:drawer-opened", { detail: "page" }));
+                  queueMicrotask(() => {
+                    window.dispatchEvent(new CustomEvent("dezign:drawer-opened", { detail: "page" }));
+                  });
                 }
                 return next;
               });

@@ -244,7 +244,9 @@ ${routeParamsHook}${sseEffectsJsx}${wsEffectsJsx}${onMountEffectsJsx}  // Listen
   useEffect(() => {
     const handleOtherDrawer = (e: Event) => {
       if (e instanceof CustomEvent && e.detail === "page") {
-        setIsOpen(false);
+        queueMicrotask(() => {
+          setIsOpen(false);
+        });
       }
     };
     window.addEventListener("dezign:drawer-opened", handleOtherDrawer);
@@ -357,7 +359,9 @@ ${routeParamsHook}${sseEffectsJsx}${wsEffectsJsx}${onMountEffectsJsx}  // Listen
           setIsOpen((prev) => {
             const next = !prev;
             if (next && typeof window !== "undefined") {
-              window.dispatchEvent(new CustomEvent("dezign:drawer-opened", { detail: "layout" }));
+              queueMicrotask(() => {
+                window.dispatchEvent(new CustomEvent("dezign:drawer-opened", { detail: "layout" }));
+              });
             }
             return next;
           });
