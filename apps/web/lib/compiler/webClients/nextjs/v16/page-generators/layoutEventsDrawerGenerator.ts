@@ -83,7 +83,7 @@ export function generateLayoutEventsDrawer(
     let isMounted = true;
     const runOnMount = async () => {
       const timestamp = new Date().toLocaleTimeString();
-      const onTrigger = async (
+      const onTrigger = async <T,>(
         eventName: string,
         eventType: string,
         url: string,
@@ -92,11 +92,11 @@ export function generateLayoutEventsDrawer(
         customHeaders?: Record<string, string>,
         queryParams?: Record<string, string>,
         requestBody?: Record<string, string | number | boolean | null | undefined>,
-      ) => {
+      ): Promise<T | void> => {
         const logId = Math.random().toString(36).substring(2, 9);
         const resolvedEventType = (eventType || "onMount").toUpperCase();
         try {
-          const result = await executeApiAction<Record<string, string | number | boolean | null | undefined>>({
+          const result = await executeApiAction<T>({
             eventName,
             eventType: resolvedEventType,
             url,
@@ -145,7 +145,7 @@ export function generateLayoutEventsDrawer(
               window.dispatchEvent(new CustomEvent("dezign:layout-log", { detail: entry }));
             }
           }
-          return { error: errorMessage };
+          return undefined;
         }
       };
 

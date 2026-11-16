@@ -339,7 +339,32 @@ export function compileNextjsV16WebClient(
   });
   const canvasCustomTypes: CustomTypeItem[] = [...userCustomTypes, ...autoDerivedCustomTypes];
 
-  const allStores = [...appGlobalStores, ...pageStores, ...graphStateStores];
+  const rawStores = [...appGlobalStores, ...pageStores, ...graphStateStores];
+  const mergedStoresMap = new Map<string, GlobalStoreDefinition>();
+  for (const st of rawStores) {
+    const baseName = toPascalCase((st.name || "App").replace(/Store$/i, ""));
+    const key = `${st.scope || "global"}:${st.targetPageId || ""}:${baseName}`;
+    const existing = mergedStoresMap.get(key);
+    if (!existing) {
+      mergedStoresMap.set(key, { ...st, fields: [...(st.fields || [])], actions: [...(st.actions || [])] });
+    } else {
+      existing.fields = existing.fields || [];
+      existing.actions = existing.actions || [];
+      const currentFields = existing.fields;
+      const currentActions = existing.actions;
+      (st.fields || []).forEach((f) => {
+        if (!currentFields.some((ef) => ef.name === f.name || ef.id === f.id)) {
+          currentFields.push(f);
+        }
+      });
+      (st.actions || []).forEach((act) => {
+        if (!currentActions.some((ea) => ea.name === act.name || ea.id === act.id)) {
+          currentActions.push(act);
+        }
+      });
+    }
+  }
+  const allStores = Array.from(mergedStoresMap.values());
 
   // Scan all actions across the web app to ensure every store referenced in state_mutation steps is present
   allActionsInApp.forEach((a: UIEventItem) => {
