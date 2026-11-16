@@ -8,6 +8,7 @@ import {
   ComponentPropMappings,
   ComponentElementBinding,
   JSONValue,
+  SidebarGroupConfig,
 } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import { Card, CardContent, CardHeader } from "@workspace/ui/components/card";
@@ -630,11 +631,91 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React
             { id: "nav-4", name: "Settings", link: "/settings" },
           ];
 
-          const parseSidebarItem = (val: JSONValue): SidebarPreviewItem | null => {
+          const parseSidebarItem = (
+            val: JSONValue,
+            grpConfig?: SidebarGroupConfig,
+          ): SidebarPreviewItem | null => {
             if (typeof val === "object" && val !== null && !Array.isArray(val)) {
-              const id = typeof val.id === "string" ? val.id : undefined;
-              const name = typeof val.name === "string" ? val.name : (typeof val.label === "string" ? val.label : (typeof val.title === "string" ? val.title : undefined));
-              const link = typeof val.link === "string" ? val.link : (typeof val.href === "string" ? val.href : (typeof val.url === "string" ? val.url : undefined));
+              const labelField = grpConfig?.labelField;
+              const labelMode = grpConfig?.labelMode;
+              const keyField = grpConfig?.keyField;
+              const keyMode = grpConfig?.keyMode;
+              const linkPattern = grpConfig?.linkPattern;
+              const linkMode = grpConfig?.linkMode;
+
+              let id: string | undefined = undefined;
+              if (keyMode === "inline" && keyField) {
+                id = keyField.replace(/\$\{([^}]+)\}|\{([^}]+)\}/g, (_m: string, a?: string, b?: string): string => {
+                  const k = a || b;
+                  if (k && val[k] !== undefined && val[k] !== null) {
+                    return String(val[k]);
+                  }
+                  return "";
+                });
+              } else if (keyField && (typeof val[keyField] === "string" || typeof val[keyField] === "number")) {
+                id = String(val[keyField]);
+              } else if (typeof val.id === "string" || typeof val.id === "number") {
+                id = String(val.id);
+              } else if (typeof val.thread_id === "string" || typeof val.thread_id === "number") {
+                id = String(val.thread_id);
+              }
+
+              let name: string | undefined = undefined;
+              if (labelMode === "inline" && labelField) {
+                name = labelField.replace(/\$\{([^}]+)\}|\{([^}]+)\}/g, (_m: string, a?: string, b?: string): string => {
+                  const k = a || b;
+                  if (k && val[k] !== undefined && val[k] !== null) {
+                    return String(val[k]);
+                  }
+                  return "";
+                });
+              } else if (labelField && typeof val[labelField] === "string") {
+                name = val[labelField];
+              } else if (labelField && typeof val[labelField] === "number") {
+                name = String(val[labelField]);
+              } else if (typeof val.title === "string") {
+                name = val.title;
+              } else if (typeof val.name === "string") {
+                name = val.name;
+              } else if (typeof val.label === "string") {
+                name = val.label;
+              }
+
+              let link: string | undefined = undefined;
+              if (linkMode === "field" && linkPattern) {
+                const rawVal = val[linkPattern];
+                if (typeof rawVal === "string" || typeof rawVal === "number") {
+                  const valStr = String(rawVal);
+                  if (valStr.startsWith("/") || valStr.startsWith("http")) {
+                    link = valStr;
+                  } else {
+                    link = `/${valStr}`;
+                  }
+                }
+              }
+              if (!link && linkPattern) {
+                let resolved = linkPattern.replace(
+                  /\$\{([^}]+)\}|\{([^}]+)\}|\[([^\]]+)\]|:([a-zA-Z0-9_]+)/g,
+                  (_match: string, a?: string, b?: string, c?: string, d?: string): string => {
+                    const k = a || b || c || d;
+                    if (k && val[k] !== undefined && val[k] !== null) {
+                      return String(val[k]);
+                    }
+                    return "";
+                  },
+                );
+                if (!resolved.startsWith("/") && !resolved.startsWith("http")) {
+                  resolved = "/" + resolved;
+                }
+                link = resolved;
+              } else if (typeof val.link === "string") {
+                link = val.link;
+              } else if (typeof val.href === "string") {
+                link = val.href;
+              } else if (typeof val.url === "string") {
+                link = val.url;
+              }
+
               const icon = typeof val.icon === "string" ? val.icon : undefined;
               const badge = typeof val.badge === "string" ? val.badge : undefined;
               const itemType = val.itemType === "action" ? "action" : "link";
@@ -646,7 +727,7 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React
           };
 
           const dynamicItems: SidebarPreviewItem[] = Array.isArray(sampleValue)
-            ? sampleValue.map(parseSidebarItem).filter((i): i is SidebarPreviewItem => i !== null)
+            ? sampleValue.map((v) => parseSidebarItem(v)).filter((i): i is SidebarPreviewItem => i !== null)
             : [];
 
           const staticItems: SidebarPreviewItem[] = propMappings.sidebarStaticItems || [];
@@ -668,11 +749,23 @@ export const StateComponentPreview: React.FC<StateComponentPreviewProps> = React
                 const isDynamic = grp.mode === "dynamic";
                 let grpItems: SidebarPreviewItem[] = [];
                 if (isDynamic) {
-                  grpItems = dynamicItems.length > 0
-                    ? dynamicItems
+                  const grpDynamicItems = Array.isArray(sampleValue)
+                    ? sampleValue.map((v) => parseSidebarItem(v, grp)).filter((i): i is SidebarPreviewItem => i !== null)
+                    : [];
+
+                  const mockPatternLink = (mockId: string) => {
+                    if (grp.linkPattern) {
+                      let u = grp.linkPattern.replace(/\$\{([^}]+)\}|\{([^}]+)\}|\[([^\]]+)\]|:([a-zA-Z0-9_]+)/g, mockId);
+                      return u.startsWith("/") || u.startsWith("http") ? u : "/" + u;
+                    }
+                    return "/#";
+                  };
+
+                  grpItems = grpDynamicItems.length > 0
+                    ? grpDynamicItems
                     : [
-                        { id: `dyn-${gIdx}-1`, name: `${grp.label || "Item"} 1`, link: "/#" },
-                        { id: `dyn-${gIdx}-2`, name: `${grp.label || "Item"} 2`, link: "/#" },
+                        { id: `dyn-${gIdx}-1`, name: `${grp.label || "Item"} 1`, link: mockPatternLink("demo-1") },
+                        { id: `dyn-${gIdx}-2`, name: `${grp.label || "Item"} 2`, link: mockPatternLink("demo-2") },
                       ];
                 } else {
                   grpItems = (grp.items && grp.items.length > 0)

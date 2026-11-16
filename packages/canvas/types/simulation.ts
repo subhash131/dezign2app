@@ -120,6 +120,14 @@ export interface SidebarGroupConfig {
   navStoreId?: string;
   navStoreName?: string;
   action?: SidebarGroupActionConfig;
+  labelField?: string;
+  labelMode?: "field" | "inline";
+  linkPattern?: string;
+  linkMode?: "field" | "inline";
+  keyField?: string;
+  keyMode?: "field" | "inline";
+  iconField?: string;
+  iconMode?: "field" | "inline";
 }
 
 export type TopbarStaticItem = SidebarStaticItem;

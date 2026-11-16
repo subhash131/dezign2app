@@ -9,6 +9,7 @@ import {
   UIEventItem,
   ConditionNode,
   Endpoint,
+  SidebarGroupConfig,
 } from "@workspace/canvas/types";
 import { labelToSlug, slugToComponentName } from "./slugUtils";
 import { generateLayoutEventsDrawer } from "./page-generators";
@@ -134,6 +135,7 @@ export function generateSectionLayout(
   layoutNode?: BackendNode,
   authNode?: BackendNode,
   hasEventsDrawer: boolean = false,
+  allNodes: BackendNode[] = [],
 ): string {
   const isPublic = groupName === "public";
   const componentName = slugToComponentName(groupName).replace(/Page$/, "") + "Layout";
@@ -279,11 +281,38 @@ import { Layers } from "lucide-react";`;
     })
     .join("\n");
 
+  const hasDynamicSidebarGroups =
+    Boolean(sidebarGroups?.some((grp) => grp.mode === "dynamic")) ||
+    sidebarComp?.propMappings?.sidebarNavMode === "dynamic";
+
   let sidebarGroupsContentJsx = "";
   if (hasSidebarGroups) {
     sidebarGroupsContentJsx = sidebarGroups!
       .map((grp, gIdx) => {
         const groupLabel = grp.label || `Section ${gIdx + 1}`;
+        if (grp.mode === "dynamic") {
+          const dynVar = grp.navBinding || "";
+          const storeName = grp.navStoreName || "AppStore";
+          const labelField = grp.labelField || "title";
+          const labelMode = grp.labelMode || "field";
+          const linkPattern = grp.linkPattern || "";
+          const linkMode = grp.linkMode || (linkPattern.includes("${") || linkPattern.includes("/") ? "inline" : "field");
+          const keyField = grp.keyField || "id";
+          const keyMode = grp.keyMode || "field";
+          return `            <SidebarDynamicGroup
+              key="${grp.id || gIdx}"
+              label="${groupLabel}"
+              storeVar="${dynVar}"
+              storeName="${storeName}"
+              labelField="${labelField}"
+              labelMode="${labelMode}"
+              linkPattern="${linkPattern}"
+              linkMode="${linkMode}"
+              keyField="${keyField}"
+              keyMode="${keyMode}"
+            />`;
+        }
+
         const grpItems =
           grp.items && grp.items.length > 0
             ? grp.items
@@ -326,6 +355,14 @@ ${groupItemsJsx}
             </SidebarGroup>`;
       })
       .join("\n");
+  } else if (sidebarComp?.propMappings?.sidebarNavMode === "dynamic") {
+    const dynVar = sidebarComp.propMappings.sidebarNavBinding || "items";
+    const storeName = sidebarComp.propMappings.sidebarNavStoreName || "AppStore";
+    sidebarGroupsContentJsx = `            <SidebarDynamicGroup
+              label="Navigation"
+              storeVar="${dynVar}"
+              storeName="${storeName}"
+            />`;
   } else {
     sidebarGroupsContentJsx = `            <SidebarGroup>
               <SidebarGroupLabel className="text-[10px]">Navigation</SidebarGroupLabel>
@@ -365,6 +402,10 @@ import { PanelLeft, LayoutDashboard, BarChart2, Folder, Settings } from "lucide-
 
   if (hasSidebarActions) {
     headerImports = `${headerImports}import { SidebarActionButton } from "./_components/SidebarActionButton";\n`;
+  }
+
+  if (hasDynamicSidebarGroups) {
+    headerImports = `${headerImports}import { SidebarDynamicGroup } from "./_components/SidebarDynamicGroup";\n`;
   }
 
   if (hasEventsDrawer) {
@@ -831,6 +872,18 @@ export function generateRouteGroupLayouts(
       });
     }
 
+    const hasDynamicSidebarGroups =
+      layoutSidebarGroups.some((grp: { mode?: string }) => grp.mode === "dynamic") ||
+      layoutSidebarComp?.propMappings?.sidebarNavMode === "dynamic";
+
+    if (hasDynamicSidebarGroups) {
+      files.push({
+        filename: `app/${folderPath}/_components/SidebarDynamicGroup.tsx`,
+        language: "typescript",
+        content: generateSidebarDynamicGroupCode(layoutSidebarGroups, allNodes),
+      });
+    }
+
     // If layout node has custom source code written in Studio or AI, use it directly
     if (connectedLayoutNode?.data?.pageSourceCode) {
       files.push({
@@ -871,6 +924,7 @@ export function generateRouteGroupLayouts(
         connectedLayoutNode,
         authNode,
         hasEventsDrawer,
+        allNodes,
       ),
     });
   });
@@ -1106,5 +1160,260 @@ export function SidebarActionButton({
 }
 
 export default SidebarActionButton;
+`;
+}
+
+function toPascalCase(str: string): string {
+  const clean = str.trim();
+  if (!clean) return "App";
+  if (/[\s\-_]/.test(clean)) {
+    return clean
+      .split(/[\s\-_]+/)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join("");
+  }
+  return clean.charAt(0).toUpperCase() + clean.slice(1);
+}
+
+function toCamelCase(str: string): string {
+  const clean = str.trim();
+  if (!clean) return "app";
+  if (/[\s\-_]/.test(clean)) {
+    const words = clean.split(/[\s\-_]+/);
+    return words[0]!.toLowerCase() + words.slice(1).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join("");
+  }
+  return clean.charAt(0).toLowerCase() + clean.slice(1);
+}
+
+export function generateSidebarDynamicGroupCode(
+  sidebarGroups: SidebarGroupConfig[] = [],
+  allNodes: BackendNode[] = [],
+): string {
+  const storeNames = new Set<string>();
+  sidebarGroups.forEach((g) => {
+    if (g.navStoreName) {
+      const clean = g.navStoreName.trim();
+      const hook = toCamelCase(clean).startsWith("use")
+        ? toCamelCase(clean)
+        : `use${toPascalCase(clean)}`;
+      storeNames.add(hook);
+    }
+  });
+
+  allNodes
+    .filter((n) => n.type === "state_store")
+    .forEach((n) => {
+      const sName = n.data?.storeName || n.data?.label || "AppStore";
+      const clean = sName.trim();
+      const hook = toCamelCase(clean).startsWith("use")
+        ? toCamelCase(clean)
+        : `use${toPascalCase(clean)}`;
+      storeNames.add(hook);
+    });
+
+  if (storeNames.size === 0) {
+    storeNames.add("useAppStore");
+  }
+
+  const storeImports = Array.from(storeNames).join(", ");
+  const defaultHook = Array.from(storeNames)[0] || "useAppStore";
+
+  const allBindings = new Set<string>();
+  sidebarGroups.forEach((g) => {
+    if (g.navBinding) {
+      allBindings.add(g.navBinding.trim());
+    }
+  });
+
+  allNodes
+    .filter((n) => n.type === "state_store")
+    .forEach((n) => {
+      const fields = n.data?.fields;
+      if (Array.isArray(fields)) {
+        fields.forEach((f: { name?: string; type?: string }) => {
+          if (f.name && (f.type?.includes("[]") || f.type?.includes("Array"))) {
+            allBindings.add(f.name.trim());
+          }
+        });
+      }
+    });
+
+  const switchCases = Array.from(allBindings)
+    .map(
+      (b) => `      case "${b}":
+        return "${b}" in store && Array.isArray(store.${b})
+          ? store.${b}.map((item) => toDynamicItem(item))
+          : [];`,
+    )
+    .join("\n");
+
+  return `"use client";
+
+import React from "react";
+import Link from "next/link";
+import {
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarGroupContent,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+} from "@workspace/ui/components/sidebar";
+import { Folder } from "lucide-react";
+import { ${storeImports} } from "@/lib/stores";
+
+export type DynamicNavigationItem = Record<string, string | number | boolean | null | undefined>;
+
+function toDynamicItem(raw: object): DynamicNavigationItem {
+  const result: DynamicNavigationItem = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (typeof v === "string" || typeof v === "number" || typeof v === "boolean" || v === null) {
+      result[k] = v;
+    }
+  }
+  return result;
+}
+
+export interface SidebarDynamicGroupProps {
+  label?: string;
+  storeVar?: string;
+  storeName?: string;
+  labelField?: string;
+  labelMode?: "field" | "inline";
+  linkPattern?: string;
+  linkMode?: "field" | "inline";
+  keyField?: string;
+  keyMode?: "field" | "inline";
+  emptyText?: string;
+}
+
+export function SidebarDynamicGroup({
+  label = "Navigation",
+  storeVar = "",
+  labelField = "title",
+  labelMode = "field",
+  linkPattern = "",
+  linkMode = "field",
+  keyField = "id",
+  keyMode = "field",
+  emptyText,
+}: SidebarDynamicGroupProps) {
+  const store = ${defaultHook}();
+
+  const getStoreItems = (): DynamicNavigationItem[] => {
+    switch (storeVar) {
+${switchCases}
+      default:
+        return [];
+    }
+  };
+
+  const items: DynamicNavigationItem[] = getStoreItems();
+
+  const resolveLink = (item: DynamicNavigationItem): string => {
+    if (linkMode === "field" && linkPattern) {
+      const rawVal = item[linkPattern];
+      if (rawVal !== undefined && rawVal !== null) {
+        const valStr = String(rawVal);
+        if (valStr.startsWith("/") || valStr.startsWith("http")) {
+          return valStr;
+        }
+        return "/" + valStr;
+      }
+    }
+    if (linkPattern) {
+      let url = linkPattern.replace(
+        /\\$\{([^}]+)\}|\\{([^}]+)\\}|\\[([^\\]]+)\\]|:([a-zA-Z0-9_]+)/g,
+        (_match: string, a?: string, b?: string, c?: string, d?: string): string => {
+          const k = a || b || c || d;
+          if (k && item[k] !== undefined && item[k] !== null) {
+            return String(item[k]);
+          }
+          return "";
+        },
+      );
+      if (!url.startsWith("/") && !url.startsWith("http")) {
+        url = "/" + url;
+      }
+      return url;
+    }
+    const defaultLink = item["link"] || item["href"] || item["url"];
+    if (typeof defaultLink === "string") return defaultLink;
+    return "#";
+  };
+
+  const resolveLabel = (item: DynamicNavigationItem): string => {
+    if (labelMode === "inline" && labelField) {
+      return labelField.replace(/\\$\{([^}]+)\}|\\{([^}]+)\\}/g, (_m: string, a?: string, b?: string): string => {
+        const k = a || b;
+        if (k && item[k] !== undefined && item[k] !== null) {
+          return String(item[k]);
+        }
+        return "";
+      });
+    }
+    if (labelField && item[labelField] !== undefined && item[labelField] !== null) {
+      return String(item[labelField]);
+    }
+    const defaultLabel = item["title"] || item["name"] || item["label"];
+    if (typeof defaultLabel === "string") return defaultLabel;
+    return "Item";
+  };
+
+  const resolveKey = (item: DynamicNavigationItem, fallbackIdx: number): string => {
+    if (keyMode === "inline" && keyField) {
+      return keyField.replace(/\\$\{([^}]+)\}|\\{([^}]+)\\}/g, (_m: string, a?: string, b?: string): string => {
+        const k = a || b;
+        if (k && item[k] !== undefined && item[k] !== null) {
+          return String(item[k]);
+        }
+        return "";
+      });
+    }
+    if (keyField && item[keyField] !== undefined && item[keyField] !== null) {
+      return String(item[keyField]);
+    }
+    const defaultId = item["id"];
+    if (typeof defaultId === "string" || typeof defaultId === "number") return String(defaultId);
+    return String(fallbackIdx);
+  };
+
+  return (
+    <SidebarGroup>
+      {label && <SidebarGroupLabel className="text-[10px]">{label}</SidebarGroupLabel>}
+      <SidebarGroupContent>
+        <SidebarMenu>
+          {items.map((item: DynamicNavigationItem, idx: number) => {
+            const itemKey = resolveKey(item, idx);
+            const itemLabel = resolveLabel(item);
+            const itemHref = resolveLink(item);
+
+            return (
+              <SidebarMenuItem key={itemKey}>
+                <SidebarMenuButton
+                  asChild
+                  tooltip={itemLabel}
+                  className="transition-all duration-150 ease-in-out cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                >
+                  <Link href={itemHref} className="text-xs">
+                    <Folder className="size-3.5 shrink-0 mr-2 inline-block transition-transform duration-150 group-hover/menu-item:scale-105" />
+                    <span className="truncate">{itemLabel}</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            );
+          })}
+          {items.length === 0 && emptyText && (
+            <div className="px-3 py-2 text-[11px] text-muted-foreground/70 italic">
+              {emptyText}
+            </div>
+          )}
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
+  );
+}
+
+export default SidebarDynamicGroup;
 `;
 }
