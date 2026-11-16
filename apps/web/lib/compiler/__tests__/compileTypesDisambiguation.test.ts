@@ -153,7 +153,7 @@ describe("compileTypesDisambiguation", () => {
     const indexFile = files.find((f) => f.filename === "lib/stores/index.ts");
     expect(indexFile).toBeDefined();
     expect(indexFile!.content).toContain('export * from "./useConversationStore";');
-    expect(indexFile!.content).toContain('export { default as useConversationStore } from "./useConversationStore";');
+    expect(indexFile!.content).not.toContain('export { default as useConversationStore }');
     expect(indexFile!.content).toContain('export { useConversationStore as useConversationsStore } from "./useConversationStore";');
   });
 
@@ -271,7 +271,7 @@ describe("compileTypesDisambiguation", () => {
     expect(code).not.toContain('response: "",');
 
     // 4. Update and Reset implementations
-    expect(code).toContain("updateResponse: (patch) => set((s) => ({ response: (patch ? ({ ...(typeof s.response === \"object\" && s.response !== null ? s.response : {}), ...patch } as unknown as ConversationsPostSendMessageByIdResponse | null) : s.response) })),");
+    expect(code).toContain('updateResponse: (patch) => set((s) => ({ response: (patch && s.response && typeof s.response === "object") ? { ...s.response, ...patch } : s.response })),');
     expect(code).toContain("reset: () => set(initialState),");
   });
 });

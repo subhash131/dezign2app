@@ -914,6 +914,7 @@ import { useRouter } from "next/navigation";
 import { SidebarMenuButton } from "@workspace/ui/components/sidebar";
 import { executeApiAction } from "@/lib/api-client";
 ${actionImports ? `${actionImports}\n` : ""}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type SidebarActionTrigger = (
   eventName: string,
   eventType: string,
@@ -923,7 +924,7 @@ export type SidebarActionTrigger = (
   customHeaders?: Record<string, string>,
   queryParams?: Record<string, string>,
   requestBody?: Record<string, string | number | boolean | null | undefined>,
-) => Promise<Record<string, string | number | boolean | null | undefined> | void> | void;
+) => Promise<any> | void;
 
 export interface SidebarActionContext {
   onTrigger?: SidebarActionTrigger;
