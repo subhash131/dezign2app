@@ -165,13 +165,7 @@ ${navigationImports}${authImport}${storeImports}${onMountImports}import { Button
 import { Badge } from "@workspace/ui/components/badge";
 import { Activity, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 
-export type LayoutLogData =
-  | Record<string, string | number | boolean | null | undefined>
-  | string
-  | number
-  | boolean
-  | null
-  | Array<Record<string, string | number | boolean | null | undefined> | string | number | boolean | null>;
+export type LayoutLogData = unknown;
 
 export interface LayoutLogEntry {
   id: string;
