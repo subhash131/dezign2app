@@ -942,7 +942,7 @@ export interface SidebarActionButtonProps {
   children?: React.ReactNode;
 }
 
-const actionHandlers: Record<string, (ctx?: SidebarActionContext) => Promise<string | number | boolean | void | Record<string, string | number | boolean | null | undefined> | null>> = {
+const actionHandlers: Record<string, (ctx?: SidebarActionContext) => Promise<unknown>> = {
 ${handlerEntries}
 };
 
@@ -974,10 +974,10 @@ export function SidebarActionButton({
       customHeaders?: Record<string, string>,
       queryParams?: Record<string, string>,
       requestBody?: Record<string, string | number | boolean | null | undefined>,
-    ): Promise<Record<string, string | number | boolean | null | undefined> | void> => {
+    ): Promise<unknown> => {
       loggedViaTrigger = true;
       try {
-        const result = await executeApiAction<Record<string, string | number | boolean | null | undefined>>({
+        const result = await executeApiAction({
           eventName,
           eventType,
           url,
