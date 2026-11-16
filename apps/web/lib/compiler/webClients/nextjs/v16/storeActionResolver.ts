@@ -1,5 +1,11 @@
 import { BackendNode, BackendEdge } from "@/types/canvas";
-import { UIEventItem, StoreActionBinding, StoreActionType } from "@workspace/canvas/types";
+import {
+  UIEventItem,
+  StoreActionBinding,
+  StoreActionType,
+  GlobalStoreField,
+  GlobalStoreAction,
+} from "@workspace/canvas/types";
 
 export type { StoreActionType };
 
@@ -36,21 +42,150 @@ const NON_ACTION_HANDLES: readonly string[] = [
   "types-out",
 ];
 
-function isValidStoreActionType(val: string | undefined): val is StoreActionType {
+const VALID_STORE_ACTION_TYPES: ReadonlySet<string> = new Set<StoreActionType>([
+  "set",
+  "append",
+  "prepend",
+  "pop",
+  "remove",
+  "toggle",
+  "increment",
+  "decrement",
+  "update",
+  "reset",
+  "populate",
+  "custom",
+  "mutate",
+  "stream",
+]);
+
+export function isValidStoreActionType(val: string | undefined): val is StoreActionType {
+  return typeof val === "string" && VALID_STORE_ACTION_TYPES.has(val);
+}
+
+/**
+ * Detects if a field name indicates a collection or plural entity,
+ * filtering out singular words ending in 'ss', 'us', 'is', 'as', 'ness'.
+ */
+export function isPluralOrCollectionName(name: string | undefined): boolean {
+  if (!name) return false;
+  const lower = name.toLowerCase().trim();
+  if (
+    lower.endsWith("list") ||
+    lower.endsWith("items") ||
+    lower.endsWith("collection") ||
+    lower.endsWith("array")
+  ) {
+    return true;
+  }
+  if (
+    lower.endsWith("ss") ||
+    lower.endsWith("us") ||
+    lower.endsWith("is") ||
+    lower.endsWith("as") ||
+    lower.endsWith("ness")
+  ) {
+    return false;
+  }
+  return lower.endsWith("s");
+}
+
+/**
+ * Checks whether a target field should be treated as an array type.
+ * Explicit field types (e.g. "string", "number", "boolean", "object") always take priority.
+ */
+export function isArrayTargetField(
+  targetFieldType?: string,
+  targetFieldName?: string,
+  reducerOrAction?: string,
+): boolean {
+  if (targetFieldType) {
+    const ft = targetFieldType.toLowerCase().trim();
+    if (ft === "array" || ft.endsWith("[]") || ft.startsWith("array<")) {
+      return true;
+    }
+    if (
+      ft === "string" ||
+      ft === "number" ||
+      ft === "boolean" ||
+      ft === "object" ||
+      ft === "record"
+    ) {
+      return false;
+    }
+  }
+  if (reducerOrAction) {
+    const r = reducerOrAction.toLowerCase();
+    if (
+      r.includes("array") ||
+      r.includes("list") ||
+      r === "push" ||
+      r === "append" ||
+      r === "prepend" ||
+      r === "pop"
+    ) {
+      return true;
+    }
+  }
+  return isPluralOrCollectionName(targetFieldName);
+}
+
+export function isNumberTargetField(targetFieldType?: string, targetFieldName?: string): boolean {
+  if (targetFieldType) {
+    const ft = targetFieldType.toLowerCase().trim();
+    if (ft === "number" || ft === "int" || ft === "float" || ft === "double") return true;
+    if (ft !== "") return false;
+  }
+  if (!targetFieldName) return false;
+  const fn = targetFieldName.toLowerCase();
   return (
-    val === "set" ||
-    val === "append" ||
-    val === "prepend" ||
-    val === "pop" ||
-    val === "remove" ||
-    val === "toggle" ||
-    val === "increment" ||
-    val === "decrement" ||
-    val === "update" ||
-    val === "reset" ||
-    val === "populate" ||
-    val === "custom" ||
-    val === "mutate"
+    fn.includes("count") ||
+    fn.includes("total") ||
+    fn.includes("amount") ||
+    fn.includes("offset") ||
+    fn.includes("limit") ||
+    fn.includes("page") ||
+    fn.includes("index")
+  );
+}
+
+export function isBooleanTargetField(
+  targetFieldType?: string,
+  targetFieldName?: string,
+  actionName?: string,
+): boolean {
+  if (targetFieldType) {
+    const ft = targetFieldType.toLowerCase().trim();
+    if (ft === "boolean" || ft === "bool") return true;
+    if (ft !== "") return false;
+  }
+  if (actionName && actionName.toLowerCase().startsWith("toggle")) return true;
+  if (!targetFieldName) return false;
+  const fn = targetFieldName.toLowerCase();
+  return (
+    fn.startsWith("is") ||
+    fn.startsWith("has") ||
+    fn.includes("enabled") ||
+    fn.includes("visible") ||
+    fn.includes("open") ||
+    fn.includes("loading")
+  );
+}
+
+export function isObjectTargetField(targetFieldType?: string, targetFieldName?: string): boolean {
+  if (targetFieldType) {
+    const ft = targetFieldType.toLowerCase().trim();
+    if (ft === "object" || ft === "record" || ft.startsWith("record<")) return true;
+    if (ft !== "") return false;
+  }
+  if (!targetFieldName) return false;
+  const fn = targetFieldName.toLowerCase();
+  return (
+    fn.includes("payload") ||
+    fn.includes("config") ||
+    fn.includes("metadata") ||
+    fn.includes("profile") ||
+    fn.includes("settings")
   );
 }
 
@@ -583,6 +718,172 @@ function findAllMatchingEdgesForAction(
   return matches;
 }
 
+function resolveStoreBindingsFromActionSteps(
+  act: UIEventItem,
+  allNodes: readonly BackendNode[],
+): StoreActionBinding[] {
+  if (!Array.isArray(act.actionSteps) || act.actionSteps.length === 0) {
+    return [];
+  }
+
+  const stateMutationSteps = act.actionSteps.filter((s) => s.type === "state_mutation");
+  if (stateMutationSteps.length === 0) {
+    return [];
+  }
+
+  const stateStoreNodes = allNodes.filter((n) => n.type === "state_store");
+  const bindings: StoreActionBinding[] = [];
+
+  for (const step of stateMutationSteps) {
+    let storeNode: BackendNode | undefined;
+    if (step.stateStoreNodeId) {
+      storeNode = stateStoreNodes.find((n) => n.id === step.stateStoreNodeId);
+    }
+    if (!storeNode && step.stateKey) {
+      storeNode = stateStoreNodes.find((n) =>
+        (Array.isArray(n.data?.fields) ? n.data.fields : []).some(
+          (f: GlobalStoreField) => f.name === step.stateKey || f.id === step.stateTargetFieldId,
+        ),
+      );
+    }
+    if (!storeNode && stateStoreNodes.length === 1) {
+      storeNode = stateStoreNodes[0];
+    }
+    if (!storeNode && stateStoreNodes.length > 0) {
+      storeNode = stateStoreNodes[0];
+    }
+
+    const storeName = storeNode?.data?.storeName || storeNode?.data?.label || "App";
+    const storeFields: GlobalStoreField[] = Array.isArray(storeNode?.data?.fields) ? storeNode.data.fields : [];
+    const storeActions: GlobalStoreAction[] = Array.isArray(storeNode?.data?.actions) ? storeNode.data.actions : [];
+
+    const matchedField = storeFields.find(
+      (f: GlobalStoreField) =>
+        (step.stateTargetFieldId && f.id === step.stateTargetFieldId) ||
+        (step.stateKey && f.name === step.stateKey),
+    );
+
+    const targetFieldId = matchedField?.id || step.stateTargetFieldId;
+    const targetFieldName = matchedField?.name || step.stateKey;
+    const inferredType = isArrayTargetField(undefined, targetFieldName, step.stateReducerName || step.stateActionName)
+      ? "array"
+      : undefined;
+    const targetFieldType = matchedField?.type
+      ? matchedField.isArray
+        ? (matchedField.type.endsWith("[]") ? matchedField.type : `${matchedField.type}[]`)
+        : matchedField.type
+      : inferredType;
+
+    const rawAction = step.stateActionName || step.stateUpdateType || "set";
+    const actionType: StoreActionType = isValidStoreActionType(rawAction) ? rawAction : "set";
+
+    let actionName: string;
+    if (
+      step.stateActionName &&
+      step.stateActionName !== "set" &&
+      step.stateActionName !== "mutate"
+    ) {
+      actionName = step.stateActionName;
+    } else if (targetFieldName) {
+      const cap = targetFieldName.charAt(0).toUpperCase() + targetFieldName.slice(1);
+      switch (actionType) {
+        case "append":
+          actionName = `append${cap}`;
+          break;
+        case "prepend":
+          actionName = `prepend${cap}`;
+          break;
+        case "pop":
+          actionName = `pop${cap}`;
+          break;
+        case "remove":
+          actionName = `remove${cap}`;
+          break;
+        case "toggle":
+          actionName = `toggle${cap}`;
+          break;
+        case "increment":
+          actionName = `increment${cap}`;
+          break;
+        case "decrement":
+          actionName = `decrement${cap}`;
+          break;
+        case "update":
+          actionName = `update${cap}`;
+          break;
+        case "reset":
+          actionName = `reset${cap}`;
+          break;
+        default:
+          actionName = `set${cap}`;
+          break;
+      }
+    } else {
+      actionName = "set";
+    }
+
+    const matchedStoreAction = storeActions.find(
+      (a: GlobalStoreAction) =>
+        (targetFieldId && a.targetFieldId === targetFieldId && (a.actionType === actionType || a.name?.toLowerCase() === actionName.toLowerCase())) ||
+        a.name?.toLowerCase() === actionName.toLowerCase(),
+    );
+
+    const actionId = matchedStoreAction?.id || step.id || `field-${actionType}-${targetFieldId || targetFieldName || "var"}`;
+    const resolvedActionName = matchedStoreAction?.name || actionName;
+
+    // Resolve updateSource, valuePath, customValue from stateValueSource
+    let updateSource: StoreActionBinding["updateSource"] = "response";
+    let valuePath: string | undefined = undefined;
+    let customValue: string | undefined = undefined;
+
+    if (actionType === "reset") {
+      updateSource = "direct";
+    } else if (step.stateValueSource) {
+      const src = step.stateValueSource;
+      if (src.kind === "prev_response") {
+        if (src.fieldPath && src.fieldPath.trim()) {
+          updateSource = "response_property";
+          valuePath = src.fieldPath.trim();
+        } else {
+          updateSource = "response";
+        }
+      } else if (src.kind === "literal") {
+        updateSource = "static";
+        customValue = src.value;
+      } else if (src.kind === "user_input") {
+        updateSource = "payload";
+        valuePath = src.fieldName;
+      } else if (src.kind === "route_param" || src.kind === "query_param") {
+        updateSource = "payload";
+        valuePath = src.paramName;
+      } else if (src.kind === "state_var") {
+        updateSource = "payload";
+        valuePath = src.stateKey || src.fieldPath;
+      } else if (src.kind === "realtime_payload") {
+        updateSource = src.fieldPath ? "nested_property" : "full_message";
+        valuePath = src.fieldPath;
+      }
+    }
+
+    bindings.push({
+      id: `bnd-${act.id}-${step.id}`,
+      storeNodeId: storeNode?.id || step.stateStoreNodeId || "App",
+      storeName,
+      actionId,
+      actionName: resolvedActionName,
+      actionType,
+      targetFieldId,
+      targetFieldName,
+      targetFieldType,
+      updateSource,
+      valuePath,
+      customValue,
+    });
+  }
+
+  return bindings;
+}
+
 function resolveActionWithBindings(
   pageNodeId: string,
   act: UIEventItem,
@@ -590,11 +891,28 @@ function resolveActionWithBindings(
   allEdges: readonly BackendEdge[],
 ): { action: UIEventItem; changed: boolean } {
   const matches = findAllMatchingEdgesForAction(pageNodeId, act, allNodes, allEdges);
+  const stepBindings = resolveStoreBindingsFromActionSteps(act, allNodes);
+
   if (matches.length > 0) {
+    const consumedStepIndices = new Set<number>();
+
     const resolvedBindings: StoreActionBinding[] = matches.map((match, mIdx) => {
       const storeNode = match.storeNode;
       const storeName = storeNode.data?.storeName || storeNode.data?.label || "App";
       const inferred = resolveStoreBindingFromHandle(storeNode, match.storeHandle, act, match.edge);
+
+      const matchingStepBindingIdx = stepBindings.findIndex(
+        (sb, idx) =>
+          !consumedStepIndices.has(idx) &&
+          (sb.storeNodeId === storeNode.id || !sb.storeNodeId) &&
+          ((inferred.targetFieldId && sb.targetFieldId === inferred.targetFieldId) ||
+            (inferred.targetFieldName && sb.targetFieldName === inferred.targetFieldName) ||
+            (!inferred.targetFieldId && !inferred.targetFieldName)),
+      );
+
+      const matchingStepBinding = matchingStepBindingIdx >= 0
+        ? (consumedStepIndices.add(matchingStepBindingIdx), stepBindings[matchingStepBindingIdx])
+        : undefined;
 
       const edgeData = match.edge.data;
       const existing =
@@ -609,12 +927,14 @@ function resolveActionWithBindings(
         ) || (mIdx === 0 ? act.storeActionBinding : undefined);
 
       const resolvedActionName =
-        existing?.actionName && existing.actionName !== "set" && existing.actionName !== "mutate"
+        matchingStepBinding?.actionName ||
+        (existing?.actionName && existing.actionName !== "set" && existing.actionName !== "mutate"
           ? existing.actionName
-          : inferred.actionName;
+          : inferred.actionName);
 
       const storeFields = storeNode.data?.fields || [];
       const resolvedFieldType =
+        matchingStepBinding?.targetFieldType ||
         existing?.targetFieldType ||
         inferred.targetFieldType ||
         storeFields.find(
@@ -626,21 +946,31 @@ function resolveActionWithBindings(
         )?.type;
 
       return {
-        id: existing?.id || edgeData?.bindingId || `bnd-${act.id}-${mIdx}`,
+        id: existing?.id || edgeData?.bindingId || matchingStepBinding?.id || `bnd-${act.id}-${mIdx}`,
         storeNodeId: storeNode.id,
-        storeName,
-        actionId: existing?.actionId || inferred.actionId,
+        storeName: matchingStepBinding?.storeName || storeName,
+        actionId: matchingStepBinding?.actionId || existing?.actionId || inferred.actionId,
         actionName: resolvedActionName,
-        actionType: existing?.actionType || inferred.actionType,
-        targetFieldId: existing?.targetFieldId || inferred.targetFieldId,
-        targetFieldName: existing?.targetFieldName || inferred.targetFieldName,
+        actionType: matchingStepBinding?.actionType || existing?.actionType || inferred.actionType,
+        targetFieldId: matchingStepBinding?.targetFieldId || existing?.targetFieldId || inferred.targetFieldId,
+        targetFieldName: matchingStepBinding?.targetFieldName || existing?.targetFieldName || inferred.targetFieldName,
         targetFieldType: resolvedFieldType,
         updateSource:
-          existing?.updateSource || (inferred.actionType === "reset" ? "direct" : "response"),
-        valuePath: existing?.valuePath,
-        customValue: existing?.customValue,
-        parameterMappings: existing?.parameterMappings,
+          matchingStepBinding?.updateSource ||
+          existing?.updateSource ||
+          (inferred.actionType === "reset" ? "direct" : "response"),
+        valuePath:
+          matchingStepBinding?.valuePath !== undefined ? matchingStepBinding.valuePath : existing?.valuePath,
+        customValue:
+          matchingStepBinding?.customValue !== undefined ? matchingStepBinding.customValue : existing?.customValue,
+        parameterMappings: existing?.parameterMappings || matchingStepBinding?.parameterMappings,
       };
+    });
+
+    stepBindings.forEach((sb, idx) => {
+      if (!consumedStepIndices.has(idx)) {
+        resolvedBindings.push(sb);
+      }
     });
 
     return {
@@ -653,7 +983,19 @@ function resolveActionWithBindings(
     };
   }
 
-  // If no canvas edges matched, ensure storeActionBindings and storeActionBinding are in sync
+  // If no canvas edges matched, check if stepBindings were found from act.actionSteps
+  if (stepBindings.length > 0) {
+    return {
+      action: {
+        ...act,
+        storeActionBinding: stepBindings[0],
+        storeActionBindings: stepBindings,
+      },
+      changed: true,
+    };
+  }
+
+  // If no canvas edges matched and no stepBindings, ensure storeActionBindings and storeActionBinding are in sync
   if (Array.isArray(act.storeActionBindings) && act.storeActionBindings.length > 0) {
     if (!act.storeActionBinding) {
       return {

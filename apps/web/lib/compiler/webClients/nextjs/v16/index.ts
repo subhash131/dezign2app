@@ -6,6 +6,13 @@ import {
   CompiledWebPageResult,
   PageSection,
   UIEventItem,
+  StoreActionBinding,
+  FrontendActionStepDraft,
+  GlobalStoreField,
+  GlobalStoreAction,
+  StoreActionType,
+  StateVariableType,
+  JsonValue,
 } from "@workspace/canvas/types";
 import { generateWebClientE2ETests } from "../../../generators/testGenerator";
 
@@ -40,7 +47,13 @@ import { resolveAppProviders } from "./providerGenerators";
 import { isServiceAssociatedWithWebApp } from "./serviceResolver";
 import { generateNextjsRoutes } from "../../../services/nextjs/v16/routeGenerator";
 import { CustomTypeItem, GlobalStoreDefinition, NodeDependencyItem } from "@workspace/canvas/types";
-import { resolveStoreActionBindings } from "./storeActionResolver";
+import {
+  resolveStoreActionBindings,
+  isValidStoreActionType,
+  isArrayTargetField,
+  isNumberTargetField,
+  isBooleanTargetField,
+} from "./storeActionResolver";
 
 export type {
   LinkedEndpointInfo,
@@ -82,6 +95,16 @@ export function compileNextjsV16WebClient(
     allEdges,
   );
 
+  const enrichedNodeMap = new Map(enrichedWebClientNodes.map((n) => [n.id, n]));
+  const enrichedAllNodes = allNodes.map((n) => {
+    if (n.type === "webPage") {
+      const match = enrichedNodeMap.get(n.id);
+      if (match) return match;
+      return resolveStoreActionBindings([n], allNodes, allEdges)[0] || n;
+    }
+    return n;
+  });
+
   const effectiveAppSlug =
     appSlug ||
     webAppNode?.data?.appSlug ||
@@ -95,14 +118,14 @@ export function compileNextjsV16WebClient(
   const authNode = resolveConnectedAuthNode(
     webAppNode,
     enrichedWebClientNodes,
-    allNodes,
+    enrichedAllNodes,
     allEdges,
   );
 
   // 1. Resolve Page Metadata and Routes
   const pagesInfo = resolvePagesInfo(
     enrichedWebClientNodes,
-    allNodes,
+    enrichedAllNodes,
     allEdges,
     effectiveAppSlug,
     webAppNode,
@@ -117,7 +140,7 @@ export function compileNextjsV16WebClient(
       pagesInfo,
       Boolean(authNode),
       webAppNode,
-      allNodes,
+      enrichedAllNodes,
       allEdges,
       authNode,
       endpoints,
@@ -130,13 +153,32 @@ export function compileNextjsV16WebClient(
 
   // Gather state_store nodes associated with this webApp
   const webClientNodeIds = new Set(enrichedWebClientNodes.map((p) => p.id));
-  const associatedStateStoreNodes = (allNodes || []).filter((n) => {
-    if (n.type !== "state_store") return false;
+  const isStateStore = (n: BackendNode) => {
+    const t: string = n.type;
+    return t === "state_store" || t === "stateStore" || t === "StateStoreNode";
+  };
+  const allStateStoreNodes = (allNodes || []).filter(isStateStore);
 
+  const allPageAndLayoutNodes = enrichedAllNodes.filter((p) => p.type === "webPage");
+  const allActionsInApp: UIEventItem[] = allPageAndLayoutNodes.flatMap((p) => [
+    ...(p.data?.sections || []).flatMap((s: PageSection) => s.actions || []),
+    ...(p.data?.events || []),
+  ]);
+
+  const associatedStateStoreNodes = allStateStoreNodes.filter((n) => {
     // 1. Direct targetWebAppId matching
-    if (n.data?.targetWebAppId) {
-      return n.data.targetWebAppId === webAppNode?.id;
+    if (n.data?.targetWebAppId && webAppNode?.id && n.data.targetWebAppId === webAppNode.id) {
+      return true;
     }
+
+    const belongsToOtherApp = Boolean(
+      n.data?.targetWebAppId &&
+      webAppNode?.id &&
+      n.data.targetWebAppId !== webAppNode.id &&
+      (allNodes || []).some(
+        (otherApp) => otherApp.type === "webApp" && otherApp.id === n.data?.targetWebAppId,
+      ),
+    );
 
     // 2. Direct edge to webAppNode
     const hasWebAppEdge = (allEdges || []).some(
@@ -154,16 +196,67 @@ export function compileNextjsV16WebClient(
     );
     if (hasPageEdge) return true;
 
-    // 3.5 Action has storeActionBinding referencing this store
-    const hasActionBinding = enrichedWebClientNodes.some((p) =>
-      (p.data?.sections || []).some((s) =>
-        (s.actions || []).some((a) => a.storeActionBinding?.storeNodeId === n.id)
-      ) ||
-      (p.data?.events || []).some((a) => a.storeActionBinding?.storeNodeId === n.id)
-    );
+    // 3.5 Action has storeActionBinding or actionSteps referencing this store
+    const storeLabel = (n.data?.label || "").trim().toLowerCase();
+    const storeName = (n.data?.storeName || "").trim().toLowerCase();
+    const cleanLabel = storeLabel.replace(/store$/i, "");
+    const cleanName = storeName.replace(/store$/i, "");
+
+    const hasActionBinding = allActionsInApp.some((a: UIEventItem) => {
+      const bindings: StoreActionBinding[] = [
+        ...(a.storeActionBinding ? [a.storeActionBinding] : []),
+        ...(a.storeActionBindings || []),
+      ];
+      if (
+        bindings.some((b: StoreActionBinding) => {
+          if (b.storeNodeId === n.id) return true;
+          if (b.storeName) {
+            const bClean = b.storeName.toLowerCase().replace(/store$/i, "");
+            return (
+              b.storeName.toLowerCase() === storeLabel ||
+              b.storeName.toLowerCase() === storeName ||
+              (cleanLabel && bClean === cleanLabel) ||
+              (cleanName && bClean === cleanName)
+            );
+          }
+          return false;
+        })
+      ) {
+        return true;
+      }
+
+      return (a.actionSteps || []).some((s: FrontendActionStepDraft) => {
+        if (s.type !== "state_mutation") return false;
+        if (s.stateStoreNodeId === n.id) return true;
+        const extraName = "stateStoreName" in s && typeof s.stateStoreName === "string" ? s.stateStoreName : "";
+        const extraLabel = "stateStoreLabel" in s && typeof s.stateStoreLabel === "string" ? s.stateStoreLabel : "";
+        const stepStore = (s.stateStoreNodeId || extraName || extraLabel).toLowerCase();
+        if (
+          stepStore &&
+          (stepStore === storeLabel ||
+            stepStore === storeName ||
+            (cleanLabel && stepStore.replace(/store$/i, "") === cleanLabel) ||
+            (cleanName && stepStore.replace(/store$/i, "") === cleanName))
+        ) {
+          return true;
+        }
+        if (s.stateKey || s.stateTargetFieldId) {
+          return (n.data?.fields || []).some(
+            (f: GlobalStoreField) => f.name === s.stateKey || f.id === s.stateTargetFieldId,
+          );
+        }
+        return false;
+      });
+    });
     if (hasActionBinding) return true;
 
-    // 4. Fallback: If only 1 webApp in graph, include unassigned stores
+    // If explicitly bound to another webApp in the graph, do not leak via fallbacks
+    if (belongsToOtherApp) return false;
+
+    // 4. Fallback: If only 1 state store node in graph, include it
+    if (allStateStoreNodes.length === 1) return true;
+
+    // 5. Fallback: If only 1 webApp in graph, include unassigned stores
     const allWebApps = (allNodes || []).filter((node) => node.type === "webApp");
     if (allWebApps.length <= 1) return true;
 
@@ -247,6 +340,130 @@ export function compileNextjsV16WebClient(
   const canvasCustomTypes: CustomTypeItem[] = [...userCustomTypes, ...autoDerivedCustomTypes];
 
   const allStores = [...appGlobalStores, ...pageStores, ...graphStateStores];
+
+  // Scan all actions across the web app to ensure every store referenced in state_mutation steps is present
+  allActionsInApp.forEach((a: UIEventItem) => {
+    (a.actionSteps || []).forEach((s: FrontendActionStepDraft) => {
+      if (s.type === "state_mutation") {
+        const extraName = "stateStoreName" in s && typeof s.stateStoreName === "string" ? s.stateStoreName : "";
+        const extraLabel = "stateStoreLabel" in s && typeof s.stateStoreLabel === "string" ? s.stateStoreLabel : "";
+        const rawStoreName =
+          extraName ||
+          extraLabel ||
+          (s.stateStoreNodeId && !s.stateStoreNodeId.startsWith("node-") && !s.stateStoreNodeId.startsWith("store-")
+            ? s.stateStoreNodeId
+            : undefined) ||
+          "AppStore";
+        const baseName = toPascalCase(rawStoreName.replace(/Store$/i, ""));
+        const storeFullName = `${baseName}Store`;
+
+        let targetStore = allStores.find((st) => {
+          const stBase = toPascalCase((st.name || "App").replace(/Store$/i, ""));
+          return stBase === baseName;
+        });
+
+        if (!targetStore) {
+          const matchedNode =
+            allStateStoreNodes.find((stNode) => {
+              if (s.stateStoreNodeId && stNode.id === s.stateStoreNodeId) return true;
+              const lbl = toPascalCase((stNode.data?.label || "").replace(/Store$/i, ""));
+              const nm = toPascalCase((stNode.data?.storeName || "").replace(/Store$/i, ""));
+              return lbl === baseName || nm === baseName;
+            }) ||
+            (allStateStoreNodes.length === 1 &&
+            (!allStateStoreNodes[0]?.data?.targetWebAppId ||
+              !webAppNode?.id ||
+              allStateStoreNodes[0]?.data?.targetWebAppId === webAppNode.id)
+              ? allStateStoreNodes[0]
+              : undefined);
+
+          if (matchedNode) {
+            const d = matchedNode.data || {};
+            targetStore = {
+              id: matchedNode.id,
+              name: d.storeName || d.label || storeFullName,
+              description: d.description,
+              fields: Array.isArray(d.fields) ? [...d.fields] : [],
+              actions: Array.isArray(d.actions) ? [...d.actions] : [],
+              storage:
+                d.storage === "localStorage" || d.storage === "sessionStorage"
+                  ? d.storage
+                  : "memory",
+              scope: "global",
+            };
+            allStores.push(targetStore);
+          } else {
+            targetStore = {
+              id: `synth-store-${baseName.toLowerCase()}`,
+              name: storeFullName,
+              description: `${baseName} application state store`,
+              fields: [],
+              actions: [],
+              storage: "memory",
+              scope: "global",
+            };
+            allStores.push(targetStore);
+          }
+        }
+
+        // Ensure mutated field exists on targetStore
+        targetStore.fields = targetStore.fields || [];
+        let fieldName = s.stateKey || "";
+        if (!fieldName && s.stateTargetFieldId) {
+          const matchedF = targetStore.fields.find((f: GlobalStoreField) => f.id === s.stateTargetFieldId);
+          if (matchedF?.name) {
+            fieldName = matchedF.name;
+          }
+        }
+        if (!fieldName && s.name) {
+          fieldName = s.name.replace(/[^a-zA-Z0-9_]/g, "_").toLowerCase();
+        }
+        if (fieldName && !targetStore.fields.some((f: GlobalStoreField) => f.name === fieldName)) {
+          const isArr = isArrayTargetField(undefined, fieldName, s.stateReducerName || s.stateActionName);
+          const isNum = !isArr && isNumberTargetField(undefined, fieldName);
+          const isBool = !isArr && !isNum && isBooleanTargetField(undefined, fieldName, s.stateActionName);
+          let fieldType: StateVariableType = "string";
+          let defaultValue: JsonValue | undefined = undefined;
+          if (isArr) {
+            fieldType = "array";
+            defaultValue = [];
+          } else if (isNum) {
+            fieldType = "number";
+            defaultValue = 0;
+          } else if (isBool) {
+            fieldType = "boolean";
+            defaultValue = false;
+          }
+          targetStore.fields.push({
+            id: `f-${fieldName}`,
+            name: fieldName,
+            type: fieldType,
+            isArray: isArr,
+            defaultValue,
+          });
+        }
+
+        // Ensure reducer action exists on targetStore
+        targetStore.actions = targetStore.actions || [];
+        const rawActionType = (s.stateActionName || s.stateUpdateType || "set").trim().toLowerCase();
+        const actionType: StoreActionType = isValidStoreActionType(rawActionType) ? rawActionType : "set";
+        const cap = fieldName ? fieldName.charAt(0).toUpperCase() + fieldName.slice(1) : "";
+        const defaultPrefix = actionType === "set" || actionType === "mutate" ? "set" : actionType;
+        const actionName =
+          s.stateActionName && s.stateActionName !== "set" && s.stateActionName !== "mutate"
+            ? s.stateActionName
+            : `${defaultPrefix}${cap}`;
+        if (actionName && !targetStore.actions.some((act: GlobalStoreAction) => act.name === actionName)) {
+          targetStore.actions.push({
+            id: `act-${actionName}`,
+            name: actionName,
+            targetFieldId: fieldName ? `f-${fieldName}` : undefined,
+            actionType,
+          });
+        }
+      }
+    });
+  });
   if (allStores.length > 0) {
     allStores.forEach((s) => {
       if (!s.customTypes || s.customTypes.length === 0) {
@@ -357,13 +574,13 @@ export function compileNextjsV16WebClient(
     enrichedWebClientNodes.some((p) => {
       const rawSections = Array.isArray(p.data?.sections) ? p.data.sections : [];
       const rawEvents = Array.isArray(p.data?.events) ? p.data.events : [];
-      const allActs = [
-        ...rawSections.flatMap((s: any) => s.actions || []),
+      const allActs: UIEventItem[] = [
+        ...rawSections.flatMap((s: PageSection) => s.actions || []),
         ...rawEvents,
       ];
-      return allActs.some((a: any) =>
+      return allActs.some((a: UIEventItem) =>
         (a.actionSteps || []).some(
-          (s: any) =>
+          (s: FrontendActionStepDraft) =>
             s.type === "transform" ||
             Boolean(s.transformerName) ||
             Boolean(s.transformerNodeId) ||
@@ -557,7 +774,7 @@ export function compileNextjsV16WebClient(
     webClientNodes: enrichedWebClientNodes,
     pagesInfo,
     endpoints,
-    allNodes,
+    allNodes: enrichedAllNodes,
     allEdges,
     authNode,
     files,
@@ -575,8 +792,8 @@ export function compileNextjsV16WebClient(
   // 8. Colocated Next.js Service Route Handlers
   associatedNextjsServiceNodes.forEach((svcNode) => {
     let svcEndpoints = endpoints.filter((ep) => ep.nodeId === svcNode.id);
-    if (svcEndpoints.length === 0 && svcNode.data?.endpoints) {
-      svcEndpoints = (svcNode.data.endpoints as Endpoint[]).map((ep) => ({
+    if (svcEndpoints.length === 0 && Array.isArray(svcNode.data?.endpoints)) {
+      svcEndpoints = svcNode.data.endpoints.map((ep: Endpoint) => ({
         ...ep,
         nodeId: svcNode.id,
       }));
@@ -606,6 +823,91 @@ export function compileNextjsV16WebClient(
       testCases,
     ),
   );
+
+  // 10. Final safeguard: ensure lib/stores/index.ts exists if any file imports from "@/lib/stores"
+  const hasStoreImport = files.some((f) => f.content.includes('@/lib/stores'));
+  const hasStoreIndexFile = files.some((f) => f.filename === "lib/stores/index.ts");
+  if (hasStoreImport && !hasStoreIndexFile) {
+    const derivedFields: GlobalStoreField[] = [];
+    const derivedActions: GlobalStoreAction[] = [];
+
+    allActionsInApp.forEach((a: UIEventItem) => {
+      (a.actionSteps || []).forEach((s: FrontendActionStepDraft) => {
+        if (s.type === "state_mutation") {
+          const fieldName = s.stateKey || (s.name ? s.name.replace(/[^a-zA-Z0-9_]/g, "_").toLowerCase() : "");
+          if (fieldName && !derivedFields.some((f) => f.name === fieldName)) {
+            const isArr = isArrayTargetField(undefined, fieldName, s.stateReducerName || s.stateActionName);
+            const isNum = !isArr && isNumberTargetField(undefined, fieldName);
+            const isBool = !isArr && !isNum && isBooleanTargetField(undefined, fieldName, s.stateActionName);
+            const fieldType: StateVariableType = isArr ? "array" : isNum ? "number" : isBool ? "boolean" : "string";
+            derivedFields.push({
+              id: `f-${fieldName}`,
+              name: fieldName,
+              type: fieldType,
+              isArray: isArr,
+              defaultValue: isArr ? [] : isNum ? 0 : isBool ? false : undefined,
+            });
+            const cap = fieldName.charAt(0).toUpperCase() + fieldName.slice(1);
+            const rawAct = s.stateActionName || s.stateUpdateType || "set";
+            const actType = isValidStoreActionType(rawAct) ? rawAct : "set";
+            const prefix = actType === "set" || actType === "mutate" ? "set" : actType;
+            const actName =
+              s.stateActionName && s.stateActionName !== "set" && s.stateActionName !== "mutate"
+                ? s.stateActionName
+                : `${prefix}${cap}`;
+            derivedActions.push({
+              id: `act-${actName}`,
+              name: actName,
+              targetFieldId: `f-${fieldName}`,
+              actionType: actType,
+            });
+          }
+        }
+      });
+    });
+
+    if (derivedFields.length === 0) {
+      derivedFields.push({
+        id: "f-data",
+        name: "data",
+        type: "string",
+        isArray: false,
+        defaultValue: "",
+      });
+      derivedActions.push({
+        id: "act-setData",
+        name: "setData",
+        targetFieldId: "f-data",
+        actionType: "set",
+      });
+    }
+
+    const fallbackStore: GlobalStoreDefinition = {
+      id: "store-fallback-app",
+      name: "AppStore",
+      description: "Application state store",
+      fields: derivedFields,
+      actions: derivedActions,
+      storage: "memory",
+      scope: "global",
+    };
+    files.push(...generateZustandStores([fallbackStore], { customTypes: canvasCustomTypes }));
+  }
+
+  // Ensure package.json includes zustand dependency if stores are referenced
+  const pkgJsonFile = files.find((f) => f.filename === "package.json");
+  if (pkgJsonFile && (hasStoreImport || allStores.length > 0)) {
+    try {
+      const parsed = JSON.parse(pkgJsonFile.content);
+      if (!parsed.dependencies?.zustand) {
+        parsed.dependencies = parsed.dependencies || {};
+        parsed.dependencies.zustand = "^5.0.0";
+        pkgJsonFile.content = JSON.stringify(parsed, null, 2);
+      }
+    } catch {
+      // ignore json parse error
+    }
+  }
 
   const webPageName =
     enrichedWebClientNodes.length === 1

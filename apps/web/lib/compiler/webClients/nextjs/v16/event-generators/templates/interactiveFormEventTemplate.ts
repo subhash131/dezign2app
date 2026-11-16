@@ -5,7 +5,14 @@ import {
   NavigationQueryParamBinding,
 } from "@workspace/canvas/types";
 import { ResolvedEventParameters } from "../types";
-import { resolveStoreActionMethodName } from "../../storeActionResolver";
+import {
+  resolveStoreActionMethodName,
+  isValidStoreActionType,
+  isArrayTargetField,
+  isNumberTargetField,
+  isBooleanTargetField,
+  isObjectTargetField,
+} from "../../storeActionResolver";
 import { resolveBaseUrlInfo } from "../paramUtils";
 import {
   partitionTransformerSteps,
@@ -160,12 +167,80 @@ export function generateInteractiveFormEventTemplate({
     queryParamBindings: navStep?.queryParamBindings || queryParamBindings,
   });
 
-  const bindings: StoreActionBinding[] =
+  let bindings: StoreActionBinding[] =
     Array.isArray(storeActionBindings) && storeActionBindings.length > 0
-      ? storeActionBindings
+      ? [...storeActionBindings]
       : storeActionBinding
       ? [storeActionBinding]
       : [];
+
+  // Fallback: If no storeActionBindings were passed, but actionSteps has state_mutation steps,
+  // infer bindings from those steps so the store update is never omitted.
+  if (bindings.length === 0 && Array.isArray(actionSteps)) {
+    const mutationSteps = actionSteps.filter((s) => s.type === "state_mutation");
+    for (const step of mutationSteps) {
+      const targetFieldName = step.stateKey;
+      const cap = targetFieldName ? targetFieldName.charAt(0).toUpperCase() + targetFieldName.slice(1) : "";
+      const rawAction = step.stateActionName || step.stateUpdateType || "set";
+      const actionType = isValidStoreActionType(rawAction) ? rawAction : "set";
+      const defaultPrefix = actionType === "set" || actionType === "mutate" ? "set" : actionType;
+      const actionName = (step.stateActionName && step.stateActionName !== "set" && step.stateActionName !== "mutate")
+        ? step.stateActionName
+        : (cap ? `${defaultPrefix}${cap}` : "set");
+
+      let updateSource: StoreActionBinding["updateSource"] = "response";
+      let valuePath: string | undefined = undefined;
+      let customValue: string | undefined = undefined;
+
+      if (actionType === "reset") {
+        updateSource = "direct";
+      } else if (step.stateValueSource) {
+        const src = step.stateValueSource;
+        if (src.kind === "prev_response") {
+          updateSource = src.fieldPath && src.fieldPath.trim() ? "response_property" : "response";
+          valuePath = src.fieldPath?.trim();
+        } else if (src.kind === "literal") {
+          updateSource = "static";
+          customValue = src.value;
+        } else if (src.kind === "user_input") {
+          updateSource = "payload";
+          valuePath = src.fieldName;
+        } else if (src.kind === "route_param" || src.kind === "query_param") {
+          updateSource = "payload";
+          if ("paramName" in src && typeof src.paramName === "string") {
+            valuePath = src.paramName;
+          }
+        } else if (src.kind === "state_var") {
+          updateSource = "payload";
+          if ("stateKey" in src && typeof src.stateKey === "string") {
+            valuePath = src.stateKey;
+          } else if ("fieldPath" in src && typeof src.fieldPath === "string") {
+            valuePath = src.fieldPath;
+          }
+        }
+      }
+
+      const isArr = isArrayTargetField(undefined, targetFieldName, step.stateReducerName || step.stateActionName);
+      const isNum = !isArr && isNumberTargetField(undefined, targetFieldName);
+      const isBool = !isArr && !isNum && isBooleanTargetField(undefined, targetFieldName, actionName);
+      const inferredFieldType = isArr ? "array" : isNum ? "number" : isBool ? "boolean" : "string";
+
+      bindings.push({
+        id: `bnd-step-${step.id}`,
+        storeNodeId: step.stateStoreNodeId || "App",
+        storeName: "AppStore",
+        actionId: step.id || `field-${actionType}-${targetFieldName || "var"}`,
+        actionName,
+        actionType,
+        targetFieldId: step.stateTargetFieldId,
+        targetFieldName,
+        targetFieldType: inferredFieldType,
+        updateSource,
+        valuePath,
+        customValue,
+      });
+    }
+  }
 
   const uniqueStoreNames = Array.from(
     new Set([
@@ -199,11 +274,14 @@ export function generateInteractiveFormEventTemplate({
       const storeHookName = `use${rawStoreName.charAt(0).toUpperCase() + rawStoreName.slice(1)}Store`;
       const storeActionName = resolveStoreActionMethodName(b);
 
-      const src = !hasApiUrl && !lastTransformerOutputVar
-        ? hasBodyFields || hasRawJson
+      const src =
+        b.updateSource === "response_property" || (hasApiUrl || lastTransformerOutputVar)
+          ? b.updateSource || "response"
+          : b.updateSource === "static"
+          ? "static"
+          : hasBodyFields || hasRawJson
           ? "payload"
-          : "direct"
-        : b.updateSource || "response";
+          : "direct";
       const vPath = b.valuePath?.trim();
       const cVal = b.customValue?.trim();
 
@@ -268,45 +346,43 @@ export function generateInteractiveFormEventTemplate({
       }
 
       if (src === "response_property" && vPath) {
-        const isFullPayload = vPath === "*" || vPath === "$" || vPath === "data" || vPath === "response";
-        const chain = vPath.split(".").filter(Boolean).map((k) => `?.[${JSON.stringify(k)}]`).join("");
-        const extractionExpr = isFullPayload
-          ? `(resData${chain} !== undefined ? resData${chain} : resData)`
-          : `resData${chain}`;
-        const isStringTarget =
-          b.targetFieldType === "string" ||
-          (!b.targetFieldType &&
-            (b.targetFieldName?.toLowerCase().includes("message") ||
-              b.targetFieldName?.toLowerCase().includes("text") ||
-              b.targetFieldName?.toLowerCase().includes("title") ||
-              b.targetFieldName?.toLowerCase().includes("desc") ||
-              b.targetFieldName?.toLowerCase().includes("input") ||
-              storeActionName.toLowerCase().includes("message") ||
-              storeActionName.toLowerCase().includes("text")));
-        const isNumberTarget = b.targetFieldType === "number";
-        const isBooleanTarget = b.targetFieldType === "boolean";
-        const isArrayTarget = b.targetFieldType === "array" || Boolean(b.targetFieldType?.endsWith("[]"));
+        const rawVPath = vPath.trim();
+        const isFullPayload =
+          rawVPath === "*" ||
+          rawVPath === "$" ||
+          rawVPath === "data" ||
+          rawVPath === "response";
 
-        let passedExpr = "extracted";
-        if (isStringTarget) {
-          passedExpr = `typeof extracted === "string" ? extracted : (extracted !== null && extracted !== undefined ? String(extracted) : "")`;
-        } else if (isNumberTarget) {
-          passedExpr = `typeof extracted === "number" ? extracted : (Number(extracted) || 0)`;
-        } else if (isBooleanTarget) {
-          passedExpr = `typeof extracted === "boolean" ? extracted : Boolean(extracted)`;
-        } else if (isArrayTarget) {
-          passedExpr = `Array.isArray(extracted) ? extracted : (extracted !== null && extracted !== undefined ? [extracted] : [])`;
+        const cleanPath = rawVPath
+          .replace(/^(data|response)\./, "")
+          .replace(/^(\*|\$)\.?/, "")
+          .trim();
+        const finalProp = isFullPayload ? "" : cleanPath;
+
+        let extractionExpr = "resData";
+        if (finalProp) {
+          extractionExpr = `(typeof resData === "object" && resData !== null && "${finalProp}" in resData ? resData.${finalProp} : resData)`;
         }
 
-        postTrigger += `      if (${resSourceExpr}) {
-        const rawRes = ${resSourceExpr};
-        const resData =
-          rawRes && typeof rawRes === "object" && "data" in rawRes && rawRes.data !== undefined
-            ? rawRes.data
-            : rawRes;
-        const extracted = ${extractionExpr};
-        ${storeHookName}.getState().${storeActionName}(${passedExpr});
-      }\n`;
+        const isArrayTarget = isArrayTargetField(b.targetFieldType, b.targetFieldName, storeActionName);
+        const isNumberTarget = isNumberTargetField(b.targetFieldType, b.targetFieldName);
+        const isBooleanTarget = isBooleanTargetField(b.targetFieldType, b.targetFieldName, storeActionName);
+        const isObjectTarget = isObjectTargetField(b.targetFieldType, b.targetFieldName);
+
+        let passedExpr = extractionExpr;
+        if (isArrayTarget) {
+          passedExpr = `Array.isArray(${extractionExpr}) ? ${extractionExpr} : (${extractionExpr} !== null && ${extractionExpr} !== undefined ? [${extractionExpr}] : [])`;
+        } else if (isNumberTarget) {
+          passedExpr = `typeof ${extractionExpr} === "number" ? ${extractionExpr} : (Number(${extractionExpr}) || 0)`;
+        } else if (isBooleanTarget) {
+          passedExpr = `typeof ${extractionExpr} === "boolean" ? ${extractionExpr} : Boolean(${extractionExpr})`;
+        } else if (isObjectTarget) {
+          passedExpr = `typeof ${extractionExpr} === "object" && ${extractionExpr} !== null ? ${extractionExpr} : {}`;
+        } else {
+          passedExpr = `typeof ${extractionExpr} === "string" ? ${extractionExpr} : (${extractionExpr} !== null && ${extractionExpr} !== undefined ? String(${extractionExpr}) : "")`;
+        }
+
+        postTrigger += `  if (${resSourceExpr}) {\n    ${storeHookName}.getState().${storeActionName}(${passedExpr});\n  }\n`;
         return;
       }
 
@@ -357,39 +433,25 @@ export function generateInteractiveFormEventTemplate({
       }
 
       // Default response:
-      const isStringTarget =
-        b.targetFieldType === "string" ||
-        (!b.targetFieldType &&
-          (b.targetFieldName?.toLowerCase().includes("message") ||
-            b.targetFieldName?.toLowerCase().includes("text") ||
-            b.targetFieldName?.toLowerCase().includes("title") ||
-            b.targetFieldName?.toLowerCase().includes("desc") ||
-            b.targetFieldName?.toLowerCase().includes("input") ||
-            storeActionName.toLowerCase().includes("message") ||
-            storeActionName.toLowerCase().includes("text")));
-      const isNumberTarget = b.targetFieldType === "number";
-      const isBooleanTarget = b.targetFieldType === "boolean";
-      const isArrayTarget = b.targetFieldType === "array" || Boolean(b.targetFieldType?.endsWith("[]"));
+      const isArrayTarget = isArrayTargetField(b.targetFieldType, b.targetFieldName, storeActionName);
+      const isNumberTarget = isNumberTargetField(b.targetFieldType, b.targetFieldName);
+      const isBooleanTarget = isBooleanTargetField(b.targetFieldType, b.targetFieldName, storeActionName);
+      const isObjectTarget = isObjectTargetField(b.targetFieldType, b.targetFieldName);
 
       let passedExpr = "resData";
-      if (isStringTarget) {
-        passedExpr = `typeof resData === "string" ? resData : (resData !== null && resData !== undefined ? String(resData) : "")`;
+      if (isArrayTarget) {
+        passedExpr = `Array.isArray(resData) ? resData : (resData !== null && resData !== undefined ? [resData] : [])`;
       } else if (isNumberTarget) {
         passedExpr = `typeof resData === "number" ? resData : (Number(resData) || 0)`;
       } else if (isBooleanTarget) {
         passedExpr = `typeof resData === "boolean" ? resData : Boolean(resData)`;
-      } else if (isArrayTarget) {
-        passedExpr = `Array.isArray(resData) ? resData : (resData !== null && resData !== undefined ? [resData] : [])`;
+      } else if (isObjectTarget) {
+        passedExpr = `typeof resData === "object" && resData !== null ? resData : {}`;
+      } else {
+        passedExpr = `typeof resData === "string" ? resData : (resData !== null && resData !== undefined ? String(resData) : "")`;
       }
 
-      postTrigger += `      if (${resSourceExpr}) {
-        const rawRes = ${resSourceExpr};
-        const resData =
-          rawRes && typeof rawRes === "object" && "data" in rawRes && rawRes.data !== undefined
-            ? rawRes.data
-            : rawRes;
-        ${storeHookName}.getState().${storeActionName}(${passedExpr});
-      }\n`;
+      postTrigger += `  if (${resSourceExpr}) {\n    ${storeHookName}.getState().${storeActionName}(${passedExpr});\n  }\n`;
     });
 
     return { preTrigger, postTrigger };
