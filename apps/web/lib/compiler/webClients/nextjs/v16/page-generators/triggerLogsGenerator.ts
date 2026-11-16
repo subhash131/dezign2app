@@ -14,8 +14,8 @@ export function generateTriggerLogsState(hasLogsSection: boolean, hasStreamingAc
     url?: string;
     method?: string;
     status?: number;
-    payload?: Record<string, string | number | boolean | null | undefined> | string | number | boolean | null | Array<Record<string, string | number | boolean | null | undefined> | string | number | boolean | null>;
-    data: Record<string, string | number | boolean | null | undefined> | string | number | boolean | null | Array<Record<string, string | number | boolean | null | undefined> | string | number | boolean | null>;
+    payload?: unknown;
+    data: unknown;
     error?: string;${streamingField}
   }>>([]);
 
