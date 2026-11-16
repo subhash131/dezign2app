@@ -1221,6 +1221,7 @@ export function generateZustandStores(
   const globalExportStatements: string[] = [];
 
   const seenExportedHookNames = new Set<string>();
+  const seenFilePaths = new Set<string>();
 
   stores.forEach((st) => {
     const isLocal = st.scope === "local";
@@ -1228,35 +1229,42 @@ export function generateZustandStores(
       ? options.localStorePaths[st.id]
       : undefined;
 
-    const file = generateZustandStore(st, {
-      filePath: customPath,
-      customTypes: options?.customTypes ?? st.customTypes,
-    });
-    files.push(file);
+    const baseName = toPascalCase(st.name || "App");
+    const storeCompName = baseName.endsWith("Store") ? baseName : `${baseName}Store`;
+    const hookName = `use${storeCompName}`;
+    const targetFilePath = customPath || `lib/stores/${hookName}.ts`;
+
+    if (!seenFilePaths.has(targetFilePath)) {
+      seenFilePaths.add(targetFilePath);
+      const file = generateZustandStore(st, {
+        filePath: customPath,
+        customTypes: options?.customTypes ?? st.customTypes,
+      });
+      files.push(file);
+    }
 
     if (!isLocal || !customPath) {
-      const baseName = toPascalCase(st.name || "App");
-      const storeCompName = baseName.endsWith("Store") ? baseName : `${baseName}Store`;
-      const hookName = `use${storeCompName}`;
-      seenExportedHookNames.add(hookName);
-      globalExportStatements.push(`export * from "./${hookName}";\nexport { default as ${hookName} } from "./${hookName}";`);
+      if (!seenExportedHookNames.has(hookName)) {
+        seenExportedHookNames.add(hookName);
+        globalExportStatements.push(`export * from "./${hookName}";`);
 
-      // Also export singular & plural alias variations so UI actions/components referencing
-      // either singular or plural (e.g. useConversationStore vs useConversationsStore) resolve cleanly
-      const rawBase = baseName.replace(/Store$/i, "");
-      const singularRaw = toPascalCase(toSingular(rawBase));
-      const pluralRaw = toPascalCase(toPlural(rawBase));
+        // Also export singular & plural alias variations so UI actions/components referencing
+        // either singular or plural (e.g. useConversationStore vs useConversationsStore) resolve cleanly
+        const rawBase = baseName.replace(/Store$/i, "");
+        const singularRaw = toPascalCase(toSingular(rawBase));
+        const pluralRaw = toPascalCase(toPlural(rawBase));
 
-      const singularHook = `use${singularRaw}Store`;
-      const pluralHook = `use${pluralRaw}Store`;
+        const singularHook = `use${singularRaw}Store`;
+        const pluralHook = `use${pluralRaw}Store`;
 
-      if (singularHook !== hookName && !seenExportedHookNames.has(singularHook)) {
-        seenExportedHookNames.add(singularHook);
-        globalExportStatements.push(`export { ${hookName} as ${singularHook} } from "./${hookName}";`);
-      }
-      if (pluralHook !== hookName && pluralHook !== singularHook && !seenExportedHookNames.has(pluralHook)) {
-        seenExportedHookNames.add(pluralHook);
-        globalExportStatements.push(`export { ${hookName} as ${pluralHook} } from "./${hookName}";`);
+        if (singularHook !== hookName && !seenExportedHookNames.has(singularHook)) {
+          seenExportedHookNames.add(singularHook);
+          globalExportStatements.push(`export { ${hookName} as ${singularHook} } from "./${hookName}";`);
+        }
+        if (pluralHook !== hookName && pluralHook !== singularHook && !seenExportedHookNames.has(pluralHook)) {
+          seenExportedHookNames.add(pluralHook);
+          globalExportStatements.push(`export { ${hookName} as ${pluralHook} } from "./${hookName}";`);
+        }
       }
     }
   });
