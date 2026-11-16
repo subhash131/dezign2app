@@ -94,10 +94,10 @@ For enterprise security and offline productivity, Dezign2App provides a native d
 
 Specification & Manifesto: https://www.dezign2app.com/dpm
 
-Just as TypeScript brought static typing to JavaScript via DefinitelyTyped (`@types/*`), **dpm** (Dezign Package Manager) brings visual architecture contracts, syntax-free composition, and deterministic Agentic development to npm packages (`@dpm/*`):
-- **Visual Contracts for npm**: Maps complex packages (e.g., `@dpm/express`, `@dpm/stripe`, `@dpm/prisma`, `@dpm/langgraph`, `@dpm/auth`) into typed, draggable canvas components with verified input/output bindings.
-- **Framework & Backend Swapping**: Switch from Node.js Express to Python FastAPI with one click; the compiler transforms routes while preserving OpenAPI specs and schema definitions.
-- **Database Engine Swapping**: Switch between PostgreSQL and SQLite; Drizzle ORM schemas and drivers are automatically remapped.
+"Design once... switch to any language." **dpm** (Dezign Package Manager) brings universal visual architecture contracts, syntax-free composition, and language-agnostic development to software packages across npm, Go modules, PyPI, and Cargo:
+- **Visual Capability Contracts**: Maps ecosystem packages (e.g., `@dpm/redis`, `@dpm/stripe`, `@dpm/database`, `@dpm/langgraph`, `@dpm/auth`) into typed, draggable canvas components with verified input/output bindings.
+- **Cross-Language Stack Swapping**: Switch from Node.js (Express/Hono) to Go (Gin/Fiber) or Python (FastAPI) with one click; compilers swap package dependencies and code bindings automatically while preserving OpenAPI specs and schema definitions.
+- **Database Engine Swapping**: Switch between PostgreSQL and SQLite; schemas and drivers are automatically remapped.
 - **Authentication Swapping**: Switch between Better Auth, Clerk, Supabase Auth, or Auth0 with pre-configured session middlewares and RBAC guards.
 
 ---

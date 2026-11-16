@@ -19,15 +19,15 @@ Dezign2App divides full-stack software generation into two complementary layers:
 - **Deterministic Monorepo Compiler**: Compiles architecture topology graphs into fully configured Turborepo monorepos in <800ms on local CPU with zero hallucinations and $0 token cost.
 - **Interactive Data Flow Simulation**: Visually track and simulate how requests, payloads, Kafka event streams, and database transactions flow through the distributed topology before compiling.
 - **Dedicated Testing Tab for Unit Tests**: In-canvas testing suite to author, execute, and inspect unit tests, endpoint contract validations, and state mutations in real time.
-- **dpm (Dezign Package Manager)**: The visual abstraction layer for npm. Compose verified visual contracts (`@dpm/*`) and swap frameworks (Express to FastAPI, Postgres to SQLite) with one click.
+- **dpm (Dezign Package Manager)**: Universal visual contract layer for software packages. Design once... switch to any language (npm, Go modules, PyPI, Cargo) with one click.
 - **Non-Destructive AST Sync**: Cleanly separates generated infrastructure contracts (schemas, wire protocols, shared types) from user business logic (controllers, routes, UI). Syncs do not overwrite custom code.
 - **Offline Desktop Studio**: Native Electron 34 desktop application with embedded PostgreSQL, Redis, and SQLite runners, plus a native PTY terminal for 100% offline development.
 - **100% Code Ownership**: Standard TypeScript monorepo with zero proprietary runtime SDKs and zero vendor lock-in.
 
 ## dpm — Dezign Package Manager
-Just as TypeScript brought static typing to JavaScript via DefinitelyTyped (`@types/*`), **dpm** brings visual architecture contracts, syntax-free composition, and deterministic Agentic development to npm packages:
-- **Visual Packages**: Maps packages like `@dpm/express`, `@dpm/stripe`, `@dpm/prisma`, `@dpm/langgraph`, and `@dpm/auth` into draggable nodes with verified typed I/O ports.
-- **Framework & DB Swapping**: Change backend engines (Express to FastAPI) or databases (PostgreSQL to SQLite) without manual rewrites; AST compilers rewrite configuration and bridges automatically.
+"Design once... switch to any language." **dpm** brings universal visual architecture contracts, syntax-free composition, and language-agnostic development to software packages across npm, Go modules, PyPI, and Cargo:
+- **Visual Capability Packages**: Maps capabilities like `@dpm/redis`, `@dpm/stripe`, `@dpm/database`, `@dpm/langgraph`, and `@dpm/auth` into draggable nodes with verified typed I/O ports.
+- **Cross-Language Stack Swapping**: Switch backend engines (Node.js Express/Hono ⇄ Go Gin/Fiber ⇄ Python FastAPI) or databases without manual rewrites; compilers swap package dependencies and code bindings automatically.
 - **dpm Specification & RFC**: https://www.dezign2app.com/dpm
 
 ## Default Generated Stack
