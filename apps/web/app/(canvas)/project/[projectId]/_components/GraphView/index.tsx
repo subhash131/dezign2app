@@ -20,6 +20,7 @@ import { useAutoLayoutShortcut } from "../hooks/useAutoLayoutShortcut";
 import { TopToolbarPanel } from "./TopToolbarPanel";
 import { TestCaseDialogs } from "./TestCaseDialogs";
 import { sortZonePages } from "@/app/(canvas)/project/[projectId]/_components/backend-nodes/graph-nodes/nodes/gateway/web-page";
+import { buildServiceStepHandMap } from "@/app/(canvas)/project/[projectId]/_components/backend-nodes/graph-nodes/common";
 import { healDirectTransformerEdges, resolveWebPageActionInboundHandle } from "@/lib/stores/backendCanvas/edge/handlers/transformerConnect";
 import { healOrphanedWebPageEdges } from "@/lib/stores/backendCanvas/edge/handlers/healOrphanedWebPageEdges";
 
@@ -396,6 +397,9 @@ export function GraphView({ projectId, projectName }: GraphViewProps) {
       });
     });
 
+    // 2. Build map of stacked hand info for all Service Step nodes per Service node endpoint
+    const stepHandMap = buildServiceStepHandMap(graphNodes, graphEdges);
+
     const nodesWithZ = graphNodes.map((node) => {
       const isSelected = Boolean(node.selected);
       const isDragging = Boolean(node.dragging);
@@ -406,7 +410,7 @@ export function GraphView({ projectId, projectName }: GraphViewProps) {
       const isLastActive = node.id === lastActiveNodeId;
       const isActive = isSelected || isDragging || isLastActive;
 
-      const hand = pageHandMap.get(node.id);
+      const hand = pageHandMap.get(node.id) || stepHandMap.get(node.id);
       let z = node.type === "webAppGroup" ? -1 : 1;
 
       if (hand?.isStacked) {
@@ -449,9 +453,9 @@ export function GraphView({ projectId, projectName }: GraphViewProps) {
       if (aIsActiveConfig && !bIsActiveConfig) return 1;
       if (!aIsActiveConfig && bIsActiveConfig) return -1;
 
-      // Tie-breaker for stacked cards within the same zone hand:
-      const aHand = pageHandMap.get(a.id);
-      const bHand = pageHandMap.get(b.id);
+      // Tie-breaker for stacked cards within the same zone hand or service step hand:
+      const aHand = pageHandMap.get(a.id) || stepHandMap.get(a.id);
+      const bHand = pageHandMap.get(b.id) || stepHandMap.get(b.id);
       if (aHand?.isStacked && bHand?.isStacked) {
         return aHand.cardIndex - bHand.cardIndex;
       }
