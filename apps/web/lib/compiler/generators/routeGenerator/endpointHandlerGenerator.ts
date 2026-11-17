@@ -241,6 +241,7 @@ export function generateEndpointRouteHandler(
     bodyTypeResHasContent: bodyTypeRes.hasContent,
     pipelineSteps: pipelineStepsEarly,
     requiresAuth,
+    allNodes,
   });
 
   let routeHandlerCode = preambleCode;

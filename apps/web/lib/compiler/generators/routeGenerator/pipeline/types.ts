@@ -30,5 +30,7 @@ export interface PipelineRenderContext {
   reusableFunctions?: ReusableFunction[];
   /** Canvas nodes for schema and data structure lookup */
   allNodes?: BackendNode[];
+  /** Set of variable identifiers declared in this scope to prevent redeclaration */
+  declaredVars?: Set<string>;
 }
 

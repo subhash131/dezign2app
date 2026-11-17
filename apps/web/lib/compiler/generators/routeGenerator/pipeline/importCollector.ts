@@ -1,6 +1,60 @@
-import { PipelineStep } from "@workspace/canvas/types";
+import { PipelineStep, BackendNode } from "@workspace/canvas/types";
 import { toVarName } from "../../../utils";
 import { toCamelCase } from "../../../langgraph/typescript/v1/utils";
+
+/**
+ * Resolves the graph variable name, import path, and agent label for a LangGraph step.
+ * Uses allNodes from the canvas to look up the actual target node by `langGraphTargetNodeId`.
+ */
+export function resolveLangGraphTarget(
+  s: PipelineStep,
+  allNodes?: BackendNode[],
+): { graphName: string; importPath: string; rawLabel: string } {
+  if (s.functionRef?.name && s.functionRef?.importPath && s.functionRef.importPath.startsWith("@")) {
+    const rawLabel = (s.name || "agent").replace(/\s+history$/i, "").trim() || "agent";
+    return {
+      graphName: s.functionRef.name,
+      importPath: s.functionRef.importPath,
+      rawLabel,
+    };
+  }
+
+  const targetNode =
+    s.langGraphTargetNodeId && allNodes
+      ? allNodes.find((n) => n.id === s.langGraphTargetNodeId)
+      : undefined;
+
+  const nodeLabel = targetNode?.data?.label || targetNode?.id;
+  const isCleanTargetId =
+    s.langGraphTargetNodeId &&
+    !/^[0-9]/.test(s.langGraphTargetNodeId) &&
+    !s.langGraphTargetNodeId.includes("-") &&
+    s.langGraphTargetNodeId.length < 20;
+
+  const rawLabel = (
+    nodeLabel ||
+    (isCleanTargetId ? s.langGraphTargetNodeId : s.name) ||
+    "agent"
+  ).replace(/\s+history$/i, "").trim() || "agent";
+
+  const trimmed = rawLabel.trim();
+  const base = trimmed.replace(/[/\\?%*:|"<>]/g, "-").replace(/\s+/g, "-") || "agent";
+  const pkgSlug =
+    base
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]/g, "-")
+      .replace(/^-+|-+$/g, "") || "agent";
+
+  const importPath =
+    s.functionRef?.importPath && s.functionRef.importPath.startsWith("@")
+      ? s.functionRef.importPath
+      : `@workspace/langgraph-${pkgSlug.replace(/^langgraph-/, "")}`;
+
+  const graphName =
+    s.functionRef?.name || `${toCamelCase(rawLabel)}Graph`;
+
+  return { graphName, importPath, rawLabel };
+}
 
 /**
  * Builds an import map from pipeline steps (including recursive nested branches).
@@ -8,6 +62,7 @@ import { toCamelCase } from "../../../langgraph/typescript/v1/utils";
  */
 export function collectPipelineImports(
   steps: PipelineStep[],
+  allNodes?: BackendNode[],
 ): Map<string, Set<string>> {
   const imports = new Map<string, Set<string>>();
 
@@ -46,28 +101,7 @@ export function collectPipelineImports(
         imports.set(importPath, new Set([name]));
       }
     } else if (s.type === "langgraph_invoke" && s.enabled !== false) {
-      // For history steps the name contains " History" suffix — strip it so
-      // the import resolves to the same package as the regular invoke step.
-      const rawLabel = (s.name || "agent").replace(/\s+history$/i, "").trim() || "agent";
-      let importPath: string;
-      if (s.functionRef?.importPath && s.functionRef.importPath.startsWith("@")) {
-        importPath = s.functionRef.importPath;
-      } else {
-        const pkgSlug =
-          rawLabel
-            .toLowerCase()
-            .replace(/[^a-z0-9_-]/g, "-")
-            .replace(/^-+|-+$/g, "") || "agent";
-        importPath = `@workspace/langgraph-${pkgSlug.replace(/^langgraph-/, "")}`;
-      }
-      const graphName =
-        s.functionRef?.name ||
-        (s.langGraphTargetNodeId &&
-        !/^[0-9]/.test(s.langGraphTargetNodeId) &&
-        !s.langGraphTargetNodeId.includes("-") &&
-        s.langGraphTargetNodeId.length < 20
-          ? `${toCamelCase(s.langGraphTargetNodeId)}Graph`
-          : `${toCamelCase(rawLabel)}Graph`);
+      const { graphName, importPath } = resolveLangGraphTarget(s, allNodes);
       const existing = imports.get(importPath);
       if (existing) {
         existing.add(graphName);

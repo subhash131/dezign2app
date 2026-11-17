@@ -102,7 +102,7 @@ export async function initConsumers(): Promise<void> {
       const executableSteps = (ev.pipelineSteps || []).filter(
         (s) => s.type !== "return_response",
       );
-      const pipelineImports = collectPipelineImports(executableSteps);
+      const pipelineImports = collectPipelineImports(executableSteps, allNodes);
       const importStatements: string[] = [];
       pipelineImports.forEach((names, importPath) => {
         if (names.size > 0 && importPath) {

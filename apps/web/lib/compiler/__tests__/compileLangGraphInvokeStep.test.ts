@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { renderPipelineStep, renderPipeline } from "../generators/routeGenerator/pipelineRenderer";
 import { generateEndpointRouteHandler } from "../generators/routeGenerator/endpointHandlerGenerator";
 import { generateResponseInterface } from "../generators/typesGenerator/responseInference";
-import { PipelineStep, Endpoint } from "@workspace/canvas/types";
+import { PipelineStep, Endpoint, BackendNode } from "@workspace/canvas/types";
 
 describe("LangGraph Invoke Pipeline Step Compiler", () => {
   describe("Streaming Mode (SSE)", () => {
@@ -1121,6 +1121,231 @@ describe("LangGraph Invoke Pipeline Step Compiler", () => {
       // Object.assign provides both array and .messages
       expect(code).toContain("const chatHistory = Object.assign(chatHistoryAllMessages, {");
       expect(code).toContain("data: chatHistory.messages");
+    });
+  });
+
+  describe("Multiple LangGraph Invoke Steps in Same Pipeline", () => {
+    it("disambiguates outputVariable and stateVar when multiple LangGraph steps exist in the same route handler", () => {
+      const endpoint: Endpoint & { nodeId: string } = {
+        id: "ep-multi-agent",
+        nodeId: "service-1",
+        name: "POST /chat/multi",
+        type: "POST",
+        pipelineSteps: [
+          {
+            id: "step-agent-1",
+            name: "AI Agent",
+            type: "langgraph_invoke",
+            outputVariable: "aIAgentResult",
+            langGraphTargetNodeId: "ai-agent-node",
+            langGraphStreamingEnabled: true,
+            langGraphStreamingProtocol: "sse",
+            langGraphStateMapping: {
+              messages: "body.message",
+            },
+          },
+          {
+            id: "step-agent-2",
+            name: "AI Agent",
+            type: "langgraph_invoke",
+            outputVariable: "aIAgentResult",
+            langGraphTargetNodeId: "ai-agent-node",
+            langGraphStreamingEnabled: false,
+            langGraphStateMapping: {
+              messages: "body.message",
+            },
+          },
+          {
+            id: "step-return",
+            name: "Return Response",
+            type: "return_response",
+            inputBindings: [],
+          },
+        ],
+      };
+
+      const result = generateEndpointRouteHandler({
+        ep: endpoint,
+        index: 0,
+        serviceName: "AiService",
+        pascalServiceName: "AiService",
+        serviceFolderName: "aiservice",
+        allNodes: [],
+        allEdges: [],
+        allEndpoints: [endpoint],
+        dbFunctions: [],
+        kafkaFunctions: [],
+        redisFunctions: [],
+        nodePublishedEvents: [],
+        usedFileNames: new Set(),
+      });
+      const code = result.file.content;
+
+      // Verify step 1 uses agentState and aIAgentResult
+      expect(code).toContain("const agentState =");
+      expect(code).toContain("const aIAgentResult =");
+
+      // Verify step 2 does NOT redeclare agentState or aIAgentResult
+      expect(code).toContain("const aIAgentResult2 =");
+      expect(code).toContain("const aIAgentResult2State =");
+
+      // Ensure no duplicate declarations of agentState or aIAgentResult
+      const agentStateMatches = code.match(/const\s+agentState\s*=/g) || [];
+      expect(agentStateMatches.length).toBe(1);
+
+      const aiAgentResultMatches = code.match(/const\s+aIAgentResult\s*=/g) || [];
+      expect(aiAgentResultMatches.length).toBe(1);
+
+      const aiAgentResult2Matches = code.match(/const\s+aIAgentResult2\s*=/g) || [];
+      expect(aiAgentResult2Matches.length).toBe(1);
+    });
+
+    it("disambiguates streaming variables (stream, sendEvent, canFlush) across multiple streaming steps", () => {
+      const endpoint: Endpoint & { nodeId: string } = {
+        id: "ep-multi-stream",
+        nodeId: "service-1",
+        name: "POST /chat/dual-stream",
+        type: "POST",
+        pipelineSteps: [
+          {
+            id: "step-stream-1",
+            name: "AI Agent",
+            type: "langgraph_invoke",
+            outputVariable: "aIAgentResult",
+            langGraphTargetNodeId: "ai-agent-node",
+            langGraphStreamingEnabled: true,
+            langGraphStreamingProtocol: "sse",
+            langGraphStateMapping: {
+              messages: "body.message",
+            },
+          },
+          {
+            id: "step-stream-2",
+            name: "AI Agent",
+            type: "langgraph_invoke",
+            outputVariable: "aIAgentResult",
+            langGraphTargetNodeId: "ai-agent-node",
+            langGraphStreamingEnabled: true,
+            langGraphStreamingProtocol: "sse",
+            langGraphStateMapping: {
+              messages: "body.message",
+            },
+          },
+        ],
+      };
+
+      const result = generateEndpointRouteHandler({
+        ep: endpoint,
+        index: 0,
+        serviceName: "AiService",
+        pascalServiceName: "AiService",
+        serviceFolderName: "aiservice",
+        allNodes: [],
+        allEdges: [],
+        allEndpoints: [endpoint],
+        dbFunctions: [],
+        kafkaFunctions: [],
+        redisFunctions: [],
+        nodePublishedEvents: [],
+        usedFileNames: new Set(),
+      });
+      const code = result.file.content;
+
+      // Stream variable names should be disambiguated
+      expect(code).toContain("const stream =");
+      expect(code).toContain("const aIAgentResult2Stream =");
+
+      // canFlush should be declared only once
+      const canFlushMatches = code.match(/const\s+canFlush\s*=/g) || [];
+      expect(canFlushMatches.length).toBe(1);
+
+      // sendEvent should be disambiguated to step output variable prefix
+      const sendEvent1 = code.match(/const\s+sendEvent\s*=/g) || [];
+      const sendEvent2 = code.match(/const\s+aIAgentResult2SendEvent\s*=/g) || [];
+      expect(sendEvent1.length).toBe(1);
+      expect(sendEvent2.length).toBe(1);
+    });
+
+    it("resolves distinct LangGraph agent packages and graphs when 2 distinct agents are targeted", () => {
+      const allNodes: BackendNode[] = [
+        {
+          id: "node-ai-agent",
+          type: "langgraph",
+          position: { x: 0, y: 0 },
+          fractionalIndex: "a0",
+          data: { label: "AI Agent" },
+        },
+        {
+          id: "node-langgraph-agent",
+          type: "langgraph",
+          position: { x: 0, y: 100 },
+          fractionalIndex: "a1",
+          data: { label: "LangGraph Agent" },
+        },
+      ];
+
+      const endpoint: Endpoint & { nodeId: string } = {
+        id: "ep-dual-agent-different",
+        nodeId: "service-1",
+        name: "POST /chat/dual-distinct",
+        type: "POST",
+        pipelineSteps: [
+          {
+            id: "step-1",
+            name: "AI Agent",
+            type: "langgraph_invoke",
+            langGraphTargetNodeId: "node-ai-agent",
+            outputVariable: "aiAgentResult",
+            langGraphStreamingEnabled: true,
+            langGraphStreamingProtocol: "sse",
+            langGraphStateMapping: {
+              messages: "body.message",
+            },
+          },
+          {
+            id: "step-2",
+            name: "LangGraph Agent",
+            type: "langgraph_invoke",
+            langGraphTargetNodeId: "node-langgraph-agent",
+            outputVariable: "langGraphAgentResult",
+            langGraphStreamingEnabled: false,
+            langGraphStateMapping: {
+              messages: "body.message",
+            },
+          },
+        ],
+      };
+
+      const result = generateEndpointRouteHandler({
+        ep: endpoint,
+        index: 0,
+        serviceName: "AiService",
+        pascalServiceName: "AiService",
+        serviceFolderName: "aiservice",
+        allNodes,
+        allEdges: [],
+        allEndpoints: [endpoint],
+        dbFunctions: [],
+        kafkaFunctions: [],
+        redisFunctions: [],
+        nodePublishedEvents: [],
+        usedFileNames: new Set(),
+      });
+      const code = result.file.content;
+
+      // Must import both distinct agent packages
+      expect(code).toContain('import { aiAgentGraph } from "@workspace/langgraph-ai-agent"');
+      expect(code).toContain('import { langGraphAgentGraph } from "@workspace/langgraph-agent"');
+
+      // Step 1 must invoke aiAgentGraph
+      expect(code).toContain("aiAgentGraph.stream(");
+
+      // Step 2 must invoke langGraphAgentGraph (NOT aiAgentGraph)
+      expect(code).toContain("langGraphAgentGraph.invoke(");
+
+      // Distinct output variables and state variables
+      expect(code).toContain("const aiAgentResult =");
+      expect(code).toContain("const langGraphAgentResult =");
     });
   });
 });
