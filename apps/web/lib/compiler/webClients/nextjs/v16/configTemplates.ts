@@ -26,7 +26,7 @@ export function generateProjectConfigFiles(
     "radix-ui": "^1.4.3",
     dotenv: "^16.4.5",
     "lucide-react": "^0.475.0",
-    next: "^16.0.0",
+    next: "16.4.6",
     react: "^19.0.0",
     "react-dom": "^19.0.0",
     sonner: "^2.0.7",

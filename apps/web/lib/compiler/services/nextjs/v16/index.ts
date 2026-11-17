@@ -4,7 +4,7 @@ import { generateNextjsRoutes } from "./routeGenerator";
 import { generateNextjsConfigFiles } from "./configGenerator";
 
 /**
- * Compiles a Service Node into a Next.js App Router (v16.x) API microservice application
+ * Compiles a Service Node into a Next.js App Router (v16.4.6) API microservice application
  */
 export function compileNextjsV16Service(
   node: BackendNode,

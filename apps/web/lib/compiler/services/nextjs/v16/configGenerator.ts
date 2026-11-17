@@ -35,7 +35,7 @@ export function generateNextjsConfigFiles(params: GenerateNextjsConfigParams): C
 
   // 1. package.json dependencies
   const dependencies: Record<string, string> = {
-    next: "^16.0.0",
+    next: "16.4.6",
     react: "^19.0.0",
     "react-dom": "^19.0.0",
     zod: "^3.24.2",

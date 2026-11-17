@@ -39,7 +39,7 @@ describe("PaywallModal", () => {
       refresh: vi.fn(),
       replace: vi.fn(),
       prefetch: vi.fn(),
-    });
+    } as any);
     vi.mocked(usePathname).mockReturnValue("/project/123"); // required route by default
   });
 

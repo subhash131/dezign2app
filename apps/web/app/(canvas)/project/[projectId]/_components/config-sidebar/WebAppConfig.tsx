@@ -107,7 +107,7 @@ export const WebAppConfig = ({
 
   // Determine auto-inferred web app dependencies
   const inferredWebDeps: { name: string; version: string; reason: string }[] = [
-    { name: "next", version: "^16.0.0", reason: "Next.js App Router framework" },
+    { name: "next", version: "16.4.6", reason: "Next.js App Router framework" },
     { name: "react", version: "^19.0.0", reason: "React 19 runtime" },
     { name: "react-dom", version: "^19.0.0", reason: "React DOM runtime" },
     { name: "@workspace/ui", version: "workspace:*", reason: "Shared Shadcn component library" },

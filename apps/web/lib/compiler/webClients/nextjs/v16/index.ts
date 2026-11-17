@@ -69,7 +69,7 @@ export {
 };
 
 /**
- * Compiles WebClient nodes into Next.js App Router (v16.x) project structure
+ * Compiles WebClient nodes into Next.js App Router (v16.4.6) project structure
  */
 export function compileNextjsV16WebClient(
   webClientNodes: BackendNode[],
