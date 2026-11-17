@@ -102,9 +102,7 @@ export function upsertDerivedConnection(
     queryParamBindings: step.clientDeliveryQueryParamBindings,
   };
 
-  const without = existing.filter(
-    (c) => c.id !== step.id && (!sourceItemId || c.sourceEventId !== sourceItemId),
-  );
+  const without = existing.filter((c) => c.id !== step.id);
 
   // If connection already exists with identical properties and no other connections were affected, skip store mutation to prevent render loops
   if (

@@ -26,6 +26,8 @@ export type { LangGraphStreamMode };
 export interface StreamingAndOutputSectionProps {
   isStreaming: boolean;
   streamingProtocol: string;
+  eventName?: string;
+  onEventNameChange?: (name: string) => void;
   streamModes?: LangGraphStreamMode[];
   includeReasoning?: boolean;
   includeSubgraphs?: boolean;
@@ -129,6 +131,8 @@ export interface StreamingAndOutputSectionProps {
 export const StreamingAndOutputSection: React.FC<StreamingAndOutputSectionProps> = ({
   isStreaming,
   streamingProtocol,
+  eventName,
+  onEventNameChange,
   streamModes = ["messages"],
   includeReasoning = true,
   includeSubgraphs = false,
@@ -908,6 +912,28 @@ export const StreamingAndOutputSection: React.FC<StreamingAndOutputSectionProps>
                   </span>
                 </div>
               )}
+
+              {/* Custom Stream Event Name */}
+              <div className="flex flex-col gap-1 pt-2 border-t border-border/30 mt-1">
+                <div className="flex items-center justify-between">
+                  <Label className="text-[10px] font-semibold text-muted-foreground flex items-center gap-1">
+                    <Radio className="w-3 h-3 text-indigo-400" />
+                    <span>Stream Event Name</span>
+                  </Label>
+                  <span className="text-[9px] text-muted-foreground font-mono">
+                    {streamingProtocol === "websocket" ? "event / channel" : "SSE event: name"}
+                  </span>
+                </div>
+                <LocalInput
+                  placeholder={streamingProtocol === "websocket" ? "agent_stream" : "message"}
+                  value={eventName || ""}
+                  onBlur={(e) => onEventNameChange?.(e.target.value)}
+                  className="h-7 text-xs font-mono bg-background"
+                />
+                <p className="text-[9px] text-muted-foreground leading-tight">
+                  Custom event name for this stream. When multiple agents stream in the same pipeline or to different pages, distinct event names prevent listener collisions.
+                </p>
+              </div>
 
               {/* Dynamic Route & Query Parameter Mapping */}
               {Boolean(

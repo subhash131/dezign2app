@@ -240,17 +240,19 @@ export function resolvePagesInfo(
     ) => {
       if (!steps) return;
       for (const step of steps) {
-        let isTargetPage = step.clientDeliveryTargetPageId === node.id;
-        if (!isTargetPage && step.clientDeliveryPageRefNodeId) {
+        let isTargetPage = false;
+        if (step.clientDeliveryTargetPageId) {
+          isTargetPage = step.clientDeliveryTargetPageId === node.id;
+        } else if (step.clientDeliveryPageRefNodeId) {
           const pr = allNodes.find(
             (n) =>
               n.id === step.clientDeliveryPageRefNodeId &&
-              n.type === "page_ref" &&
-              (n.data?.targetPageId === node.id || n.data?.pageRefId === node.id),
+              n.type === "page_ref",
           );
-          if (pr) isTargetPage = true;
-        }
-        if (!isTargetPage) {
+          if (pr) {
+            isTargetPage = pr.data?.targetPageId === node.id || pr.data?.pageRefId === node.id;
+          }
+        } else {
           const edgeToPageRef = allEdges.find(
             (e) =>
               e.source === srcNodeId &&

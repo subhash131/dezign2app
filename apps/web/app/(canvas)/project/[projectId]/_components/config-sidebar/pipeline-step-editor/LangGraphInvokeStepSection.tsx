@@ -286,6 +286,8 @@ export const LangGraphInvokeStepSection: React.FC<
       <StreamingAndOutputSection
         isStreaming={realtimeStreaming.isStreaming}
         streamingProtocol={realtimeStreaming.streamingProtocol}
+        eventName={realtimeStreaming.eventName}
+        onEventNameChange={realtimeStreaming.handleEventNameChange}
         outputMode={realtimeStreaming.outputMode}
         streamingFields={realtimeStreaming.streamingFields}
         outputFields={realtimeStreaming.outputFields}

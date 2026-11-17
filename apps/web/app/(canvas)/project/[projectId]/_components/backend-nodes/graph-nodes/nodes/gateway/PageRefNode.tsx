@@ -116,7 +116,7 @@ export const PageRefNode = ({
             const updatedSteps = ep.pipelineSteps.map((s) => {
               if (
                 (s.type === "push_to_client" || (s.type === "langgraph_invoke" && s.langGraphStreamingEnabled)) &&
-                (s.clientDeliveryPageRefNodeId === id || !s.clientDeliveryPageRefNodeId)
+                s.clientDeliveryPageRefNodeId === id
               ) {
                 const prevTargetPageId = s.clientDeliveryTargetPageId;
                 if (prevTargetPageId && prevTargetPageId !== resolvedPageId) {
@@ -150,7 +150,7 @@ export const PageRefNode = ({
           const hasPushStep = ev.pipelineSteps.some((s) => s.type === "push_to_client");
           if (hasPushStep) {
             const updatedSteps = ev.pipelineSteps.map((s) => {
-              if (s.type === "push_to_client" && (s.clientDeliveryPageRefNodeId === id || !s.clientDeliveryPageRefNodeId)) {
+              if (s.type === "push_to_client" && s.clientDeliveryPageRefNodeId === id) {
                 const prevTargetPageId = s.clientDeliveryTargetPageId;
                 if (prevTargetPageId && prevTargetPageId !== resolvedPageId) {
                   removeDerivedConnection(store, prevTargetPageId, s.id);
