@@ -53,6 +53,7 @@ describe("buildServiceStepHandMap", () => {
         sourceHandle: "langgraph-out",
         targetHandle: "endpoint-in-ep-chat",
         type: "connection",
+        fractionalIndex: "a0",
       },
       {
         id: "edge-2",
@@ -61,6 +62,7 @@ describe("buildServiceStepHandMap", () => {
         sourceHandle: "langgraph-out",
         targetHandle: "endpoint-in-ep-chat",
         type: "connection",
+        fractionalIndex: "a1",
       },
     ];
 
@@ -122,6 +124,7 @@ describe("buildServiceStepHandMap", () => {
         sourceHandle: "langgraph-out",
         targetHandle: "endpoint-in-ep-chat",
         type: "connection",
+        fractionalIndex: "a0",
       },
       {
         id: "edge-2",
@@ -130,6 +133,7 @@ describe("buildServiceStepHandMap", () => {
         sourceHandle: "langgraph-out",
         targetHandle: "endpoint-in-ep-chat",
         type: "connection",
+        fractionalIndex: "a1",
       },
     ];
 

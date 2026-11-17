@@ -6,6 +6,7 @@ import { PipelineStepDraft, StepBinding } from "../../types";
 import { DeclaredChannel } from "../StateChannelPayloadSection";
 import { isDedicatedChannel } from "../utils";
 import { syncAgentInputChannelsToStore } from "../syncUtils";
+import { toVarName } from "@/lib/compiler/utils";
 
 export interface UseAgentTargetingParams {
   step: PipelineStepDraft;
@@ -43,15 +44,47 @@ export function useAgentTargeting({
     return availableAgents[0];
   }, [availableAgents, step.langGraphTargetNodeId]);
 
-  // Auto-set targetNodeId if not set yet
+  // Auto-set targetNodeId if not set yet, or reconcile stale default name/outputVariable
   useEffect(() => {
-    if (!step.langGraphTargetNodeId && selectedAgentNode?.id) {
+    if (!selectedAgentNode) return;
+    const targetLabel = selectedAgentNode.data?.label || "LangGraph Agent";
+    const currentName = step.name || "";
+    const currentOutputVar = step.outputVariable || "";
+
+    if (!step.langGraphTargetNodeId && selectedAgentNode.id) {
+      const isHistory = step.langGraphAction === "history";
       onChangeRef.current({
         ...stepRef.current,
         langGraphTargetNodeId: selectedAgentNode.id,
+        name: isHistory ? `${targetLabel} History` : targetLabel,
+        outputVariable: isHistory ? "chatHistory" : `${toVarName(targetLabel)}Result`,
+      });
+      return;
+    }
+
+    // Reconcile stale initial "AI Agent" defaults when the step is targeting a different agent
+    const isStaleAiAgentName =
+      (currentName === "AI Agent" || currentName === "AI Agent 2" || currentName === "agent") &&
+      targetLabel !== "AI Agent";
+    const isStaleAiAgentVar =
+      (currentOutputVar === "aIAgentResult" || currentOutputVar === "aIAgentResult2" || currentOutputVar === "agentResult") &&
+      targetLabel !== "AI Agent";
+
+    if (isStaleAiAgentName || isStaleAiAgentVar) {
+      const isHistory = step.langGraphAction === "history";
+      onChangeRef.current({
+        ...stepRef.current,
+        name: isStaleAiAgentName ? (isHistory ? `${targetLabel} History` : targetLabel) : currentName,
+        outputVariable: isStaleAiAgentVar ? (isHistory ? "chatHistory" : `${toVarName(targetLabel)}Result`) : currentOutputVar,
       });
     }
-  }, [step.langGraphTargetNodeId, selectedAgentNode?.id]);
+  }, [
+    step.langGraphTargetNodeId,
+    selectedAgentNode,
+    step.name,
+    step.outputVariable,
+    step.langGraphAction,
+  ]);
 
   // Input channels defined on selected agent node (the explicit public API contract)
   const inputChannels: LangGraphInputChannel[] = useMemo(() => {
@@ -153,12 +186,37 @@ export function useAgentTargeting({
     }
   }, [selectedAgentNode?.id, step.inputBindings, step.langGraphStateMapping, step.langGraphThreadIdSource, syncAgentInputChannels]);
 
-  const handleSelectAgent = useCallback((nodeId: string) => {
-    onChange({
-      ...step,
-      langGraphTargetNodeId: nodeId,
-    });
-  }, [onChange, step]);
+  const handleSelectAgent = useCallback(
+    (nodeId: string) => {
+      const targetNode = availableAgents.find((n) => n.id === nodeId);
+      const targetLabel = targetNode?.data?.label || "LangGraph Agent";
+      const isHistory = step.langGraphAction === "history";
+      const newName = isHistory ? `${targetLabel} History` : targetLabel;
+      const newOutputVar = isHistory ? "chatHistory" : `${toVarName(targetLabel)}Result`;
+
+      // Set default state mapping for new agent's state channels
+      const newStateChannels = targetNode?.data?.stateChannels || [];
+      const newMapping: Record<string, string> = {};
+      if (newStateChannels.length > 0) {
+        newStateChannels.forEach((ch) => {
+          if (ch.key === "thread_id" || ch.key === "threadId") return;
+          newMapping[ch.key] = ch.key === "messages" ? "body.message" : `body.${ch.key}`;
+        });
+      } else {
+        newMapping["messages"] = "body.message";
+      }
+
+      onChange({
+        ...step,
+        langGraphTargetNodeId: nodeId,
+        name: newName,
+        outputVariable: newOutputVar,
+        functionRef: undefined,
+        langGraphStateMapping: isHistory ? {} : newMapping,
+      });
+    },
+    [onChange, step, availableAgents],
+  );
 
   const handleOpenStudio = useCallback(() => {
     if (selectedAgentNode) {

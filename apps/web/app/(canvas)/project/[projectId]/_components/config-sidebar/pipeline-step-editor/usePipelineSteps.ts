@@ -131,6 +131,7 @@ export function usePipelineSteps({
       endpoint,
       consumedEvent,
       serviceNodeId,
+      existingSteps: executableSteps,
     });
 
     if (isConsumer || isNested) {
