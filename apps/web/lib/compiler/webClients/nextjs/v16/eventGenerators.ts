@@ -189,6 +189,7 @@ export function generateEventComponent(
       targetRoute: navStep?.targetRoute || targetRoute || eventItem?.targetRoute,
       pathParamBindings: effectivePathParamBindings,
       queryParamBindings: effectiveQueryParamBindings,
+      hasEndpointLink: Boolean(endpointLink),
     });
   }
 
@@ -210,6 +211,7 @@ export function generateEventComponent(
     targetRoute: navStep?.targetRoute || targetRoute || eventItem?.targetRoute,
     pathParamBindings: effectivePathParamBindings,
     queryParamBindings: effectiveQueryParamBindings,
+    hasEndpointLink: Boolean(endpointLink),
   });
 }
 
