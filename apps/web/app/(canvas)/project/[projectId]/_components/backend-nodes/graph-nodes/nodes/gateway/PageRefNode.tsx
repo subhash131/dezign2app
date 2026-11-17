@@ -410,40 +410,6 @@ export const PageRefNode = ({
                   ? selectedPage.data?.label || "Untitled Page"
                   : "Select Target"}
             </span>
-            {linkedSteps.length > 0 && (
-              <div className="flex items-center gap-1 mt-1 flex-wrap">
-                {linkedSteps.map((step) => (
-                  <span
-                    key={`${step.sourceId}-${step.stepId}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (step.sourceType === "endpoint") {
-                        setActiveConfigItem({
-                          type: "endpoint",
-                          id: step.sourceId,
-                          nodeId: step.sourceNodeId,
-                        });
-                      } else {
-                        setActiveConfigItem({
-                          type: "event",
-                          id: step.sourceId,
-                          nodeId: step.sourceNodeId,
-                        });
-                      }
-                    }}
-                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-medium bg-secondary/80 hover:bg-secondary text-foreground/80 hover:text-foreground border border-border/70 hover:border-border transition-colors cursor-pointer truncate max-w-[190px]"
-                    title={`Click to open Step ${step.stepIndex} (${step.stepName}) in config sidebar`}
-                  >
-                    {step.stepType === "langgraph_invoke" ? (
-                      <Bot size={10} className="text-muted-foreground shrink-0" />
-                    ) : (
-                      <Radio size={10} className="text-muted-foreground shrink-0" />
-                    )}
-                    <span className="truncate">Step {step.stepIndex}: {step.stepName}</span>
-                  </span>
-                ))}
-              </div>
-            )}
           </div>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
@@ -543,6 +509,41 @@ export const PageRefNode = ({
             </SelectContent>
           </Select>
         </div>
+
+        {linkedSteps.length > 0 && (
+          <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+            {linkedSteps.map((step) => (
+              <span
+                key={`${step.sourceId}-${step.stepId}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (step.sourceType === "endpoint") {
+                    setActiveConfigItem({
+                      type: "endpoint",
+                      id: step.sourceId,
+                      nodeId: step.sourceNodeId,
+                    });
+                  } else {
+                    setActiveConfigItem({
+                      type: "event",
+                      id: step.sourceId,
+                      nodeId: step.sourceNodeId,
+                    });
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[9.5px] font-medium bg-secondary/80 hover:bg-secondary text-foreground/85 hover:text-foreground border border-border/70 hover:border-border transition-colors cursor-pointer truncate max-w-full"
+                title={`Click to open Step ${step.stepIndex} (${step.stepName}) in config sidebar`}
+              >
+                {step.stepType === "langgraph_invoke" ? (
+                  <Bot size={11} className="text-muted-foreground shrink-0" />
+                ) : (
+                  <Radio size={11} className="text-muted-foreground shrink-0" />
+                )}
+                <span className="truncate">Step {step.stepIndex}: {step.stepName}</span>
+              </span>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
