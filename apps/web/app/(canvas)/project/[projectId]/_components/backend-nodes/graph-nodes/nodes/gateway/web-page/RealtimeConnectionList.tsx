@@ -45,20 +45,24 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
       sourceNodeId: string,
     ): boolean => {
       // 1. Explicit target page ID on step
-      if (step.clientDeliveryTargetPageId === nodeId) return true;
+      if (step.clientDeliveryTargetPageId) {
+        return step.clientDeliveryTargetPageId === nodeId;
+      }
 
       // 2. Step targets a page_ref node that references this page
       if (step.clientDeliveryPageRefNodeId) {
         const pr = nodes.find(
           (n) =>
             n.id === step.clientDeliveryPageRefNodeId &&
-            n.type === "page_ref" &&
-            (n.data?.targetPageId === nodeId || n.data?.pageRefId === nodeId),
+            n.type === "page_ref",
         );
-        if (pr) return true;
+        if (pr) {
+          return pr.data?.targetPageId === nodeId || pr.data?.pageRefId === nodeId;
+        }
       }
 
-      // 3. Canvas edge connects source endpoint/event to a page_ref referencing this page
+      // 3. Fallback only if step has neither explicit targetPageId nor pageRefNodeId:
+      // Canvas edge connects source endpoint/event to a page_ref referencing this page
       const edgeToPageRef = edges.find((e) => {
         if (e.source !== sourceNodeId) return false;
         const matchesHandle =
@@ -68,10 +72,10 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
           e.sourceHandle === `consumedEvents-out-${sourceItemId}`;
         if (!matchesHandle) return false;
         const targetNode = nodes.find((n) => n.id === e.target && n.type === "page_ref");
-        return (
+        return Boolean(
           targetNode &&
-          (targetNode.data?.targetPageId === nodeId ||
-            targetNode.data?.pageRefId === nodeId)
+            (targetNode.data?.targetPageId === nodeId ||
+              targetNode.data?.pageRefId === nodeId),
         );
       });
       if (edgeToPageRef) return true;

@@ -6,7 +6,7 @@ import { BackendNode, BackendEdge, Endpoint, KafkaTopic, RedisStream } from "@wo
 import { PipelineStepDraft, StepBinding, AvailableSource, LangGraphStreamMode } from "../../types";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { ensurePageRefConnection } from "../../utils";
-import { upsertDerivedConnection, removeDerivedConnection } from "../../pushToClientUtils";
+import { upsertDerivedConnection, removeDerivedConnection, sanitizeEventName } from "../../pushToClientUtils";
 import { ensureWsPackageInService } from "@/lib/stores/backendCanvas/packageTypesSync";
 import {
   stepSourceToAccessor,
@@ -187,8 +187,9 @@ export function useRealtimeStreaming({
       serviceNodeId,
       endpoint,
       step.clientDeliveryPageRefNodeId,
+      selectedTargetPageId,
     );
-  }, [allEdges, allNodes, endpoint, serviceNodeId, step.clientDeliveryPageRefNodeId]);
+  }, [allEdges, allNodes, endpoint, serviceNodeId, step.clientDeliveryPageRefNodeId, selectedTargetPageId]);
 
   const ssePageRefNode = connectedPageRefNode;
 
@@ -370,6 +371,34 @@ export function useRealtimeStreaming({
   const outputMode = step.langGraphOutputMode || "full_state";
   const streamingFields = step.langGraphStreamingFields || [];
   const outputFields = step.langGraphOutputFields || [];
+  const eventName = step.clientDeliveryEventName || "";
+
+  const handleEventNameChange = useCallback(
+    (name: string) => {
+      const sanitized = sanitizeEventName(name);
+      const nextStep: PipelineStepDraft = {
+        ...step,
+        clientDeliveryEventName: sanitized || undefined,
+      };
+      onChange(nextStep);
+      const targetPageId = step.clientDeliveryTargetPageId || defaultTargetPage?.id;
+      if (targetPageId && (step.langGraphStreamingEnabled || nextStep.langGraphStreamingEnabled)) {
+        const store = useBackendCanvasStore.getState();
+        const sourceItemName = endpoint ? endpoint.name || "Endpoint" : undefined;
+        const sourceItemId = endpoint ? endpoint.id : undefined;
+        upsertDerivedConnection(
+          store,
+          targetPageId,
+          nextStep,
+          serviceNodeId,
+          sourceItemName,
+          sourceItemId,
+          "endpoint",
+        );
+      }
+    },
+    [step, onChange, defaultTargetPage?.id, serviceNodeId, endpoint],
+  );
 
   const handleArgBindingChange = useCallback(
     (
@@ -1018,6 +1047,8 @@ export function useRealtimeStreaming({
     ssePageRefNode,
     isStreaming,
     streamingProtocol,
+    eventName,
+    handleEventNameChange,
     outputMode,
     streamingFields,
     outputFields,

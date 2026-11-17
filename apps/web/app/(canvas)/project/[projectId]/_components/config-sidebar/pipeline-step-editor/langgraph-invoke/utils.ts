@@ -322,9 +322,21 @@ export function resolveConnectedPageRefNode(
   serviceNodeId?: string,
   endpoint?: Endpoint,
   clientDeliveryPageRefNodeId?: string,
+  targetPageId?: string,
 ): BackendNode | undefined {
   if (!serviceNodeId) return undefined;
+
+  // 1. If explicit pageRefNodeId is provided, look up that specific node first
+  if (clientDeliveryPageRefNodeId) {
+    const byId = allNodes.find(
+      (n) => n.id === clientDeliveryPageRefNodeId && n.type === "page_ref",
+    );
+    if (byId) return byId;
+  }
+
   const epId = endpoint?.id;
+
+  // 2. Look for connected edge to a page_ref matching targetPageId (if provided)
   for (const edge of allEdges) {
     const isSrc = edge.source === serviceNodeId;
     const isTgt = edge.target === serviceNodeId;
@@ -336,15 +348,32 @@ export function resolveConnectedPageRefNode(
     const matchesHandle = epId ? (!handle || handle.includes(epId)) : true;
     if (matchesHandle) {
       const candidate = allNodes.find((n) => n.id === otherId && n.type === "page_ref");
-      if (candidate) return candidate;
+      if (candidate) {
+        if (!targetPageId || candidate.data?.targetPageId === targetPageId || candidate.data?.pageRefId === targetPageId) {
+          return candidate;
+        }
+      }
     }
   }
-  if (clientDeliveryPageRefNodeId) {
-    const byId = allNodes.find(
-      (n) => n.id === clientDeliveryPageRefNodeId && n.type === "page_ref",
-    );
-    if (byId) return byId;
+
+  // 3. Fallback: if no targetPageId was provided, return any connected page_ref
+  if (!targetPageId) {
+    for (const edge of allEdges) {
+      const isSrc = edge.source === serviceNodeId;
+      const isTgt = edge.target === serviceNodeId;
+      if (!isSrc && !isTgt) continue;
+
+      const otherId = isSrc ? edge.target : edge.source;
+      const handle = isSrc ? (edge.sourceHandle || "") : (edge.targetHandle || "");
+
+      const matchesHandle = epId ? (!handle || handle.includes(epId)) : true;
+      if (matchesHandle) {
+        const candidate = allNodes.find((n) => n.id === otherId && n.type === "page_ref");
+        if (candidate) return candidate;
+      }
+    }
   }
+
   return undefined;
 }
 

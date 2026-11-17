@@ -39,6 +39,7 @@ export function ensurePageRefConnection({
   serviceNodeId,
   endpointId,
   consumedEventId,
+  stepId,
 }: EnsurePageRefConnectionParams): PageRefConnectionResult | undefined {
   if (!serviceNodeId) return undefined;
   const store = useBackendCanvasStore.getState();
@@ -59,26 +60,99 @@ export function ensurePageRefConnection({
 
   const resolvedTargetPageId = targetPageId || targetWebPage?.id;
 
-  // 2. Look for existing page_ref node:
-  // - By pageRefNodeId if provided
-  // - Or already connected to this service & sourceHandle
+  // 2. Locate or validate page_ref node:
   let pageRefNode = pageRefNodeId
     ? allNodes.find((n) => n.id === pageRefNodeId && n.type === "page_ref")
     : undefined;
 
-  if (!pageRefNode) {
-    const existingEdge = edges.find(
-      (e) =>
-        e.source === serviceNodeId &&
-        (e.sourceHandle === sourceHandle || !e.sourceHandle) &&
-        allNodes.some((n) => n.id === e.target && n.type === "page_ref"),
-    );
+  if (pageRefNode) {
+    const currentTarget = pageRefNode.data?.targetPageId || pageRefNode.data?.pageRefId;
+    if (resolvedTargetPageId && currentTarget && currentTarget !== resolvedTargetPageId) {
+      // The step changed its target page!
+      // Check if this pageRefNode is used by any other step in any endpoint or event:
+      const isUsedByOtherStep =
+        store.endpoints.some((ep) =>
+          ep.pipelineSteps?.some(
+            (s) =>
+              (stepId ? s.id !== stepId : true) &&
+              (s.clientDeliveryPageRefNodeId === pageRefNode!.id ||
+                (!s.clientDeliveryPageRefNodeId && s.clientDeliveryTargetPageId === currentTarget)),
+          ),
+        ) ||
+        store.events.some((ev) =>
+          ev.pipelineSteps?.some(
+            (s) =>
+              (stepId ? s.id !== stepId : true) &&
+              (s.clientDeliveryPageRefNodeId === pageRefNode!.id ||
+                (!s.clientDeliveryPageRefNodeId && s.clientDeliveryTargetPageId === currentTarget)),
+          ),
+        );
+
+      if (isUsedByOtherStep) {
+        // Do NOT retarget this pageRefNode — other step(s) rely on it!
+        // Instead, find or create another page_ref node for resolvedTargetPageId
+        pageRefNode = undefined;
+      } else {
+        // No other step uses this pageRefNode.
+        // Check if another page_ref node already targets resolvedTargetPageId
+        const existingNodeForTarget = allNodes.find(
+          (n) =>
+            n.id !== pageRefNode!.id &&
+            n.type === "page_ref" &&
+            (n.data?.targetPageId === resolvedTargetPageId || n.data?.pageRefId === resolvedTargetPageId),
+        );
+        if (existingNodeForTarget) {
+          // Clean up the orphaned old node and edge
+          const oldEdges = edges.filter((e) => e.target === pageRefNode!.id || e.source === pageRefNode!.id);
+          oldEdges.forEach((e) => store.deleteEdge(e.id));
+          store.deleteNode(pageRefNode.id);
+          pageRefNode = existingNodeForTarget;
+        } else {
+          // Safely update this pageRefNode in place
+          const isLayout = isLayoutNode(targetWebPage);
+          const layoutDetails = isLayout && targetWebPage ? getLayoutNodeDetails(targetWebPage, allNodes, edges) : null;
+          const pageLabel = targetWebPage?.data?.label || "Page";
+          const cleanLabel = pageLabel.trim().toLowerCase();
+          const isRoot = !isLayout && (targetWebPage?.data?.isRoot === true || cleanLabel === "/");
+          const displayLabel = layoutDetails ? layoutDetails.displayTitle : isRoot ? "/" : pageLabel;
+
+          store.updateNode(pageRefNode.id, {
+            data: {
+              ...pageRefNode.data,
+              targetPageId: resolvedTargetPageId,
+              pageRefId: resolvedTargetPageId,
+              targetPageLabel: layoutDetails ? layoutDetails.displayTitle : pageLabel,
+              label: `Ref: ${displayLabel}`,
+            },
+          });
+        }
+      }
+    }
+  }
+
+  // 3. If no matching pageRefNode found yet, check if there is an existing page_ref node
+  // already connected to this service/handle that targets resolvedTargetPageId
+  if (!pageRefNode && resolvedTargetPageId) {
+    const existingEdge = edges.find((e) => {
+      if (e.source !== serviceNodeId) return false;
+      const matchesHandle =
+        !e.sourceHandle ||
+        e.sourceHandle === sourceHandle ||
+        (endpointId && e.sourceHandle.includes(endpointId));
+      if (!matchesHandle) return false;
+      const targetNode = allNodes.find((n) => n.id === e.target && n.type === "page_ref");
+      return (
+        targetNode &&
+        (targetNode.data?.targetPageId === resolvedTargetPageId ||
+          targetNode.data?.pageRefId === resolvedTargetPageId)
+      );
+    });
     if (existingEdge) {
       pageRefNode = allNodes.find((n) => n.id === existingEdge.target);
     }
   }
 
-  // 2b. If not found by edge, look for existing page_ref node targeting resolvedTargetPageId
+  // 4. If not connected, look for ANY existing page_ref node targeting resolvedTargetPageId
   if (!pageRefNode && resolvedTargetPageId) {
     pageRefNode = allNodes.find(
       (n) =>
@@ -88,12 +162,12 @@ export function ensurePageRefConnection({
     );
   }
 
-  // 3. If no page_ref node exists, create one!
+  // 5. If still no page_ref node exists, create one!
   if (!pageRefNode) {
     const serviceNode = allNodes.find((n) => n.id === serviceNodeId);
     const basePos = serviceNode?.position || { x: 300, y: 200 };
     const existingPageRefs = allNodes.filter((n) => n.type === "page_ref");
-    const yOffset = existingPageRefs.length * 90;
+    const yOffset = existingPageRefs.length * 110;
     const newPos = {
       x: basePos.x + 380,
       y: basePos.y + yOffset,
@@ -125,28 +199,6 @@ export function ensurePageRefConnection({
     pageRefNode = useBackendCanvasStore
       .getState()
       .nodes.find((n) => n.id === newRefId);
-  } else if (
-    resolvedTargetPageId &&
-    targetWebPage &&
-    pageRefNode.data?.targetPageId !== resolvedTargetPageId
-  ) {
-    // If pageRefNode exists and targetPageId was updated, update pageRefNode details
-    const isLayout = isLayoutNode(targetWebPage);
-    const layoutDetails = isLayout ? getLayoutNodeDetails(targetWebPage, allNodes, edges) : null;
-    const pageLabel = targetWebPage.data?.label || "Page";
-    const cleanLabel = pageLabel.trim().toLowerCase();
-    const isRoot = !isLayout && (targetWebPage.data?.isRoot === true || cleanLabel === "/");
-    const displayLabel = layoutDetails ? layoutDetails.displayTitle : isRoot ? "/" : pageLabel;
-
-    store.updateNode(pageRefNode.id, {
-      data: {
-        ...pageRefNode.data,
-        targetPageId: resolvedTargetPageId,
-        pageRefId: resolvedTargetPageId,
-        targetPageLabel: layoutDetails ? layoutDetails.displayTitle : pageLabel,
-        label: `Ref: ${displayLabel}`,
-      },
-    });
   }
 
   if (!pageRefNode) return undefined;
