@@ -1,5 +1,6 @@
 import { PipelineStep, ReusableFunction } from "@workspace/canvas/types";
 import { BackendNode } from "@/types/canvas";
+import { toVarName } from "../../../utils";
 import { PipelineRenderContext, PipelineStepOutputMeta } from "./types";
 import {
   renderTransformStep,
@@ -105,14 +106,52 @@ export function renderPipelineStep(
 }
 
 /**
+ * Ensures all steps within the pipeline block receive distinct outputVariable names
+ * so that generated TypeScript code does not encounter block-scoped redeclaration errors (TS2451).
+ */
+function disambiguateStepOutputs(
+  steps: PipelineStep[],
+  declaredVars: Set<string>,
+): PipelineStep[] {
+  const result: PipelineStep[] = [];
+  for (const step of steps) {
+    if (step.enabled === false) {
+      result.push(step);
+      continue;
+    }
+    let outVar = step.outputVariable?.trim();
+    if (!outVar && step.type === "langgraph_invoke") {
+      outVar = toVarName(step.name || "agentResult") || "agentResult";
+    }
+    if (outVar) {
+      let candidate = toVarName(outVar);
+      if (declaredVars.has(candidate)) {
+        let suffix = 2;
+        while (declaredVars.has(`${candidate}${suffix}`)) {
+          suffix++;
+        }
+        candidate = `${candidate}${suffix}`;
+      }
+      declaredVars.add(candidate);
+      result.push({ ...step, outputVariable: candidate });
+    } else {
+      result.push(step);
+    }
+  }
+  return result;
+}
+
+/**
  * Helper to render nested sub-steps with context propagation.
  */
 export function renderPipelineNested(
   steps: PipelineStep[],
   ctx: PipelineRenderContext,
 ): string[] {
+  const declaredVars = ctx.declaredVars ?? (ctx.declaredVars = new Set<string>());
+  const sanitizedSteps = disambiguateStepOutputs(steps, declaredVars);
   const lines: string[] = [];
-  for (const step of steps) {
+  for (const step of sanitizedSteps) {
     if (step.enabled === false) continue;
     const stepLines = renderPipelineStep(step, ctx);
     lines.push(...stepLines);
@@ -142,6 +181,15 @@ export function renderPipeline(
     stepOutputMeta?: Map<string, PipelineStepOutputMeta>;
   },
 ): string[] {
+  const declaredVars = new Set<string>();
+  if (bodyVar) declaredVars.add(bodyVar);
+  declaredVars.add("req");
+  declaredVars.add("res");
+  declaredVars.add("abort");
+  declaredVars.add("auth");
+  declaredVars.add("onClose");
+  declaredVars.add("logger");
+
   const ctx: PipelineRenderContext = {
     priorOutputs: new Map(),
     bodyVar,
@@ -149,14 +197,17 @@ export function renderPipeline(
     stepOutputMeta: options?.stepOutputMeta || new Map(),
     reusableFunctions: options?.reusableFunctions,
     allNodes: options?.allNodes,
+    declaredVars,
   };
+
+  const sanitizedSteps = disambiguateStepOutputs(steps, declaredVars);
 
   const allLines: string[] = [];
 
   // Validate all environment variables referenced by the pipeline steps.
   // Throws an Error if not defined, which naturally narrows their types to `string` in TypeScript
   // without needing `as any`, `as unknown`, or type assertions.
-  const referencedEnvVars = collectReferencedEnvVars(steps);
+  const referencedEnvVars = collectReferencedEnvVars(sanitizedSteps);
   if (referencedEnvVars.length > 0) {
     allLines.push("// Validate required environment variables");
     for (const envVar of referencedEnvVars) {
@@ -171,7 +222,7 @@ export function renderPipeline(
     allLines.push("");
   }
 
-  const hasStreaming = steps.some(
+  const hasStreaming = sanitizedSteps.some(
     (s) =>
       s.type === "langgraph_invoke" &&
       s.langGraphStreamingEnabled &&
@@ -179,7 +230,7 @@ export function renderPipeline(
       s.enabled !== false,
   );
 
-  for (const step of steps) {
+  for (const step of sanitizedSteps) {
     if (step.enabled === false) continue;
     // When SSE streaming is enabled on the endpoint, the LangGraph step directly streams
     // and terminates the HTTP response via res.write / res.end. Any trailing return_response

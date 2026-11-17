@@ -36,6 +36,7 @@ export interface CreateDefaultStepDraftParams {
   endpoint?: Endpoint;
   consumedEvent?: AnyMessagingResource;
   serviceNodeId?: string;
+  existingSteps?: PipelineStepDraft[];
 }
 
 export function getDefaultVariableName(type: StepType, stepNumber: number): string {
@@ -86,6 +87,7 @@ export function createDefaultStepDraft({
   endpoint,
   consumedEvent,
   serviceNodeId,
+  existingSteps,
 }: CreateDefaultStepDraftParams): PipelineStepDraft {
   const id = generateId();
   const defaultVar = getDefaultVariableName(type, stepNumber);
@@ -435,18 +437,26 @@ export function createDefaultStepDraft({
     };
   } else if (type === "langgraph_invoke") {
     const allLangGraphNodes = allNodes.filter((n) => n.type === "langgraph");
-    const firstAgent = allLangGraphNodes[0];
+    const usedTargetIds = new Set(
+      existingSteps
+        ?.filter((s) => s.type === "langgraph_invoke")
+        .map((s) => s.langGraphTargetNodeId)
+        .filter(Boolean),
+    );
+    const chosenAgent =
+      allLangGraphNodes.find((n) => !usedTargetIds.has(n.id)) ||
+      allLangGraphNodes[0];
     const connectionResult = ensureLangGraphConnection({
-      langGraphNodeId: firstAgent?.id,
+      langGraphNodeId: chosenAgent?.id,
       serviceNodeId,
       endpointId: endpoint?.id,
       consumedEventId: consumedEvent?.id,
     });
-    const effectiveLgId = connectionResult?.langGraphNodeId || firstAgent?.id;
+    const effectiveLgId = connectionResult?.langGraphNodeId || chosenAgent?.id;
     const effectiveLgNode =
       allNodes.find((n) => n.id === effectiveLgId) ||
       useBackendCanvasStore.getState().nodes.find((n) => n.id === effectiveLgId) ||
-      firstAgent;
+      chosenAgent;
     const agentLabel = effectiveLgNode?.data?.label || "AI Agent";
     const varName = `${toVarName(agentLabel)}Result`;
     const stateChannels = effectiveLgNode?.data?.stateChannels || [];
@@ -565,7 +575,7 @@ export function createDefaultStepDraft({
     }
   }
 
-  return {
+  const draft: PipelineStepDraft = {
     id,
     name: defaultVar,
     type,
@@ -574,4 +584,29 @@ export function createDefaultStepDraft({
     outputVariable: defaultVar,
     ...initialFields,
   };
+
+  if (existingSteps && existingSteps.length > 0) {
+    if (draft.outputVariable) {
+      const usedVars = new Set(existingSteps.map((s) => s.outputVariable).filter(Boolean));
+      if (usedVars.has(draft.outputVariable)) {
+        let counter = 2;
+        while (usedVars.has(`${draft.outputVariable}${counter}`)) {
+          counter++;
+        }
+        draft.outputVariable = `${draft.outputVariable}${counter}`;
+      }
+    }
+    if (draft.name) {
+      const usedNames = new Set(existingSteps.map((s) => s.name).filter(Boolean));
+      if (usedNames.has(draft.name)) {
+        let counter = 2;
+        while (usedNames.has(`${draft.name} ${counter}`)) {
+          counter++;
+        }
+        draft.name = `${draft.name} ${counter}`;
+      }
+    }
+  }
+
+  return draft;
 }

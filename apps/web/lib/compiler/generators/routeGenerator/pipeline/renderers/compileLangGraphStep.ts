@@ -9,6 +9,7 @@ import { PipelineRenderContext } from "../types";
 import { resolveBinding } from "../sourceResolver";
 import { toVarName } from "../../../../utils";
 import { toCamelCase } from "../../../../langgraph/typescript/v1/utils";
+import { resolveLangGraphTarget } from "../importCollector";
 
 function isBlankOrQuotes(val: string | number | boolean | object | null | undefined): boolean {
   if (val === undefined || val === null) return true;
@@ -129,16 +130,7 @@ export function renderLangGraphInvokeStep(
   } = step;
 
   const rawLines: string[] = [];
-  // Strip the " History" suffix so history steps resolve to the same graph variable as the regular invoke step.
-  const rawLabel = (step.name || "agent").replace(/\s+history$/i, "").trim() || "agent";
-  const graphVar =
-    functionRef?.name ||
-    (langGraphTargetNodeId &&
-    !/^[0-9]/.test(langGraphTargetNodeId) &&
-    !langGraphTargetNodeId.includes("-") &&
-    langGraphTargetNodeId.length < 20
-      ? `${toCamelCase(langGraphTargetNodeId)}Graph`
-      : `${toCamelCase(rawLabel)}Graph`);
+  const { graphName: graphVar, rawLabel } = resolveLangGraphTarget(step, ctx.allNodes);
 
   // Extract thread_id if configured or mapped
   let threadIdExpr: string | undefined = langGraphThreadIdSource
@@ -266,13 +258,27 @@ export function renderLangGraphInvokeStep(
     return rawLines;
   }
 
+  if (!ctx.declaredVars) {
+    ctx.declaredVars = new Set<string>();
+  }
+
   // Build dedicated messages initialization if langGraphMessagesConfig is defined
   const stepPrefix = toVarName(step.name || step.id || "agent");
   const messagesInitLines: string[] = [];
   let messagesVarName: string | undefined;
 
   if (langGraphMessagesConfig) {
-    messagesVarName = `${stepPrefix}Messages`;
+    const defaultMessagesVar = `${stepPrefix}Messages`;
+    messagesVarName = defaultMessagesVar;
+    if (ctx.declaredVars.has(defaultMessagesVar)) {
+      let candidate = `${toVarName(outputVariable)}Messages`;
+      let suffix = 2;
+      while (ctx.declaredVars.has(candidate)) {
+        candidate = `${toVarName(outputVariable)}Messages${suffix++}`;
+      }
+      messagesVarName = candidate;
+    }
+    ctx.declaredVars.add(messagesVarName);
     const systemSource = langGraphMessagesConfig.systemMessageSource?.trim();
     const systemAccessor = systemSource ? resolvePathAccessor(systemSource, ctx) : undefined;
     const aiSource = langGraphMessagesConfig.aiMessageSource?.trim();
@@ -398,6 +404,53 @@ export function renderLangGraphInvokeStep(
     ? `, { configurable: { thread_id: ${threadIdExpr} } }`
     : "";
 
+  // Choose state variable: prefer "agentState" for first step to align with conventional tests/code,
+  // but disambiguate to `${toVarName(outputVariable)}State` if "agentState" has already been declared in this scope.
+  let stateVar = "agentState";
+  if (ctx.declaredVars?.has("agentState")) {
+    let baseStateVar = `${toVarName(outputVariable)}State`;
+    stateVar = baseStateVar;
+    let suffix = 2;
+    while (ctx.declaredVars.has(stateVar)) {
+      stateVar = `${baseStateVar}${suffix++}`;
+    }
+  }
+  ctx.declaredVars?.add(stateVar);
+
+  let streamVar = "stream";
+  if (ctx.declaredVars?.has("stream")) {
+    let baseStreamVar = `${toVarName(outputVariable)}Stream`;
+    streamVar = baseStreamVar;
+    let suffix = 2;
+    while (ctx.declaredVars.has(streamVar)) {
+      streamVar = `${baseStreamVar}${suffix++}`;
+    }
+  }
+  ctx.declaredVars?.add(streamVar);
+
+  let sendEventFn = "sendEvent";
+  if (ctx.declaredVars?.has("sendEvent")) {
+    let baseSendVar = `${toVarName(outputVariable)}SendEvent`;
+    sendEventFn = baseSendVar;
+    let suffix = 2;
+    while (ctx.declaredVars.has(sendEventFn)) {
+      sendEventFn = `${baseSendVar}${suffix++}`;
+    }
+  }
+  ctx.declaredVars?.add(sendEventFn);
+
+  const defaultTokenUsage = `${stepPrefix}TokenUsage`;
+  let tokenUsageVar = defaultTokenUsage;
+  if (ctx.declaredVars?.has(defaultTokenUsage)) {
+    let baseUsageVar = `${toVarName(outputVariable)}TokenUsage`;
+    tokenUsageVar = baseUsageVar;
+    let suffix = 2;
+    while (ctx.declaredVars.has(tokenUsageVar)) {
+      tokenUsageVar = `${baseUsageVar}${suffix++}`;
+    }
+  }
+  ctx.declaredVars?.add(tokenUsageVar);
+
   if (langGraphStreamingEnabled) {
     const streamProtocol = step.langGraphStreamingProtocol || "sse";
 
@@ -412,7 +465,7 @@ export function renderLangGraphInvokeStep(
       if (messagesInitLines.length > 0) {
         rawLines.push(...messagesInitLines);
       }
-      rawLines.push(`const agentState = ${stateInit};`);
+      rawLines.push(`const ${stateVar} = ${stateInit};`);
       if (isRaw) {
         rawLines.push(`res.setHeader("Content-Type", "text/plain; charset=utf-8");`);
         rawLines.push(`res.setHeader("Cache-Control", "no-cache");`);
@@ -431,9 +484,12 @@ export function renderLangGraphInvokeStep(
       rawLines.push(`if (typeof res.flushHeaders === "function") {`);
       rawLines.push(`  res.flushHeaders();`);
       rawLines.push(`}`);
-      rawLines.push(
-        `const canFlush = typeof (res as unknown as { flush?: unknown }).flush === "function";`,
-      );
+      if (!ctx.declaredVars?.has("canFlush")) {
+        rawLines.push(
+          `const canFlush = typeof res.flush === "function";`,
+        );
+        ctx.declaredVars?.add("canFlush");
+      }
       let sseChannelExpr: string | undefined;
       if (!isRaw) {
         if (step.clientDeliveryPathParamBindings) {
@@ -454,36 +510,36 @@ export function renderLangGraphInvokeStep(
 
       if (isRaw) {
         rawLines.push(
-          `const sendEvent = (data: unknown) => {`,
+          `const ${sendEventFn} = (data: unknown) => {`,
           `  if (res.writableEnded || res.destroyed) return;`,
           `  res.write(typeof data === "string" ? data : JSON.stringify(data));`,
-          `  if (canFlush) (res as unknown as { flush: () => void }).flush();`,
+          `  if (canFlush) res.flush?.();`,
           `};`,
         );
       } else {
         rawLines.push(
-          `const sendEvent = (data: unknown) => {`,
+          `const ${sendEventFn} = (data: unknown) => {`,
           `  if (!res.writableEnded && !res.destroyed) {`,
           `    res.write(\`${sseEvt}data: \${JSON.stringify(data)}\\n\\n\`);`,
-          `    if (canFlush) (res as unknown as { flush: () => void }).flush();`,
+          `    if (canFlush) res.flush?.();`,
           `  }`,
           `  sseBroadcast(${JSON.stringify(sseEventName)}, data${sseChannelArg});`,
           `};`,
         );
       }
       rawLines.push(
-        `const ${stepPrefix}TokenUsage: Usage = { input_tokens: 0, output_tokens: 0, total_tokens: 0, reasoning_tokens: 0 };`,
+        `const ${tokenUsageVar}: Usage = { input_tokens: 0, output_tokens: 0, total_tokens: 0, reasoning_tokens: 0 };`,
         `const ${outputVariable}ContentParts: string[] = [];`,
       );
       if (!isRaw) {
         rawLines.push(
-          `sendEvent({ type: "stream_start", threadId: ${threadIdExpr || "undefined"} });`,
+          `${sendEventFn}({ type: "stream_start", threadId: ${threadIdExpr || "undefined"} });`,
         );
       }
       rawLines.push(
-        `const stream = await ${graphVar}.stream(agentState, ${streamConfigOptions});`,
+        `const ${streamVar} = await ${graphVar}.stream(${stateVar}, ${streamConfigOptions});`,
       );
-      rawLines.push(`for await (const chunk of stream) {`);
+      rawLines.push(`for await (const chunk of ${streamVar}) {`);
       rawLines.push(`  if (abort.signal.aborted || res.writableEnded || res.destroyed) break;`);
       rawLines.push(`  const { mode, payload } = normalizeChunk(chunk);`);
       rawLines.push(`  if (mode === "messages") {`);
@@ -504,36 +560,36 @@ export function renderLangGraphInvokeStep(
           `      const inT = pickNumber(u, ["input_tokens", "prompt_tokens", "promptTokens", "inputTokens"]);`,
           `      const outT = pickNumber(u, ["output_tokens", "completion_tokens", "completionTokens", "outputTokens"]);`,
           `      const reasT = findReasoningTokens(u, rm);`,
-          `      if (inT > 0) ${stepPrefix}TokenUsage.input_tokens = inT;`,
-          `      if (outT > 0) ${stepPrefix}TokenUsage.output_tokens = outT;`,
-          `      if (reasT > 0) ${stepPrefix}TokenUsage.reasoning_tokens = reasT;`,
+          `      if (inT > 0) ${tokenUsageVar}.input_tokens = inT;`,
+          `      if (outT > 0) ${tokenUsageVar}.output_tokens = outT;`,
+          `      if (reasT > 0) ${tokenUsageVar}.reasoning_tokens = reasT;`,
           `    } else if (token) {`,
-          `      ${stepPrefix}TokenUsage.output_tokens += 1;`,
+          `      ${tokenUsageVar}.output_tokens += 1;`,
           `    }`,
-          `    ${stepPrefix}TokenUsage.total_tokens = ${stepPrefix}TokenUsage.input_tokens + ${stepPrefix}TokenUsage.output_tokens;`,
+          `    ${tokenUsageVar}.total_tokens = ${tokenUsageVar}.input_tokens + ${tokenUsageVar}.output_tokens;`,
         );
       }
       if (langGraphStreamingFields.length > 0) {
         const allowedFields = JSON.stringify(langGraphStreamingFields);
         rawLines.push(`    if (${allowedFields}.includes(nodeName || "")) {`);
         if (langGraphStreamIncludeReasoning !== false) {
-          rawLines.push(`      if (reasoning) sendEvent({ type: "reasoning", reasoning, node: nodeName });`);
+          rawLines.push(`      if (reasoning) ${sendEventFn}({ type: "reasoning", reasoning, node: nodeName });`);
         }
         rawLines.push(
           `      if (token) {`,
           `        ${outputVariable}ContentParts.push(token);`,
-          `        sendEvent(${isRaw ? 'token' : '{ token, node: nodeName }'});`,
+          `        ${sendEventFn}(${isRaw ? 'token' : '{ token, node: nodeName }'});`,
           `      }`,
           `    }`,
         );
       } else {
         if (langGraphStreamIncludeReasoning !== false) {
-          rawLines.push(`    if (reasoning) sendEvent({ type: "reasoning", reasoning, node: nodeName });`);
+          rawLines.push(`    if (reasoning) ${sendEventFn}({ type: "reasoning", reasoning, node: nodeName });`);
         }
         rawLines.push(
           `    if (token) {`,
           `      ${outputVariable}ContentParts.push(token);`,
-          `      sendEvent(${isRaw ? 'token' : '{ token, node: nodeName }'});`,
+          `      ${sendEventFn}(${isRaw ? 'token' : '{ token, node: nodeName }'});`,
           `    }`,
         );
       }
@@ -542,7 +598,7 @@ export function renderLangGraphInvokeStep(
         `      ? (Array.isArray(msg.tool_calls) ? msg.tool_calls : Array.isArray(msg.tool_call_chunks) ? msg.tool_call_chunks : undefined)`,
         `      : undefined;`,
         `    if (toolCalls && toolCalls.length > 0) {`,
-        `      sendEvent(${isRaw ? 'JSON.stringify({ type: "tool_call", tool_calls: toolCalls })' : '{ type: "tool_call", tool_calls: toolCalls, node: nodeName }'});`,
+        `      ${sendEventFn}(${isRaw ? 'JSON.stringify({ type: "tool_call", tool_calls: toolCalls })' : '{ type: "tool_call", tool_calls: toolCalls, node: nodeName }'});`,
         `    }`,
         `  } else if (mode === "updates") {`,
         `    const nodeName = isRec(payload) ? Object.keys(payload)[0] : undefined;`,
@@ -550,14 +606,14 @@ export function renderLangGraphInvokeStep(
       if (langGraphStreamingFields.length > 0) {
         const allowedFields = JSON.stringify(langGraphStreamingFields);
         rawLines.push(`    if (${allowedFields}.includes(nodeName || "")) {`);
-        rawLines.push(`      sendEvent(${isRaw ? 'JSON.stringify(payload)' : '{ type: "update", mode: "updates", node: nodeName, data: payload }'});`);
+        rawLines.push(`      ${sendEventFn}(${isRaw ? 'JSON.stringify(payload)' : '{ type: "update", mode: "updates", node: nodeName, data: payload }'});`);
         rawLines.push(`    }`);
       } else {
-        rawLines.push(`    sendEvent(${isRaw ? 'JSON.stringify(payload)' : '{ type: "update", mode: "updates", node: nodeName, data: payload }'});`);
+        rawLines.push(`    ${sendEventFn}(${isRaw ? 'JSON.stringify(payload)' : '{ type: "update", mode: "updates", node: nodeName, data: payload }'});`);
       }
       rawLines.push(
         `  } else if (mode === "custom" || mode === "values") {`,
-        `    sendEvent(${isRaw ? 'typeof payload === "string" ? payload : JSON.stringify(payload)' : '{ type: mode, mode, data: payload }'});`,
+        `    ${sendEventFn}(${isRaw ? 'typeof payload === "string" ? payload : JSON.stringify(payload)' : '{ type: mode, mode, data: payload }'});`,
         `  }`,
         `}`,
         `const ${outputVariable}Content = ${outputVariable}ContentParts.join("");`,
@@ -565,9 +621,9 @@ export function renderLangGraphInvokeStep(
       );
       if (!isRaw) {
         if (langGraphTrackTokenUsage) {
-          rawLines.push(`  sendEvent({ type: "usage", usage: ${stepPrefix}TokenUsage });`);
+          rawLines.push(`  ${sendEventFn}({ type: "usage", usage: ${tokenUsageVar} });`);
         }
-        rawLines.push(`  sendEvent({ type: "stream_end", done: true, content: ${outputVariable}Content, usage: ${stepPrefix}TokenUsage, threadId: ${threadIdExpr || "undefined"} });`);
+        rawLines.push(`  ${sendEventFn}({ type: "stream_end", done: true, content: ${outputVariable}Content, usage: ${tokenUsageVar}, threadId: ${threadIdExpr || "undefined"} });`);
         rawLines.push(`  res.write("${sseEvt}data: [DONE]\\n\\n");`);
         rawLines.push(`  sseBroadcast(${JSON.stringify(sseEventName)}, "[DONE]"${sseChannelArg});`);
       }
@@ -581,7 +637,7 @@ export function renderLangGraphInvokeStep(
   protocol: "${streamProtocol}",
   response: ${outputVariable}Content,
   content: ${outputVariable}Content,
-  usage: ${stepPrefix}TokenUsage,
+  usage: ${tokenUsageVar},
   threadId: ${threadIdExpr || "undefined"},
 };`);
       }
@@ -594,18 +650,18 @@ export function renderLangGraphInvokeStep(
       if (messagesInitLines.length > 0) {
         rawLines.push(...messagesInitLines);
       }
-      rawLines.push(`const agentState = ${stateInit};`);
+      rawLines.push(`const ${stateVar} = ${stateInit};`);
       rawLines.push(
-        `const ${stepPrefix}TokenUsage = { input_tokens: 0, output_tokens: 0, total_tokens: 0, reasoning_tokens: 0 };`,
+        `const ${tokenUsageVar} = { input_tokens: 0, output_tokens: 0, total_tokens: 0, reasoning_tokens: 0 };`,
         `let ${outputVariable}Content = "";`,
       );
       rawLines.push(
         `wsBroadcast("agent_stream", { type: "stream_start", threadId: ${threadIdExpr || "undefined"}, done: false }, ${roomExpr});`,
       );
       rawLines.push(
-        `const stream = await ${graphVar}.stream(agentState, ${streamConfigOptions});`,
+        `const ${streamVar} = await ${graphVar}.stream(${stateVar}, ${streamConfigOptions});`,
       );
-      rawLines.push(`for await (const chunk of stream) {`);
+      rawLines.push(`for await (const chunk of ${streamVar}) {`);
       rawLines.push(`  let mode: string = "messages";`);
       rawLines.push(`  let payload = chunk;`);
       rawLines.push(`  const _c = Array.isArray(chunk) ? chunk : undefined;`);
@@ -687,13 +743,13 @@ export function renderLangGraphInvokeStep(
           `          else if ("reasoning" in _ctd && typeof _ctd.reasoning === "number") _reas = _ctd.reasoning;`,
           `        }`,
           `      }`,
-          `      if (_in > 0) ${stepPrefix}TokenUsage.input_tokens = _in;`,
-          `      if (_out > 0) ${stepPrefix}TokenUsage.output_tokens = _out;`,
-          `      if (_reas > 0) ${stepPrefix}TokenUsage.reasoning_tokens = _reas;`,
-          `      ${stepPrefix}TokenUsage.total_tokens = ${stepPrefix}TokenUsage.input_tokens + ${stepPrefix}TokenUsage.output_tokens;`,
+          `      if (_in > 0) ${tokenUsageVar}.input_tokens = _in;`,
+          `      if (_out > 0) ${tokenUsageVar}.output_tokens = _out;`,
+          `      if (_reas > 0) ${tokenUsageVar}.reasoning_tokens = _reas;`,
+          `      ${tokenUsageVar}.total_tokens = ${tokenUsageVar}.input_tokens + ${tokenUsageVar}.output_tokens;`,
           `    } else if (token !== undefined && token !== "") {`,
-          `      ${stepPrefix}TokenUsage.output_tokens += 1;`,
-          `      ${stepPrefix}TokenUsage.total_tokens = ${stepPrefix}TokenUsage.input_tokens + ${stepPrefix}TokenUsage.output_tokens;`,
+          `      ${tokenUsageVar}.output_tokens += 1;`,
+          `      ${tokenUsageVar}.total_tokens = ${tokenUsageVar}.input_tokens + ${tokenUsageVar}.output_tokens;`,
           `    }`,
         );
       }
@@ -735,11 +791,11 @@ export function renderLangGraphInvokeStep(
       rawLines.push(`}`);
       if (langGraphTrackTokenUsage) {
         rawLines.push(
-          `wsBroadcast("agent_stream", { type: "usage", usage: ${stepPrefix}TokenUsage, done: false }, ${roomExpr});`,
+          `wsBroadcast("agent_stream", { type: "usage", usage: ${tokenUsageVar}, done: false }, ${roomExpr});`,
         );
       }
       rawLines.push(
-        `wsBroadcast("agent_stream", { type: "stream_end", done: true, content: ${outputVariable}Content, usage: ${stepPrefix}TokenUsage, threadId: ${threadIdExpr || "undefined"} }, ${roomExpr});`,
+        `wsBroadcast("agent_stream", { type: "stream_end", done: true, content: ${outputVariable}Content, usage: ${tokenUsageVar}, threadId: ${threadIdExpr || "undefined"} }, ${roomExpr});`,
       );
       rawLines.push(`wsBroadcast("agent_stream", { done: true }, ${roomExpr});`);
       if (outputVariable) {
@@ -749,7 +805,7 @@ export function renderLangGraphInvokeStep(
   room: ${roomExpr},
   response: ${outputVariable}Content,
   content: ${outputVariable}Content,
-  usage: ${stepPrefix}TokenUsage,
+  usage: ${tokenUsageVar},
   threadId: ${threadIdExpr || "undefined"},
 };`);
       }
@@ -763,18 +819,18 @@ export function renderLangGraphInvokeStep(
       if (messagesInitLines.length > 0) {
         rawLines.push(...messagesInitLines);
       }
-      rawLines.push(`const agentState = ${stateInit};`);
+      rawLines.push(`const ${stateVar} = ${stateInit};`);
       rawLines.push(
-        `const ${stepPrefix}TokenUsage = { input_tokens: 0, output_tokens: 0, total_tokens: 0, reasoning_tokens: 0 };`,
+        `const ${tokenUsageVar} = { input_tokens: 0, output_tokens: 0, total_tokens: 0, reasoning_tokens: 0 };`,
         `let ${outputVariable}Content = "";`,
       );
       rawLines.push(
         `await publishKafkaEvent(${topicExpr}, { type: "stream_start", threadId: ${threadIdExpr || "undefined"}, done: false }, ${keyExpr});`,
       );
       rawLines.push(
-        `const stream = await ${graphVar}.stream(agentState, ${streamConfigOptions});`,
+        `const ${streamVar} = await ${graphVar}.stream(${stateVar}, ${streamConfigOptions});`,
       );
-      rawLines.push(`for await (const chunk of stream) {`);
+      rawLines.push(`for await (const chunk of ${streamVar}) {`);
       rawLines.push(`  let mode: string = "messages";`);
       rawLines.push(`  let payload = chunk;`);
       rawLines.push(`  if (Array.isArray(chunk) && chunk.length === 2 && typeof chunk[0] === "string" && ["messages", "updates", "custom", "values", "debug"].includes(chunk[0])) {`);
@@ -847,13 +903,13 @@ export function renderLangGraphInvokeStep(
           `          else if ("reasoning" in _ctd && typeof _ctd.reasoning === "number") _reas = _ctd.reasoning;`,
           `        }`,
           `      }`,
-          `      if (_in > 0) ${stepPrefix}TokenUsage.input_tokens = _in;`,
-          `      if (_out > 0) ${stepPrefix}TokenUsage.output_tokens = _out;`,
-          `      if (_reas > 0) ${stepPrefix}TokenUsage.reasoning_tokens = _reas;`,
-          `      ${stepPrefix}TokenUsage.total_tokens = ${stepPrefix}TokenUsage.input_tokens + ${stepPrefix}TokenUsage.output_tokens;`,
+          `      if (_in > 0) ${tokenUsageVar}.input_tokens = _in;`,
+          `      if (_out > 0) ${tokenUsageVar}.output_tokens = _out;`,
+          `      if (_reas > 0) ${tokenUsageVar}.reasoning_tokens = _reas;`,
+          `      ${tokenUsageVar}.total_tokens = ${tokenUsageVar}.input_tokens + ${tokenUsageVar}.output_tokens;`,
           `    } else if (token !== undefined && token !== "") {`,
-          `      ${stepPrefix}TokenUsage.output_tokens += 1;`,
-          `      ${stepPrefix}TokenUsage.total_tokens = ${stepPrefix}TokenUsage.input_tokens + ${stepPrefix}TokenUsage.output_tokens;`,
+          `      ${tokenUsageVar}.output_tokens += 1;`,
+          `      ${tokenUsageVar}.total_tokens = ${tokenUsageVar}.input_tokens + ${tokenUsageVar}.output_tokens;`,
           `    }`,
         );
       }
@@ -895,11 +951,11 @@ export function renderLangGraphInvokeStep(
       rawLines.push(`}`);
       if (langGraphTrackTokenUsage) {
         rawLines.push(
-          `await publishKafkaEvent(${topicExpr}, { type: "usage", usage: ${stepPrefix}TokenUsage, done: false }, ${keyExpr});`,
+          `await publishKafkaEvent(${topicExpr}, { type: "usage", usage: ${tokenUsageVar}, done: false }, ${keyExpr});`,
         );
       }
       rawLines.push(
-        `await publishKafkaEvent(${topicExpr}, { type: "stream_end", done: true, content: ${outputVariable}Content, usage: ${stepPrefix}TokenUsage, threadId: ${threadIdExpr || "undefined"} }, ${keyExpr});`,
+        `await publishKafkaEvent(${topicExpr}, { type: "stream_end", done: true, content: ${outputVariable}Content, usage: ${tokenUsageVar}, threadId: ${threadIdExpr || "undefined"} }, ${keyExpr});`,
       );
       rawLines.push(`await publishKafkaEvent(${topicExpr}, { done: true }, ${keyExpr});`);
       if (outputVariable) {
@@ -909,7 +965,7 @@ export function renderLangGraphInvokeStep(
   topic: ${topicExpr},
   response: ${outputVariable}Content,
   content: ${outputVariable}Content,
-  usage: ${stepPrefix}TokenUsage,
+  usage: ${tokenUsageVar},
   threadId: ${threadIdExpr || "undefined"},
 };`);
       }
@@ -923,19 +979,22 @@ export function renderLangGraphInvokeStep(
       if (messagesInitLines.length > 0) {
         rawLines.push(...messagesInitLines);
       }
-      rawLines.push(`const agentState = ${stateInit};`);
-      rawLines.push(`const redisClient = await getRedisClient();`);
+      rawLines.push(`const ${stateVar} = ${stateInit};`);
+      if (!ctx.declaredVars?.has("redisClient")) {
+        rawLines.push(`const redisClient = await getRedisClient();`);
+        ctx.declaredVars?.add("redisClient");
+      }
       rawLines.push(
-        `const ${stepPrefix}TokenUsage = { input_tokens: 0, output_tokens: 0, total_tokens: 0, reasoning_tokens: 0 };`,
+        `const ${tokenUsageVar} = { input_tokens: 0, output_tokens: 0, total_tokens: 0, reasoning_tokens: 0 };`,
         `let ${outputVariable}Content = "";`,
       );
       rawLines.push(
         `await redisClient.xadd(${streamKeyExpr}, "*", "type", "stream_start", "thread_id", String(${threadIdExpr || "undefined"}), "done", "false");`,
       );
       rawLines.push(
-        `const stream = await ${graphVar}.stream(agentState, ${streamConfigOptions});`,
+        `const ${streamVar} = await ${graphVar}.stream(${stateVar}, ${streamConfigOptions});`,
       );
-      rawLines.push(`for await (const chunk of stream) {`);
+      rawLines.push(`for await (const chunk of ${streamVar}) {`);
       rawLines.push(`  let mode: string = "messages";`);
       rawLines.push(`  let payload = chunk;`);
       rawLines.push(`  if (Array.isArray(chunk) && chunk.length === 2 && typeof chunk[0] === "string" && ["messages", "updates", "custom", "values", "debug"].includes(chunk[0])) {`);
@@ -1008,13 +1067,13 @@ export function renderLangGraphInvokeStep(
           `          else if ("reasoning" in _ctd && typeof _ctd.reasoning === "number") _reas = _ctd.reasoning;`,
           `        }`,
           `      }`,
-          `      if (_in > 0) ${stepPrefix}TokenUsage.input_tokens = _in;`,
-          `      if (_out > 0) ${stepPrefix}TokenUsage.output_tokens = _out;`,
-          `      if (_reas > 0) ${stepPrefix}TokenUsage.reasoning_tokens = _reas;`,
-          `      ${stepPrefix}TokenUsage.total_tokens = ${stepPrefix}TokenUsage.input_tokens + ${stepPrefix}TokenUsage.output_tokens;`,
+          `      if (_in > 0) ${tokenUsageVar}.input_tokens = _in;`,
+          `      if (_out > 0) ${tokenUsageVar}.output_tokens = _out;`,
+          `      if (_reas > 0) ${tokenUsageVar}.reasoning_tokens = _reas;`,
+          `      ${tokenUsageVar}.total_tokens = ${tokenUsageVar}.input_tokens + ${tokenUsageVar}.output_tokens;`,
           `    } else if (token !== undefined && token !== "") {`,
-          `      ${stepPrefix}TokenUsage.output_tokens += 1;`,
-          `      ${stepPrefix}TokenUsage.total_tokens = ${stepPrefix}TokenUsage.input_tokens + ${stepPrefix}TokenUsage.output_tokens;`,
+          `      ${tokenUsageVar}.output_tokens += 1;`,
+          `      ${tokenUsageVar}.total_tokens = ${tokenUsageVar}.input_tokens + ${tokenUsageVar}.output_tokens;`,
           `    }`,
         );
       }
@@ -1056,7 +1115,7 @@ export function renderLangGraphInvokeStep(
       rawLines.push(`}`);
       if (langGraphTrackTokenUsage) {
         rawLines.push(
-          `await redisClient.xadd(${streamKeyExpr}, "*", "type", "usage", "input_tokens", String(${stepPrefix}TokenUsage.input_tokens), "output_tokens", String(${stepPrefix}TokenUsage.output_tokens), "total_tokens", String(${stepPrefix}TokenUsage.total_tokens), "reasoning_tokens", String(${stepPrefix}TokenUsage.reasoning_tokens), "done", "false");`,
+          `await redisClient.xadd(${streamKeyExpr}, "*", "type", "usage", "input_tokens", String(${tokenUsageVar}.input_tokens), "output_tokens", String(${tokenUsageVar}.output_tokens), "total_tokens", String(${tokenUsageVar}.total_tokens), "reasoning_tokens", String(${tokenUsageVar}.reasoning_tokens), "done", "false");`,
         );
       }
       rawLines.push(
@@ -1070,7 +1129,7 @@ export function renderLangGraphInvokeStep(
   streamKey: ${streamKeyExpr},
   response: ${outputVariable}Content,
   content: ${outputVariable}Content,
-  usage: ${stepPrefix}TokenUsage,
+  usage: ${tokenUsageVar},
   threadId: ${threadIdExpr || "undefined"},
 };`);
       }
@@ -1085,8 +1144,8 @@ export function renderLangGraphInvokeStep(
     if (messagesInitLines.length > 0) {
       rawLines.push(...messagesInitLines);
     }
-    rawLines.push(`const agentState = ${stateInit};`);
-    rawLines.push(`const ${outputVariable}Raw = await ${graphVar}.invoke(agentState${invokeConfigOptions});`);
+    rawLines.push(`const ${stateVar} = ${stateInit};`);
+    rawLines.push(`const ${outputVariable}Raw = await ${graphVar}.invoke(${stateVar}${invokeConfigOptions});`);
 
     if (langGraphTrackTokenUsage) {
       rawLines.push(

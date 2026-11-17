@@ -4,8 +4,7 @@
 // EMITS:  Imports, error response types, request & response context types, handler declaration
 // ═══════════════════════════════════════════════════════════════
 
-import { ReusableFunction, TargetDbOperation } from "@workspace/canvas/types";
-import { Endpoint } from "@workspace/canvas/types";
+import { ReusableFunction, TargetDbOperation, Endpoint, BackendNode } from "@workspace/canvas/types";
 import { collectPipelineImports } from "../pipelineRenderer";
 
 export interface HandlerPreambleParams {
@@ -29,6 +28,7 @@ export interface HandlerPreambleParams {
   bodyTypeResHasContent: boolean;
   pipelineSteps?: Endpoint["pipelineSteps"];
   requiresAuth?: boolean;
+  allNodes?: BackendNode[];
 }
 
 export interface HandlerPreambleResult {
@@ -61,6 +61,7 @@ export function emitHandlerPreamble(params: HandlerPreambleParams): HandlerPream
     bodyTypeResHasContent,
     pipelineSteps,
     requiresAuth = false,
+    allNodes,
   } = params;
 
   // Build the extra import lines (de-duped by importPath)
@@ -114,7 +115,7 @@ export function emitHandlerPreamble(params: HandlerPreambleParams): HandlerPream
 
   // Pre-collect pipeline step imports so they land in the file's import block
   if (Array.isArray(pipelineSteps) && pipelineSteps.length > 0) {
-    const pipelineImports = collectPipelineImports(pipelineSteps);
+    const pipelineImports = collectPipelineImports(pipelineSteps, allNodes);
     pipelineImports.forEach((names, importPath) => {
       if (!extraImports.has(importPath)) {
         extraImports.set(importPath, new Set());
@@ -179,7 +180,7 @@ ${
     };`
 }
 
-${hasStreamingStep ? `export type ${pascalName}ResponseContext = Response;\n
+${hasStreamingStep ? `export type ${pascalName}ResponseContext = Response & { flush?: () => void };\n
 // ---------------------------------------------------------------------------
 // Helpers (module-level: allocated once, not per request / per chunk)
 // ---------------------------------------------------------------------------
