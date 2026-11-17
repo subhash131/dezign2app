@@ -158,7 +158,6 @@ ${hasPathParams ? `  pathParams?: ${componentName}PathParams;\n` : ""}${hasQuery
   id?: string;
   item?: Record<string, unknown>;
   response?: Record<string, unknown>;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onTrigger?: (
     eventName: string,
     eventType: string,
@@ -168,7 +167,7 @@ ${hasPathParams ? `  pathParams?: ${componentName}PathParams;\n` : ""}${hasQuery
     customHeaders?: Record<string, string>,
     queryParams?: Record<string, string>,
     requestBody?: Record<string, string | number | boolean | null | undefined>,
-  ) => Promise<any> | void;
+  ) => Promise<unknown> | void;
   onRequestChange?: (payload: ${componentName}RequestPayload) => void;
   className?: string;
 }`);

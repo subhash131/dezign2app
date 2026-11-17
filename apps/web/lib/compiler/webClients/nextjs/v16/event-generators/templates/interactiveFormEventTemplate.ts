@@ -347,42 +347,26 @@ export function generateInteractiveFormEventTemplate({
 
       if (src === "response_property" && vPath) {
         const rawVPath = vPath.trim();
-        const isFullPayload =
-          rawVPath === "*" ||
-          rawVPath === "$" ||
-          rawVPath === "data" ||
-          rawVPath === "response";
-
-        const cleanPath = rawVPath
-          .replace(/^(data|response)\./, "")
-          .replace(/^(\*|\$)\.?/, "")
-          .trim();
-        const finalProp = isFullPayload ? "" : cleanPath;
-
-        let extractionExpr = "resData";
-        if (finalProp) {
-          extractionExpr = `(typeof resData === "object" && resData !== null && "${finalProp}" in resData ? resData.${finalProp} : resData)`;
-        }
+        const chain = rawVPath.split(".").filter(Boolean).map((k) => `?.[${JSON.stringify(k)}]`).join("");
+        const extractionExpr = `resData${chain}`;
 
         const isArrayTarget = isArrayTargetField(b.targetFieldType, b.targetFieldName, storeActionName);
         const isNumberTarget = isNumberTargetField(b.targetFieldType, b.targetFieldName);
         const isBooleanTarget = isBooleanTargetField(b.targetFieldType, b.targetFieldName, storeActionName);
         const isObjectTarget = isObjectTargetField(b.targetFieldType, b.targetFieldName);
 
-        let passedExpr = extractionExpr;
+        let passedExpr = "extracted";
         if (isArrayTarget) {
-          passedExpr = `Array.isArray(${extractionExpr}) ? ${extractionExpr} : []`;
+          passedExpr = `Array.isArray(extracted) ? extracted : (extracted !== null && extracted !== undefined ? [extracted] : [])`;
         } else if (isNumberTarget) {
-          passedExpr = `typeof ${extractionExpr} === "number" ? ${extractionExpr} : (Number(${extractionExpr}) || 0)`;
+          passedExpr = `typeof extracted === "number" ? extracted : (Number(extracted) || 0)`;
         } else if (isBooleanTarget) {
-          passedExpr = `typeof ${extractionExpr} === "boolean" ? ${extractionExpr} : Boolean(${extractionExpr})`;
+          passedExpr = `typeof extracted === "boolean" ? extracted : Boolean(extracted)`;
         } else if (isObjectTarget) {
-          passedExpr = `typeof ${extractionExpr} === "object" && ${extractionExpr} !== null ? ${extractionExpr} : {}`;
-        } else {
-          passedExpr = `typeof ${extractionExpr} === "string" ? ${extractionExpr} : (${extractionExpr} !== null && ${extractionExpr} !== undefined ? String(${extractionExpr}) : "")`;
+          passedExpr = `typeof extracted === "object" && extracted !== null ? extracted : {}`;
         }
 
-        postTrigger += `  if (${resSourceExpr}) {\n    ${storeHookName}.getState().${storeActionName}(${passedExpr});\n  }\n`;
+        postTrigger += `  if (${resSourceExpr}) {\n    const extracted = ${extractionExpr};\n    ${storeHookName}.getState().${storeActionName}(${passedExpr});\n  }\n`;
         return;
       }
 
