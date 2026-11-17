@@ -47,7 +47,7 @@ export interface ${componentName}Props {
     customHeaders?: Record<string, string>,
     queryParams?: Record<string, string>,
     requestBody?: Record<string, string | number | boolean | null | undefined>,
-  ) => Promise<Record<string, string | number | boolean | null | undefined> | void> | void;
+  ) => Promise<unknown> | void;
 }
 
 export interface ${componentName}ActionContext {
@@ -187,7 +187,7 @@ ${propFields}
     customHeaders?: Record<string, string>,
     queryParams?: Record<string, string>,
     requestBody?: Record<string, string | number | boolean | null | undefined>,
-  ) => Promise<Record<string, string | number | boolean | null | undefined> | void> | void;
+  ) => Promise<unknown> | void;
 }
 
 export interface ${componentName}ActionContext {

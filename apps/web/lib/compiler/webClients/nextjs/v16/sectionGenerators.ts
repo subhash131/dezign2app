@@ -720,7 +720,6 @@ export function generateSectionComponent(
 
     return `${isClient ? `"use client";\n\n` : ""}${reactImport}
 ${libraryImports}${storeImports ? `${storeImports}\n` : ""}${actionImports ? `${actionImports}\n` : ""}${mappedActionImports ? `${mappedActionImports}\n` : ""}export interface ${sectionCompName}Props {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onTrigger?: (
     eventName: string,
     eventType: string,
@@ -730,7 +729,7 @@ ${libraryImports}${storeImports ? `${storeImports}\n` : ""}${actionImports ? `${
     customHeaders?: Record<string, string>,
     queryParams?: Record<string, string>,
     requestBody?: Record<string, string | number | boolean | null | undefined>,
-  ) => Promise<any> | void;
+  ) => Promise<unknown> | void;
 }
 
 export function ${sectionCompName}({ onTrigger }: ${sectionCompName}Props) {
@@ -1918,7 +1917,6 @@ ${authButtonsJsx}
 
   return `${isClient ? `"use client";\n\n` : ""}${reactImport}
 ${extraComponentImports ? `${extraComponentImports}\n` : ""}${toastImport}${libraryImports}${storeImports ? `${storeImports}\n` : ""}${actionImports ? `${actionImports}\n` : ""}${mappedActionImports ? `${mappedActionImports}\n` : ""}export interface ${sectionCompName}Props {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onTrigger?: (
     eventName: string,
     eventType: string,
@@ -1928,7 +1926,7 @@ ${extraComponentImports ? `${extraComponentImports}\n` : ""}${toastImport}${libr
     customHeaders?: Record<string, string>,
     queryParams?: Record<string, string>,
     requestBody?: Record<string, string | number | boolean | null | undefined>,
-  ) => Promise<any> | void;
+  ) => Promise<unknown> | void;
 }
 
 export function ${sectionCompName}({ onTrigger }: ${sectionCompName}Props) {

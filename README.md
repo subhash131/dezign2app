@@ -4,7 +4,7 @@ Welcome to **Dezign2App**—an enterprise-grade visual system design and archite
 
 Dezign2App bridges the gap between high-level system architecture design and executable code. It unifies visual drag-and-drop canvas editors, relational database modeling, real-time protocol bindings (WebSockets, WebRTC, SSE), stateful AI graph execution (LangGraph & MCP), an in-memory architecture simulation engine, project snapshot version control, and an automated code generation compiler—all packaged in a high-performance Turborepo + pnpm workspace with both web and native desktop runtimes.
 
-[![Next.js](https://img.shields.io/badge/Next.js-16.0.10-black?style=flat-square&logo=next.js)](https://nextjs.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-16.4.6-black?style=flat-square&logo=next.js)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19.2.4-blue?style=flat-square&logo=react)](https://react.dev/)
 [![Convex](https://img.shields.io/badge/Convex-1.31.6-EE742F?style=flat-square)](https://convex.dev/)
 [![Better Auth](https://img.shields.io/badge/Auth-Better_Auth_1.6-black?style=flat-square)](https://better-auth.com/)

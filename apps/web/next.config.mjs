@@ -6,8 +6,16 @@ const __dirname = path.dirname(__filename);
 
 /** @type {import("next").NextConfig} */
 const nextConfig = {
+  allowedDevOrigins: ["127.0.0.1", "localhost"],
   output: "standalone",
   outputFileTracingRoot: path.join(__dirname, "../../"),
+  outputFileTracingExcludes: {
+    "*": [
+      "**/apps/desktop/release/**",
+      "**/.turbo/**",
+      "**/test-deploy/**",
+    ],
+  },
   transpilePackages: [
     "@workspace/ui",
     "@workspace/canvas",
@@ -15,9 +23,6 @@ const nextConfig = {
     "@wterm/react",
   ],
   crossOrigin: "use-credentials",
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   experimental: {
     mcpServer: true,
   },

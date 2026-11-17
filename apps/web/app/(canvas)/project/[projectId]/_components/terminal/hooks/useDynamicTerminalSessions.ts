@@ -78,7 +78,7 @@ function simulateCommand(rawCmd: string, targetDir: string): string {
       `\x1b[90m> dezign2app@0.1.0 dev /workspace/dezign2app\x1b[0m\r\n` +
       `\x1b[90m> turbo run dev\x1b[0m\r\n\r\n` +
       `\x1b[36m• packages:cache\x1b[0m \x1b[32m✔ Up to date (turbo)\x1b[0m\r\n` +
-      `\x1b[35m• web:dev\x1b[0m       ▲ Next.js 16.0.10 (Turbopack) ready in 420ms\r\n` +
+      `\x1b[35m• web:dev\x1b[0m       ▲ Next.js 16.4.6 (Turbopack) ready in 420ms\r\n` +
       `\x1b[35m• web:dev\x1b[0m       - Local:   \x1b[4;34mhttp://localhost:3000\x1b[0m\r\n` +
       `\x1b[35m• web:dev\x1b[0m       - Network: \x1b[4;34mhttp://192.168.1.100:3000\x1b[0m\r\n` +
       `\x1b[33m• api:dev\x1b[0m       ⚡ Express REST API listening on \x1b[4;34mhttp://localhost:4000\x1b[0m\r\n` +

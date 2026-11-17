@@ -563,7 +563,11 @@ describe("compileNextjsV16WebClient - Configuration-Driven Output", () => {
     expect(webAppFiles.length).toBe(0);
 
     // Should compile the service in apps/
-    const serviceFiles = result.files.filter((f) => f.filename.startsWith("apps/billingservice"));
+    const serviceFiles = result.files.filter(
+      (f) =>
+        f.filename.startsWith("apps/billing-service") ||
+        f.filename.startsWith("apps/billingservice"),
+    );
     expect(serviceFiles.length).toBeGreaterThan(0);
   });
 

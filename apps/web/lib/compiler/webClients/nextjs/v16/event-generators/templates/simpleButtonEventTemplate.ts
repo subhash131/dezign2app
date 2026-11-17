@@ -55,6 +55,7 @@ export function generateSimpleButtonEventTemplate({
   targetRoute,
   pathParamBindings,
   queryParamBindings,
+  hasEndpointLink = false,
 }: {
   componentName: string;
   eventName: string;
@@ -71,6 +72,7 @@ export function generateSimpleButtonEventTemplate({
   targetRoute?: string;
   pathParamBindings?: NavigationPathParamBinding[];
   queryParamBindings?: NavigationQueryParamBinding[];
+  hasEndpointLink?: boolean;
 }): string {
   const libImports = resolveActionLibImports(libraries);
   const hasApiUrl = Boolean(url && url.trim() && url !== "#");
@@ -290,47 +292,31 @@ export function generateSimpleButtonEventTemplate({
       }
 
       const resSourceExpr = lastTransformerOutputVar
-        ? `(typeof triggerResult !== "undefined" ? triggerResult : ${lastTransformerOutputVar})`
-        : `triggerResult`;
+        ? `(typeof resData !== "undefined" ? resData : ${lastTransformerOutputVar})`
+        : `resData`;
 
       if (src === "response_property" && vPath) {
         const rawVPath = vPath.trim();
-        const isFullPayload =
-          rawVPath === "*" ||
-          rawVPath === "$" ||
-          rawVPath === "data" ||
-          rawVPath === "response";
-
-        const cleanPath = rawVPath
-          .replace(/^(data|response)\./, "")
-          .replace(/^(\*|\$)\.?/, "")
-          .trim();
-        const finalProp = isFullPayload ? "" : cleanPath;
-
-        let extractionExpr = "resData";
-        if (finalProp) {
-          extractionExpr = `(typeof resData === "object" && resData !== null && "${finalProp}" in resData ? resData.${finalProp} : resData)`;
-        }
+        const chain = rawVPath.split(".").filter(Boolean).map((k) => `?.[${JSON.stringify(k)}]`).join("");
+        const extractionExpr = `resData${chain}`;
 
         const isArrayTarget = isArrayTargetField(b.targetFieldType, b.targetFieldName, storeActionName);
         const isNumberTarget = isNumberTargetField(b.targetFieldType, b.targetFieldName);
         const isBooleanTarget = isBooleanTargetField(b.targetFieldType, b.targetFieldName, storeActionName);
         const isObjectTarget = isObjectTargetField(b.targetFieldType, b.targetFieldName);
 
-        let passedExpr = extractionExpr;
+        let passedExpr = "extracted";
         if (isArrayTarget) {
-          passedExpr = `Array.isArray(${extractionExpr}) ? ${extractionExpr} : []`;
+          passedExpr = `Array.isArray(extracted) ? extracted : (extracted !== null && extracted !== undefined ? [extracted] : [])`;
         } else if (isNumberTarget) {
-          passedExpr = `typeof ${extractionExpr} === "number" ? ${extractionExpr} : (Number(${extractionExpr}) || 0)`;
+          passedExpr = `typeof extracted === "number" ? extracted : (Number(extracted) || 0)`;
         } else if (isBooleanTarget) {
-          passedExpr = `typeof ${extractionExpr} === "boolean" ? ${extractionExpr} : Boolean(${extractionExpr})`;
+          passedExpr = `typeof extracted === "boolean" ? extracted : Boolean(extracted)`;
         } else if (isObjectTarget) {
-          passedExpr = `typeof ${extractionExpr} === "object" && ${extractionExpr} !== null ? ${extractionExpr} : {}`;
-        } else {
-          passedExpr = `typeof ${extractionExpr} === "string" ? ${extractionExpr} : (${extractionExpr} !== null && ${extractionExpr} !== undefined ? String(${extractionExpr}) : "")`;
+          passedExpr = `typeof extracted === "object" && extracted !== null ? extracted : {}`;
         }
 
-        postTrigger += `  if (${resSourceExpr}) {\n    ${storeHookName}.getState().${storeActionName}(${passedExpr});\n  }\n`;
+        postTrigger += `  if (${resSourceExpr}) {\n    const extracted = ${extractionExpr};\n    ${storeHookName}.getState().${storeActionName}(${passedExpr});\n  }\n`;
         return;
       }
 
@@ -343,14 +329,7 @@ export function generateSimpleButtonEventTemplate({
             return `${fieldName}: resData?.${chain}`;
           });
         if (mappedEntries.length > 0) {
-          postTrigger += `      if (${resSourceExpr}) {
-        const rawRes = ${resSourceExpr};
-        const resData =
-          rawRes && typeof rawRes === "object" && "data" in rawRes && rawRes.data !== undefined
-            ? rawRes.data
-            : rawRes;
-        ${storeHookName}.getState().populate({ ${mappedEntries.join(", ")} });
-      }\n`;
+          postTrigger += `  if (${resSourceExpr}) {\n    ${storeHookName}.getState().populate({ ${mappedEntries.join(", ")} });\n  }\n`;
           return;
         }
       }
@@ -361,14 +340,7 @@ export function generateSimpleButtonEventTemplate({
           const chain = path.trim().split(".").map((p, i) => (i === 0 ? p : `?.${p}`)).join("");
           return `resData?.${chain}`;
         });
-        postTrigger += `      if (${resSourceExpr}) {
-        const rawRes = ${resSourceExpr};
-        const resData =
-          rawRes && typeof rawRes === "object" && "data" in rawRes && rawRes.data !== undefined
-            ? rawRes.data
-            : rawRes;
-        ${storeHookName}.getState().${storeActionName}(${paramArgs.join(", ")});
-      }\n`;
+        postTrigger += `  if (${resSourceExpr}) {\n    ${storeHookName}.getState().${storeActionName}(${paramArgs.join(", ")});\n  }\n`;
         return;
       }
 
@@ -403,7 +375,7 @@ export function generateSimpleButtonEventTemplate({
   return `"use client";
 
 import React, { useState } from "react";
-${navImportLines}${storeImports}${transformerImportLines}${authImports.importStatement}${libImports}import { Button } from "@workspace/ui/components/button";
+${navImportLines}${storeImports}${transformerImportLines}${authImports.importStatement}${libImports}${hasApiUrl ? `import { executeApiAction } from "@/lib/api-client";\n` : ""}import { Button } from "@workspace/ui/components/button";
 ${typeDefs.join("\n\n")}
 
 export interface ${componentName}ActionContext {
@@ -416,19 +388,8 @@ export interface ${componentName}ActionContext {
 export async function handle${componentName}(ctx: ${componentName}ActionContext = {}) {
   const onTrigger = ctx.onTrigger;
 ${navResult.needsUseRouter || authReqs.needsUseRouter ? `  const routerContext = ctx.router;\n  const router = { push: (url: string) => { if (routerContext) { routerContext.push(url); } else if (typeof window !== "undefined") { window.location.href = url; } }, replace: (url: string) => { if (routerContext?.replace) { routerContext.replace(url); } else if (typeof window !== "undefined") { window.location.replace(url); } } };\n` : ""}${transImports.needsUseParams || navResult.needsUseParams ? `  const routeParams = ctx.routeParams;\n` : ""}${transImports.needsUseSearchParams || navResult.needsUseSearchParams ? `  const routeSearchParams = ctx.routeSearchParams;\n` : ""}
-${urlInfo.baseUrlDeclaration ? `  ${urlInfo.baseUrlDeclaration}\n` : ""}${preAuthCode}${preStepsCode}${storeSnippet.preTrigger}  const triggerResult = await onTrigger?.(
-    "${eventName}",
-    "${eventType}",
-    ${urlInfo.urlExpression},
-    "${upperMethod}",
-    ${Boolean(requireAuth)},
-  );
-  const resData =
-    triggerResult && typeof triggerResult === "object" && "data" in triggerResult && triggerResult.data !== undefined
-      ? triggerResult.data
-      : triggerResult;
-${postAuthCode}${postStepsCode}${storeSnippet.postTrigger}${navResult.navigationCode ? `${navResult.navigationCode}\n` : ""}  return resData;
-}
+${urlInfo.baseUrlDeclaration ? `  ${urlInfo.baseUrlDeclaration}\n` : ""}${preAuthCode}${preStepsCode}${storeSnippet.preTrigger}${hasApiUrl ? `  const result = await executeApiAction<${hasEndpointLink ? `${componentName}Response` : "unknown"}>({\n    eventName: "${eventName}",\n    eventType: "${eventType}",\n    url: ${urlInfo.urlExpression},\n    method: "${upperMethod}",\n    requireAuth: ${Boolean(requireAuth)},\n  });\n  const resData = result.data;\n  await onTrigger?.(\n    "${eventName}",\n    "${eventType}",\n    ${urlInfo.urlExpression},\n    "${upperMethod}",\n    ${Boolean(requireAuth)},\n  );\n` : ""}
+${postAuthCode}${postStepsCode}${storeSnippet.postTrigger}${navResult.navigationCode ? `${navResult.navigationCode}\n` : ""}${hasApiUrl ? "  return resData;\n" : ""}}
 
 export function ${componentName}({ onTrigger }: ${componentName}Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);

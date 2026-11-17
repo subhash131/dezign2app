@@ -102,7 +102,7 @@ export const ServiceConfig: React.FC<ServiceConfigProps> = ({ id, nodeId }) => {
     ? [
         { name: "@workspace/types", version: "workspace:*", reason: "Shared API & Schema contracts" },
         { name: "@workspace/logger", version: "workspace:*", reason: "Structured logging" },
-        { name: "next", version: "^16.0.0", reason: "Next.js App Router framework" },
+        { name: "next", version: "16.4.6", reason: "Next.js App Router framework" },
         { name: "react", version: "^19.0.0", reason: "React runtime" },
         { name: "react-dom", version: "^19.0.0", reason: "React DOM runtime" },
         { name: "zod", version: "^3.24.2", reason: "Request/Response validation" },

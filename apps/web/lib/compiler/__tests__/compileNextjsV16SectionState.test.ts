@@ -1226,7 +1226,7 @@ describe("compileNextjsV16SectionState", () => {
     expect(code).toContain('onChange={(e) => setSearchQuery(e.target.value)}');
 
     // 5. Primary UI: Button triggering action directly
-    expect(code).toContain('onClick={() => onTrigger?.("searchProducts", "click", "/api/products/search", "POST")}');
+    expect(code).toMatch(/onClick=\{async \(\) => \{ await handleSearchproductsAction\(|\(\) => onTrigger\?\.\("searchProducts"/);
     expect(code).toContain('>Search Now</Button>');
 
     // 6. Suppressed: NO duplicate standalone <SearchProductsAction />
@@ -1333,7 +1333,7 @@ describe("compileNextjsV16SectionState", () => {
     expect(code).toContain("onCheckedChange={(checked) => setSmsAlerts(Boolean(checked))}");
 
     // 4. Action button inside card
-    expect(code).toContain('onClick={() => onTrigger?.("saveSettings", "click", "/api/settings", "PUT")}');
+    expect(code).toMatch(/onClick=\{async \(\) => \{ await handleSavesettingsAction\(|\(\) => onTrigger\?\.\("saveSettings"/);
     expect(code).toContain('>Save Changes</Button>');
 
     // 5. Zero duplicate action imports or standalone buttons
