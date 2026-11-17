@@ -1347,5 +1347,46 @@ describe("LangGraph Invoke Pipeline Step Compiler", () => {
       expect(code).toContain("const aiAgentResult =");
       expect(code).toContain("const langGraphAgentResult =");
     });
+
+    it("renders pipeline with two streaming steps where only the last step ends the response", () => {
+      const step1: PipelineStep = {
+        id: "step-stream-1",
+        name: "AI Agent",
+        type: "langgraph_invoke",
+        langGraphStreamingEnabled: true,
+        langGraphStreamingProtocol: "sse",
+        clientDeliveryEventName: "agent1_stream",
+        clientDeliveryTargetPageId: "page-1",
+        outputVariable: "streamResult1",
+      };
+
+      const step2: PipelineStep = {
+        id: "step-stream-2",
+        name: "LangGraph Agent",
+        type: "langgraph_invoke",
+        langGraphStreamingEnabled: true,
+        langGraphStreamingProtocol: "sse",
+        clientDeliveryEventName: "agent2_stream",
+        clientDeliveryTargetPageId: "page-2",
+        outputVariable: "streamResult2",
+      };
+
+      const lines = renderPipeline([step1, step2], "body");
+      const code = lines.join("\n");
+
+      // Both should guard headers
+      expect(code).toContain("if (!res.headersSent) {");
+
+      // Step 1 broadcasts with agent1_stream
+      expect(code).toContain('sseBroadcast("agent1_stream"');
+
+      // Step 2 broadcasts with agent2_stream
+      expect(code).toContain('sseBroadcast("agent2_stream"');
+
+      // Only 1 res.end() call in the entire pipeline, after the final stream finishes
+      const endMatches = code.match(/res\.end\(\);/g);
+      expect(endMatches).toBeDefined();
+      expect(endMatches?.length).toBe(1);
+    });
   });
 });

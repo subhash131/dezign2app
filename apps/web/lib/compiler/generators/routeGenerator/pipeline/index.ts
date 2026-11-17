@@ -222,13 +222,15 @@ export function renderPipeline(
     allLines.push("");
   }
 
-  const hasStreaming = sanitizedSteps.some(
+  const streamingSteps = sanitizedSteps.filter(
     (s) =>
       s.type === "langgraph_invoke" &&
       s.langGraphStreamingEnabled &&
       (!s.langGraphStreamingProtocol || s.langGraphStreamingProtocol === "sse" || s.langGraphStreamingProtocol === "raw") &&
       s.enabled !== false,
   );
+  const hasStreaming = streamingSteps.length > 0;
+  const lastStreamingStepId = streamingSteps[streamingSteps.length - 1]?.id;
 
   for (const step of sanitizedSteps) {
     if (step.enabled === false) continue;
@@ -236,6 +238,8 @@ export function renderPipeline(
     // and terminates the HTTP response via res.write / res.end. Any trailing return_response
     // step must be skipped to avoid ERR_HTTP_HEADERS_SENT ("Cannot set headers after they are sent to the client").
     if (hasStreaming && step.type === "return_response") continue;
+
+    ctx.isLastStreamingStep = streamingSteps.length > 0 ? step.id === lastStreamingStepId : true;
 
     allLines.push(`// --- Pipeline Step: ${step.name} ---`);
     const stepLines = renderPipelineStep(step, ctx);

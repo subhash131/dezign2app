@@ -211,18 +211,24 @@ export const PushToClientStepSection: React.FC<PushToClientStepSectionProps> = (
     ? `endpoint-out-${serviceNodeId}`
     : undefined;
 
-  const connectedEdge = edges.find(
-    (e) =>
-      e.source === serviceNodeId &&
-      (sourceHandle ? e.sourceHandle === sourceHandle || !e.sourceHandle : true) &&
-      nodes.some((n) => n.id === e.target && n.type === "page_ref"),
-  );
-
-  const connectedPageRefNode = connectedEdge
-    ? nodes.find((n) => n.id === connectedEdge.target && n.type === "page_ref")
-    : step.clientDeliveryPageRefNodeId
-    ? nodes.find((n) => n.id === step.clientDeliveryPageRefNodeId && n.type === "page_ref")
-    : null;
+  const connectedPageRefNode =
+    (step.clientDeliveryPageRefNodeId
+      ? nodes.find((n) => n.id === step.clientDeliveryPageRefNodeId && n.type === "page_ref")
+      : null) ||
+    (() => {
+      const edge = edges.find(
+        (e) =>
+          e.source === serviceNodeId &&
+          (sourceHandle ? e.sourceHandle === sourceHandle || !e.sourceHandle : true) &&
+          nodes.some(
+            (n) =>
+              n.id === e.target &&
+              n.type === "page_ref" &&
+              (!targetPageId || n.data?.targetPageId === targetPageId || n.data?.pageRefId === targetPageId),
+          ),
+      );
+      return edge ? nodes.find((n) => n.id === edge.target && n.type === "page_ref") : null;
+    })();
 
   const handleSpawnPageRefNode = () => {
     if (!serviceNodeId) return;

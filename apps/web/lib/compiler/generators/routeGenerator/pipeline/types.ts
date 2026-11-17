@@ -32,5 +32,7 @@ export interface PipelineRenderContext {
   allNodes?: BackendNode[];
   /** Set of variable identifiers declared in this scope to prevent redeclaration */
   declaredVars?: Set<string>;
+  /** Whether this is the final streaming step in the pipeline (controls closing res.end) */
+  isLastStreamingStep?: boolean;
 }
 

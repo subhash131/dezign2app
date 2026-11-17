@@ -280,5 +280,142 @@ describe("compileWebPageNodes Realtime SSE generation", () => {
     // Verify useEffect re-subscribes when route params or search params change
     expect(code).toContain("}, [routeParams, routeSearchParams]);");
   });
+
+  it("routes two LangGraph streaming steps in the same endpoint to their respective different pages", () => {
+    const page1Node: BackendNode = {
+      id: "node-page-1",
+      type: "webPage",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "/agent-one",
+        appSlug: "ai-app",
+      },
+    };
+
+    const page2Node: BackendNode = {
+      id: "node-page-2",
+      type: "webPage",
+      position: { x: 0, y: 200 },
+      fractionalIndex: "a1",
+      data: {
+        label: "/agent-two",
+        appSlug: "ai-app",
+      },
+    };
+
+    const pageRef1: BackendNode = {
+      id: "node-page-ref-1",
+      type: "page_ref",
+      position: { x: 700, y: 0 },
+      fractionalIndex: "a2",
+      data: {
+        label: "Ref: /agent-one",
+        targetPageId: "node-page-1",
+      },
+    };
+
+    const pageRef2: BackendNode = {
+      id: "node-page-ref-2",
+      type: "page_ref",
+      position: { x: 700, y: 200 },
+      fractionalIndex: "a3",
+      data: {
+        label: "Ref: /agent-two",
+        targetPageId: "node-page-2",
+      },
+    };
+
+    const serviceNode: BackendNode = {
+      id: "node-service-ai",
+      type: "service",
+      position: { x: 400, y: 100 },
+      fractionalIndex: "a4",
+      data: {
+        label: "AiService",
+        port: "8080",
+      },
+    };
+
+    const endpoints: (Endpoint & { nodeId: string })[] = [
+      {
+        id: "ep-send-msg",
+        name: "sendMessage",
+        type: "POST",
+        nodeId: "node-service-ai",
+        pipelineSteps: [
+          {
+            id: "step-agent-1",
+            name: "First Agent",
+            type: "langgraph_invoke",
+            enabled: true,
+            langGraphStreamingEnabled: true,
+            langGraphStreamingProtocol: "sse",
+            clientDeliveryEventName: "agent_one_stream",
+            clientDeliveryTargetPageId: "node-page-1",
+            clientDeliveryPageRefNodeId: "node-page-ref-1",
+          },
+          {
+            id: "step-agent-2",
+            name: "Second Agent",
+            type: "langgraph_invoke",
+            enabled: true,
+            langGraphStreamingEnabled: true,
+            langGraphStreamingProtocol: "sse",
+            clientDeliveryEventName: "agent_two_stream",
+            clientDeliveryTargetPageId: "node-page-2",
+            clientDeliveryPageRefNodeId: "node-page-ref-2",
+          },
+        ],
+      },
+    ];
+
+    const edges: BackendEdge[] = [
+      {
+        id: "edge-ep-to-ref1",
+        source: "node-service-ai",
+        sourceHandle: "endpoint-out-ep-send-msg",
+        target: "node-page-ref-1",
+        targetHandle: "page-ref-in",
+        type: "connection",
+        fractionalIndex: "a0",
+      },
+      {
+        id: "edge-ep-to-ref2",
+        source: "node-service-ai",
+        sourceHandle: "endpoint-out-ep-send-msg",
+        target: "node-page-ref-2",
+        targetHandle: "page-ref-in",
+        type: "connection",
+        fractionalIndex: "a1",
+      },
+    ];
+
+    const result = compileWebPageNodes(
+      [page1Node, page2Node],
+      endpoints,
+      [],
+      [page1Node, page2Node, serviceNode, pageRef1, pageRef2],
+      edges,
+      "AI App",
+    );
+
+    const page1File = result.files.find((f) => f.filename.includes("agent-one") && f.filename.includes("page.tsx"));
+    const page2File = result.files.find((f) => f.filename.includes("agent-two") && f.filename.includes("page.tsx"));
+
+    expect(page1File).toBeDefined();
+    expect(page2File).toBeDefined();
+
+    const page1Code = page1File!.content;
+    const page2Code = page2File!.content;
+
+    // Page 1 receives agent_one_stream, but NOT agent_two_stream
+    expect(page1Code).toContain('es.addEventListener("agent_one_stream"');
+    expect(page1Code).not.toContain('es.addEventListener("agent_two_stream"');
+
+    // Page 2 receives agent_two_stream, but NOT agent_one_stream
+    expect(page2Code).toContain('es.addEventListener("agent_two_stream"');
+    expect(page2Code).not.toContain('es.addEventListener("agent_one_stream"');
+  });
 });
 

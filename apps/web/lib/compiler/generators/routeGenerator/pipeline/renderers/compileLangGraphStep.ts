@@ -467,21 +467,26 @@ export function renderLangGraphInvokeStep(
       }
       rawLines.push(`const ${stateVar} = ${stateInit};`);
       if (isRaw) {
-        rawLines.push(`res.setHeader("Content-Type", "text/plain; charset=utf-8");`);
-        rawLines.push(`res.setHeader("Cache-Control", "no-cache");`);
-        rawLines.push(`res.setHeader("Transfer-Encoding", "chunked");`);
+        rawLines.push(`if (!res.headersSent) {`);
+        rawLines.push(`  res.setHeader("Content-Type", "text/plain; charset=utf-8");`);
+        rawLines.push(`  res.setHeader("Cache-Control", "no-cache");`);
+        rawLines.push(`  res.setHeader("Transfer-Encoding", "chunked");`);
+        rawLines.push(`  res.setHeader("X-Accel-Buffering", "no");`);
+        rawLines.push(`}`);
       } else {
-        rawLines.push(`res.setHeader("Content-Type", "text/event-stream");`);
-        rawLines.push(`res.setHeader("Cache-Control", "no-cache");`);
-        rawLines.push(`res.setHeader("Connection", "keep-alive");`);
+        rawLines.push(`if (!res.headersSent) {`);
+        rawLines.push(`  res.setHeader("Content-Type", "text/event-stream");`);
+        rawLines.push(`  res.setHeader("Cache-Control", "no-cache");`);
+        rawLines.push(`  res.setHeader("Connection", "keep-alive");`);
+        rawLines.push(`  res.setHeader("X-Accel-Buffering", "no");`);
+        rawLines.push(`}`);
       }
-      rawLines.push(`res.setHeader("X-Accel-Buffering", "no");`);
       if (threadIdExpr) {
-        rawLines.push(`if (${threadIdExpr} && typeof res.setHeader === "function") {`);
+        rawLines.push(`if (${threadIdExpr} && typeof res.setHeader === "function" && !res.headersSent) {`);
         rawLines.push(`  res.setHeader("X-Thread-Id", String(${threadIdExpr}));`);
         rawLines.push(`}`);
       }
-      rawLines.push(`if (typeof res.flushHeaders === "function") {`);
+      rawLines.push(`if (!res.headersSent && typeof res.flushHeaders === "function") {`);
       rawLines.push(`  res.flushHeaders();`);
       rawLines.push(`}`);
       if (!ctx.declaredVars?.has("canFlush")) {
@@ -627,8 +632,12 @@ export function renderLangGraphInvokeStep(
         rawLines.push(`  res.write("${sseEvt}data: [DONE]\\n\\n");`);
         rawLines.push(`  sseBroadcast(${JSON.stringify(sseEventName)}, "[DONE]"${sseChannelArg});`);
       }
+      if (ctx.isLastStreamingStep !== false) {
+        rawLines.push(
+          `  res.end();`,
+        );
+      }
       rawLines.push(
-        `  res.end();`,
         `}`,
       );
       if (outputVariable) {

@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { Handle, Position, NodeProps } from "@xyflow/react";
-import { Compass, Globe, Trash, AlertTriangle, LayoutTemplate } from "lucide-react";
+import { Compass, Globe, Trash, AlertTriangle, LayoutTemplate, Bot, Radio } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
 import { cn } from "@workspace/ui/lib/utils";
 import {
@@ -47,6 +47,9 @@ export const PageRefNode = ({
   const requestDeleteNode = useBackendCanvasStore((s) => s.requestDeleteNode);
   const edges = useBackendCanvasStore((s) => s.edges);
   const nodes = useBackendCanvasStore((s) => s.nodes);
+  const endpoints = useBackendCanvasStore((s) => s.endpoints);
+  const events = useBackendCanvasStore((s) => s.events);
+  const setActiveConfigItem = useBackendCanvasStore((s) => s.setActiveConfigItem);
 
   const simulation = useSimulationNodeState(id);
   const borderClass = getSimulationNodeBorderClass(
@@ -74,6 +77,147 @@ export const PageRefNode = ({
     isSelectedLayout && selectedPage
       ? getLayoutNodeDetails(selectedPage, nodes, edges)
       : null;
+
+  // Derive which pipeline steps are linked to this PageRef/LayoutRef node
+  const linkedSteps = useMemo(() => {
+    const list: Array<{
+      stepId: string;
+      stepName: string;
+      stepType: string;
+      stepIndex: number;
+      eventName?: string;
+      protocol: string;
+      sourceId: string;
+      sourceNodeId: string;
+      sourceName: string;
+      sourceType: "endpoint" | "event";
+      sourceMethod?: string;
+      serviceLabel?: string;
+    }> = [];
+
+    // Incoming edges to this page_ref / layout_ref node
+    const incomingEdges = edges.filter((e) => e.target === id);
+
+    endpoints.forEach((ep) => {
+      const incomingEdgesFromThisEp = incomingEdges.filter(
+        (e) =>
+          e.source === ep.nodeId &&
+          (!e.sourceHandle ||
+            e.sourceHandle === `endpoint-out-${ep.id}` ||
+            e.sourceHandle.includes(ep.id)),
+      );
+      const hasEdge = incomingEdgesFromThisEp.length > 0;
+      if (!hasEdge && !ep.pipelineSteps?.some((s) => s.clientDeliveryPageRefNodeId === id)) {
+        return;
+      }
+
+      // Check how many page_ref nodes this endpoint connects to
+      const allEdgesForEp = edges.filter(
+        (e) =>
+          e.source === ep.nodeId &&
+          (!e.sourceHandle ||
+            e.sourceHandle === `endpoint-out-${ep.id}` ||
+            e.sourceHandle.includes(ep.id)),
+      );
+      const isSolePageRefForEp = allEdgesForEp.length === 1;
+
+      const serviceNode = nodes.find((n) => n.id === ep.nodeId);
+      const serviceLabel = serviceNode?.data?.label || "Service";
+
+      (ep.pipelineSteps || []).forEach((step, idx) => {
+        const isExplicitLink = step.clientDeliveryPageRefNodeId === id;
+        const matchesTarget =
+          (selectedTargetId && step.clientDeliveryTargetPageId === selectedTargetId) ||
+          (data.targetPageId && step.clientDeliveryTargetPageId === data.targetPageId);
+        const isFallbackLink =
+          !step.clientDeliveryPageRefNodeId &&
+          hasEdge &&
+          (matchesTarget || (!step.clientDeliveryTargetPageId && isSolePageRefForEp));
+
+        const isLg =
+          step.type === "langgraph_invoke" &&
+          Boolean(step.langGraphStreamingEnabled) &&
+          (step.langGraphStreamingProtocol === "sse" ||
+            step.langGraphStreamingProtocol === "websocket" ||
+            !step.langGraphStreamingProtocol);
+        const isPush = step.type === "push_to_client";
+
+        if ((isLg || isPush) && (isExplicitLink || isFallbackLink)) {
+          list.push({
+            stepId: step.id,
+            stepName: step.name || (isLg ? "LangGraph Agent" : "Push to Client"),
+            stepType: step.type,
+            stepIndex: idx + 1,
+            eventName: step.clientDeliveryEventName,
+            protocol: isLg
+              ? (step.langGraphStreamingProtocol || "sse").toUpperCase()
+              : (step.clientDeliveryProtocol || "SSE"),
+            sourceId: ep.id,
+            sourceNodeId: ep.nodeId,
+            sourceName: ep.name || "Endpoint",
+            sourceType: "endpoint",
+            sourceMethod: ep.type || "POST",
+            serviceLabel,
+          });
+        }
+      });
+    });
+
+    events.forEach((ev) => {
+      const incomingEdgesFromThisEv = incomingEdges.filter(
+        (e) =>
+          e.source === ev.nodeId &&
+          (!e.sourceHandle ||
+            e.sourceHandle === `consumedEvents-out-${ev.id}` ||
+            e.sourceHandle.includes(ev.id)),
+      );
+      const hasEdge = incomingEdgesFromThisEv.length > 0;
+      if (!hasEdge && !ev.pipelineSteps?.some((s) => s.clientDeliveryPageRefNodeId === id)) {
+        return;
+      }
+
+      const allEdgesForEv = edges.filter(
+        (e) =>
+          e.source === ev.nodeId &&
+          (!e.sourceHandle ||
+            e.sourceHandle === `consumedEvents-out-${ev.id}` ||
+            e.sourceHandle.includes(ev.id)),
+      );
+      const isSolePageRefForEv = allEdgesForEv.length === 1;
+
+      const serviceNode = nodes.find((n) => n.id === ev.nodeId);
+      const serviceLabel = serviceNode?.data?.label || "Service";
+
+      (ev.pipelineSteps || []).forEach((step, idx) => {
+        const isExplicitLink = step.clientDeliveryPageRefNodeId === id;
+        const matchesTarget =
+          (selectedTargetId && step.clientDeliveryTargetPageId === selectedTargetId) ||
+          (data.targetPageId && step.clientDeliveryTargetPageId === data.targetPageId);
+        const isFallbackLink =
+          !step.clientDeliveryPageRefNodeId &&
+          hasEdge &&
+          (matchesTarget || (!step.clientDeliveryTargetPageId && isSolePageRefForEv));
+
+        if (step.type === "push_to_client" && (isExplicitLink || isFallbackLink)) {
+          list.push({
+            stepId: step.id,
+            stepName: step.name || "Push to Client",
+            stepType: step.type,
+            stepIndex: idx + 1,
+            eventName: step.clientDeliveryEventName,
+            protocol: step.clientDeliveryProtocol || "SSE",
+            sourceId: ev.id,
+            sourceNodeId: ev.nodeId,
+            sourceName: ev.name || "Consumer",
+            sourceType: "event",
+            serviceLabel,
+          });
+        }
+      });
+    });
+
+    return list;
+  }, [id, edges, endpoints, events, nodes, selectedTargetId, data.targetPageId]);
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -116,7 +260,7 @@ export const PageRefNode = ({
             const updatedSteps = ep.pipelineSteps.map((s) => {
               if (
                 (s.type === "push_to_client" || (s.type === "langgraph_invoke" && s.langGraphStreamingEnabled)) &&
-                (s.clientDeliveryPageRefNodeId === id || !s.clientDeliveryPageRefNodeId)
+                s.clientDeliveryPageRefNodeId === id
               ) {
                 const prevTargetPageId = s.clientDeliveryTargetPageId;
                 if (prevTargetPageId && prevTargetPageId !== resolvedPageId) {
@@ -150,7 +294,7 @@ export const PageRefNode = ({
           const hasPushStep = ev.pipelineSteps.some((s) => s.type === "push_to_client");
           if (hasPushStep) {
             const updatedSteps = ev.pipelineSteps.map((s) => {
-              if (s.type === "push_to_client" && (s.clientDeliveryPageRefNodeId === id || !s.clientDeliveryPageRefNodeId)) {
+              if (s.type === "push_to_client" && s.clientDeliveryPageRefNodeId === id) {
                 const prevTargetPageId = s.clientDeliveryTargetPageId;
                 if (prevTargetPageId && prevTargetPageId !== resolvedPageId) {
                   removeDerivedConnection(store, prevTargetPageId, s.id);
@@ -365,6 +509,41 @@ export const PageRefNode = ({
             </SelectContent>
           </Select>
         </div>
+
+        {linkedSteps.length > 0 && (
+          <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+            {linkedSteps.map((step) => (
+              <span
+                key={`${step.sourceId}-${step.stepId}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (step.sourceType === "endpoint") {
+                    setActiveConfigItem({
+                      type: "endpoint",
+                      id: step.sourceId,
+                      nodeId: step.sourceNodeId,
+                    });
+                  } else {
+                    setActiveConfigItem({
+                      type: "event",
+                      id: step.sourceId,
+                      nodeId: step.sourceNodeId,
+                    });
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[9.5px] font-medium bg-secondary/80 hover:bg-secondary text-foreground/85 hover:text-foreground border border-border/70 hover:border-border transition-colors cursor-pointer truncate max-w-full"
+                title={`Click to open Step ${step.stepIndex} (${step.stepName}) in config sidebar`}
+              >
+                {step.stepType === "langgraph_invoke" ? (
+                  <Bot size={11} className="text-muted-foreground shrink-0" />
+                ) : (
+                  <Radio size={11} className="text-muted-foreground shrink-0" />
+                )}
+                <span className="truncate">Step {step.stepIndex}: {step.stepName}</span>
+              </span>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

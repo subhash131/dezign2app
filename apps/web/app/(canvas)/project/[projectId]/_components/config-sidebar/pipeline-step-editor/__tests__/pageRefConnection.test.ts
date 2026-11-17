@@ -214,4 +214,97 @@ describe("pipeline-step-editor: PageRefNode and Edge Synchronization", () => {
     const pageRefNode = state.nodes.find((n) => n.id === pageRefId);
     expect(pageRefNode).toBeDefined();
   });
+
+  it("supports two streaming steps in the same endpoint targeting different pages without hijacking", () => {
+    // Step 1 targets /dashboard (webPageId)
+    const step1Result = ensurePageRefConnection({
+      targetPageId: webPageId,
+      serviceNodeId,
+      endpointId,
+      stepId: "step-1",
+    });
+    expect(step1Result).toBeDefined();
+    const step1RefId = step1Result!.pageRefNodeId;
+
+    // Simulate Step 1 saved in endpoint pipelineSteps
+    useBackendCanvasStore.setState({
+      endpoints: [
+        {
+          id: endpointId,
+          nodeId: serviceNodeId,
+          name: "Send Message",
+          type: "POST",
+          pipelineSteps: [
+            {
+              id: "step-1",
+              name: "AI Agent 1",
+              type: "langgraph_invoke",
+              clientDeliveryTargetPageId: webPageId,
+              clientDeliveryPageRefNodeId: step1RefId,
+              langGraphStreamingEnabled: true,
+            },
+          ],
+        },
+      ],
+    });
+
+    // Step 2 targets /profile (otherWebPageId)
+    const step2Result = ensurePageRefConnection({
+      targetPageId: otherWebPageId,
+      serviceNodeId,
+      endpointId,
+      stepId: "step-2",
+    });
+    expect(step2Result).toBeDefined();
+    const step2RefId = step2Result!.pageRefNodeId;
+
+    // Step 2 MUST get a distinct page_ref node, not overwrite Step 1's node!
+    expect(step2RefId).not.toBe(step1RefId);
+
+    const state = useBackendCanvasStore.getState();
+    const step1Node = state.nodes.find((n) => n.id === step1RefId);
+    const step2Node = state.nodes.find((n) => n.id === step2RefId);
+
+    expect(step1Node).toBeDefined();
+    expect(step1Node?.data?.targetPageId).toBe(webPageId);
+    expect(step1Node?.data?.label).toBe("Ref: /dashboard");
+
+    expect(step2Node).toBeDefined();
+    expect(step2Node?.data?.targetPageId).toBe(otherWebPageId);
+    expect(step2Node?.data?.label).toBe("Ref: /profile");
+
+    // Both edges must exist from this endpoint to both page_ref nodes
+    const edge1 = state.edges.find(
+      (e) =>
+        e.source === serviceNodeId &&
+        e.target === step1RefId &&
+        e.sourceHandle === `endpoint-out-${endpointId}`,
+    );
+    const edge2 = state.edges.find(
+      (e) =>
+        e.source === serviceNodeId &&
+        e.target === step2RefId &&
+        e.sourceHandle === `endpoint-out-${endpointId}`,
+    );
+    expect(edge1).toBeDefined();
+    expect(edge2).toBeDefined();
+  });
+
+  it("shares page_ref node when two steps in the same endpoint target the same page", () => {
+    const step1Result = ensurePageRefConnection({
+      targetPageId: webPageId,
+      serviceNodeId,
+      endpointId,
+      stepId: "step-1",
+    });
+
+    const step2Result = ensurePageRefConnection({
+      targetPageId: webPageId,
+      serviceNodeId,
+      endpointId,
+      stepId: "step-2",
+    });
+
+    expect(step1Result?.pageRefNodeId).toBe(step2Result?.pageRefNodeId);
+  });
 });
