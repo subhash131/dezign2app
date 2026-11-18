@@ -116,7 +116,12 @@ console.log("===================================================================
 const nextBin = path.join(webDir, "node_modules", ".bin", process.platform === "win32" ? "next.cmd" : "next");
 const cmd = fs.existsSync(nextBin) ? nextBin : "next";
 
-const result = spawnSync(cmd, ["build"], {
+const buildArgs = ["build"];
+if (args.includes("--webpack") || process.env.NEXT_USE_WEBPACK === "true") {
+  buildArgs.push("--webpack");
+}
+
+const result = spawnSync(cmd, buildArgs, {
   cwd: webDir,
   stdio: "inherit",
   env: resolvedEnv,

@@ -2,6 +2,8 @@ import vm from "node:vm";
 import type { DatabaseSync } from "node:sqlite";
 import type * as tsType from "typescript";
 
+declare const __non_webpack_require__: typeof require | undefined;
+
 // Lazy-load typescript so execution never crashes if typescript is not bundled in runtime
 let tsModule: typeof tsType | null = null;
 let tsAttempted = false;
@@ -10,8 +12,17 @@ function getTs(): typeof tsType | null {
   if (tsAttempted) return tsModule;
   tsAttempted = true;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    tsModule = require("typescript");
+    const req =
+      typeof __non_webpack_require__ !== "undefined"
+        ? __non_webpack_require__
+        : typeof require !== "undefined"
+          ? require
+          : null;
+    if (req) {
+      const modName = "typescript";
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      tsModule = req(modName);
+    }
   } catch {
     tsModule = null;
   }
