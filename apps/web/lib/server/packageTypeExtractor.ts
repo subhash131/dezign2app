@@ -1,11 +1,38 @@
 import fs from "fs";
 import path from "path";
-import ts from "typescript";
+import type * as tsType from "typescript";
 import type {
   CustomTypeItem,
   CustomTypeField,
   CustomTypeKind,
 } from "@workspace/canvas/types";
+
+declare const __non_webpack_require__: typeof require | undefined;
+
+// Lazy-load typescript dynamically so execution never crashes if typescript is not bundled in runtime (e.g. Cloudflare Workers)
+let _tsModule: typeof tsType | null = null;
+let _tsAttempted = false;
+
+function getTs(): typeof tsType | null {
+  if (_tsAttempted) return _tsModule;
+  _tsAttempted = true;
+  try {
+    const req =
+      typeof __non_webpack_require__ !== "undefined"
+        ? __non_webpack_require__
+        : typeof require !== "undefined"
+          ? require
+          : null;
+    if (req) {
+      const modName = "typescript";
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      _tsModule = req(modName);
+    }
+  } catch {
+    _tsModule = null;
+  }
+  return _tsModule;
+}
 
 export interface PackageExportSymbol {
   name: string;
@@ -536,7 +563,7 @@ function cleanPropertyType(typeString: string): string {
   return trimmed.replace(/\s+/g, " ");
 }
 
-function extractJsDocComment(node: ts.Node, sourceFile: ts.SourceFile): string | undefined {
+function extractJsDocComment(ts: typeof tsType, node: tsType.Node, sourceFile: tsType.SourceFile): string | undefined {
   const fullText = sourceFile.getFullText();
   const ranges = ts.getLeadingCommentRanges(fullText, node.getFullStart());
   if (!ranges || ranges.length === 0) return undefined;
@@ -556,23 +583,24 @@ function extractJsDocComment(node: ts.Node, sourceFile: ts.SourceFile): string |
 }
 
 function extractTypeFromDecl(
-  primaryDecl: ts.Node,
+  ts: typeof tsType,
+  primaryDecl: tsType.Node,
   symName: string,
   trimmedPkg: string,
   seenNames: Set<string>,
-  typeChecker?: ts.TypeChecker,
+  typeChecker?: tsType.TypeChecker,
 ): CustomTypeItem | null {
   // Check for Interface Declaration
   if (ts.isInterfaceDeclaration(primaryDecl)) {
     seenNames.add(symName);
-    const description = extractJsDocComment(primaryDecl, primaryDecl.getSourceFile());
+    const description = extractJsDocComment(ts, primaryDecl, primaryDecl.getSourceFile());
     const fields: CustomTypeField[] = [];
 
     for (const member of primaryDecl.members) {
       if (ts.isPropertySignature(member) && member.name) {
         const propName = member.name.getText(primaryDecl.getSourceFile());
         const rawType = member.type ? member.type.getText(primaryDecl.getSourceFile()) : "string";
-        const propDesc = extractJsDocComment(member, primaryDecl.getSourceFile());
+        const propDesc = extractJsDocComment(ts, member, primaryDecl.getSourceFile());
         const isArray = member.type ? ts.isArrayTypeNode(member.type) : false;
 
         fields.push({
@@ -603,7 +631,7 @@ function extractTypeFromDecl(
   // Check for Type Alias Declaration
   if (ts.isTypeAliasDeclaration(primaryDecl)) {
     seenNames.add(symName);
-    const description = extractJsDocComment(primaryDecl, primaryDecl.getSourceFile());
+    const description = extractJsDocComment(ts, primaryDecl, primaryDecl.getSourceFile());
     const aliasType = primaryDecl.type;
     const rawCode = primaryDecl.getText(primaryDecl.getSourceFile());
 
@@ -614,7 +642,7 @@ function extractTypeFromDecl(
         if (ts.isPropertySignature(member) && member.name) {
           const propName = member.name.getText(primaryDecl.getSourceFile());
           const rawType = member.type ? member.type.getText(primaryDecl.getSourceFile()) : "string";
-          const propDesc = extractJsDocComment(member, primaryDecl.getSourceFile());
+          const propDesc = extractJsDocComment(ts, member, primaryDecl.getSourceFile());
           const isArray = member.type ? ts.isArrayTypeNode(member.type) : false;
 
           fields.push({
@@ -702,7 +730,7 @@ function extractTypeFromDecl(
   // Check for Enum Declaration
   if (ts.isEnumDeclaration(primaryDecl)) {
     seenNames.add(symName);
-    const description = extractJsDocComment(primaryDecl, primaryDecl.getSourceFile());
+    const description = extractJsDocComment(ts, primaryDecl, primaryDecl.getSourceFile());
     const enumValues: string[] = primaryDecl.members.map((m) =>
       m.name.getText(primaryDecl.getSourceFile()),
     );
@@ -724,7 +752,7 @@ function extractTypeFromDecl(
   // Check for Class Declaration (e.g. BaseMessage, HumanMessage, AIMessage from @langchain/core, PostgresSaver)
   if (ts.isClassDeclaration(primaryDecl)) {
     seenNames.add(symName);
-    const description = extractJsDocComment(primaryDecl, primaryDecl.getSourceFile());
+    const description = extractJsDocComment(ts, primaryDecl, primaryDecl.getSourceFile());
     const fields: CustomTypeField[] = [];
     const seenFieldNames = new Set<string>();
 
@@ -751,7 +779,7 @@ function extractTypeFromDecl(
           : typeChecker
             ? typeChecker.typeToString(typeChecker.getTypeAtLocation(member))
             : "string";
-        const propDesc = extractJsDocComment(member, primaryDecl.getSourceFile());
+        const propDesc = extractJsDocComment(ts, member, primaryDecl.getSourceFile());
         const isArray = member.type
           ? ts.isArrayTypeNode(member.type) || rawType.endsWith("[]")
           : rawType.endsWith("[]");
@@ -770,7 +798,7 @@ function extractTypeFromDecl(
     // 2. If typeChecker is available, inspect instance type symbol properties (inherited from base classes like BaseMessage)
     if (typeChecker) {
       try {
-        const sym: ts.Symbol | undefined = primaryDecl.name
+        const sym: tsType.Symbol | undefined = primaryDecl.name
           ? typeChecker.getSymbolAtLocation(primaryDecl.name)
           : typeChecker.getSymbolAtLocation(primaryDecl);
         if (sym) {
@@ -805,7 +833,7 @@ function extractTypeFromDecl(
             seenFieldNames.add(pName);
             const typeStr = typeChecker.typeToString(propTypeObj);
             const pDecl = prop.declarations?.[0];
-            const pDesc = pDecl ? extractJsDocComment(pDecl, pDecl.getSourceFile()) : undefined;
+            const pDesc = pDecl ? extractJsDocComment(ts, pDecl, pDecl.getSourceFile()) : undefined;
 
             fields.push({
               id: `f-${symName}-${pName}`,
@@ -929,6 +957,24 @@ export function extractPackageTypesFromNodeModules(
   }
 
   if (entryFiles.length > 0) {
+    const ts = getTs();
+    if (!ts) {
+      if (trimmedPkg === "uuid") {
+        return {
+          installed: true,
+          pkg: trimmedPkg,
+          version: "native",
+          types: [...UUID_BUILTIN_TYPES],
+          exports: [...UUID_BUILTIN_EXPORTS],
+        };
+      }
+      return {
+        installed: false,
+        pkg: trimmedPkg,
+        types: [],
+        error: `TypeScript runtime compiler is not available in this environment.`,
+      };
+    }
     try {
       const program = ts.createProgram(entryFiles, {
         allowJs: true,
@@ -944,7 +990,7 @@ export function extractPackageTypesFromNodeModules(
         if (!sourceFile) continue;
 
         // Helper to determine kind and signature
-        const recordExportSymbol = (sym: ts.Symbol, name: string, isDefault = false) => {
+        const recordExportSymbol = (sym: tsType.Symbol, name: string, isDefault = false) => {
           if (seenExportNames.has(name) || name.startsWith("_")) return;
           seenExportNames.add(name);
 
@@ -957,7 +1003,7 @@ export function extractPackageTypesFromNodeModules(
 
           const decls = targetSym.declarations;
           const primaryDecl = decls && decls.length > 0 ? decls[0] : undefined;
-          const desc = primaryDecl ? extractJsDocComment(primaryDecl, primaryDecl.getSourceFile()) : undefined;
+          const desc = primaryDecl ? extractJsDocComment(ts, primaryDecl, primaryDecl.getSourceFile()) : undefined;
 
           let kind: PackageExportSymbol["kind"] = "function";
           let signature: string | undefined;
@@ -1025,7 +1071,7 @@ export function extractPackageTypesFromNodeModules(
             if (declarations && declarations.length > 0) {
               const primaryDecl = declarations[0];
               if (primaryDecl) {
-                const item = extractTypeFromDecl(primaryDecl, symName, trimmedPkg, seenNames, typeChecker);
+                const item = extractTypeFromDecl(ts, primaryDecl, symName, trimmedPkg, seenNames, typeChecker);
                 if (item) extractedTypes.push(item);
               }
             }
@@ -1049,7 +1095,7 @@ export function extractPackageTypesFromNodeModules(
               symName !== "default" &&
               !seenNames.has(symName)
             ) {
-              const item = extractTypeFromDecl(stmt, symName, trimmedPkg, seenNames, typeChecker);
+              const item = extractTypeFromDecl(ts, stmt, symName, trimmedPkg, seenNames, typeChecker);
               if (item) extractedTypes.push(item);
             }
           }
@@ -1062,7 +1108,7 @@ export function extractPackageTypesFromNodeModules(
               extractedExports.push({
                 name: fnName,
                 kind: "function",
-                description: extractJsDocComment(stmt, sourceFile),
+                description: extractJsDocComment(ts, stmt, sourceFile),
               });
             }
           }
