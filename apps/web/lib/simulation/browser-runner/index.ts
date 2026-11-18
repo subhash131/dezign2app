@@ -3,6 +3,7 @@ import {
   getLatestBrowserCheckpoint,
   type BrowserCheckpoint,
 } from "../indexedDBCheckpointer";
+import { resolveInputTransition, isTransformerCanvasNode } from "@workspace/canvas";
 import type {
   SimulationTraceEntry,
   SimulationStepLogEntry,
@@ -106,18 +107,103 @@ export async function executeBrowserLangGraph(
     const val = inputValues[inputCh.key];
     if (val !== undefined) {
       const targetStateKey = inputCh.stateChannelKey || inputCh.key;
-      if (targetStateKey === "messages") {
-        const msgs = extractMessages(state[targetStateKey]);
-        if (typeof val === "string" && val.trim()) {
-          state.messages = [
-            ...msgs,
-            { role: "user", content: val.trim() },
-          ];
-        } else if (Array.isArray(val)) {
-          state.messages = [...msgs, ...extractMessages(val)];
+      const targetChannel = stateChannels.find((sc) => sc.key === targetStateKey);
+      const transition = resolveInputTransition(inputCh, targetChannel);
+
+      switch (transition) {
+        case "as_human_message": {
+          const msgs = extractMessages(state[targetStateKey]);
+          if (typeof val === "string" && val.trim()) {
+            state.messages = [
+              ...msgs,
+              { role: "user", content: val.trim() },
+            ];
+          } else if (Array.isArray(val)) {
+            state.messages = [...msgs, ...extractMessages(val)];
+          } else if (val && typeof val === "object") {
+            state.messages = [...msgs, ...extractMessages([val])];
+          }
+          break;
         }
-      } else {
-        state[targetStateKey] = val;
+        case "append_to_list": {
+          const existing = Array.isArray(state[targetStateKey])
+            ? (state[targetStateKey] as unknown[])
+            : [];
+          state[targetStateKey] = Array.isArray(val)
+            ? [...existing, ...val]
+            : [...existing, val];
+          break;
+        }
+        case "merge_object": {
+          const existing =
+            typeof state[targetStateKey] === "object" && state[targetStateKey] !== null
+              ? (state[targetStateKey] as Record<string, unknown>)
+              : {};
+          state[targetStateKey] = {
+            ...existing,
+            ...(typeof val === "object" && val !== null
+              ? (val as Record<string, unknown>)
+              : {}),
+          };
+          break;
+        }
+        case "parse_json": {
+          if (typeof val === "string") {
+            try {
+              state[targetStateKey] = JSON.parse(val);
+            } catch {
+              state[targetStateKey] = val;
+            }
+          } else {
+            state[targetStateKey] = val;
+          }
+          break;
+        }
+        case "transformer": {
+          // If transformer is referenced, check for matching transformer node code
+          const tNode = nodes.find(
+            (n) =>
+              isTransformerCanvasNode(n) &&
+              (n.data.functionName === inputCh.transformerRef ||
+                n.data.label === inputCh.transformerRef ||
+                n.id === inputCh.transformerRef),
+          );
+          const tCode = tNode && isTransformerCanvasNode(tNode) ? tNode.data.code : undefined;
+          if (tCode && typeof tCode === "string" && tCode.trim()) {
+            try {
+              const fn = new Function("input", "state", tCode);
+              const transformed = fn(val, state);
+              if (targetStateKey === "messages") {
+                const msgs = extractMessages(state.messages);
+                state.messages = Array.isArray(transformed)
+                  ? [...msgs, ...extractMessages(transformed)]
+                  : [...msgs, { role: "user", content: String(transformed) }];
+              } else {
+                state[targetStateKey] = transformed;
+              }
+            } catch (err) {
+              console.warn(`[sim] Error in transformer "${inputCh.transformerRef}":`, err);
+              state[targetStateKey] = val;
+            }
+          } else {
+            state[targetStateKey] = val;
+          }
+          break;
+        }
+        case "direct":
+        default: {
+          if (targetStateKey === "messages") {
+            const msgs = extractMessages(state.messages);
+            if (Array.isArray(val)) {
+              state.messages = [...msgs, ...extractMessages(val)];
+            } else if (typeof val === "string" && val.trim()) {
+              state.messages = [...msgs, { role: "user", content: val.trim() }];
+            }
+          } else {
+            state[targetStateKey] = val;
+          }
+          break;
+        }
       }
     }
   }

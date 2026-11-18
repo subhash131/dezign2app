@@ -13,7 +13,7 @@ import { useSimulationStore } from "@/lib/stores/simulationStore";
 import { useSidebarStore, getEffectiveConfigSidebarWidth } from "@/lib/stores/sidebarStore";
 import { nodeTypes } from "../backend-nodes/Nodes";
 import { canvasEdgeTypes } from "../backend-nodes/CustomEdges";
-import { isValidConnection, WebAppZone, PageSection } from "@workspace/canvas";
+import { isValidConnection, WebAppZone, PageSection, type BackendEdge } from "@workspace/canvas";
 import { useCanvasHandlers } from "../hooks/useCanvasHandlers";
 import { useGraphAutoLayout, getGraphFlowNodes } from "../hooks/useAutoLayout";
 import { useAutoLayoutShortcut } from "../hooks/useAutoLayoutShortcut";
@@ -96,6 +96,7 @@ export function GraphView({ projectId, projectName }: GraphViewProps) {
 
   const simulationStatus = useSimulationStore((s) => s.status);
   const activeNodeIds = useSimulationStore((s) => s.activeNodeIds);
+  const activeEdgeIds = useSimulationStore((s) => s.activeEdgeIds);
   const currentNodeId = useSimulationStore((s) => s.currentNodeId);
   const simulationTrace = useSimulationStore((s) => s.trace);
   const simulationActiveIndex = useSimulationStore((s) => s.activeIndex);
@@ -341,18 +342,126 @@ export function GraphView({ projectId, projectName }: GraphViewProps) {
     });
   }, [edges, graphNodeIds, validEndpointKeys, validEventKeys, validWebPageActionKeys, validWebPageRealtimeKeys, webPageNodeIdsSet]);
 
+  const selectedNodeIdSet = React.useMemo(() => {
+    const set = new Set<string>();
+    for (const n of nodes) {
+      if (n.selected) set.add(n.id);
+    }
+    const actId = activeConfigItem?.nodeId || activeConfigItem?.id;
+    if (actId) set.add(actId);
+    return set;
+  }, [nodes, activeConfigItem]);
+
+  const activeUpstreamSourceIds = React.useMemo(() => {
+    const actId = activeConfigItem?.nodeId || activeConfigItem?.id;
+    if (!actId) return new Set<string>();
+    const sources = new Set<string>();
+    for (const e of edges) {
+      if (e.source === actId) {
+        sources.add(e.target);
+      }
+    }
+    return sources;
+  }, [edges, activeConfigItem]);
+
   const visualGraphEdges = React.useMemo(() => {
-    if (webPageNodeIdsSet.size === 0) return graphEdges;
+    const hasRun = simulationStatus !== "idle";
+    const visitedTrace = hasRun ? simulationTrace.slice(0, simulationActiveIndex + 1) : [];
+    const visitedEdgeSet = hasRun
+      ? new Set([
+          ...activeEdgeIds,
+          ...visitedTrace.filter((t) => t.edgeId).map((t) => t.edgeId!),
+        ])
+      : null;
+
     return graphEdges.map((e) => {
-      if (webPageNodeIdsSet.has(e.source) || webPageNodeIdsSet.has(e.target)) {
+      const edge = e as BackendEdge & {
+        selected?: boolean;
+        className?: string;
+        style?: React.CSSProperties;
+      };
+
+      const isRefEdge =
+        edge.type === "transformer-reference" ||
+        edge.type === "reference" ||
+        edge.type === "storage-reference" ||
+        edge.type === "page-reference" ||
+        edge.type === "type-reference";
+
+      const isExtension = edge.type === "type-reference" && Boolean(edge.data?.isExtensionEdge);
+
+      let isVisible = true;
+      if (isRefEdge && !isExtension) {
+        const isConnectedSelected =
+          selectedNodeIdSet.has(edge.source) ||
+          selectedNodeIdSet.has(edge.target) ||
+          activeUpstreamSourceIds.has(edge.source) ||
+          Boolean(edge.selected);
+        isVisible = isConnectedSelected;
+      }
+
+      const isSimulationInactive = Boolean(
+        hasRun && visitedEdgeSet && !visitedEdgeSet.has(edge.id),
+      );
+
+      const isInactiveOrInvisible = !isVisible || isSimulationInactive;
+
+      const zIndex =
+        webPageNodeIdsSet.has(edge.source) || webPageNodeIdsSet.has(edge.target)
+          ? 50
+          : edge.zIndex;
+
+      if (isInactiveOrInvisible) {
         return {
-          ...e,
-          zIndex: 50,
+          ...edge,
+          zIndex,
+          hidden: !isVisible,
+          selectable: false,
+          focusable: false,
+          interactionWidth: 0,
+          className: `${edge.className || ""} pointer-events-none`.trim(),
+          style: {
+            ...edge.style,
+            pointerEvents: "none" as const,
+            opacity: !isVisible ? 0 : 0.08,
+          },
         };
       }
-      return e;
+
+      if (isRefEdge && !isExtension) {
+        return {
+          ...edge,
+          zIndex,
+          hidden: false,
+          selectable: false,
+          interactionWidth: 0,
+          className: `${edge.className || ""} pointer-events-none`.trim(),
+          style: {
+            ...edge.style,
+            pointerEvents: "none" as const,
+          },
+        };
+      }
+
+      if (zIndex !== edge.zIndex) {
+        return {
+          ...edge,
+          zIndex,
+        };
+      }
+
+      return edge;
     });
-  }, [graphEdges, webPageNodeIdsSet]);
+  }, [
+    graphEdges,
+    webPageNodeIdsSet,
+    selectedNodeIdSet,
+    activeUpstreamSourceIds,
+    simulationStatus,
+    simulationTrace,
+    simulationActiveIndex,
+    activeEdgeIds,
+  ]);
 
   const { handleLayout, panToFlow } = useGraphAutoLayout({
     nodes: graphNodes,

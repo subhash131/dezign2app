@@ -76,6 +76,25 @@ export function StartNodeInspector({
 }: StartNodeInspectorProps) {
   const [activeTab, setActiveTab] = useState<string>(defaultTab);
 
+  const availableTransformers = React.useMemo(() => {
+    return (nodes || [])
+      .filter(
+        (n) =>
+          n.type === "transformer_ref" ||
+          n.type === "transformer",
+      )
+      .map((n) => {
+        const d = n.data;
+        const functionName =
+          d && typeof d.functionName === "string" ? d.functionName : undefined;
+        const label = d && typeof d.label === "string" ? d.label : undefined;
+        return {
+          id: n.id,
+          name: functionName || label || n.id,
+        };
+      });
+  }, [nodes]);
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* ── Top Tabs Navigation ── */}
@@ -130,6 +149,7 @@ export function StartNodeInspector({
             setInputChannels={setInputChannels}
             suggestedParams={suggestedParams}
             stateChannels={stateChannels}
+            availableTransformers={availableTransformers}
             onRefreshInputs={onRefreshInputs}
           />
         </TabsContent>

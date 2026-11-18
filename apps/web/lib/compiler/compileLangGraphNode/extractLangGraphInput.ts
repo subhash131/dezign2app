@@ -7,6 +7,20 @@ import {
 } from "@/types/canvas";
 import { CompileLangGraphInput } from "../langgraph/typescript/v1";
 import { reconstructNodes, reconstructEdges } from "./reconstructCanvas";
+import {
+  NODE_ID_START,
+  NODE_ID_STATE_GLOBAL,
+  LANGGRAPH_CANVAS_NODE_START,
+  LANGGRAPH_CANVAS_NODE_STATE_GLOBAL,
+} from "@/app/(canvas)/project/[projectId]/_components/backend-nodes/graph-nodes/langgraph/langgraph-canvas/constants";
+
+function isInputChannelArray(val: unknown): val is LangGraphInputChannel[] {
+  return Array.isArray(val);
+}
+
+function isStateChannelArray(val: unknown): val is LangGraphStateChannel[] {
+  return Array.isArray(val);
+}
 
 export function extractLangGraphInput(
   node: BackendNode,
@@ -14,22 +28,61 @@ export function extractLangGraphInput(
   const data: CanvasLangGraphNodeData = node.data || {};
   const graphLabel = data.label || "LangGraph Agent";
 
-  const stateChannels: LangGraphStateChannel[] = data.stateChannels || [
-    {
-      key: "messages",
-      type: "messages",
-      reducer: "add_messages",
-      defaultValue: [],
-    },
-  ];
-  const inputChannels: LangGraphInputChannel[] = data.inputChannels || [];
+  const canvasNodes = data.nodes;
+  const canvasEdges = data.edges;
+
+  // Resolve inputChannels: prefer data.inputChannels, then START node on canvasNodes
+  let inputChannels: LangGraphInputChannel[] = data.inputChannels || [];
+  if (inputChannels.length === 0 && Array.isArray(canvasNodes)) {
+    const startNode = canvasNodes.find(
+      (n) => n.id === NODE_ID_START || n.type === LANGGRAPH_CANVAS_NODE_START,
+    );
+    if (
+      startNode &&
+      "data" in startNode &&
+      startNode.data &&
+      typeof startNode.data === "object" &&
+      "inputChannels" in startNode.data &&
+      isInputChannelArray(startNode.data.inputChannels)
+    ) {
+      inputChannels = startNode.data.inputChannels;
+    }
+  }
+
+  // Resolve stateChannels: prefer data.stateChannels, then state_global on canvasNodes
+  let stateChannels: LangGraphStateChannel[] = data.stateChannels || [];
+  if (stateChannels.length === 0 && Array.isArray(canvasNodes)) {
+    const stateNode = canvasNodes.find(
+      (n) =>
+        n.id === NODE_ID_STATE_GLOBAL ||
+        n.type === LANGGRAPH_CANVAS_NODE_STATE_GLOBAL,
+    );
+    if (
+      stateNode &&
+      "data" in stateNode &&
+      stateNode.data &&
+      typeof stateNode.data === "object" &&
+      "stateChannels" in stateNode.data &&
+      isStateChannelArray(stateNode.data.stateChannels)
+    ) {
+      stateChannels = stateNode.data.stateChannels;
+    }
+  }
+  if (stateChannels.length === 0) {
+    stateChannels = [
+      {
+        key: "messages",
+        type: "messages",
+        reducer: "add_messages",
+        defaultValue: [],
+      },
+    ];
+  }
+
   const memoryConfig: LangGraphMemoryConfig | undefined = data.memoryConfig;
 
   let trackTokenUsage: boolean | undefined =
     data.trackTokenUsage ?? data.langGraphTrackTokenUsage;
-
-  const canvasNodes = data.nodes;
-  const canvasEdges = data.edges;
 
   if (trackTokenUsage === undefined && Array.isArray(canvasNodes)) {
     for (const an of canvasNodes) {

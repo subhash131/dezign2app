@@ -5,7 +5,9 @@ import type {
   WebRtcCapabilities,
   WebRtcMediaMode,
   Parameter,
+  LangGraphInputTransition,
 } from "./types";
+import { isLangGraphInputTransition } from "./types";
 import { CONNECTION_RULES, EDGE_TYPE_MAP } from "./graph-rules";
 import { MESSAGING_RESOURCE_TYPES, MESSAGING_NODE_TYPES, BACKEND_EDGE_TYPES } from "./constants";
 
@@ -1496,3 +1498,44 @@ export function resolveWebRtcCapabilitiesFromStep(
     enableRemoteVideo,
   };
 }
+
+/**
+ * Resolves the transition mode for adapting a raw input channel value
+ * into its target state channel before invoking the graph.
+ */
+export function resolveInputTransition(
+  input?: { type?: string; transition?: string; transformerRef?: string },
+  targetChannel?: { type?: string; reducer?: string },
+): LangGraphInputTransition {
+  if (input?.transformerRef) {
+    return "transformer";
+  }
+  if (input?.transition && isLangGraphInputTransition(input.transition)) {
+    return input.transition;
+  }
+  if (!targetChannel) {
+    return "direct";
+  }
+  if (
+    (targetChannel.type === "messages" || targetChannel.reducer === "add_messages") &&
+    input?.type === "string"
+  ) {
+    return "as_human_message";
+  }
+  if (
+    (targetChannel.type === "array" ||
+      targetChannel.reducer === "append" ||
+      targetChannel.reducer === "concat_array") &&
+    input?.type !== "array"
+  ) {
+    return "append_to_list";
+  }
+  if (
+    (targetChannel.type === "object" || targetChannel.reducer === "merge_object") &&
+    input?.type === "string"
+  ) {
+    return "parse_json";
+  }
+  return "direct";
+}
+
