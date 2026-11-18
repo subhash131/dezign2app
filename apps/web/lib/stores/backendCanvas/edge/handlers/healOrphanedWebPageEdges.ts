@@ -189,6 +189,11 @@ export function healOrphanedWebPageEdges({
       edge.targetHandle &&
       (edge.targetHandle.startsWith("rtc-in-") || edge.targetHandle.startsWith("rtc-right-in-"))
     ) {
+      if (edge.type === "page-reference") {
+        // Page reference edges are managed exclusively by PageRefNode lifecycle.
+        // Do not eagerly prune them here while realtime connection state is reconciling.
+        continue;
+      }
       if (targetNode.type === "webPage") {
         const rtcId = edge.targetHandle.replace(/^(?:rtc-in-|rtc-right-in-)/, "");
         const rtcExists = (targetNode.data?.realtimeConnections || []).some(
