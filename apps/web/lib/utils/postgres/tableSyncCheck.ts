@@ -348,16 +348,16 @@ export async function checkPostgresTableSync(
          JOIN pg_attribute att ON att.attrelid = c.conrelid AND att.attnum = ANY(c.conkey)
          WHERE c.contype IN ('p', 'u')
            AND n.nspname = $1
-           AND array_length(c.conkey, 1) = 1
+           AND cardinality(c.conkey) = 1
          UNION
          SELECT LOWER(cl.relname) AS table_name, LOWER(att.attname) AS column_name
          FROM pg_index ix
          JOIN pg_class cl ON cl.oid = ix.indrelid
          JOIN pg_namespace n ON n.oid = cl.relnamespace
-         JOIN pg_attribute att ON att.attrelid = cl.oid AND att.attnum = ANY(ix.indkey)
+         JOIN pg_attribute att ON att.attrelid = cl.oid AND att.attnum = ANY(ix.indkey::smallint[])
          WHERE ix.indisunique = true
            AND n.nspname = $1
-           AND array_length(ix.indkey, 1) = 1`,
+           AND ix.indnatts = 1`,
         [targetSchema],
       );
       candidateKeySet = new Set(
@@ -371,6 +371,14 @@ export async function checkPostgresTableSync(
       const cCol = cFk.column.toLowerCase();
       const cTargetTable = cFk.foreignTable.toLowerCase();
       const cTargetCol = cFk.foreignColumn.toLowerCase();
+
+      // Check if this is a known LangGraph checkpointer logical relation (checkpoints has a composite PK)
+      const isLanggraphLogicalFk =
+        (cTargetTable === "checkpoints" || cTargetTable === "langgraph_checkpoints") &&
+        (cTargetCol === "thread_id" || cTargetCol === "checkpoint_id");
+      if (isLanggraphLogicalFk) {
+        return false;
+      }
 
       // If the target table exists in DB, but the target column is not a candidate key (unique/PK),
       // PostgreSQL cannot support a physical foreign key constraint. Treat as logical canvas relation.

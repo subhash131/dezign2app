@@ -271,13 +271,13 @@ export function checkCheckpointerTablesStatus(
 
 /**
  * Provisions missing LangGraph checkpointer tables/schemas in SchemaView under the linked storage node,
- * or updates existing ones with foreign key mappings and indexes.
+ * or updates existing ones with schema definitions and indexes (no physical foreign keys per official LangGraph schema).
  */
 export function provisionCheckpointerTables({
   linkedNodeId,
   checkpointerType,
   nodes,
-  edges = [],
+  edges: _edges = [],
   addNode,
   updateNode,
   addEdge,
@@ -296,7 +296,6 @@ export function provisionCheckpointerTables({
   const dbPos = linkedNode.position || { x: 200, y: 200 };
   let createdCount = 0;
   let updatedCount = 0;
-  const tableIdMap: Record<string, string> = {};
 
   if (checkpointerType === "redis") {
     LANGGRAPH_REDIS_SCHEMA_DEFINITIONS.forEach((schemaDef, idx) => {
@@ -308,7 +307,6 @@ export function provisionCheckpointerTables({
       );
 
       if (existingNode) {
-        tableIdMap[schemaDef.name] = existingNode.id;
         if (updateNode) {
           updateNode(existingNode.id, {
             data: {
@@ -323,7 +321,6 @@ export function provisionCheckpointerTables({
       }
 
       const schemaId = crypto.randomUUID();
-      tableIdMap[schemaDef.name] = schemaId;
       const colOffset = (idx % 2) * 320;
       const rowOffset = Math.floor(idx / 2) * 260 + 260;
 
@@ -371,10 +368,6 @@ export function provisionCheckpointerTables({
       );
 
       if (existingNode) {
-        tableIdMap[tableDef.name] = existingNode.id;
-        if (existingNode.data?.label) {
-          tableIdMap[existingNode.data.label] = existingNode.id;
-        }
         if (updateNode) {
           updateNode(existingNode.id, {
             data: {
@@ -389,7 +382,6 @@ export function provisionCheckpointerTables({
       }
 
       const tableId = crypto.randomUUID();
-      tableIdMap[tableDef.name] = tableId;
       const colOffset = (idx % 2) * 320;
       const rowOffset = Math.floor(idx / 2) * 260 + 260;
 
@@ -421,115 +413,6 @@ export function provisionCheckpointerTables({
 
       createdCount++;
     });
-
-    // Establish foreign-key edges between checkpoints, writes, and blobs
-    const checkpointsId =
-      tableIdMap["checkpoints"] || tableIdMap["langgraph_checkpoints"];
-    const writesId =
-      tableIdMap["checkpoint_writes"] ||
-      tableIdMap["writes"] ||
-      tableIdMap["langgraph_checkpoint_writes"];
-    const blobsId =
-      tableIdMap["checkpoint_blobs"] ||
-      tableIdMap["langgraph_checkpoint_blobs"];
-
-    // 1. checkpoints (checkpoint_id) -> checkpoint_writes / writes (checkpoint_id)
-    if (checkpointsId && writesId) {
-      const checkpointsNode = nodes.find((n) => n.id === checkpointsId);
-      const writesNode = nodes.find((n) => n.id === writesId);
-
-      const cpColIdx =
-        (checkpointsNode?.data?.columns?.findIndex(
-          (c) => c.name === "checkpoint_id",
-        ) ?? -1) >= 0
-          ? checkpointsNode!.data!.columns!.findIndex(
-              (c) => c.name === "checkpoint_id",
-            )
-          : LANGGRAPH_POSTGRES_TABLE_DEFINITIONS.find(
-              (t) => t.name === "checkpoints",
-            )?.columns.findIndex((c) => c.name === "checkpoint_id") ?? 2;
-
-      const writesColIdx =
-        (writesNode?.data?.columns?.findIndex(
-          (c) => c.name === "checkpoint_id",
-        ) ?? -1) >= 0
-          ? writesNode!.data!.columns!.findIndex(
-              (c) => c.name === "checkpoint_id",
-            )
-          : LANGGRAPH_POSTGRES_TABLE_DEFINITIONS.find(
-              (t) => t.name === "checkpoint_writes",
-            )?.columns.findIndex((c) => c.name === "checkpoint_id") ?? 2;
-
-      const sourceHandle = `source-${cpColIdx >= 0 ? cpColIdx : 2}`;
-      const targetHandle = `target-${writesColIdx >= 0 ? writesColIdx : 2}`;
-
-      const hasWritesFk = edges.some(
-        (e) =>
-          e.type === "foreign-key" &&
-          e.source === checkpointsId &&
-          e.target === writesId &&
-          e.targetHandle === targetHandle,
-      );
-      if (!hasWritesFk) {
-        addEdge({
-          id: `edge-fk-${writesId}-${checkpointsId}-checkpoint_id`,
-          source: checkpointsId,
-          target: writesId,
-          sourceHandle,
-          targetHandle,
-          type: "foreign-key",
-        });
-      }
-    }
-
-    // 2. checkpoints (thread_id) -> checkpoint_blobs (thread_id)
-    if (checkpointsId && blobsId) {
-      const checkpointsNode = nodes.find((n) => n.id === checkpointsId);
-      const blobsNode = nodes.find((n) => n.id === blobsId);
-
-      const cpThreadIdx =
-        (checkpointsNode?.data?.columns?.findIndex(
-          (c) => c.name === "thread_id",
-        ) ?? -1) >= 0
-          ? checkpointsNode!.data!.columns!.findIndex(
-              (c) => c.name === "thread_id",
-            )
-          : LANGGRAPH_POSTGRES_TABLE_DEFINITIONS.find(
-              (t) => t.name === "checkpoints",
-            )?.columns.findIndex((c) => c.name === "thread_id") ?? 0;
-
-      const blobsThreadIdx =
-        (blobsNode?.data?.columns?.findIndex(
-          (c) => c.name === "thread_id",
-        ) ?? -1) >= 0
-          ? blobsNode!.data!.columns!.findIndex(
-              (c) => c.name === "thread_id",
-            )
-          : LANGGRAPH_POSTGRES_TABLE_DEFINITIONS.find(
-              (t) => t.name === "checkpoint_blobs",
-            )?.columns.findIndex((c) => c.name === "thread_id") ?? 0;
-
-      const sourceHandle = `source-${cpThreadIdx >= 0 ? cpThreadIdx : 0}`;
-      const targetHandle = `target-${blobsThreadIdx >= 0 ? blobsThreadIdx : 0}`;
-
-      const hasBlobsFk = edges.some(
-        (e) =>
-          e.type === "foreign-key" &&
-          e.source === checkpointsId &&
-          e.target === blobsId &&
-          e.targetHandle === targetHandle,
-      );
-      if (!hasBlobsFk) {
-        addEdge({
-          id: `edge-fk-${blobsId}-${checkpointsId}-thread_id`,
-          source: checkpointsId,
-          target: blobsId,
-          sourceHandle,
-          targetHandle,
-          type: "foreign-key",
-        });
-      }
-    }
   }
 
   return createdCount > 0 ? createdCount : updatedCount;

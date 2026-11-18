@@ -139,7 +139,7 @@ describe("checkpointerTables utilities", () => {
   });
 
   describe("provisionCheckpointerTables", () => {
-    it("provisions all 4 tables for PostgreSQL with indexes, foreign-key mappings, and connection edges", () => {
+    it("provisions all 4 tables for PostgreSQL with indexes and database connection edges (no foreign keys per LangGraph official schema)", () => {
       const addedNodes: ProvisionNodeInput[] = [];
       const addedEdges: ProvisionEdgeInput[] = [];
 
@@ -153,8 +153,9 @@ describe("checkpointerTables utilities", () => {
 
       expect(createdCount).toBe(4);
       expect(addedNodes).toHaveLength(4);
-      // 4 database-connection edges + 2 foreign-key edges
-      expect(addedEdges).toHaveLength(6);
+      // 4 database-connection edges, 0 foreign-key edges (LangGraph has no FK constraints)
+      expect(addedEdges).toHaveLength(4);
+      expect(addedEdges.every((e) => e.type === "database-connection")).toBe(true);
 
       // Check checkpoints table
       const checkpointsNode = addedNodes.find((n) => n.data?.label === "checkpoints");
@@ -164,7 +165,7 @@ describe("checkpointerTables utilities", () => {
       expect(checkpointsNode?.data?.indexes).toHaveLength(3);
       expect(checkpointsNode?.data?.indexes?.[0]?.name).toBe("idx_checkpoints_thread_id");
 
-      // Check writes table: BYTEA blob + FK to checkpoints
+      // Check writes table: BYTEA blob, no FK
       const writesNode = addedNodes.find((n) => n.data?.label === "checkpoint_writes");
       expect(writesNode).toBeDefined();
       expect(writesNode?.data?.indexes).toHaveLength(3);
@@ -172,12 +173,11 @@ describe("checkpointerTables utilities", () => {
       expect(writesBlobCol?.type).toBe("BYTEA");
       expect(writesBlobCol?.isNotNull).toBe(true);
 
-      const writesFkCol = writesNode?.data?.columns?.find((c) => c.name === "checkpoint_id");
-      expect(writesFkCol?.isForeignKey).toBe(true);
-      expect(writesFkCol?.references?.table).toBe("checkpoints");
-      expect(writesFkCol?.references?.column).toBe("checkpoint_id");
+      const writesCheckpointCol = writesNode?.data?.columns?.find((c) => c.name === "checkpoint_id");
+      expect(writesCheckpointCol?.isForeignKey).toBeUndefined();
+      expect(writesCheckpointCol?.references).toBeUndefined();
 
-      // Check blobs table: type TEXT NOT NULL, blob BYTEA NULL + FK to checkpoints
+      // Check blobs table: type TEXT NOT NULL, blob BYTEA NULL, no FK
       const blobsNode = addedNodes.find((n) => n.data?.label === "checkpoint_blobs");
       expect(blobsNode).toBeDefined();
       const blobsTypeCol = blobsNode?.data?.columns?.find((c) => c.name === "type");
@@ -186,20 +186,13 @@ describe("checkpointerTables utilities", () => {
       expect(blobsBlobCol?.type).toBe("BYTEA");
       expect(blobsBlobCol?.isNotNull).toBe(false);
 
-      const blobsFkCol = blobsNode?.data?.columns?.find((c) => c.name === "thread_id");
-      expect(blobsFkCol?.isForeignKey).toBe(true);
-      expect(blobsFkCol?.references?.table).toBe("checkpoints");
-      expect(blobsFkCol?.references?.column).toBe("thread_id");
+      const blobsThreadCol = blobsNode?.data?.columns?.find((c) => c.name === "thread_id");
+      expect(blobsThreadCol?.isForeignKey).toBeUndefined();
+      expect(blobsThreadCol?.references).toBeUndefined();
 
-      // Verify foreign-key edges are created connecting checkpoints to writes and blobs
+      // Verify no foreign-key edges are created
       const fkEdges = addedEdges.filter((e) => e.type === "foreign-key");
-      expect(fkEdges).toHaveLength(2);
-      expect(
-        fkEdges.some((e) => e.source === checkpointsNode?.id && e.target === writesNode?.id),
-      ).toBe(true);
-      expect(
-        fkEdges.some((e) => e.source === checkpointsNode?.id && e.target === blobsNode?.id),
-      ).toBe(true);
+      expect(fkEdges).toHaveLength(0);
     });
 
     it("provisions all 3 schemas for Redis and creates connection edges", () => {

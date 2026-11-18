@@ -132,6 +132,14 @@ export async function applyForeignKeysToTable(
       continue;
     }
 
+    // Skip physical constraint creation for LangGraph checkpointer composite PK relations
+    const isLanggraphLogicalFk =
+      (targetTable.toLowerCase() === "checkpoints" || targetTable.toLowerCase() === "langgraph_checkpoints") &&
+      (targetCol.toLowerCase() === "thread_id" || targetCol.toLowerCase() === "checkpoint_id");
+    if (isLanggraphLogicalFk) {
+      continue;
+    }
+
     // Verify target column is a candidate key (unique constraint or single-column PK or unique index)
     try {
       const candidateKeyRes = await client.query<{ exists: boolean }>(
@@ -145,17 +153,17 @@ export async function applyForeignKeysToTable(
             WHERE c.contype IN ('p', 'u')
               AND LOWER(cl.relname) = LOWER($1)
               AND n.nspname = $2
-              AND array_length(c.conkey, 1) = 1
+              AND cardinality(c.conkey) = 1
             UNION
             SELECT att.attname AS colname
             FROM pg_index ix
             JOIN pg_class cl ON cl.oid = ix.indrelid
             JOIN pg_namespace n ON n.oid = cl.relnamespace
-            JOIN pg_attribute att ON att.attrelid = cl.oid AND att.attnum = ANY(ix.indkey)
+            JOIN pg_attribute att ON att.attrelid = cl.oid AND att.attnum = ANY(ix.indkey::smallint[])
             WHERE ix.indisunique = true
               AND LOWER(cl.relname) = LOWER($1)
               AND n.nspname = $2
-              AND array_length(ix.indkey, 1) = 1
+              AND ix.indnatts = 1
           ) sub
           WHERE LOWER(colname) = LOWER($3)
         ) AS exists`,
