@@ -961,7 +961,7 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
         ]);
 
         clearPending(
-          syncingNodes,
+          syncingNodes.filter((n) => !failedNodeIds.has(n.id)),
           syncingNodeRemovals,
           syncingEdges,
           syncingEdgeRemovals,

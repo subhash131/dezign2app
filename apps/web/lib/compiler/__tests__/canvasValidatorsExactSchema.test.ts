@@ -1802,6 +1802,60 @@ describe("Convex canvasValidators exact schema", () => {
     expect(pageStateObjectConvexValidator.fields.itemEvents).toBeDefined();
     expect(pageSectionConvexValidator.fields.states).toBeDefined();
   });
+
+  it("validates webPage realtimeConnections with sourceStepName, sourceStepType, pathParamBindings, and queryParamBindings", async () => {
+    const { webPageDataSchema } = await import("@workspace/canvas/schemas");
+    const { realtimeConnectionConvexValidator } = await import(
+      "../../../../../packages/backend/convex/schema/canvasValidators"
+    );
+
+    const userPayload: Parameters<typeof webPageDataSchema.safeParse>[0] = {
+      appSlug: "web",
+      description: "User sign-in and authentication page",
+      label: "/login",
+      path: "/login",
+      position: { x: 2850.0, y: 1079.3214257237782 },
+      realtimeConnections: [
+        {
+          description: "send-message",
+          eventName: "message",
+          id: "jkvhwr3j",
+          isLangGraph: true,
+          langGraphStreamIncludeReasoning: true,
+          langGraphStreamModes: ["messages"],
+          langGraphTargetNodeId: "04e8dba6-ce9b-4489-a1c3-c08c7ae94320",
+          protocol: "SSE",
+          sourceEventId: "01b52kx",
+          sourceItemName: "send-message",
+          sourceItemType: "endpoint",
+          sourceServiceLabel: "Ai service",
+          sourceServiceNodeId: "3910ccfa-cc47-4bc7-9dbf-8a475249207f",
+          sourceStepName: "AI Agent",
+          sourceStepType: "langgraph_invoke",
+        },
+      ],
+      sections: [
+        {
+          actions: [{ event: "submit", id: "act-1794655597039-login", name: "Sign In" }],
+          id: "sec-1794655597039-login",
+          loadStrategy: "eager",
+          name: "Sign In Form",
+          renderMode: "client",
+        },
+      ],
+      stackOrder: 2.0,
+      useZoneDefault: true,
+    };
+
+    const parsed = webPageDataSchema.safeParse(userPayload);
+    expect(parsed.success).toBe(true);
+
+    expect(realtimeConnectionConvexValidator.fields.sourceStepName).toBeDefined();
+    expect(realtimeConnectionConvexValidator.fields.sourceStepType).toBeDefined();
+    expect(realtimeConnectionConvexValidator.fields.sourceStepIndex).toBeDefined();
+    expect(realtimeConnectionConvexValidator.fields.pathParamBindings).toBeDefined();
+    expect(realtimeConnectionConvexValidator.fields.queryParamBindings).toBeDefined();
+  });
 });
 
 

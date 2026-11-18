@@ -223,10 +223,14 @@ export const PageRefNode = ({
 
   // Ensure invisible reference edge exists between this ref-out handle and the target WebPage realtime connection
   React.useEffect(() => {
+    const currentRefEdges = edges.filter(
+      (e) => e.type === "page-reference" && e.source === id,
+    );
+
     if (!selectedTargetId) {
-      edges
-        .filter((e) => e.type === "page-reference" && e.source === id)
-        .forEach((e) => deleteEdge(e.id));
+      if (currentRefEdges.length > 0) {
+        currentRefEdges.forEach((e) => deleteEdge(e.id));
+      }
       return;
     }
 
@@ -253,34 +257,31 @@ export const PageRefNode = ({
     }
 
     // Clean up any stale page-reference edges originating from this node that are no longer needed
-    edges
-      .filter((e) => e.type === "page-reference" && e.source === id)
-      .forEach((e) => {
-        const stillNeeded = desiredEdges.some(
-          (d) =>
-            d.target === e.target &&
-            d.targetHandle === e.targetHandle &&
-            d.sourceHandle === e.sourceHandle,
-        );
-        if (!stillNeeded) {
-          deleteEdge(e.id);
-        }
-      });
+    const staleEdges = currentRefEdges.filter((e) => {
+      return !desiredEdges.some(
+        (d) =>
+          d.target === e.target &&
+          d.targetHandle === e.targetHandle &&
+          (!e.sourceHandle || e.sourceHandle === d.sourceHandle),
+      );
+    });
 
     // Add any missing desired edges
-    desiredEdges.forEach((d) => {
-      const exists = edges.some(
+    const missingEdges = desiredEdges.filter((d) => {
+      return !currentRefEdges.some(
         (e) =>
-          e.type === "page-reference" &&
-          e.source === d.source &&
           e.target === d.target &&
-          e.sourceHandle === d.sourceHandle &&
-          e.targetHandle === d.targetHandle,
+          e.targetHandle === d.targetHandle &&
+          (!e.sourceHandle || e.sourceHandle === d.sourceHandle),
       );
-      if (!exists) {
-        addEdge(d);
-      }
     });
+
+    if (staleEdges.length === 0 && missingEdges.length === 0) {
+      return;
+    }
+
+    staleEdges.forEach((e) => deleteEdge(e.id));
+    missingEdges.forEach((d) => addEdge(d));
   }, [id, selectedTargetId, linkedSteps, edges, addEdge, deleteEdge]);
 
   const handleDelete = (e: React.MouseEvent) => {
