@@ -154,6 +154,21 @@ try {
       JSON.stringify(stamp, null, 2),
       "utf8"
     );
+
+    // Ensure required-server-files.json is synchronized across .next and standalone locations for OpenNext
+    const directServerFiles = path.join(dotNextDir, "required-server-files.json");
+    const standaloneServerFiles = path.join(dotNextDir, "standalone", "apps", "web", ".next", "required-server-files.json");
+    if (!fs.existsSync(directServerFiles) && fs.existsSync(standaloneServerFiles)) {
+      try {
+        fs.copyFileSync(standaloneServerFiles, directServerFiles);
+      } catch {}
+    } else if (fs.existsSync(directServerFiles) && !fs.existsSync(standaloneServerFiles)) {
+      try {
+        const standaloneDir = path.dirname(standaloneServerFiles);
+        if (!fs.existsSync(standaloneDir)) fs.mkdirSync(standaloneDir, { recursive: true });
+        fs.copyFileSync(directServerFiles, standaloneServerFiles);
+      } catch {}
+    }
   }
 } catch (e) {
   console.warn("[build-runner] Warning saving build-env.json stamp:", e.message);
