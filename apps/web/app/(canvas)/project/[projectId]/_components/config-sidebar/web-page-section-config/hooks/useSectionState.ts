@@ -192,19 +192,26 @@ export function useSectionState({ id, nodeId }: UseSectionStateProps) {
 
     // If deleting previous actions, clean up canvas edges/page_refs
     if (shouldDeletePreviousActions && currentActions.length > 0) {
-      for (const act of currentActions) {
-        const existingEdge = edges.find(
-          (edge) => edge.source === nodeId && edge.sourceHandle === `events-${act.id}`
-        );
-        if (existingEdge) {
-          const targetNode = nodes.find((n) => n.id === existingEdge.target);
-          deleteEdge(existingEdge.id);
-          if (targetNode && targetNode.type === "page_ref") {
-            const remaining = edges.filter(
-              (edge) => edge.target === targetNode.id && edge.id !== existingEdge.id
-            );
-            if (remaining.length === 0) deleteNode(targetNode.id);
-          }
+      const actionIds = new Set(currentActions.map((a) => a.id));
+      const edgesToDelete = edges.filter(
+        (edge) =>
+          (edge.source === nodeId && actionIds.has(edge.sourceHandle?.replace(/^events-/, "") || "")) ||
+          (edge.target === nodeId &&
+            actionIds.has(
+              edge.targetHandle?.replace(
+                /^(?:event-in-|pageload-in-|mount-in-|onmount-in-|unmount-in-|interval-in-|effect-in-|sse-in-|websocket-in-|webrtc-in-)/,
+                "",
+              ) || "",
+            )),
+      );
+      for (const existingEdge of edgesToDelete) {
+        const targetNode = nodes.find((n) => n.id === existingEdge.target);
+        deleteEdge(existingEdge.id);
+        if (targetNode && targetNode.type === "page_ref") {
+          const remaining = edges.filter(
+            (edge) => edge.target === targetNode.id && edge.id !== existingEdge.id,
+          );
+          if (remaining.length === 0) deleteNode(targetNode.id);
         }
       }
     }

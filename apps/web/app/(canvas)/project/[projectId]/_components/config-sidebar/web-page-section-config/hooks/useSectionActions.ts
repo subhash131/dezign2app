@@ -114,19 +114,34 @@ export function useSectionActions({
 
   const handleDeleteAction = (actionId: string) => {
     const store = useBackendCanvasStore.getState();
-    const existingEdge = store.edges.find(
-      (e) => e.source === nodeId && e.sourceHandle === `events-${actionId}`
+    const matchingEdges = store.edges.filter(
+      (e) =>
+        (e.source === nodeId && (e.sourceHandle === `events-${actionId}` || e.sourceHandle?.endsWith(`-${actionId}`))) ||
+        (e.target === nodeId &&
+          (e.targetHandle === `event-in-${actionId}` ||
+            e.targetHandle === `pageload-in-${actionId}` ||
+            e.targetHandle === `mount-in-${actionId}` ||
+            e.targetHandle === `onmount-in-${actionId}` ||
+            e.targetHandle === `unmount-in-${actionId}` ||
+            e.targetHandle === `interval-in-${actionId}` ||
+            e.targetHandle === `effect-in-${actionId}` ||
+            e.targetHandle === `sse-in-${actionId}` ||
+            e.targetHandle === `websocket-in-${actionId}` ||
+            e.targetHandle === `webrtc-in-${actionId}` ||
+            e.targetHandle?.endsWith(`-${actionId}`)))
     );
-    if (existingEdge) {
-      const targetNode = store.nodes.find((n) => n.id === existingEdge.target);
-      store.deleteEdge(existingEdge.id);
-      if (targetNode && targetNode.type === "page_ref") {
+
+    matchingEdges.forEach((edge) => {
+      const otherNodeId = edge.source === nodeId ? edge.target : edge.source;
+      const otherNode = store.nodes.find((n) => n.id === otherNodeId);
+      store.deleteEdge(edge.id);
+      if (otherNode && otherNode.type === "page_ref") {
         const remaining = store.edges.filter(
-          (e) => e.target === targetNode.id && e.id !== existingEdge.id
+          (e) => e.target === otherNode.id && e.id !== edge.id
         );
-        if (remaining.length === 0) store.deleteNode(targetNode.id);
+        if (remaining.length === 0) store.deleteNode(otherNode.id);
       }
-    }
+    });
 
     const nextActions = currentActions.filter((act) => act.id !== actionId);
     handleUpdate({ actions: nextActions });

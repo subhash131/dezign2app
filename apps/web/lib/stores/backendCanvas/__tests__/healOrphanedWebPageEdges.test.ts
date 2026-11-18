@@ -211,6 +211,27 @@ describe("healOrphanedWebPageEdges", () => {
     expect(result.pendingEdgeRemovals).toContain("e-orphaned-in");
   });
 
+  it("prunes orphaned action event-in edges referencing deleted actions", () => {
+    const orphanedInboundEventEdge: BackendEdge = {
+      id: "edge-action-cpf5zao-store-1",
+      source: "store-1",
+      target: "page-1",
+      sourceHandle: "store-out",
+      targetHandle: "event-in-cpf5zao",
+      type: "connection",
+      fractionalIndex: "a1",
+    };
+
+    const result = healOrphanedWebPageEdges({
+      nodes: [webPageNode, storeNode],
+      edges: [orphanedInboundEventEdge],
+    });
+
+    expect(result.changed).toBe(true);
+    expect(result.edges).toHaveLength(0);
+    expect(result.pendingEdgeRemovals).toContain("edge-action-cpf5zao-store-1");
+  });
+
   it("returns changed: false when all edges are valid", () => {
     const validEdge: BackendEdge = {
       id: "edge-valid",

@@ -159,8 +159,7 @@ export function healOrphanedWebPageEdges({
           sections.some((sec) =>
             (sec.actions || []).some((act) => act.id === actionId),
           ) ||
-          (targetNode.data?.events || []).some((act) => act.id === actionId) ||
-          (targetNode.data?.realtimeConnections || []).some((c) => c.id === actionId);
+          (targetNode.data?.events || []).some((act) => act.id === actionId);
         if (!actionExists) {
           orphanedEdgeIds.add(edge.id);
           continue;
@@ -177,9 +176,39 @@ export function healOrphanedWebPageEdges({
           sections.some((sec) =>
             (sec.actions || []).some((act) => act.id === actionId),
           ) ||
-          (sourceNode.data?.events || []).some((act) => act.id === actionId) ||
-          (sourceNode.data?.realtimeConnections || []).some((c) => c.id === actionId);
+          (sourceNode.data?.events || []).some((act) => act.id === actionId);
         if (!actionExists) {
+          orphanedEdgeIds.add(edge.id);
+          continue;
+        }
+      }
+    }
+
+    // Check 8: Target handle is an inbound realtime handle on a WebPage (rtc-in-*, rtc-right-in-*)
+    if (
+      edge.targetHandle &&
+      (edge.targetHandle.startsWith("rtc-in-") || edge.targetHandle.startsWith("rtc-right-in-"))
+    ) {
+      if (targetNode.type === "webPage") {
+        const rtcId = edge.targetHandle.replace(/^(?:rtc-in-|rtc-right-in-)/, "");
+        const rtcExists = (targetNode.data?.realtimeConnections || []).some(
+          (c: { id: string }) => c.id === rtcId,
+        );
+        if (!rtcExists) {
+          orphanedEdgeIds.add(edge.id);
+          continue;
+        }
+      }
+    }
+
+    // Check 9: Source handle is an outgoing realtime handle on a WebPage (rtc-out-*)
+    if (edge.sourceHandle && edge.sourceHandle.startsWith("rtc-out-")) {
+      if (sourceNode.type === "webPage") {
+        const rtcId = edge.sourceHandle.replace(/^rtc-out-/, "");
+        const rtcExists = (sourceNode.data?.realtimeConnections || []).some(
+          (c: { id: string }) => c.id === rtcId,
+        );
+        if (!rtcExists) {
           orphanedEdgeIds.add(edge.id);
           continue;
         }
