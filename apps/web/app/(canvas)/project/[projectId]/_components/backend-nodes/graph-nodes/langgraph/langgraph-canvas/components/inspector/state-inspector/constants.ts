@@ -105,8 +105,8 @@ export const REDUCER_CODE_PRESETS = {
     return list.length === 0 ? list : [];
   }
 
-  // 2. Action: replace / set - overwrites entire message history
-  if (action === "replace" || action === "set" || action === "setter" || action === "mutate") {
+  // 2. Action: set / replace - overwrites entire message history
+  if (action === "set" || action === "replace") {
     const items = toItems(payload);
     return sameItems(items, list) ? list : items;
   }
@@ -243,9 +243,9 @@ export const REDUCER_CODE_PRESETS = {
     return list.length === 0 ? list : [];
   }
 
-  // 2. Action: replace / set - overwrites entire array
-  // e.g. dispatch { items: { action: "replace", value: [1, 2, 3] } }
-  if (action === "replace" || action === "set" || action === "setter" || action === "mutate") {
+  // 2. Action: set / replace - overwrites entire array
+  // e.g. dispatch { items: { action: "set", value: [1, 2, 3] } }
+  if (action === "set" || action === "replace") {
     const items = toItems(payload);
     return sameItems(items, list) ? list : items;
   }
@@ -340,8 +340,8 @@ export const REDUCER_CODE_PRESETS = {
     return list.length === 0 ? list : [];
   }
 
-  // 2. Action: replace / set - overwrites entire array
-  if (action === "replace" || action === "set" || action === "setter" || action === "mutate") {
+  // 2. Action: set / replace - overwrites entire array
+  if (action === "set" || action === "replace") {
     const items = toItems(payload);
     return list.length === items.length && list.every((x, i) => Object.is(x, items[i])) ? list : items;
   }
@@ -989,7 +989,7 @@ ${streamingCode}        },
 
   // 2. Action: set / replace - overwrites entire array
   // e.g. dispatch { action: "set", value: [...] }
-  if (action === "set" || action === "setter" || action === "replace" || action === "mutate") {
+  if (action === "set" || action === "replace") {
     const items = toItems(payload);
     return sameItems(items, list) ? list : items;
   }
@@ -1241,22 +1241,166 @@ export interface ReducerActionMeta {
   label: string;
   description: string;
   requiresValue: boolean;
+  aliases?: string[];
 }
 
 /**
- * Checks if an action is typically valueless (e.g. reset, clear, toggle).
+ * Checks if an action is typically valueless (e.g. reset, clear, toggle, pop).
+ * Supports composite action labels like "reset | clear".
  */
 export function isValuelessAction(action?: string): boolean {
   if (!action) return false;
   const lower = action.toLowerCase().trim();
-  return (
-    lower === "reset" ||
-    lower === "clear" ||
-    lower === "toggle" ||
-    lower === "empty" ||
-    lower.startsWith("clear_") ||
-    lower.startsWith("reset_")
+  const parts = lower.split("|").map((p) => p.trim());
+  return parts.some(
+    (p) =>
+      p === "reset" ||
+      p === "clear" ||
+      p === "toggle" ||
+      p === "empty" ||
+      p === "pop" ||
+      p.startsWith("clear_") ||
+      p.startsWith("reset_")
   );
+}
+
+/**
+ * Extracts grouped action names from reducer JavaScript code.
+ * If actions are evaluated in an OR condition (e.g. action === "reset" || action === "clear",
+ * or ["set", "replace"].includes(action), or fall-through switch cases), they are returned
+ * as a single array group, e.g. ["set", "replace"].
+ */
+export function extractActionGroupsFromReducerCode(code?: string): string[][] {
+  if (!code || typeof code !== "string") return [];
+
+  const groups: string[][] = [];
+  const assigned = new Set<string>();
+
+  const addGroup = (rawActions: string[]) => {
+    const cleaned: string[] = [];
+    for (const a of rawActions) {
+      const act = a?.trim();
+      if (act && act !== "default" && act !== "" && !cleaned.includes(act)) {
+        cleaned.push(act);
+      }
+    }
+    if (cleaned.length === 0) return;
+
+    // Filter out actions already assigned to earlier groups
+    const newActions = cleaned.filter((a) => !assigned.has(a));
+    if (newActions.length === 0) return;
+
+    // Prioritize canonical action names to be first in the group
+    const preferredOrder = [
+      "set",
+      "reset",
+      "remove",
+      "append",
+      "prepend",
+      "pop",
+      "update",
+      "increment",
+      "decrement",
+      "toggle",
+      "stream",
+    ];
+    newActions.sort((a, b) => {
+      const idxA = preferredOrder.indexOf(a);
+      const idxB = preferredOrder.indexOf(b);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return 0;
+    });
+
+    for (const a of newActions) assigned.add(a);
+    groups.push(newActions);
+  };
+
+  // 1. Match if (...) or else if (...) statements with balanced parentheses
+  const ifRegex = /\b(?:if|else\s+if)\s*\(/g;
+  let match: RegExpExecArray | null;
+  while ((match = ifRegex.exec(code)) !== null) {
+    const startIdx = match.index + match[0].length;
+    let depth = 1;
+    let endIdx = startIdx;
+    while (depth > 0 && endIdx < code.length) {
+      if (code[endIdx] === "(") depth++;
+      else if (code[endIdx] === ")") depth--;
+      endIdx++;
+    }
+    const cond = code.slice(startIdx, endIdx - 1);
+    const actionsInCond: string[] = [];
+
+    // Check array includes: ['a', 'b'].includes(action)
+    const incRegex = /\[([^\]]+)\]\.includes\(\s*(?:action|\.action)\s*\)/g;
+    let incMatch: RegExpExecArray | null;
+    while ((incMatch = incRegex.exec(cond)) !== null) {
+      const inner = incMatch[1];
+      if (inner) {
+        const strRegex = /["']([^"']+)["']/g;
+        let sm: RegExpExecArray | null;
+        while ((sm = strRegex.exec(inner)) !== null) {
+          if (sm[1]) actionsInCond.push(sm[1]);
+        }
+      }
+    }
+
+    // Check equality checks: action === 'x' or 'x' === action
+    const eqRegex = /(?:action|\.action)\s*===?\s*["']([^"']+)["']/g;
+    let eqMatch: RegExpExecArray | null;
+    while ((eqMatch = eqRegex.exec(cond)) !== null) {
+      if (eqMatch[1]) actionsInCond.push(eqMatch[1]);
+    }
+    const revEqRegex = /["']([^"']+)["']\s*===?\s*(?:action|\.action)/g;
+    let revMatch: RegExpExecArray | null;
+    while ((revMatch = revEqRegex.exec(cond)) !== null) {
+      if (revMatch[1]) actionsInCond.push(revMatch[1]);
+    }
+
+    if (actionsInCond.length > 0) {
+      addGroup(actionsInCond);
+    }
+  }
+
+  // 2. Match switch statement fallthrough cases
+  const caseBlockRegex = /(?:case\s*["']([^"']+)["']\s*:\s*)+/g;
+  while ((match = caseBlockRegex.exec(code)) !== null) {
+    const strRegex = /case\s*["']([^"']+)["']\s*:/g;
+    const caseActions: string[] = [];
+    let sm: RegExpExecArray | null;
+    while ((sm = strRegex.exec(match[0])) !== null) {
+      if (sm[1]) caseActions.push(sm[1]);
+    }
+    if (caseActions.length > 0) {
+      addGroup(caseActions);
+    }
+  }
+
+  // 3. Fallback for any other .includes: ['a', 'b'].includes(action)
+  const includesRegex = /\[([^\]]+)\]\.includes\(\s*(?:action|\.action)\s*\)/g;
+  while ((match = includesRegex.exec(code)) !== null) {
+    const inner = match[1];
+    if (inner) {
+      const strRegex = /["']([^"']+)["']/g;
+      const incActions: string[] = [];
+      let sm: RegExpExecArray | null;
+      while ((sm = strRegex.exec(inner)) !== null) {
+        if (sm[1]) incActions.push(sm[1]);
+      }
+      if (incActions.length > 0) {
+        addGroup(incActions);
+      }
+    }
+  }
+
+  // 4. Any leftover action === 'x'
+  const leftoverEq = /(?:action|\.action)\s*===?\s*["']([^"']+)["']/g;
+  while ((match = leftoverEq.exec(code)) !== null) {
+    if (match[1]) addGroup([match[1]]);
+  }
+
+  return groups;
 }
 
 /**
@@ -1268,65 +1412,33 @@ export function isValuelessAction(action?: string): boolean {
  * - ["reset", "clear"].includes(action)
  */
 export function extractActionsFromReducerCode(code?: string): string[] {
-  if (!code || typeof code !== "string") return [];
-  const actions = new Set<string>();
-
-  // Pattern 1: action === "name" or .action === "name"
-  const eqRegex = /(?:action|\.action)\s*===?\s*["']([^"']+)["']/g;
-  let match: RegExpExecArray | null;
-  while ((match = eqRegex.exec(code)) !== null) {
-    const act = match[1]?.trim();
-    if (act && act !== "default" && act !== "") {
-      actions.add(act);
-    }
-  }
-
-  // Pattern 2: "name" === action or "name" === next?.action
-  const revEqRegex = /["']([^"']+)["']\s*===?\s*(?:action|\.action)/g;
-  while ((match = revEqRegex.exec(code)) !== null) {
-    const act = match[1]?.trim();
-    if (act && act !== "default" && act !== "") {
-      actions.add(act);
-    }
-  }
-
-  // Pattern 3: case "name":
-  const caseRegex = /case\s*["']([^"']+)["']\s*:/g;
-  while ((match = caseRegex.exec(code)) !== null) {
-    const act = match[1]?.trim();
-    if (act && act !== "default" && act !== "") {
-      actions.add(act);
-    }
-  }
-
-  // Pattern 4: ["reset", "clear"].includes(action)
-  const includesRegex = /\[([^\]]+)\]\.includes\(\s*(?:action|\.action)\s*\)/g;
-  while ((match = includesRegex.exec(code)) !== null) {
-    const inner = match[1];
-    if (!inner) continue;
-    const strRegex = /["']([^"']+)["']/g;
-    let sm: RegExpExecArray | null;
-    while ((sm = strRegex.exec(inner)) !== null) {
-      const act = sm[1]?.trim();
-      if (act && act !== "default" && act !== "") {
-        actions.add(act);
+  const groups = extractActionGroupsFromReducerCode(code);
+  const seen = new Set<string>();
+  const actions: string[] = [];
+  for (const group of groups) {
+    for (const act of group) {
+      if (!seen.has(act)) {
+        seen.add(act);
+        actions.push(act);
       }
     }
   }
-
-  return Array.from(actions);
+  return actions;
 }
 
 /**
- * Returns formatted action metadata for an action name.
+ * Returns formatted action metadata for an action name or group of actions.
+ * If multiple aliases exist (e.g. from an OR condition), formats label as "set | replace".
+ * Omits "(value)" and "(no value)" hint labels to keep dropdown options clean.
  */
 export function getActionMetadata(
   action: string,
   _channelType?: string,
+  group?: string[],
 ): ReducerActionMeta {
   const isValueless = isValuelessAction(action);
-  const hint = isValueless ? "(no value)" : "(value)";
-  let label = `${action} ${hint}`;
+  const aliases = group && group.length > 0 ? group : [action];
+  let label = aliases.length > 1 ? aliases.join(" | ") : action;
   let desc = `Dispatches { action: "${action}" }`;
 
   if (action === "default") {
@@ -1339,12 +1451,13 @@ export function getActionMetadata(
     label,
     description: desc,
     requiresValue: !isValueless,
+    aliases,
   };
 }
 
 /**
  * Returns the list of available actions for a channel.
- * If custom reducer code is present, it returns ONLY the auto-detected actions (plus default).
+ * If custom reducer code is present, it returns the auto-detected action groups (plus default).
  */
 export function getActionsForReducer(
   channelType?: string,
@@ -1367,20 +1480,29 @@ export function getActionsForReducer(
     label: "default (direct)",
     description: "Standard reducer update passing value directly",
     requiresValue: true,
+    aliases: ["default"],
   });
 
   // 2. Extract actions from custom reducer code or preset code for channel type
-  // Extracts THOSE ACTIONS ALONE matching ChannelReducerConfig!
   const effectiveCode =
     customCode && typeof customCode === "string" && customCode.trim()
       ? customCode
       : getSuggestedReducerCodeForChannelType(channelType);
 
   if (effectiveCode) {
-    const detected = extractActionsFromReducerCode(effectiveCode);
-    if (detected.length > 0) {
-      for (const act of detected) {
-        add(getActionMetadata(act, channelType));
+    const groups = extractActionGroupsFromReducerCode(effectiveCode);
+    if (groups.length > 0) {
+      for (const group of groups) {
+        let primaryAction = group[0];
+        if (
+          (channelType === "number" || channelType === "boolean") &&
+          group.includes("replace")
+        ) {
+          primaryAction = "replace";
+        }
+        if (primaryAction) {
+          add(getActionMetadata(primaryAction, channelType, group));
+        }
       }
       return actions;
     }
@@ -1392,52 +1514,48 @@ export function getActionsForReducer(
     return actions;
   }
   if (reducerName === "add_messages") {
-    add(getActionMetadata("append", channelType));
-    add(getActionMetadata("replace", channelType));
-    add(getActionMetadata("reset", channelType));
+    add(getActionMetadata("append", channelType, ["append", "add"]));
+    add(getActionMetadata("replace", channelType, ["replace", "set"]));
+    add(getActionMetadata("reset", channelType, ["reset", "clear"]));
     return actions;
   }
   if (reducerName === "append" || reducerName === "concat_array") {
-    add(getActionMetadata("append", channelType));
-    add(getActionMetadata("replace", channelType));
-    add(getActionMetadata("reset", channelType));
-    add(getActionMetadata("clear", channelType));
+    add(getActionMetadata("append", channelType, ["append", "add"]));
+    add(getActionMetadata("replace", channelType, ["replace", "set"]));
+    add(getActionMetadata("reset", channelType, ["reset", "clear"]));
     return actions;
   }
   if (reducerName === "merge_object") {
     add(getActionMetadata("merge", channelType));
-    add(getActionMetadata("replace", channelType));
-    add(getActionMetadata("reset", channelType));
-    add(getActionMetadata("clear", channelType));
+    add(getActionMetadata("replace", channelType, ["replace", "set"]));
+    add(getActionMetadata("reset", channelType, ["reset", "clear"]));
     return actions;
   }
 
   // 4. Fallback type-specific actions ONLY if no specific reducer code was found
   if (channelType === "number") {
-    add(getActionMetadata("increment", channelType));
-    add(getActionMetadata("decrement", channelType));
-    add(getActionMetadata("replace", channelType));
-    add(getActionMetadata("reset", channelType));
+    add(getActionMetadata("increment", channelType, ["increment", "add"]));
+    add(getActionMetadata("decrement", channelType, ["decrement", "subtract"]));
+    add(getActionMetadata("replace", channelType, ["replace", "set"]));
+    add(getActionMetadata("reset", channelType, ["reset", "clear"]));
   } else if (channelType === "boolean") {
     add(getActionMetadata("toggle", channelType));
-    add(getActionMetadata("replace", channelType));
-    add(getActionMetadata("reset", channelType));
+    add(getActionMetadata("replace", channelType, ["replace", "set"]));
+    add(getActionMetadata("reset", channelType, ["reset", "clear"]));
   } else if (channelType === "array" || channelType === "messages") {
-    add(getActionMetadata("append", channelType));
-    add(getActionMetadata("replace", channelType));
-    add(getActionMetadata("reset", channelType));
-    add(getActionMetadata("clear", channelType));
+    add(getActionMetadata("append", channelType, ["append", "add"]));
+    add(getActionMetadata("set", channelType, ["set", "replace"]));
+    add(getActionMetadata("reset", channelType, ["reset", "clear"]));
   } else if (channelType === "object") {
     add(getActionMetadata("merge", channelType));
-    add(getActionMetadata("replace", channelType));
-    add(getActionMetadata("reset", channelType));
+    add(getActionMetadata("replace", channelType, ["replace", "set"]));
+    add(getActionMetadata("reset", channelType, ["reset", "clear"]));
   } else if (channelType === "string") {
-    add(getActionMetadata("replace", channelType));
-    add(getActionMetadata("reset", channelType));
-    add(getActionMetadata("clear", channelType));
+    add(getActionMetadata("replace", channelType, ["replace", "set"]));
+    add(getActionMetadata("reset", channelType, ["reset", "clear"]));
   } else {
-    add(getActionMetadata("replace", channelType));
-    add(getActionMetadata("reset", channelType));
+    add(getActionMetadata("replace", channelType, ["replace", "set"]));
+    add(getActionMetadata("reset", channelType, ["reset", "clear"]));
   }
 
   return actions;

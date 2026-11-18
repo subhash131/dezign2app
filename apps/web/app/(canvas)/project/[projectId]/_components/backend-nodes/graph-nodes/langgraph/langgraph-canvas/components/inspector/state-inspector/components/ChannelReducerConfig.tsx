@@ -19,6 +19,7 @@ import {
   generateSchemaAwareReducerCode,
   isReducerCodeCompatibleWithType,
   extractActionsFromReducerCode,
+  extractActionGroupsFromReducerCode,
   getActionMetadata,
   getChannelReducerName,
 } from "../constants";
@@ -131,6 +132,13 @@ export function ChannelReducerConfig({
 
   // Live auto-detected actions extracted from the current reducer code
   const detectedActions = useMemo(() => {
+    const groups = extractActionGroupsFromReducerCode(customCode);
+    if (groups.length > 0) {
+      return groups.flatMap((group) => {
+        const primary = group[0];
+        return primary ? [getActionMetadata(primary, ch.type, group)] : [];
+      });
+    }
     const actions = extractActionsFromReducerCode(customCode);
     return actions.map((act) => getActionMetadata(act, ch.type));
   }, [customCode, ch.type]);
@@ -620,10 +628,7 @@ export function ChannelReducerConfig({
                 }`}
                 title={act.description}
               >
-                <span className="font-semibold">⚡ {act.action}</span>
-                <span className="ml-1 text-[8px] opacity-75">
-                  {act.requiresValue ? "(value)" : "(no value)"}
-                </span>
+                <span className="font-semibold">⚡ {act.label || act.action}</span>
               </Badge>
             ))}
           </div>

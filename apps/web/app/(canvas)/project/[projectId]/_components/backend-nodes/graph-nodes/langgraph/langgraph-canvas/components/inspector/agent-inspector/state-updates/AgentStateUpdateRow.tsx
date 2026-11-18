@@ -138,6 +138,13 @@ export function AgentStateUpdateRow({
   const currentAction = su.action || "default";
   const isValueless = isValuelessAction(currentAction);
 
+  const selectedActionValue = React.useMemo(() => {
+    const act = su.action;
+    if (!act || act === "custom") return availableActions[0]?.action || "default";
+    const matched = availableActions.find((a) => a.action === act || a.aliases?.includes(act));
+    return matched ? matched.action : act;
+  }, [su.action, availableActions]);
+
   // Row mode: JSON textarea mode vs single line
   const isRowJsonMode =
     isJsonOverride !== undefined
@@ -333,11 +340,7 @@ export function AgentStateUpdateRow({
         {/* 2. Reducer Action Dropdown */}
         <div className="w-[140px] shrink-0">
           <Select
-            value={
-              su.action && su.action !== "custom" && availableActions.some((a) => a.action === su.action)
-                ? su.action
-                : (availableActions[0]?.action || "default")
-            }
+            value={selectedActionValue}
             onValueChange={handleActionSelect}
           >
             <SelectTrigger className="h-7 text-xs bg-background font-mono truncate border-border/80">

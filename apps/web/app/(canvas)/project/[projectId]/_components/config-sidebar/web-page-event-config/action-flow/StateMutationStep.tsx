@@ -153,11 +153,11 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
   const availableFieldActions: ReducerActionMeta[] = React.useMemo(() => {
     if (targetKind !== "store" || !selectedField) {
       return [
-        { action: "set", label: "set (value)", description: "Direct assignment", requiresValue: true },
-        { action: "toggle", label: "toggle (no value)", description: "Inverts boolean", requiresValue: false },
-        { action: "increment", label: "increment (value)", description: "Adds to number", requiresValue: true },
-        { action: "decrement", label: "decrement (value)", description: "Subtracts from number", requiresValue: true },
-        { action: "reset", label: "reset (no value)", description: "Resets to initial/default", requiresValue: false },
+        { action: "set", label: "set", description: "Direct assignment", requiresValue: true },
+        { action: "toggle", label: "toggle", description: "Inverts boolean", requiresValue: false },
+        { action: "increment", label: "increment", description: "Adds to number", requiresValue: true },
+        { action: "decrement", label: "decrement", description: "Subtracts from number", requiresValue: true },
+        { action: "reset", label: "reset", description: "Resets to initial/default", requiresValue: false },
       ];
     }
 
@@ -169,7 +169,7 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
 
     if (Array.isArray(selectedField.actions) && selectedField.actions.length > 0) {
       selectedField.actions.forEach((actName) => {
-        if (!actions.some((a) => a.action === actName)) {
+        if (!actions.some((a) => a.action === actName || a.aliases?.includes(actName))) {
           actions.push(getActionMetadata(actName, selectedField.type));
         }
       });
@@ -178,8 +178,8 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
     return actions.length > 0
       ? actions
       : [
-          { action: "set", label: "set (value)", description: "Direct assignment", requiresValue: true },
-          { action: "reset", label: "reset (no value)", description: "Resets value", requiresValue: false },
+          { action: "set", label: "set", description: "Direct assignment", requiresValue: true },
+          { action: "reset", label: "reset", description: "Resets value", requiresValue: false },
         ];
   }, [targetKind, selectedField]);
 
@@ -403,7 +403,11 @@ export const StateMutationStep: React.FC<StateMutationStepProps> = ({
             {targetKind === "store" ? "Reducer Action to Dispatch" : "Operation Type"}
           </Label>
           <Select
-            value={currentAction}
+            value={
+              availableFieldActions.find(
+                (act) => act.action === currentAction || act.aliases?.includes(currentAction)
+              )?.action || currentAction
+            }
             onValueChange={handleActionSelect}
           >
             <SelectTrigger className="h-7 text-xs bg-background font-mono">
