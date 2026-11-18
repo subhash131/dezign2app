@@ -392,7 +392,7 @@ export function generatePostgresTableHelpers(
       return `  ${c.name}${opt}: ${toTsType(c.type)};`;
     })
     .join("\n");
-  code += `export interface Create${pascal}Data {\n  ${pkVarName}?: ${pkTsType};\n${createFields ? `${createFields}\n` : ""}}\n\n`;
+  code += `export interface Create${pascal}Data {\n  ${pkVarName}?: ${pkTsType};\n${pkColName !== pkVarName ? `  ${pkColName}?: ${pkTsType};\n` : ""}${createFields ? `${createFields}\n` : ""}}\n\n`;
 
   code += `export type Update${pascal}Data = Partial<Create${pascal}Data>;\n\n`;
   code += `export type Upsert${pascal}Data = Create${pascal}Data;\n\n`;
