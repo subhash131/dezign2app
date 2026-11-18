@@ -5,9 +5,6 @@ import { createUiEditorGraph } from "../ai/ui-agent";
 import {
   pageEditorRequestBodySchema,
   type PageEditorStreamEvent,
-  type BackendNode,
-  type BackendEdge,
-  type Endpoint,
 } from "@workspace/canvas";
 import { Id } from "@workspace/backend/_generated/dataModel";
 
@@ -26,19 +23,52 @@ function formatStreamError(error: unknown): string {
   return String(error);
 }
 
+interface EndpointSummaryField {
+  name: string;
+  type?: string;
+}
+
+interface EndpointSummaryItem {
+  name?: string;
+  route?: string;
+  type?: string;
+  requestBody?: { fields?: EndpointSummaryField[] };
+  responseBody?: { fields?: EndpointSummaryField[] };
+}
+
+interface EndpointSourceNode {
+  id?: string;
+  nodeId?: string;
+  type: string;
+  data?: {
+    label?: string;
+    endpoints?: EndpointSummaryItem[];
+  };
+}
+
+interface EndpointSourceEdge {
+  source: string;
+  target: string;
+}
+
+interface ConnectedEndpointsSource {
+  nodes?: EndpointSourceNode[];
+  edges?: EndpointSourceEdge[];
+}
+
 /**
  * Helper to extract connected service endpoints for the target node
  */
 function extractConnectedEndpoints(
   nodeId: string,
-  elements: { nodes?: BackendNode[]; edges?: BackendEdge[] } | null | undefined,
+  elements: ConnectedEndpointsSource | null | undefined,
 ): string {
   if (!elements || !Array.isArray(elements.nodes) || !Array.isArray(elements.edges)) {
     return "";
   }
 
   const { nodes, edges } = elements;
-  const targetNode = nodes.find((n) => n.id === nodeId);
+  const targetNode = nodes.find((n) => (n.nodeId || n.id) === nodeId);
   if (!targetNode) return "";
 
   // Find parent or connected webApp node
@@ -50,19 +80,28 @@ function extractConnectedEndpoints(
 
   // Find service nodes directly connected or connected via WebApp
   const serviceNodes = nodes.filter(
-    (n) => n.type === "service" && (connectedNodeIds.has(n.id) || edges.some((e) => (e.source === n.id || e.target === n.id)))
+    (n) => {
+      const currentId = n.nodeId || n.id;
+      return (
+        n.type === "service" &&
+        (
+          (currentId ? connectedNodeIds.has(currentId) : false) ||
+          edges.some((e) => (currentId ? (e.source === currentId || e.target === currentId) : false))
+        )
+      );
+    }
   );
 
   if (serviceNodes.length === 0) return "";
 
   const summaries: string[] = [];
   for (const svc of serviceNodes) {
-    const serviceName = svc.data?.label || svc.id;
+    const serviceName = svc.data?.label || svc.nodeId || svc.id || "Service";
     const endpoints = svc.data?.endpoints || [];
     if (endpoints.length > 0) {
-      const epSummaries = endpoints.map((ep: Endpoint) => {
+      const epSummaries = endpoints.map((ep: EndpointSummaryItem) => {
         const method = (ep.type || "GET").toUpperCase();
-        const route = ep.path || ep.name || "/";
+        const route = ep.route || ep.name || "/";
         const reqFields = ep.requestBody?.fields?.map((f) => `${f.name}: ${f.type || "string"}`).join(", ");
         const resFields = ep.responseBody?.fields?.map((f) => `${f.name}: ${f.type || "string"}`).join(", ");
         return `  - ${method} ${route} ${reqFields ? `(Body: { ${reqFields} })` : ""} ${resFields ? `(Returns: { ${resFields} })` : ""}`;
@@ -454,8 +493,8 @@ pageEditorRouter.post("/", async (req, res) => {
     );
     res.end();
   } catch (error) {
-    const errObj = error as { name?: string; message?: string } | undefined;
-    if (isClientDisconnected || errObj?.name === "AbortError") {
+    const isAbortError = error instanceof Error && error.name === "AbortError";
+    if (isClientDisconnected || isAbortError) {
       console.log(`🛑 [page-editor] Generation request aborted by user. Exited cleanly.`);
       try {
         if (req.body?.projectId && req.body?.nodeId) {
@@ -473,8 +512,16 @@ pageEditorRouter.post("/", async (req, res) => {
       return;
     }
 
-    console.error("[page-editor] Critical error:", error?.message || error);
-    if (error?.stack) console.error("[page-editor] Stack:", error.stack);
+    const errorMessage =
+      error instanceof Error
+        ? error.message
+        : typeof error === "string"
+          ? error
+          : "Internal Server Error";
+    const errorStack = error instanceof Error ? error.stack : undefined;
+
+    console.error("[page-editor] Critical error:", errorMessage);
+    if (errorStack) console.error("[page-editor] Stack:", errorStack);
     try {
       if (req.body?.projectId && req.body?.nodeId) {
         const convexUrl = req.body.convexUrl || process.env.CONVEX_URL;
@@ -495,9 +542,9 @@ pageEditorRouter.post("/", async (req, res) => {
     }
 
     if (!res.headersSent) {
-      res.status(500).json({ error: error?.message || "Internal Server Error" });
+      res.status(500).json({ error: errorMessage });
     } else {
-      res.write(JSON.stringify({ type: "error", message: error?.message || "Internal Server Error" }) + "\n");
+      res.write(JSON.stringify({ type: "error", message: errorMessage }) + "\n");
       res.end();
     }
   }

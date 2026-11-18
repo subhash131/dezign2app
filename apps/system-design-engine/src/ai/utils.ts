@@ -64,12 +64,26 @@ export function formatToolCallLog(
   return `\n\`\`\`json\n${JSON.stringify(args, null, 2)}\n\`\`\`\n`;
 }
 
+export interface CanvasSnapshotNodeData {
+  label?: string;
+  tableRef?: string;
+  columns?: Array<{ name: string }>;
+  endpoints?: Array<{
+    id?: string;
+    name?: string;
+    type?: string;
+    databaseNodeId?: string;
+    databaseNodeIds?: string[];
+  }>;
+  events?: Array<{ id?: string; name?: string }>;
+  topics?: Array<{ id?: string; name?: string }>;
+}
+
 export interface CanvasSnapshotElements {
   nodes?: Array<{
     nodeId: string;
     type: string;
-    data: BackendNodeData;
-    [key: string]: unknown;
+    data?: CanvasSnapshotNodeData;
   }>;
   edges?: Array<{
     source: string;
@@ -77,8 +91,7 @@ export interface CanvasSnapshotElements {
     type?: string;
     sourceHandle?: string | null;
     targetHandle?: string | null;
-    data?: { label?: string; [key: string]: unknown };
-    [key: string]: unknown;
+    data?: { label?: string };
   }>;
 }
 
@@ -88,14 +101,14 @@ export function formatCanvasState(elements: CanvasSnapshotElements | null | unde
     output = "Backend Canvas Nodes:\n";
     elements.nodes.forEach((n) => {
       let extra = "";
-      if (n.type === "entity" && n.data.columns) {
+      if (n.type === "entity" && n.data?.columns) {
         extra +=
           `\n  Columns (use for 'sourceHandle'/'targetHandle'): ` +
           n.data.columns
             .map((c) => `${c.name} (ID: ${c.name})`)
             .join(", ");
       }
-      if (n.type === "service" && n.data.endpoints) {
+      if (n.type === "service" && n.data?.endpoints) {
         extra +=
           `\n  Endpoints: ` +
           n.data.endpoints
@@ -115,16 +128,16 @@ export function formatCanvasState(elements: CanvasSnapshotElements | null | unde
             .join("\n    ");
       }
       if (n.type === "db_ref") {
-        extra += `\n  Database target handle: targetHandle="database-target"${n.data.tableRef ? ` (tableRef=${n.data.tableRef})` : ""}`;
+        extra += `\n  Database target handle: targetHandle="database-target"${n.data?.tableRef ? ` (tableRef=${n.data.tableRef})` : ""}`;
       }
-      if (n.type === "webPage" && n.data.events) {
+      if (n.type === "webPage" && n.data?.events) {
         extra +=
           `\n  Events: ` +
           n.data.events
             .map((ev) => `${ev.name} (sourceHandle="events-${ev.id}")`)
             .join("\n    ");
       }
-      if (n.type === "kafka" && n.data.topics) {
+      if (n.type === "kafka" && n.data?.topics) {
         extra +=
           `\n  Topics: ` +
           n.data.topics
@@ -134,17 +147,17 @@ export function formatCanvasState(elements: CanvasSnapshotElements | null | unde
             )
             .join("\n    ");
       }
-      output += `- [${n.type}] id: ${n.nodeId}, label: "${n.data.label}"${extra}\n`;
+      output += `- [${n.type}] id: ${n.nodeId}, label: "${n.data?.label || n.nodeId}"${extra}\n`;
     });
 
     if (elements.edges && elements.edges.length > 0) {
       output += "\nConnections:\n";
       elements.edges.forEach((e) => {
         const sourceNode =
-          elements.nodes?.find((n) => n.nodeId === e.source)?.data.label ||
+          elements.nodes?.find((n) => n.nodeId === e.source)?.data?.label ||
           e.source;
         const targetNode =
-          elements.nodes?.find((n) => n.nodeId === e.target)?.data.label ||
+          elements.nodes?.find((n) => n.nodeId === e.target)?.data?.label ||
           e.target;
         const label = e.data?.label ? ` (label: ${e.data.label})` : "";
         output += `- ${sourceNode} (${e.source}) -> ${targetNode} (${e.target}) [${e.type}]${label} sourceHandle="${e.sourceHandle ?? ""}" targetHandle="${e.targetHandle ?? ""}"\n`;
