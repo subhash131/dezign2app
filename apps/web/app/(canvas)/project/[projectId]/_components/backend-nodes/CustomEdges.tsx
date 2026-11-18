@@ -121,6 +121,8 @@ export const DatabaseRefEdge = (props: EdgeProps<BackendEdge>) => {
   );
   const simulation = useSimulationEdgeState(props.id);
 
+  const isInactive = simulation.hasRun && !simulation.isVisited;
+
   // Requirement: Show edges ONLY when the database node is selected
   if (!isDbSelected) {
     return null;
@@ -138,7 +140,7 @@ export const DatabaseRefEdge = (props: EdgeProps<BackendEdge>) => {
   });
 
   return (
-    <>
+    <g className={isInactive ? "pointer-events-none" : undefined} style={{ pointerEvents: isInactive ? "none" : undefined }}>
       <EdgeStyles />
       <svg style={{ position: "absolute", top: 0, left: 0, width: 0, height: 0 }}>
         <defs>
@@ -159,11 +161,13 @@ export const DatabaseRefEdge = (props: EdgeProps<BackendEdge>) => {
       {/* Base path / glow */}
       <BaseEdge
         path={edgePath}
+        interactionWidth={isInactive ? 0 : undefined}
         style={{
           ...style,
           strokeWidth: 3,
           stroke: `${dbColor}20`,
-          opacity: simulation.hasRun && !simulation.isVisited ? 0.05 : 1,
+          opacity: isInactive ? 0.05 : 1,
+          pointerEvents: isInactive ? "none" : undefined,
         }}
       />
 
@@ -171,18 +175,20 @@ export const DatabaseRefEdge = (props: EdgeProps<BackendEdge>) => {
       <BaseEdge
         path={edgePath}
         markerEnd={`url(#${markerId})`}
+        interactionWidth={isInactive ? 0 : undefined}
         style={{
           ...style,
           strokeWidth: 1.5,
           stroke: dbColor,
           strokeDasharray: "4, 4",
-          opacity: simulation.hasRun && !simulation.isVisited ? 0.08 : 1,
+          opacity: isInactive ? 0.08 : 1,
+          pointerEvents: isInactive ? "none" : undefined,
           filter: simulation.isCurrent
             ? `drop-shadow(0 0 5px ${dbColor})`
             : undefined,
         }}
       />
-    </>
+    </g>
   );
 };
 
@@ -236,19 +242,23 @@ export const HTTPConnectionEdge = (props: EdgeProps<BackendEdge>) => {
   const flowColor = isStateSubscription ? "#cffafe" : "#e0f2fe";
   const glowColor = isStateSubscription ? "rgba(6, 182, 212, 0.2)" : "rgba(14, 165, 233, 0.15)";
 
+  const isInactive = simulation.hasRun && !simulation.isVisited;
+
   return (
-    <>
+    <g className={isInactive ? "pointer-events-none" : undefined} style={{ pointerEvents: isInactive ? "none" : undefined }}>
       <EdgeStyles />
       <EdgeMarkers />
 
       {/* Background/Base path */}
       <BaseEdge
         path={edgePath}
+        interactionWidth={isInactive ? 0 : undefined}
         style={{
           ...style,
           strokeWidth: 3,
           stroke: glowColor,
-          opacity: simulation.hasRun && !simulation.isVisited ? 0.05 : 1,
+          opacity: isInactive ? 0.05 : 1,
+          pointerEvents: isInactive ? "none" : undefined,
         }}
       />
 
@@ -256,11 +266,13 @@ export const HTTPConnectionEdge = (props: EdgeProps<BackendEdge>) => {
       <BaseEdge
         path={edgePath}
         markerEnd={`url(#${markerId})`}
+        interactionWidth={isInactive ? 0 : undefined}
         style={{
           ...style,
           strokeWidth: 1.5,
           stroke: edgeColor,
-          opacity: simulation.hasRun && !simulation.isVisited ? 0.08 : 1,
+          opacity: isInactive ? 0.08 : 1,
+          pointerEvents: isInactive ? "none" : undefined,
           filter: simulation.isCurrent
             ? `drop-shadow(0 0 5px ${edgeColor})`
             : undefined,
@@ -291,7 +303,8 @@ export const HTTPConnectionEdge = (props: EdgeProps<BackendEdge>) => {
             style={{
               position: "absolute",
               transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
-              pointerEvents: "all",
+              pointerEvents: isInactive ? "none" : "all",
+              opacity: isInactive ? 0.1 : 1,
             }}
             className={
               props.sourceHandle?.startsWith("events-")
@@ -303,7 +316,7 @@ export const HTTPConnectionEdge = (props: EdgeProps<BackendEdge>) => {
           </div>
         </EdgeLabelRenderer>
       )}
-    </>
+    </g>
   );
 };
 
@@ -319,6 +332,7 @@ export const MessagingEdge = (props: EdgeProps<BackendEdge>) => {
     style,
   } = props;
   const simulation = useSimulationEdgeState(props.id);
+  const isInactive = simulation.hasRun && !simulation.isVisited;
 
   const [edgePath] = getBezierPath({
     sourceX,
@@ -330,18 +344,20 @@ export const MessagingEdge = (props: EdgeProps<BackendEdge>) => {
   });
 
   return (
-    <>
+    <g className={isInactive ? "pointer-events-none" : undefined} style={{ pointerEvents: isInactive ? "none" : undefined }}>
       <EdgeStyles />
       <EdgeMarkers />
 
       {/* Base shadow path */}
       <BaseEdge
         path={edgePath}
+        interactionWidth={isInactive ? 0 : undefined}
         style={{
           ...style,
           strokeWidth: 3.5,
           stroke: "rgba(168, 85, 247, 0.12)",
-          opacity: simulation.hasRun && !simulation.isVisited ? 0.05 : 1,
+          opacity: isInactive ? 0.05 : 1,
+          pointerEvents: isInactive ? "none" : undefined,
         }}
       />
 
@@ -349,11 +365,13 @@ export const MessagingEdge = (props: EdgeProps<BackendEdge>) => {
       <BaseEdge
         path={edgePath}
         markerEnd="url(#arrow-purple)"
+        interactionWidth={isInactive ? 0 : undefined}
         style={{
           ...style,
           strokeWidth: 1.5,
           stroke: "#a855f7", // purple-500
-          opacity: simulation.hasRun && !simulation.isVisited ? 0.08 : 1,
+          opacity: isInactive ? 0.08 : 1,
+          pointerEvents: isInactive ? "none" : undefined,
           filter: simulation.isCurrent
             ? "drop-shadow(0 0 5px #a855f7)"
             : undefined,
@@ -374,7 +392,7 @@ export const MessagingEdge = (props: EdgeProps<BackendEdge>) => {
           }}
         />
       )}
-    </>
+    </g>
   );
 };
 
@@ -390,6 +408,7 @@ export const IdentityConnectionEdge = (props: EdgeProps<BackendEdge>) => {
     style,
   } = props;
   const simulation = useSimulationEdgeState(props.id);
+  const isInactive = simulation.hasRun && !simulation.isVisited;
 
   const [edgePath] = getBezierPath({
     sourceX,
@@ -401,36 +420,40 @@ export const IdentityConnectionEdge = (props: EdgeProps<BackendEdge>) => {
   });
 
   return (
-    <>
+    <g className={isInactive ? "pointer-events-none" : undefined} style={{ pointerEvents: isInactive ? "none" : undefined }}>
       <EdgeStyles />
       <EdgeMarkers />
 
       {/* Base path */}
       <BaseEdge
         path={edgePath}
+        interactionWidth={isInactive ? 0 : undefined}
         style={{
           ...style,
           strokeWidth: 3,
           stroke: "rgba(16, 185, 129, 0.1)",
-          opacity: simulation.hasRun && !simulation.isVisited ? 0.05 : 1,
+          opacity: isInactive ? 0.05 : 1,
+          pointerEvents: isInactive ? "none" : undefined,
         }}
       />
 
       {/* Main dashed edge */}
       <BaseEdge
         path={edgePath}
+        interactionWidth={isInactive ? 0 : undefined}
         style={{
           ...style,
           strokeWidth: 1.5,
           stroke: "#10b981", // emerald-500
           strokeDasharray: "4, 4",
-          opacity: simulation.hasRun && !simulation.isVisited ? 0.08 : 1,
+          opacity: isInactive ? 0.08 : 1,
+          pointerEvents: isInactive ? "none" : undefined,
           filter: simulation.isCurrent
             ? "drop-shadow(0 0 5px #10b981)"
             : undefined,
         }}
       />
-    </>
+    </g>
   );
 };
 
@@ -479,31 +502,24 @@ export const TransformerReferenceEdge = (props: EdgeProps<BackendEdge>) => {
   });
 
   if (!isVisible) {
-    return (
-      <BaseEdge
-        path={edgePath}
-        style={{
-          opacity: 0,
-          pointerEvents: "none",
-          strokeWidth: 0,
-        }}
-      />
-    );
+    return null;
   }
 
   return (
-    <>
+    <g className="pointer-events-none" style={{ pointerEvents: "none" }}>
       <EdgeStyles />
       <EdgeMarkers />
 
       {/* Subtle purple background glow */}
       <BaseEdge
         path={edgePath}
+        interactionWidth={0}
         style={{
           ...style,
           strokeWidth: 4,
           stroke: "rgba(168, 85, 247, 0.25)",
           filter: "drop-shadow(0 0 6px rgba(168, 85, 247, 0.6))",
+          pointerEvents: "none",
         }}
       />
 
@@ -511,14 +527,16 @@ export const TransformerReferenceEdge = (props: EdgeProps<BackendEdge>) => {
       <BaseEdge
         path={edgePath}
         markerEnd="url(#arrow-purple)"
+        interactionWidth={0}
         style={{
           ...style,
           strokeWidth: 1.5,
           stroke: "#a855f7", // purple-500
           strokeDasharray: "4, 4",
+          pointerEvents: "none",
         }}
       />
-    </>
+    </g>
   );
 };
 
@@ -567,45 +585,40 @@ export const StorageReferenceEdge = (props: EdgeProps<BackendEdge>) => {
   });
 
   if (!isVisible) {
-    return (
-      <BaseEdge
-        path={edgePath}
-        style={{
-          opacity: 0,
-          pointerEvents: "none",
-          strokeWidth: 0,
-        }}
-      />
-    );
+    return null;
   }
 
   return (
-    <>
+    <g className="pointer-events-none" style={{ pointerEvents: "none" }}>
       <EdgeStyles />
       <EdgeMarkers />
 
       {/* Subtle amber background glow */}
       <BaseEdge
         path={edgePath}
+        interactionWidth={0}
         style={{
           ...style,
           strokeWidth: 4,
           stroke: "#f59e0b25",
           filter: "drop-shadow(0 0 6px #f59e0b80)",
+          pointerEvents: "none",
         }}
       />
 
       {/* Main dashed edge */}
       <BaseEdge
         path={edgePath}
+        interactionWidth={0}
         style={{
           ...style,
           strokeWidth: 1.5,
           stroke: "#f59e0b", // amber-500
           strokeDasharray: "4, 4",
+          pointerEvents: "none",
         }}
       />
-    </>
+    </g>
   );
 };
 
@@ -651,7 +664,7 @@ export const TypeReferenceEdge = (props: TypeReferenceEdgeProps) => {
   const markerId = isExtensionEdge ? "arrow-purple" : "arrow-indigo";
 
   return (
-    <>
+    <g className={!isExtensionEdge ? "pointer-events-none" : undefined} style={{ pointerEvents: !isExtensionEdge ? "none" : undefined }}>
       <EdgeStyles />
       <EdgeMarkers />
       <svg style={{ position: "absolute", top: 0, left: 0, width: 0, height: 0 }}>
@@ -673,11 +686,13 @@ export const TypeReferenceEdge = (props: TypeReferenceEdgeProps) => {
       {/* Glow path */}
       <BaseEdge
         path={edgePath}
+        interactionWidth={isExtensionEdge ? undefined : 0}
         style={{
           ...style,
           strokeWidth: 4,
           stroke: `${edgeColor}25`,
           filter: `drop-shadow(0 0 6px ${edgeColor}80)`,
+          pointerEvents: !isExtensionEdge ? "none" : undefined,
         }}
       />
 
@@ -685,11 +700,13 @@ export const TypeReferenceEdge = (props: TypeReferenceEdgeProps) => {
       <BaseEdge
         path={edgePath}
         markerEnd={`url(#${markerId})`}
+        interactionWidth={isExtensionEdge ? undefined : 0}
         style={{
           ...style,
           strokeWidth: 1.5,
           stroke: edgeColor,
           strokeDasharray: "4, 4",
+          pointerEvents: !isExtensionEdge ? "none" : undefined,
         }}
       />
 
@@ -708,7 +725,7 @@ export const TypeReferenceEdge = (props: TypeReferenceEdgeProps) => {
           </div>
         </EdgeLabelRenderer>
       )}
-    </>
+    </g>
   );
 };
 
@@ -758,31 +775,24 @@ export const PageReferenceEdge = (props: EdgeProps<BackendEdge>) => {
   });
 
   if (!isVisible) {
-    return (
-      <BaseEdge
-        path={edgePath}
-        style={{
-          opacity: 0,
-          pointerEvents: "none",
-          strokeWidth: 0,
-        }}
-      />
-    );
+    return null;
   }
 
   return (
-    <>
+    <g className="pointer-events-none" style={{ pointerEvents: "none" }}>
       <EdgeStyles />
       <EdgeMarkers />
 
       {/* Subtle purple background glow */}
       <BaseEdge
         path={edgePath}
+        interactionWidth={0}
         style={{
           ...style,
           strokeWidth: 4,
           stroke: "rgba(168, 85, 247, 0.25)",
           filter: "drop-shadow(0 0 6px rgba(168, 85, 247, 0.6))",
+          pointerEvents: "none",
         }}
       />
 
@@ -790,14 +800,16 @@ export const PageReferenceEdge = (props: EdgeProps<BackendEdge>) => {
       <BaseEdge
         path={edgePath}
         markerEnd="url(#arrow-purple)"
+        interactionWidth={0}
         style={{
           ...style,
           strokeWidth: 1.5,
           stroke: "#a855f7",
           strokeDasharray: "4, 4",
+          pointerEvents: "none",
         }}
       />
-    </>
+    </g>
   );
 };
 

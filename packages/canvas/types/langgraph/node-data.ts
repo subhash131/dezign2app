@@ -351,6 +351,13 @@ export interface StartNodeData extends Record<string, unknown> {
   }>;
   /** Available state channels for mapping dropdowns */
   stateChannels?: LangGraphStateChannel[];
+  /** Available transformer nodes for custom transition transformations */
+  availableTransformers?: Array<{
+    id: string;
+    name: string;
+    functionName?: string;
+    label?: string;
+  }>;
   /** Auto-maps inputs to state channels by matching names or common aliases */
   onAutoMapStateChannels?: () => void;
   /** Maps a state channel to a specific input channel (or unmaps if undefined) */
