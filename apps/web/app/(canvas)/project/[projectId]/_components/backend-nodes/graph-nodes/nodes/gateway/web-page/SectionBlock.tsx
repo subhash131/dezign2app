@@ -138,19 +138,38 @@ export const SectionBlock = ({
   const handleDeleteSection = () => {
     deleteSectionCollapseState(nodeId, section.id);
     const store = useBackendCanvasStore.getState();
-    section.actions.forEach((act) => {
-      const edge = store.edges.find(
-        (ed) => ed.source === nodeId && ed.sourceHandle === `events-${act.id}`,
-      );
-      if (edge) {
-        store.deleteEdge(edge.id);
-        const targetNode = store.nodes.find((n) => n.id === edge.target);
-        if (targetNode && targetNode.type === "page_ref") {
-          const remaining = store.edges.filter(
-            (ed) => ed.target === targetNode.id && ed.id !== edge.id,
-          );
-          if (remaining.length === 0) store.deleteNode(targetNode.id);
+    const actionIds = new Set(section.actions.map((act) => act.id));
+
+    const matchingEdges = store.edges.filter((e) => {
+      if (e.source === nodeId) {
+        if (e.sourceHandle?.startsWith("events-")) {
+          const actId = e.sourceHandle.replace(/^events-/, "");
+          if (actionIds.has(actId)) return true;
         }
+      }
+      if (e.target === nodeId) {
+        if (e.targetHandle?.startsWith("section-state-in-")) {
+          const secPrefix = `section-state-in-${section.id}-`;
+          if (e.targetHandle.startsWith(secPrefix)) return true;
+        }
+        const actionMatch = e.targetHandle?.replace(
+          /^(?:event-in-|pageload-in-|mount-in-|onmount-in-|unmount-in-|interval-in-|effect-in-|sse-in-|websocket-in-|webrtc-in-)/,
+          "",
+        );
+        if (actionMatch && actionIds.has(actionMatch)) return true;
+      }
+      return false;
+    });
+
+    matchingEdges.forEach((edge) => {
+      const otherNodeId = edge.source === nodeId ? edge.target : edge.source;
+      const otherNode = store.nodes.find((n) => n.id === otherNodeId);
+      store.deleteEdge(edge.id);
+      if (otherNode && otherNode.type === "page_ref") {
+        const remaining = store.edges.filter(
+          (ed) => ed.target === otherNode.id && ed.id !== edge.id,
+        );
+        if (remaining.length === 0) store.deleteNode(otherNode.id);
       }
     });
 
