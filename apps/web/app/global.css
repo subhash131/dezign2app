@@ -26,6 +26,12 @@
   color: var(--color-foreground) !important;
 }
 
+/* Ensure inactive / invisible edges and their paths never capture pointer events */
+.react-flow__edge.pointer-events-none,
+.react-flow__edge.pointer-events-none * {
+  pointer-events: none !important;
+}
+
 /* Ensure schema group containers render behind edges, and regular nodes render in front */
 .react-flow__node-group {
   z-index: -1 !important;

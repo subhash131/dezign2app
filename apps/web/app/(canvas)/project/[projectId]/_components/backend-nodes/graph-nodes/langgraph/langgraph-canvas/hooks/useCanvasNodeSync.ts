@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import {
   type LangGraphStateChannel,
   type LangGraphInputChannel,
@@ -65,6 +66,29 @@ interface UseCanvasNodeSyncProps {
   suggestedParams?: Array<{ key: string; type: LangGraphInputChannel["type"]; description?: string; required?: boolean }>;
 }
 
+function extractTransformerInfo(
+  nodeId: string,
+  nodeData: { functionName?: string; label?: string } | null | undefined,
+): {
+  id: string;
+  name: string;
+  functionName?: string;
+  label?: string;
+} {
+  const functionName =
+    nodeData && typeof nodeData.functionName === "string"
+      ? nodeData.functionName
+      : undefined;
+  const label =
+    nodeData && typeof nodeData.label === "string" ? nodeData.label : undefined;
+  return {
+    id: nodeId,
+    name: functionName || label || nodeId,
+    functionName,
+    label,
+  };
+}
+
 export function useCanvasNodeSync({
   setNodes,
   setEdges,
@@ -95,6 +119,28 @@ export function useCanvasNodeSync({
     setNodes((nds) => {
       const hasStateGlobal = nds.some((n) => n.id === NODE_ID_STATE_GLOBAL);
 
+      const localTransformers = nds
+        .filter(
+          (n) =>
+            n.type === "transformer_ref" ||
+            n.type === "transformer",
+        )
+        .map((n) => extractTransformerInfo(n.id, n.data));
+
+      const rootTransformers = (useBackendCanvasStore.getState().nodes || [])
+        .filter((n) => n.type === "transformer")
+        .map((n) => extractTransformerInfo(n.id, n.data));
+
+      const availableTransformers = [
+        ...localTransformers,
+        ...rootTransformers.filter(
+          (rt) =>
+            !localTransformers.some(
+              (lt) => lt.id === rt.id || lt.name === rt.name,
+            ),
+        ),
+      ];
+
       let updated = nds.map((n): LangGraphCanvasNode => {
         if (n.id === NODE_ID_START && n.type === LANGGRAPH_CANVAS_NODE_START) {
           return {
@@ -104,6 +150,7 @@ export function useCanvasNodeSync({
               inputChannels,
               stateChannels,
               suggestedParams,
+              availableTransformers,
               onRefreshInputs: handleRefreshInputs,
               onAddInputChannel: handleAddInputChannel,
               onAddSuggestedChannel: handleAddSuggestedChannel,

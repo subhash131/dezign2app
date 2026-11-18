@@ -31,6 +31,18 @@ export const inputChannelSchema = z.object({
       z.record(z.unknown()),
     ])
     .optional(),
+  stateChannelKey: z.string().optional(),
+  transition: z
+    .enum([
+      "direct",
+      "as_human_message",
+      "append_to_list",
+      "merge_object",
+      "parse_json",
+      "transformer",
+    ])
+    .optional(),
+  transformerRef: z.string().optional(),
 });
 export type InputChannel = z.infer<typeof inputChannelSchema>;
 

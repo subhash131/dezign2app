@@ -53,6 +53,30 @@ export function isLangGraphChannelType(
   }
 }
 
+export type LangGraphInputTransition =
+  | "direct"
+  | "as_human_message"
+  | "append_to_list"
+  | "merge_object"
+  | "parse_json"
+  | "transformer";
+
+export function isLangGraphInputTransition(
+  val: string,
+): val is LangGraphInputTransition {
+  switch (val) {
+    case "direct":
+    case "as_human_message":
+    case "append_to_list":
+    case "merge_object":
+    case "parse_json":
+    case "transformer":
+      return true;
+    default:
+      return false;
+  }
+}
+
 export type LangGraphInputChannel = {
   id?: string;
   key: string;
@@ -73,8 +97,12 @@ export type LangGraphInputChannel = {
     | string[];
   /** Whether this came from the connected endpoint or was manually added */
   source?: "request" | "custom";
-  /** Which state channel key this input initializes */
+  /** Which state channel key this input initializes / feeds */
   stateChannelKey?: string;
+  /** Transition mode to transform raw input value before updating state channel */
+  transition?: LangGraphInputTransition;
+  /** ID or function name of a TransformerNode if transition === "transformer" */
+  transformerRef?: string;
 };
 
 export type LangGraphOutputPort = {

@@ -3,9 +3,15 @@ import { NodeProps, Handle, Position } from "@xyflow/react";
 import {
   Zap, Plus, Trash2, ChevronDown, Sparkles,
   ArrowRight, Globe, Sliders, ChevronsRight, Play, Check,
-  Database, RefreshCw,
+  Database, RefreshCw, Shuffle,
 } from "lucide-react";
-import type { StartNode, LangGraphInputChannel, LangGraphStateChannel } from "@workspace/canvas";
+import {
+  type StartNode,
+  type LangGraphInputChannel,
+  type LangGraphStateChannel,
+  resolveInputTransition,
+  isLangGraphInputTransition,
+} from "@workspace/canvas";
 import { Button } from "@workspace/ui/components/button";
 import { LocalInput } from "../../../common";
 import {
@@ -70,15 +76,39 @@ interface ChannelRowProps {
   ch: LangGraphInputChannel;
   idx: number;
   stateChannels: LangGraphStateChannel[];
+  availableTransformers?: Array<{ id: string; name: string }>;
   onUpdate: (idx: number, changes: Partial<LangGraphInputChannel>) => void;
   onDelete: (idx: number) => void;
 }
 
-function ChannelRow({ ch, idx, stateChannels, onUpdate, onDelete }: ChannelRowProps) {
+function ChannelRow({
+  ch,
+  idx,
+  stateChannels,
+  availableTransformers = [],
+  onUpdate,
+  onDelete,
+}: ChannelRowProps) {
   const [isEditing, setIsEditing] = useState(false);
   const rowRef = useRef<HTMLDivElement>(null);
   const typeColor = TYPE_COLORS[ch.type] || TYPE_COLORS.string;
   const validStateChannels = stateChannels.filter((sc) => Boolean(sc.key?.trim()));
+  const targetChannel = stateChannels.find((sc) => sc.key === ch.stateChannelKey);
+  const resolvedTransition = resolveInputTransition(ch, targetChannel);
+  const inferredTransition = resolveInputTransition(
+    { ...ch, transition: undefined },
+    targetChannel,
+  );
+  const inferredLabel =
+    inferredTransition === "as_human_message"
+      ? "HumanMessage"
+      : inferredTransition === "append_to_list"
+        ? "Append to List"
+        : inferredTransition === "parse_json"
+          ? "Parse JSON"
+          : inferredTransition === "merge_object"
+            ? "Merge Object"
+            : "Direct";
 
   const stop = (e: React.MouseEvent) => e.stopPropagation();
 
@@ -171,6 +201,7 @@ function ChannelRow({ ch, idx, stateChannels, onUpdate, onDelete }: ChannelRowPr
             <Trash2 className="w-3 h-3" />
           </Button>
         </div>
+
         {/* State mapping */}
         <div className="flex items-center gap-1.5 pl-0.5">
           <ChevronsRight className="w-2.5 h-2.5 text-muted-foreground shrink-0" />
@@ -193,6 +224,61 @@ function ChannelRow({ ch, idx, stateChannels, onUpdate, onDelete }: ChannelRowPr
             </SelectContent>
           </Select>
         </div>
+
+        {/* Transition mode */}
+        {ch.stateChannelKey && (
+          <div className="flex items-center gap-1.5 pl-0.5">
+            <Shuffle className="w-2.5 h-2.5 text-purple-400 shrink-0" />
+            <span className="text-[8px] text-muted-foreground shrink-0">transition</span>
+            <Select
+              value={ch.transition || "__auto__"}
+              onValueChange={(v) =>
+                onUpdate(idx, {
+                  transition: isLangGraphInputTransition(v) ? v : undefined,
+                })
+              }
+            >
+              <SelectTrigger className="h-5 flex-1 text-[9px] font-mono bg-background nodrag">
+                <SelectValue placeholder="auto" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__auto__" className="text-xs font-mono">auto ({inferredLabel})</SelectItem>
+                <SelectItem value="as_human_message" className="text-xs font-mono">HumanMessage (User Query)</SelectItem>
+                <SelectItem value="append_to_list" className="text-xs font-mono">Append to List</SelectItem>
+                <SelectItem value="merge_object" className="text-xs font-mono">Merge Object (Dict)</SelectItem>
+                <SelectItem value="direct" className="text-xs font-mono">Direct Pass-through</SelectItem>
+                <SelectItem value="parse_json" className="text-xs font-mono">Parse JSON String</SelectItem>
+                <SelectItem value="transformer" className="text-xs font-mono text-purple-400 font-semibold">⚡ Transformer Node...</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        {/* Transformer node selector if transformer transition */}
+        {ch.stateChannelKey && (ch.transition === "transformer" || ch.transformerRef) && (
+          <div className="flex items-center gap-1.5 pl-0.5">
+            <span className="text-[8px] text-purple-400 font-semibold shrink-0">transformer node</span>
+            <Select
+              value={ch.transformerRef || "__none__"}
+              onValueChange={(v) => onUpdate(idx, {
+                transformerRef: v === "__none__" ? undefined : v,
+                transition: "transformer"
+              })}
+            >
+              <SelectTrigger className="h-5 flex-1 text-[9px] font-mono bg-background nodrag text-purple-400">
+                <SelectValue placeholder="select transformer" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__" className="text-xs text-muted-foreground">— select —</SelectItem>
+                {availableTransformers.map((t) => (
+                  <SelectItem key={t.id} value={t.name || t.id} className="text-xs font-mono">
+                    {t.name || t.id}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
     );
   }
@@ -222,6 +308,19 @@ function ChannelRow({ ch, idx, stateChannels, onUpdate, onDelete }: ChannelRowPr
           <ArrowRight className="w-2.5 h-2.5 text-[#006ddd]" />
           <span className="text-[9px] font-mono font-medium text-[#006ddd] truncate max-w-[65px]">
             {ch.stateChannelKey}
+          </span>
+          <span className="text-[7px] font-mono text-muted-foreground/70 ml-0.5">
+            {ch.transformerRef
+              ? `(⚡${ch.transformerRef})`
+              : resolvedTransition === "as_human_message"
+                ? "(msg)"
+                : resolvedTransition === "append_to_list"
+                  ? "(+list)"
+                  : resolvedTransition === "parse_json"
+                    ? "(json)"
+                    : resolvedTransition === "merge_object"
+                      ? "(merge)"
+                      : ""}
           </span>
         </div>
       ) : (
@@ -256,23 +355,15 @@ function StateMappingRow({
   onCreateInput,
 }: StateMappingRowProps) {
   // Find which input channel maps to this state variable
-  const mappedInput =
-    allChannels.find(
-      (c) =>
-        c.stateChannelKey === sc.key ||
-        (!c.stateChannelKey && c.key === sc.key) ||
-        (c.stateChannelKey &&
-          c.stateChannelKey.split(",").map((s) => s.trim()).includes(sc.key)),
-    ) ||
-    (sc.key === "messages"
-      ? allChannels.find(
-          (c) =>
-            !c.stateChannelKey &&
-            ["query", "prompt", "message", "user_message", "input"].includes(
-              c.key.toLowerCase(),
-            ),
-        )
-      : undefined);
+  const mappedInput = allChannels.find(
+    (c) =>
+      c.stateChannelKey === sc.key ||
+      (!c.stateChannelKey && c.key === sc.key) ||
+      (c.stateChannelKey &&
+        c.stateChannelKey.split(",").map((s) => s.trim()).includes(sc.key)),
+  );
+
+  const transition = mappedInput ? resolveInputTransition(mappedInput, sc) : undefined;
 
   const typeColor =
     STATE_TYPE_COLORS[sc.type] || "text-muted-foreground bg-muted border-border/40";
@@ -308,12 +399,17 @@ function StateMappingRow({
         {sc.key}
       </span>
 
-      {/* Direction indicator */}
-      <ArrowRight className="w-2.5 h-2.5 text-muted-foreground/60 shrink-0" />
+      {/* Ingestion arrow indicator: input feeds state */}
+      <span
+        className="text-[9px] font-mono text-muted-foreground/60 shrink-0 font-bold"
+        title="receives value from"
+      >
+        ←
+      </span>
 
       {/* Mapping target input selector using Combobox (Base UI) */}
       <div
-        className="flex-1 min-w-0 nodrag"
+        className="flex-1 min-w-0 nodrag flex items-center gap-1"
         data-testid="mock-select"
         data-value={mappedInput?.id || mappedInput?.key || "__none__"}
       >
@@ -336,7 +432,7 @@ function StateMappingRow({
             className="h-5 text-[9px] font-mono bg-background/80 hover:bg-background border border-input/60 rounded px-1.5 w-full nodrag"
           />
           <ComboboxContent
-            className="w-[220px] p-0 shadow-2xl border border-border/80 bg-popover text-popover-foreground rounded-lg z-50 overflow-hidden font-mono text-xs"
+            className="w-[240px] p-0 shadow-2xl border border-border/80 bg-popover text-popover-foreground rounded-lg z-50 overflow-hidden font-mono text-xs"
             align="start"
             sideOffset={4}
           >
@@ -369,13 +465,19 @@ function StateMappingRow({
                   );
                 }
                 const ch = allChannels.find((c) => c.key === item || c.id === item);
-                const isMessagesTarget = sc.key === "messages";
+                const itemTransition = ch ? resolveInputTransition(ch, sc) : undefined;
                 const roleHint =
-                  isMessagesTarget && ch
-                    ? ch.type === "string"
-                      ? " (wraps as HumanMessage)"
-                      : " (bulk array)"
-                    : "";
+                  itemTransition === "as_human_message"
+                    ? " → HumanMessage"
+                    : itemTransition === "append_to_list"
+                      ? " → Append"
+                      : itemTransition === "merge_object"
+                        ? " → Merge"
+                        : itemTransition === "parse_json"
+                          ? " → JSON.parse"
+                          : itemTransition === "transformer"
+                            ? ` (⚡ ${ch?.transformerRef || "txfm"})`
+                            : "";
                 return (
                   <ComboboxItem
                     key={item}
@@ -395,6 +497,39 @@ function StateMappingRow({
           </ComboboxContent>
         </Combobox>
       </div>
+
+      {/* Transition mode badge */}
+      {mappedInput && transition && (
+        <span
+          className={cn(
+            "text-[7px] font-mono px-1 py-0.5 rounded border shrink-0 font-medium leading-none",
+            transition === "transformer"
+              ? "text-purple-400 bg-purple-400/10 border-purple-400/30"
+              : transition === "as_human_message"
+                ? "text-sky-400 bg-sky-400/10 border-sky-400/30"
+                : transition === "append_to_list"
+                  ? "text-orange-400 bg-orange-400/10 border-orange-400/30"
+                  : transition === "merge_object"
+                    ? "text-emerald-400 bg-emerald-400/10 border-emerald-400/30"
+                    : transition === "parse_json"
+                      ? "text-violet-400 bg-violet-400/10 border-violet-400/30"
+                      : "text-muted-foreground bg-muted border-border/40",
+          )}
+          title={`Transition: ${transition}${mappedInput.transformerRef ? ` (${mappedInput.transformerRef})` : ""}`}
+        >
+          {transition === "transformer"
+            ? (mappedInput.transformerRef ? `⚡ ${mappedInput.transformerRef}` : "txfm")
+            : transition === "as_human_message"
+              ? "user msg"
+              : transition === "append_to_list"
+                ? "+ list"
+                : transition === "merge_object"
+                  ? "merge"
+                  : transition === "parse_json"
+                    ? "json"
+                    : "direct"}
+        </span>
+      )}
 
       {/* Quick 1-click create button if unmapped */}
       {!mappedInput && (
@@ -508,6 +643,8 @@ export const LangGraphCanvasStartNode = ({
     onAddInputChannel?.();
   }, [onAddInputChannel]);
 
+  const availableTransformers = data.availableTransformers ?? [];
+
   const handleAddSuggested = useCallback(
     (e: React.MouseEvent, s: typeof pendingSuggestions[0]) => {
       stop(e);
@@ -515,10 +652,9 @@ export const LangGraphCanvasStartNode = ({
         s.targetStateChannel ||
         (validStateChannels.some((sc) => sc.key === s.key)
           ? s.key
-          : ["query", "prompt", "message", "user_message", "input"].includes(s.key.toLowerCase()) &&
-            validStateChannels.some((sc) => sc.key === "messages")
-          ? "messages"
-          : undefined);
+          : s.type === "messages" && validStateChannels.some((sc) => sc.key === "messages")
+            ? "messages"
+            : undefined);
 
       onAddSuggestedChannel?.({
         id: `input_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
@@ -544,12 +680,7 @@ export const LangGraphCanvasStartNode = ({
         c.stateChannelKey === sc.key ||
         (!c.stateChannelKey && c.key === sc.key) ||
         (c.stateChannelKey &&
-          c.stateChannelKey.split(",").map((s) => s.trim()).includes(sc.key)) ||
-        (sc.key === "messages" &&
-          !c.stateChannelKey &&
-          ["query", "prompt", "message", "user_message", "input"].includes(
-            c.key.toLowerCase(),
-          )),
+          c.stateChannelKey.split(",").map((s) => s.trim()).includes(sc.key)),
     ),
   ).length;
 
@@ -567,11 +698,9 @@ export const LangGraphCanvasStartNode = ({
         sug?.targetStateChannel ||
         (validKeys.has(ch.key)
           ? ch.key
-          : ["query", "prompt", "message", "user_message", "input"].includes(
-              ch.key.toLowerCase(),
-            ) && validKeys.has("messages")
-          ? "messages"
-          : undefined);
+          : ch.type === "messages" && validKeys.has("messages")
+            ? "messages"
+            : undefined);
 
       if (targetState) {
         onUpdateInputChannel?.(idx, { stateChannelKey: targetState });
@@ -718,6 +847,7 @@ export const LangGraphCanvasStartNode = ({
                   ch={ch}
                   idx={globalIdx(ch)}
                   stateChannels={stateChannels}
+                  availableTransformers={availableTransformers}
                   onUpdate={onUpdateInputChannel ?? (() => {})}
                   onDelete={onDeleteInputChannel ?? (() => {})}
                 />
@@ -781,6 +911,7 @@ export const LangGraphCanvasStartNode = ({
                     ch={ch}
                     idx={globalIdx(ch)}
                     stateChannels={stateChannels}
+                    availableTransformers={availableTransformers}
                     onUpdate={onUpdateInputChannel ?? (() => {})}
                     onDelete={onDeleteInputChannel ?? (() => {})}
                   />
@@ -793,7 +924,7 @@ export const LangGraphCanvasStartNode = ({
           <div className="border-t border-border/40">
             <SectionHeader
               icon={<Database className="w-2.5 h-2.5 text-[#006ddd]" />}
-              label="State Mapping"
+              label="Input Ingestion"
               count={`${mappedStateCount}/${validStateChannels.length}`}
               color="bg-[#006ddd]/5 text-[#006ddd]"
               extraAction={
@@ -843,7 +974,7 @@ export const LangGraphCanvasStartNode = ({
             <div className="flex items-center gap-1.5 px-2.5 py-1.5 border-t border-border/30 bg-primary/3">
               <ArrowRight className="w-2.5 h-2.5 text-primary/40 shrink-0" />
               <span className="text-[8px] text-muted-foreground/60">
-                Mapped input values initialize graph state on invoke
+                Mapped input values feed state channel updates on invoke
               </span>
             </div>
           )}

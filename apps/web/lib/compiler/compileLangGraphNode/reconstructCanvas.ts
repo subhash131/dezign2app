@@ -25,6 +25,8 @@ import type {
   AgentNode,
   StepNode,
   OutputNode,
+  TransformerCanvasNode,
+  TransformerRefCanvasNode,
 } from "@/app/(canvas)/project/[projectId]/_components/backend-nodes/graph-nodes/langgraph/langgraph-canvas/types";
 import {
   NODE_ID_STATE_GLOBAL,
@@ -41,6 +43,8 @@ import {
   LANGGRAPH_CANVAS_NODE_MEMORY_REF,
   LANGGRAPH_CANVAS_NODE_NODE,
   LANGGRAPH_CANVAS_NODE_AGENT_REF,
+  LANGGRAPH_CANVAS_NODE_TRANSFORMER,
+  LANGGRAPH_CANVAS_NODE_TRANSFORMER_REF,
   LANGGRAPH_CANVAS_NODE_STEP,
   LANGGRAPH_CANVAS_NODE_END,
   LANGGRAPH_CANVAS_NODE_OUTPUT,
@@ -64,6 +68,24 @@ export function reconstructNodes(
   stateChannels: LangGraphStateChannel[],
   inputChannels: LangGraphInputChannel[],
 ): LangGraphCanvasNode[] {
+  const transformerDefs =
+    data.customTransformerNodes || data.transformerDefinitions || [];
+  const transformerRefs = data.customTransformerRefNodes || [];
+
+  const availableTransformers = [
+    ...transformerDefs.map((t) => ({
+      id: t.id,
+      name: t.functionName || t.label || t.id,
+      functionName: t.functionName,
+      label: t.label,
+    })),
+    ...transformerRefs.map((r) => ({
+      id: r.id,
+      name: r.label || r.transformerRef || r.id,
+      label: r.label,
+    })),
+  ];
+
   const reconstructedNodes: LangGraphCanvasNode[] = [
     {
       id: NODE_ID_STATE_GLOBAL,
@@ -79,7 +101,12 @@ export function reconstructNodes(
       id: NODE_ID_START,
       type: LANGGRAPH_CANVAS_NODE_START,
       position: data.startNodePosition || { x: 100, y: 320 },
-      data: { label: "INPUT State", inputChannels },
+      data: {
+        label: "INPUT State",
+        inputChannels,
+        stateChannels,
+        availableTransformers,
+      },
       deletable: false,
     },
   ];
@@ -185,6 +212,43 @@ export function reconstructNodes(
       },
     };
     reconstructedNodes.push(customRefNode);
+  });
+
+  transformerDefs.forEach((tDef) => {
+    const tId = tDef.id || `transformer_${Date.now()}`;
+    const tNode: TransformerCanvasNode = {
+      id: tId,
+      type: LANGGRAPH_CANVAS_NODE_TRANSFORMER,
+      position: tDef.position || { x: 340, y: 160 },
+      data: {
+        label: tDef.label || tDef.functionName || "Transformer",
+        functionName: tDef.functionName || tDef.label,
+        code: tDef.code,
+        scope: tDef.scope,
+        inputSchema: tDef.inputSchema?.map((p, idx) => ({
+          id: `param_${idx}`,
+          name: p.name,
+          type: p.type,
+          required: p.required ?? false,
+          description: p.description,
+        })),
+        returnSchema: tDef.returnSchema,
+      },
+    };
+    reconstructedNodes.push(tNode);
+  });
+
+  transformerRefs.forEach((tRef) => {
+    const refNode: TransformerRefCanvasNode = {
+      id: tRef.id,
+      type: LANGGRAPH_CANVAS_NODE_TRANSFORMER_REF,
+      position: tRef.position || { x: 340, y: 160 },
+      data: {
+        label: tRef.label || "Transformer Ref",
+        transformerRef: tRef.transformerRef,
+      },
+    };
+    reconstructedNodes.push(refNode);
   });
 
   const toolDefs: LangGraphToolDefinition[] = data.toolDefinitions || [];
@@ -384,6 +448,8 @@ export function reconstructEdges(
   const middlewareDefs: LangGraphMiddlewareDefinition[] =
     data.middlewareDefinitions || [];
   const memoryDefs: LangGraphMemoryDefinition[] = data.memoryDefinitions || [];
+  const transformerDefs =
+    data.customTransformerNodes || data.transformerDefinitions || [];
   const graphEdges: LangGraphEdgeConfig[] = data.graphEdges || [];
 
   const reconstructedNodeIds = new Set(reconstructedNodes.map((n) => n.id));
@@ -418,6 +484,12 @@ export function reconstructEdges(
           e.source.startsWith("db_") ||
           memoryDefs.some((m) => (m.id || m.memoryId) === e.source) ||
           (data.customMemoryRefNodes || []).some((r) => r.id === e.source);
+        const isTransformerSource =
+          e.sourceHandle === HANDLE_TRANSFORMER_OUT ||
+          e.source.startsWith("transformer_") ||
+          e.source.startsWith("transformer_ref_") ||
+          transformerDefs.some((t) => t.id === e.source) ||
+          (data.customTransformerRefNodes || []).some((r) => r.id === e.source);
 
         const sourceHandle =
           e.sourceHandle ||
@@ -429,7 +501,9 @@ export function reconstructEdges(
                 ? HANDLE_MIDDLEWARE_OUT
                 : isMemorySource
                   ? HANDLE_MEMORY_OUT
-                  : undefined);
+                  : isTransformerSource
+                    ? HANDLE_TRANSFORMER_OUT
+                    : undefined);
         const targetHandle =
           e.targetHandle ||
           t.targetHandle ||
@@ -441,7 +515,9 @@ export function reconstructEdges(
                 ? HANDLE_MIDDLEWARE_IN
                 : isMemorySource
                   ? HANDLE_MEMORY_IN
-                  : "in");
+                  : isTransformerSource
+                    ? HANDLE_TRANSFORMER_IN
+                    : "in");
 
         let resolvedTargetId = t.id;
         if (t.kind === TARGET_KIND_END || t.id === "END") {

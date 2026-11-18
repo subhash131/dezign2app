@@ -1,5 +1,6 @@
 import type { CompileContext, RouteEndpoint } from "../types";
 import { toCamelCase, toPascalCase, escapeStr } from "../utils";
+import { resolveInputTransition } from "@workspace/canvas";
 
 export function buildServerFile(ctx: CompileContext, routes: RouteEndpoint[]): string {
   const graphVarName = `${toCamelCase(ctx.graphId)}Graph`;
@@ -31,9 +32,12 @@ export function buildServerFile(ctx: CompileContext, routes: RouteEndpoint[]): s
       }
 
       const stateFields: string[] = [];
+      const inputChannels = ctx.input.inputChannels || [];
       for (const key of allStateKeys) {
         const customPath = payloadMap[key];
         const camelKey = toCamelCase(key);
+        const stateChannel = stateChannels.find((sc) => sc.key === key);
+
         if (customPath) {
           const accessor = customPath.startsWith("headers.")
             ? `req.headers["${customPath.slice(8)}"]`
@@ -41,6 +45,42 @@ export function buildServerFile(ctx: CompileContext, routes: RouteEndpoint[]): s
               ? `req.body?.${customPath.slice(5)}`
               : `req.body?.${customPath}`;
           stateFields.push(`      ${camelKey}: ${accessor}`);
+          continue;
+        }
+
+        // Find matching input channel
+        const matchingInput = inputChannels.find(
+          (c) => c.stateChannelKey === key || (!c.stateChannelKey && c.key === key),
+        );
+
+        if (matchingInput) {
+          const inKey = matchingInput.key;
+          const transition = resolveInputTransition(matchingInput, stateChannel);
+
+          if (transition === "transformer" && matchingInput.transformerRef) {
+            const tName = toCamelCase(matchingInput.transformerRef);
+            stateFields.push(
+              `      ${camelKey}: typeof ${tName} === "function" ? await ${tName}(req.body?.${inKey}) : req.body?.${inKey}`,
+            );
+          } else if (transition === "as_human_message") {
+            stateFields.push(
+              `      ${camelKey}: (typeof req.body === "object" && req.body !== null && "${inKey}" in req.body && Array.isArray(req.body.${inKey})) ? req.body.${inKey} : [{ role: "user", content: typeof req.body?.${inKey} === "string" ? req.body.${inKey} : (typeof req.body === "string" ? req.body : JSON.stringify(req.body?.${inKey} ?? req.body)) }]`,
+            );
+          } else if (transition === "append_to_list") {
+            stateFields.push(
+              `      ${camelKey}: Array.isArray(req.body?.${inKey}) ? req.body.${inKey} : (req.body?.${inKey} !== undefined ? [req.body.${inKey}] : [])`,
+            );
+          } else if (transition === "merge_object") {
+            stateFields.push(
+              `      ${camelKey}: typeof req.body?.${inKey} === "object" && req.body?.${inKey} !== null ? req.body.${inKey} : {}`,
+            );
+          } else if (transition === "parse_json") {
+            stateFields.push(
+              `      ${camelKey}: typeof req.body?.${inKey} === "string" ? (() => { try { return JSON.parse(req.body.${inKey}); } catch { return req.body.${inKey}; } })() : req.body?.${inKey}`,
+            );
+          } else {
+            stateFields.push(`      ${camelKey}: req.body?.${inKey}`);
+          }
         } else if (key === "messages") {
           if (isEvent) {
             stateFields.push(

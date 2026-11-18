@@ -433,12 +433,7 @@ export function useLangGraphCanvasState({
         if (validStateKeys.has(ch.key)) {
           return { ...ch, stateChannelKey: ch.key };
         }
-        if (
-          ["query", "prompt", "message", "user_message", "input"].includes(
-            ch.key.toLowerCase(),
-          ) &&
-          validStateKeys.has("messages")
-        ) {
+        if (ch.type === "messages" && validStateKeys.has("messages")) {
           return { ...ch, stateChannelKey: "messages" };
         }
         return ch;
@@ -510,12 +505,7 @@ export function useLangGraphCanvasState({
         if (!targetState) {
           if (validStateKeys.has(p.key)) {
             targetState = p.key;
-          } else if (
-            ["query", "prompt", "message", "user_message", "input"].includes(
-              p.key.toLowerCase(),
-            ) &&
-            validStateKeys.has("messages")
-          ) {
+          } else if (p.type === "messages" && validStateKeys.has("messages")) {
             targetState = "messages";
           }
         }
@@ -568,12 +558,7 @@ export function useLangGraphCanvasState({
         if (!targetState) {
           if (validStateKeys.has(p.key)) {
             targetState = p.key;
-          } else if (
-            ["query", "prompt", "message", "user_message", "input"].includes(
-              p.key.toLowerCase(),
-            ) &&
-            validStateKeys.has("messages")
-          ) {
+          } else if (p.type === "messages" && validStateKeys.has("messages")) {
             targetState = "messages";
           }
         }

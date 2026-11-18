@@ -11,8 +11,35 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select";
 import { Switch } from "@workspace/ui/components/switch";
-import type { LangGraphInputChannel, LangGraphStateChannel } from "@workspace/canvas";
+import {
+  type LangGraphInputChannel,
+  type LangGraphStateChannel,
+  isLangGraphInputTransition,
+  resolveInputTransition,
+} from "@workspace/canvas";
 import { cn } from "@workspace/ui/lib/utils";
+
+type InputChannelType = LangGraphInputChannel["type"];
+
+const INPUT_CHANNEL_TYPES: readonly InputChannelType[] = [
+  "string",
+  "messages",
+  "number",
+  "boolean",
+  "object",
+  "array",
+];
+
+function isInputChannelType(val: string): val is InputChannelType {
+  return (
+    val === "string" ||
+    val === "messages" ||
+    val === "number" ||
+    val === "boolean" ||
+    val === "object" ||
+    val === "array"
+  );
+}
 
 type SuggestedParam = {
   key: string;
@@ -26,6 +53,7 @@ interface InputsTabContentProps {
   setInputChannels: React.Dispatch<React.SetStateAction<LangGraphInputChannel[]>>;
   suggestedParams?: SuggestedParam[];
   stateChannels?: LangGraphStateChannel[];
+  availableTransformers?: Array<{ id: string; name: string }>;
   onRefreshInputs?: () => void;
 }
 
@@ -43,15 +71,33 @@ function ChannelEditor({
   input,
   idx,
   stateChannels = [],
+  availableTransformers = [],
   onChange,
   onDelete,
 }: {
   input: LangGraphInputChannel;
   idx: number;
   stateChannels?: LangGraphStateChannel[];
+  availableTransformers?: Array<{ id: string; name: string }>;
   onChange: (idx: number, changes: Partial<LangGraphInputChannel>) => void;
   onDelete: (idx: number) => void;
 }) {
+  const targetChannel = stateChannels.find((sc) => sc.key === input.stateChannelKey);
+  const inferredTransition = resolveInputTransition(
+    { ...input, transition: undefined },
+    targetChannel,
+  );
+  const inferredLabel =
+    inferredTransition === "as_human_message"
+      ? "HumanMessage"
+      : inferredTransition === "append_to_list"
+        ? "Append to List"
+        : inferredTransition === "parse_json"
+          ? "Parse JSON"
+          : inferredTransition === "merge_object"
+            ? "Merge Object"
+            : "Direct Pass-through";
+
   return (
     <div className="flex flex-col gap-2.5 p-3.5 rounded-xl border bg-card/50 shadow-sm text-xs">
       {/* Key + type + delete */}
@@ -64,13 +110,17 @@ function ChannelEditor({
         />
         <Select
           value={input.type}
-          onValueChange={(v) => onChange(idx, { type: v as LangGraphInputChannel["type"] })}
+          onValueChange={(v) => {
+            if (isInputChannelType(v)) {
+              onChange(idx, { type: v });
+            }
+          }}
         >
           <SelectTrigger className="h-7 text-xs w-28 bg-background font-mono">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {(["string","messages","number","boolean","object","array"] as LangGraphInputChannel["type"][]).map((t) => (
+            {INPUT_CHANNEL_TYPES.map((t) => (
               <SelectItem key={t} value={t} className="text-xs font-mono">{t}</SelectItem>
             ))}
           </SelectContent>
@@ -103,30 +153,120 @@ function ChannelEditor({
       </div>
 
       {/* State channel mapping */}
-      <div className="flex items-center gap-2 pt-1 border-t border-border/40">
-        <div className="flex items-center gap-1.5 shrink-0 text-muted-foreground">
-          <ArrowRight className="w-3 h-3" />
-          <span className="text-[10px]">Initial state</span>
+      <div className="flex flex-col gap-2 pt-1 border-t border-border/40">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 shrink-0 text-muted-foreground">
+            <ArrowRight className="w-3 h-3" />
+            <span className="text-[10px]">Maps to state</span>
+          </div>
+          <Select
+            value={input.stateChannelKey || "__none__"}
+            onValueChange={(v) => onChange(idx, { stateChannelKey: v === "__none__" ? undefined : v })}
+          >
+            <SelectTrigger className="h-7 flex-1 text-xs bg-background font-mono">
+              <SelectValue placeholder="— no mapping —" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__" className="text-xs text-muted-foreground">— no mapping —</SelectItem>
+              {stateChannels
+                .filter((sc) => Boolean(sc.key?.trim()))
+                .map((sc) => (
+                  <SelectItem key={sc.key} value={sc.key} className="text-xs font-mono">
+                    {sc.key}
+                    <span className="ml-1 text-[9px] text-muted-foreground opacity-70">({sc.type})</span>
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
         </div>
-        <Select
-          value={input.stateChannelKey || "__none__"}
-          onValueChange={(v) => onChange(idx, { stateChannelKey: v === "__none__" ? undefined : v })}
-        >
-          <SelectTrigger className="h-7 flex-1 text-xs bg-background font-mono">
-            <SelectValue placeholder="— no mapping —" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__none__" className="text-xs text-muted-foreground">— no mapping —</SelectItem>
-            {stateChannels
-              .filter((sc) => Boolean(sc.key?.trim()))
-              .map((sc) => (
-                <SelectItem key={sc.key} value={sc.key} className="text-xs font-mono">
-                  {sc.key}
-                  <span className="ml-1 text-[9px] text-muted-foreground opacity-70">({sc.type})</span>
+
+        {/* Transition selection if stateChannelKey is configured */}
+        {input.stateChannelKey && (
+          <div className="flex items-center gap-2 pl-4">
+            <span className="text-[10px] text-muted-foreground shrink-0">Transition:</span>
+            <Select
+              value={input.transition || "__auto__"}
+              onValueChange={(v) => {
+                if (v === "__auto__") {
+                  onChange(idx, { transition: undefined });
+                } else if (isLangGraphInputTransition(v)) {
+                  onChange(idx, { transition: v });
+                }
+              }}
+            >
+              <SelectTrigger className="h-6 flex-1 text-[11px] bg-background/80 font-mono">
+                <SelectValue placeholder="Auto (inferred)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__auto__" className="text-xs font-mono">
+                  auto ({inferredLabel})
                 </SelectItem>
-              ))}
-          </SelectContent>
-        </Select>
+                <SelectItem value="as_human_message" className="text-xs font-mono">
+                  <div className="flex items-center justify-between gap-3 w-full">
+                    <span>HumanMessage (User Query)</span>
+                    <span className="text-[10px] text-muted-foreground opacity-60 font-normal">[new HumanMessage]</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="append_to_list" className="text-xs font-mono">
+                  <div className="flex items-center justify-between gap-3 w-full">
+                    <span>Append to List</span>
+                    <span className="text-[10px] text-muted-foreground opacity-60 font-normal">[item] concat</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="merge_object" className="text-xs font-mono">
+                  <div className="flex items-center justify-between gap-3 w-full">
+                    <span>Merge Object (Dict)</span>
+                    <span className="text-[10px] text-muted-foreground opacity-60 font-normal">&#123;...obj&#125;</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="direct" className="text-xs font-mono">
+                  <div className="flex items-center justify-between gap-3 w-full">
+                    <span>Direct Pass-through</span>
+                    <span className="text-[10px] text-muted-foreground opacity-60 font-normal">as-is</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="parse_json" className="text-xs font-mono">
+                  <div className="flex items-center justify-between gap-3 w-full">
+                    <span>Parse JSON String</span>
+                    <span className="text-[10px] text-muted-foreground opacity-60 font-normal">JSON.parse</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="transformer" className="text-xs font-mono text-purple-400 font-semibold">
+                  <div className="flex items-center justify-between gap-3 w-full">
+                    <span>⚡ Transformer Node...</span>
+                    <span className="text-[10px] text-purple-400/70 font-normal">await fn(x)</span>
+                  </div>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        {/* Transformer picker if transformer mode is selected */}
+        {input.stateChannelKey && (input.transition === "transformer" || input.transformerRef) && (
+          <div className="flex items-center gap-2 pl-4">
+            <span className="text-[10px] text-purple-400 font-medium shrink-0">Transformer:</span>
+            <Select
+              value={input.transformerRef || "__none__"}
+              onValueChange={(v) => onChange(idx, {
+                transformerRef: v === "__none__" ? undefined : v,
+                transition: "transformer"
+              })}
+            >
+              <SelectTrigger className="h-6 flex-1 text-[11px] bg-background/80 font-mono text-purple-400">
+                <SelectValue placeholder="— select transformer —" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__" className="text-xs text-muted-foreground">— select —</SelectItem>
+                {availableTransformers.map((t) => (
+                  <SelectItem key={t.id} value={t.name || t.id} className="text-xs font-mono">
+                    {t.name || t.id}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -137,6 +277,7 @@ export function InputsTabContent({
   setInputChannels,
   suggestedParams = [],
   stateChannels = [],
+  availableTransformers = [],
   onRefreshInputs,
 }: InputsTabContentProps) {
   const pendingSuggestions = suggestedParams.filter(
@@ -279,6 +420,7 @@ export function InputsTabContent({
             input={ch}
             idx={globalIdx(ch)}
             stateChannels={stateChannels}
+            availableTransformers={availableTransformers}
             onChange={handleChange}
             onDelete={handleDelete}
           />
@@ -330,6 +472,7 @@ export function InputsTabContent({
             input={ch}
             idx={globalIdx(ch)}
             stateChannels={stateChannels}
+            availableTransformers={availableTransformers}
             onChange={handleChange}
             onDelete={handleDelete}
           />
@@ -347,8 +490,8 @@ export function InputsTabContent({
         <div className="flex items-start gap-2 p-3 rounded-lg bg-primary/5 border border-primary/10 text-xs text-muted-foreground">
           <ArrowRight className="w-3.5 h-3.5 text-primary/50 mt-0.5 shrink-0" />
           <div>
-            <p className="font-medium text-foreground/70 mb-0.5">Initial State Mapping</p>
-            <p>Each field can be mapped to a state channel. On invocation, the mapped state channels will be pre-seeded with the incoming value — e.g. <code className="font-mono">message → messages</code>.</p>
+            <p className="font-medium text-foreground/70 mb-0.5">Input to State Ingestion</p>
+            <p>Each incoming request parameter can map to a state channel. Use Transitions or custom Transformer nodes to adapt shapes before invocation updates are folded by channel reducers.</p>
           </div>
         </div>
       )}
