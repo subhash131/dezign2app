@@ -12,6 +12,7 @@ export default defineConfig({
       "**/node_modules/**",
       "**/dist/**",
       "**/.next/**",
+      "**/.open-next/**",
       "**/e2e/**",
       "**/*.spec.ts",
     ],

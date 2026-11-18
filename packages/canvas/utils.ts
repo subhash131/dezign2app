@@ -276,6 +276,20 @@ export function classifyHandle(
   if (id === "page-in" || id.startsWith("page-in")) return "page-in";
   if (id === "page-ref-in" || id.startsWith("page-ref-in")) return "page-ref-in";
   if (nodeType === "page_ref" && handleDirection === "target") return "page-ref-in";
+  if (id === "ref-out" || id.startsWith("ref-out-") || (nodeType === "page_ref" && handleDirection === "source")) {
+    return "page-ref-out";
+  }
+  if (id.startsWith("rtc-out-") || id.startsWith("rtc-out")) {
+    return handleDirection === "target" ? "rtc-in" : "rtc-out";
+  }
+  if (
+    id.startsWith("rtc-in-") ||
+    id.startsWith("rtc-in") ||
+    id.startsWith("rtc-right-in-") ||
+    id.startsWith("rtc-ref-in-")
+  ) {
+    return "rtc-in";
+  }
   if (nodeType === "webApp") {
     if (id === "auth-in" || id.startsWith("auth-in")) {
       return handleDirection === "source" ? "auth-out" : "auth-in";

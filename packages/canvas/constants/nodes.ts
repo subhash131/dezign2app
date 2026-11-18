@@ -130,6 +130,7 @@ export const BACKEND_EDGE_TRANSFORMER_REFERENCE = "transformer-reference" as con
 export const BACKEND_EDGE_STORAGE_REFERENCE = "storage-reference" as const;
 export const BACKEND_EDGE_REFERENCE = "reference" as const;
 export const BACKEND_EDGE_TYPE_REFERENCE = "type-reference" as const;
+export const BACKEND_EDGE_PAGE_REFERENCE = "page-reference" as const;
 
 export const BACKEND_EDGE_TYPES = {
   FOREIGN_KEY: BACKEND_EDGE_FOREIGN_KEY,
@@ -141,4 +142,5 @@ export const BACKEND_EDGE_TYPES = {
   STORAGE_REFERENCE: BACKEND_EDGE_STORAGE_REFERENCE,
   REFERENCE: BACKEND_EDGE_REFERENCE,
   TYPE_REFERENCE: BACKEND_EDGE_TYPE_REFERENCE,
+  PAGE_REFERENCE: BACKEND_EDGE_PAGE_REFERENCE,
 } as const;

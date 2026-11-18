@@ -35,6 +35,8 @@ export function handleWebPageActionConnect({
   const isTargetWebPage = targetNode.type === "webPage";
 
   if (!isSourceWebPage && !isTargetWebPage) return false;
+  if (newEdge.type === "page-reference") return false;
+  if (sourceNode.type === "page_ref" || targetNode.type === "page_ref") return false;
 
   const webPageNode = isSourceWebPage ? sourceNode : targetNode;
   const otherNode = isSourceWebPage ? targetNode : sourceNode;
@@ -55,13 +57,12 @@ export function handleWebPageActionConnect({
     webHandle.startsWith("interval-in-") ||
     webHandle.startsWith("effect-in-") ||
     webHandle.startsWith("action-in-") ||
-    webHandle.startsWith("rtc-out-") ||
-    webHandle.startsWith("rtc-in-");
+    webHandle.startsWith("rtc-out-");
 
   if (!isActionHandle) return false;
 
   const actionId = webHandle.replace(
-    /^(?:events-|event-in-|pageload-in-|mount-in-|onmount-in-|unmount-in-|interval-in-|effect-in-|action-in-|rtc-out-|rtc-in-)/,
+    /^(?:events-|event-in-|pageload-in-|mount-in-|onmount-in-|unmount-in-|interval-in-|effect-in-|action-in-|rtc-out-)/,
     "",
   );
 

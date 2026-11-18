@@ -42,6 +42,9 @@ export const ActionFlowEditor: React.FC<ActionFlowEditorProps> = ({
   realtimeProtocol,
   realtimeSourceLabel,
   realtimeSourceItemName,
+  sourceStepName,
+  sourceStepType,
+  sourceStepIndex,
   incomingPaths,
   isItemScoped,
   itemKeyField,
@@ -55,6 +58,7 @@ export const ActionFlowEditor: React.FC<ActionFlowEditorProps> = ({
 }) => {
     const effectiveIsItemScoped = isItemScoped ?? Boolean(item?.scope === "item" || item?.itemSourceStateId);
   const effectiveItemKey = itemKeyField || item?.itemContextFields?.[0] || "id";
+
   const [drafts, setDrafts] = useState<FrontendActionStepDraft[]>(() => {
     if (item?.actionSteps && item.actionSteps.length > 0) {
       const hasUnmergedCanvasStep = canvasSteps.some(
@@ -90,7 +94,9 @@ export const ActionFlowEditor: React.FC<ActionFlowEditorProps> = ({
       if (hasUnmergedCanvasStep) {
         const derived = deriveStepsFromEdges(canvasSteps, item.actionSteps, isProtected);
         setDrafts(derived);
-        onSave(derived);
+        if (JSON.stringify(derived) !== JSON.stringify(item.actionSteps)) {
+          onSave(derived);
+        }
       } else {
         const mapped = item.actionSteps.map((s) => {
           if (s.type === "api_call") {
@@ -110,7 +116,9 @@ export const ActionFlowEditor: React.FC<ActionFlowEditorProps> = ({
     } else if (canvasSteps.length > 0) {
       const derived = deriveStepsFromEdges(canvasSteps, item?.actionSteps, isProtected);
       setDrafts(derived);
-      onSave(derived);
+      if (JSON.stringify(derived) !== JSON.stringify(item?.actionSteps || [])) {
+        onSave(derived);
+      }
     } else {
       setDrafts([]);
     }
@@ -340,6 +348,9 @@ export const ActionFlowEditor: React.FC<ActionFlowEditorProps> = ({
           protocol={realtimeProtocol}
           sourceServiceLabel={realtimeSourceLabel}
           sourceItemName={realtimeSourceItemName}
+          sourceStepName={sourceStepName}
+          sourceStepType={sourceStepType}
+          sourceStepIndex={sourceStepIndex}
           incomingPaths={incomingPaths}
           isLangGraph={isLangGraph}
           langGraphStreamModes={langGraphStreamModes}

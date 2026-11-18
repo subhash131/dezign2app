@@ -50,6 +50,8 @@ export const PageRefNode = ({
   const endpoints = useBackendCanvasStore((s) => s.endpoints);
   const events = useBackendCanvasStore((s) => s.events);
   const setActiveConfigItem = useBackendCanvasStore((s) => s.setActiveConfigItem);
+  const addEdge = useBackendCanvasStore((s) => s.addEdge);
+  const deleteEdge = useBackendCanvasStore((s) => s.deleteEdge);
 
   const simulation = useSimulationNodeState(id);
   const borderClass = getSimulationNodeBorderClass(
@@ -218,6 +220,68 @@ export const PageRefNode = ({
 
     return list;
   }, [id, edges, endpoints, events, nodes, selectedTargetId, data.targetPageId]);
+
+  // Ensure invisible reference edge exists between this ref-out handle and the target WebPage realtime connection
+  React.useEffect(() => {
+    if (!selectedTargetId) {
+      edges
+        .filter((e) => e.type === "page-reference" && e.source === id)
+        .forEach((e) => deleteEdge(e.id));
+      return;
+    }
+
+    const desiredEdges: Array<{
+      id: string;
+      source: string;
+      target: string;
+      sourceHandle: string;
+      targetHandle: string;
+      type: "page-reference";
+    }> = [];
+
+    if (linkedSteps.length > 0) {
+      linkedSteps.forEach((step) => {
+        desiredEdges.push({
+          id: `edge-page-ref-${id}-${selectedTargetId}-${step.stepId}`,
+          source: id,
+          target: selectedTargetId,
+          sourceHandle: "ref-out",
+          targetHandle: `rtc-right-in-${step.stepId}`,
+          type: "page-reference",
+        });
+      });
+    }
+
+    // Clean up any stale page-reference edges originating from this node that are no longer needed
+    edges
+      .filter((e) => e.type === "page-reference" && e.source === id)
+      .forEach((e) => {
+        const stillNeeded = desiredEdges.some(
+          (d) =>
+            d.target === e.target &&
+            d.targetHandle === e.targetHandle &&
+            d.sourceHandle === e.sourceHandle,
+        );
+        if (!stillNeeded) {
+          deleteEdge(e.id);
+        }
+      });
+
+    // Add any missing desired edges
+    desiredEdges.forEach((d) => {
+      const exists = edges.some(
+        (e) =>
+          e.type === "page-reference" &&
+          e.source === d.source &&
+          e.target === d.target &&
+          e.sourceHandle === d.sourceHandle &&
+          e.targetHandle === d.targetHandle,
+      );
+      if (!exists) {
+        addEdge(d);
+      }
+    });
+  }, [id, selectedTargetId, linkedSteps, edges, addEdge, deleteEdge]);
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();

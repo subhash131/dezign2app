@@ -446,7 +446,15 @@ export const TransformerReferenceEdge = (props: EdgeProps<BackendEdge>) => {
       act?.id === props.source ||
       act?.nodeId === props.target ||
       act?.id === props.target;
-    return isSourceSelected || isTargetSelected || isConfigActive;
+    const isUpstreamActive = Boolean(
+      act &&
+        s.edges.some(
+          (e) =>
+            e.target === props.source &&
+            (e.source === act.nodeId || e.source === act.id),
+        ),
+    );
+    return isSourceSelected || isTargetSelected || isConfigActive || isUpstreamActive;
   });
 
   const isVisible = isEdgeSelected || isNodeSelected;
@@ -526,7 +534,15 @@ export const StorageReferenceEdge = (props: EdgeProps<BackendEdge>) => {
       act?.id === props.source ||
       act?.nodeId === props.target ||
       act?.id === props.target;
-    return isSourceSelected || isTargetSelected || isConfigActive;
+    const isUpstreamActive = Boolean(
+      act &&
+        s.edges.some(
+          (e) =>
+            e.target === props.source &&
+            (e.source === act.nodeId || e.source === act.id),
+        ),
+    );
+    return isSourceSelected || isTargetSelected || isConfigActive || isUpstreamActive;
   });
 
   const isVisible = isEdgeSelected || isNodeSelected;
@@ -697,6 +713,94 @@ export const TypeReferenceEdge = (props: TypeReferenceEdgeProps) => {
 };
 
 
+// 5c. Page Reference Edge (Invisible reference edge between PageRef/LayoutRef node and target WebPage realtime connection)
+export const PageReferenceEdge = (props: EdgeProps<BackendEdge>) => {
+  const isEdgeSelected = props.selected;
+  const isNodeSelected = useBackendCanvasStore((s) => {
+    const isSourceSelected = Boolean(s.nodes.find((n) => n.id === props.source)?.selected);
+    const isTargetSelected = Boolean(s.nodes.find((n) => n.id === props.target)?.selected);
+    const act = s.activeConfigItem;
+    const isConfigActive =
+      act?.nodeId === props.source ||
+      act?.id === props.source ||
+      act?.nodeId === props.target ||
+      act?.id === props.target;
+    const isUpstreamActive = Boolean(
+      act &&
+        s.edges.some(
+          (e) =>
+            e.target === props.source &&
+            (e.source === act.nodeId || e.source === act.id),
+        ),
+    );
+    return isSourceSelected || isTargetSelected || isConfigActive || isUpstreamActive;
+  });
+
+  const isVisible = isEdgeSelected || isNodeSelected;
+
+  const {
+    sourceX,
+    sourceY,
+    targetX,
+    targetY,
+    sourcePosition,
+    targetPosition,
+    style,
+  } = props;
+
+  const [edgePath] = getBezierPath({
+    sourceX,
+    sourceY,
+    sourcePosition,
+    targetPosition,
+    targetX,
+    targetY,
+  });
+
+  if (!isVisible) {
+    return (
+      <BaseEdge
+        path={edgePath}
+        style={{
+          opacity: 0,
+          pointerEvents: "none",
+          strokeWidth: 0,
+        }}
+      />
+    );
+  }
+
+  return (
+    <>
+      <EdgeStyles />
+      <EdgeMarkers />
+
+      {/* Subtle purple background glow */}
+      <BaseEdge
+        path={edgePath}
+        style={{
+          ...style,
+          strokeWidth: 4,
+          stroke: "rgba(168, 85, 247, 0.25)",
+          filter: "drop-shadow(0 0 6px rgba(168, 85, 247, 0.6))",
+        }}
+      />
+
+      {/* Main purple dashed reference line */}
+      <BaseEdge
+        path={edgePath}
+        markerEnd="url(#arrow-purple)"
+        style={{
+          ...style,
+          strokeWidth: 1.5,
+          stroke: "#a855f7",
+          strokeDasharray: "4, 4",
+        }}
+      />
+    </>
+  );
+};
+
 export const canvasEdgeTypes = {
   "foreign-key": ForeignKeyEdge,
   connection: HTTPConnectionEdge,
@@ -706,5 +810,6 @@ export const canvasEdgeTypes = {
   "transformer-reference": TransformerReferenceEdge,
   "storage-reference": StorageReferenceEdge,
   "type-reference": TypeReferenceEdge,
+  "page-reference": PageReferenceEdge,
   reference: TransformerReferenceEdge,
 };
