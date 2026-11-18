@@ -4,10 +4,16 @@ import {
   Endpoint,
   SimulationTestCase,
 } from "@/types/canvas";
+import type { StartNode, LangGraphCanvasNode } from "@workspace/canvas";
+import { LANGGRAPH_CANVAS_NODE_START } from "@workspace/canvas/constants";
 import { CompiledServiceResult } from "@workspace/canvas/types";
 import { compileLangGraph } from "../langgraph/typescript/v1";
 import { extractLangGraphInput } from "./extractLangGraphInput";
 import { resolveRouteEndpoints } from "./resolveRouteEndpoints";
+
+function isStartCanvasNode(node: LangGraphCanvasNode): node is StartNode {
+  return node.type === LANGGRAPH_CANVAS_NODE_START;
+}
 
 export function compileLangGraphNode(
   node: BackendNode,
@@ -27,6 +33,38 @@ export function compileLangGraphNode(
 ): CompiledServiceResult {
   const serviceName = node.data?.label || "LangGraph Service";
   const input = extractLangGraphInput(node);
+
+  // Enrich availableTransformers on START node from context root canvas nodes if available
+  if (context?.nodes && Array.isArray(input.nodes)) {
+    const startNode = input.nodes.find(isStartCanvasNode);
+    if (startNode) {
+      const existing = startNode.data.availableTransformers || [];
+      const rootTransformers = context.nodes
+        .filter((n) => n.type === "transformer")
+        .map((n) => {
+          const d = n.data;
+          const fn =
+            d && typeof d.functionName === "string" ? d.functionName : undefined;
+          const lbl = d && typeof d.label === "string" ? d.label : undefined;
+          return {
+            id: n.id,
+            name: fn || lbl || n.id,
+            functionName: fn,
+            label: lbl,
+          };
+        })
+        .filter(
+          (rt) => !existing.some((et) => et.id === rt.id || et.name === rt.name),
+        );
+
+      if (rootTransformers.length > 0) {
+        startNode.data.availableTransformers = [
+          ...existing,
+          ...rootTransformers,
+        ];
+      }
+    }
+  }
 
   if (context?.outputMode) {
     input.outputMode = context.outputMode;
