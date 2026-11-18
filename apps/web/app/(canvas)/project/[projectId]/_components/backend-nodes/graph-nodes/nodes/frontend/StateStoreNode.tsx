@@ -58,6 +58,7 @@ import {
   getAvailableCustomTypes,
   resolveCustomType,
   extractFieldsFromCustomType,
+  extractActionGroupsFromReducerCode,
   getAllowedEnumValues,
   isFieldStreamable,
 } from "../../langgraph/langgraph-canvas/components/inspector/state-inspector/constants";
@@ -550,7 +551,12 @@ export const StateStoreNode = ({
         (expectedActions.includes("stream") && !f.actions?.includes("stream")) ||
         (!expectedActions.includes("update") && f.actions?.includes("update"))
       );
-      if (isMissingCode || isMismatched || isSchemaMismatch || isArrayWithObjectReducer || isSenderEnumMismatch || hasActionsMismatch) {
+      const hasLegacySetterMutate = Boolean(
+        f.customReducerCode &&
+          (f.customReducerCode.includes('action === "setter"') ||
+            f.customReducerCode.includes('action === "mutate"')),
+      );
+      if (isMissingCode || isMismatched || isSchemaMismatch || isArrayWithObjectReducer || isSenderEnumMismatch || hasActionsMismatch || hasLegacySetterMutate) {
         needsUpdate = true;
         const generated = getSuggestedReducerCodeForChannelType(f.type, matchedCustom, isArray);
         return {
@@ -787,10 +793,17 @@ export const StateStoreNode = ({
                 typeName: cleanFieldBaseType,
                 typeId: f.customTypeId,
               });
-              const supportedActions =
-                f.actions && f.actions.length > 0 && !(isFieldArray && !f.actions.includes("append"))
-                  ? f.actions
-                  : getSupportedActionsForType(f.type, isFieldArray, f.name, matchedCustom);
+              const actionGroups: string[] = f.customReducerCode
+                ? extractActionGroupsFromReducerCode(f.customReducerCode).map((g: string[]) =>
+                    g.length > 1 ? g.join(" | ") : (g[0] ?? ""),
+                  )
+                : [];
+              const supportedActions: string[] =
+                actionGroups.length > 0
+                  ? actionGroups
+                  : f.actions && f.actions.length > 0 && !(isFieldArray && !f.actions.includes("append"))
+                    ? f.actions
+                    : getSupportedActionsForType(f.type, isFieldArray, f.name, matchedCustom);
               const reducerName = f.reducer || `${f.name || "state"}_reducer`;
 
               const isOutputConnected = edges.some(
