@@ -234,38 +234,6 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
     return [...derivedWithBindings, ...manualOnly];
   }, [derivedConnections, connections, nodes, edges]);
 
-  // Auto-clean any bogus action steps created from reference edges or page_ref nodes from node store
-  React.useEffect(() => {
-    if (!connections || connections.length === 0) return;
-    let hasBogus = false;
-    const cleaned = connections.map((c) => {
-      if (!c.actionSteps || c.actionSteps.length === 0) return c;
-      const valid = c.actionSteps.filter((s) => {
-        if (s.serviceNodeId && nodes.some((n) => n.id === s.serviceNodeId && n.type === "page_ref")) {
-          return false;
-        }
-        if (s.edgeId && edges.some((e) => e.id === s.edgeId && e.type === "page-reference")) {
-          return false;
-        }
-        return true;
-      });
-      if (valid.length !== c.actionSteps.length) {
-        hasBogus = true;
-        return { ...c, actionSteps: valid };
-      }
-      return c;
-    });
-
-    if (hasBogus) {
-      updateNode(nodeId, {
-        data: {
-          ...data,
-          realtimeConnections: cleaned,
-        },
-      });
-    }
-  }, [connections, nodes, edges, nodeId, data, updateNode]);
-
   const handleAdd = () => {
     const newId = `rtc-${generateId()}`;
     const newConn: RealtimeConnection = {

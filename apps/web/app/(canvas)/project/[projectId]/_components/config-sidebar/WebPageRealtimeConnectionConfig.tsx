@@ -161,38 +161,6 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
     };
   }, [manualConn, derivedInfo, id, events, endpoints, validActionSteps]);
 
-  // Clean up any stale actionSteps pointing to reference edges or page_ref nodes from the store
-  React.useEffect(() => {
-    if (!pageNode?.data?.realtimeConnections) return;
-    let modified = false;
-    const nextConns = pageNode.data.realtimeConnections.map((c) => {
-      if (!c.actionSteps || c.actionSteps.length === 0) return c;
-      const valid = c.actionSteps.filter((s) => {
-        if (s.serviceNodeId && nodes.some((n) => n.id === s.serviceNodeId && n.type === "page_ref")) {
-          return false;
-        }
-        if (s.edgeId && edges.some((e) => e.id === s.edgeId && e.type === "page-reference")) {
-          return false;
-        }
-        return true;
-      });
-      if (valid.length !== c.actionSteps.length) {
-        modified = true;
-        return { ...c, actionSteps: valid };
-      }
-      return c;
-    });
-
-    if (modified) {
-      updateNode(nodeId, {
-        data: {
-          ...pageNode.data,
-          realtimeConnections: nextConns,
-        },
-      });
-    }
-  }, [pageNode, nodes, edges, nodeId, updateNode]);
-
   const isDerived = Boolean(derivedInfo?.step);
   const isConnected = Boolean(
     isDerived ||
@@ -397,6 +365,13 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
     }
 
     const isAlreadyInExisting = connections.some((c) => c.id === id);
+    if (
+      isAlreadyInExisting &&
+      manualConn &&
+      JSON.stringify(manualConn) === JSON.stringify({ ...manualConn, ...changes })
+    ) {
+      return;
+    }
     const updatedList = isAlreadyInExisting
       ? connections.map((c) => (c.id === id ? { ...c, ...changes } : c))
       : [...connections, { ...conn, ...changes }];
@@ -481,98 +456,110 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
     );
   }, [nodes]);
 
-  const actionEdges = edges.filter(
-    (e) =>
-      (e.source === nodeId && (e.sourceHandle === `rtc-out-${id}` || e.sourceHandle === `rtc-in-${id}` || e.sourceHandle === `rtc-right-in-${id}`)) ||
-      (e.target === nodeId && (e.targetHandle === `rtc-in-${id}` || e.targetHandle === `rtc-out-${id}` || e.targetHandle === `rtc-right-in-${id}`)),
-  );
+  const actionEdges = useMemo(() => {
+    return edges.filter(
+      (e) =>
+        e.type !== "page-reference" &&
+        ((e.source === nodeId && e.sourceHandle === `rtc-out-${id}`) ||
+        (e.target === nodeId && e.targetHandle === `rtc-out-${id}`)),
+    );
+  }, [edges, nodeId, id]);
 
-  const sortedActionEdges = [...actionEdges].sort((a, b) => {
-    const ordA =
-      a.data?.sequenceOrder ??
-      (a.data?.label ? parseInt(a.data.label, 10) : 99);
-    const ordB =
-      b.data?.sequenceOrder ??
-      (b.data?.label ? parseInt(b.data.label, 10) : 99);
-    return ordA - ordB;
-  });
+  const canvasSteps: ActionStepItem[] = useMemo(() => {
+    const sortedActionEdges = [...actionEdges].sort((a, b) => {
+      const ordA =
+        a.data?.sequenceOrder ??
+        (a.data?.label ? parseInt(a.data.label, 10) : 99);
+      const ordB =
+        b.data?.sequenceOrder ??
+        (b.data?.label ? parseInt(b.data.label, 10) : 99);
+      return ordA - ordB;
+    });
 
-  const canvasSteps: ActionStepItem[] = sortedActionEdges.map((e, idx) => {
-    const isSource = e.source === nodeId;
-    const targetNodeId = isSource ? e.target : e.source;
-    const handle = isSource ? e.targetHandle : e.sourceHandle;
-    const targetNode = nodes.find((n) => n.id === targetNodeId);
-    const stepNumber = e.data?.sequenceOrder ?? idx + 1;
-    const stepLabel = e.data?.label ?? String(stepNumber);
-    const isStorageRef = isStorageRefNode(targetNode?.type);
+    return sortedActionEdges.map((e, idx) => {
+      const isSource = e.source === nodeId;
+      const targetNodeId = isSource ? e.target : e.source;
+      const handle = isSource ? e.targetHandle : e.sourceHandle;
+      const targetNode = nodes.find((n) => n.id === targetNodeId);
+      const stepNumber = e.data?.sequenceOrder ?? idx + 1;
+      const stepLabel = e.data?.label ?? String(stepNumber);
+      const isStorageRef = isStorageRefNode(targetNode?.type);
 
-    if (isStorageRef) {
-      const opName =
-        handle?.replace(/^func-(?:in-)?/, "") ||
-        e.data?.operationName ||
-        "uploadObject";
-      const bucketName =
-        targetNode?.data?.bucketId ||
-        targetNode?.data?.bucketName ||
-        e.data?.bucketId ||
-        "bucket";
+      if (isStorageRef) {
+        const opName =
+          handle?.replace(/^func-(?:in-)?/, "") ||
+          e.data?.operationName ||
+          "uploadObject";
+        const bucketName =
+          targetNode?.data?.bucketId ||
+          targetNode?.data?.bucketName ||
+          e.data?.bucketId ||
+          "bucket";
+        return {
+          step: stepNumber,
+          label: stepLabel,
+          edgeId: e.id,
+          targetNodeId,
+          targetNode,
+          isStorageRef: true,
+          operationName: opName,
+          bucketName,
+          endpoint: {
+            id: `storage-op-${opName}`,
+            name: `${opName}()`,
+            type:
+              opName.toLowerCase().includes("presign") ||
+              opName.toLowerCase().includes("upload")
+                ? "PUT"
+                : "STORAGE",
+            summary: `Storage bucket operation via ${bucketName}`,
+          },
+          edge: e,
+        };
+      }
+
+      let endpointId: string | undefined;
+      if (handle) {
+        const parts = handle.split("-in-");
+        endpointId = parts[parts.length - 1];
+      }
+
+      let targetEndpoint: Endpoint | undefined;
+      if (endpointId && targetNode) {
+        const storeEndpoints = endpoints.filter(
+          (ep) => ep.nodeId === targetNodeId && ep.id === endpointId,
+        );
+        if (storeEndpoints.length > 0) targetEndpoint = storeEndpoints[0];
+        if (!targetEndpoint && targetNode.data?.endpoints) {
+          targetEndpoint = targetNode.data.endpoints.find(
+            (ep: Endpoint) => ep.id === endpointId,
+          );
+        }
+      }
+
       return {
         step: stepNumber,
         label: stepLabel,
         edgeId: e.id,
         targetNodeId,
         targetNode,
-        isStorageRef: true,
-        operationName: opName,
-        bucketName,
-        endpoint: {
-          id: `storage-op-${opName}`,
-          name: `${opName}()`,
-          type:
-            opName.toLowerCase().includes("presign") ||
-            opName.toLowerCase().includes("upload")
-              ? "PUT"
-              : "STORAGE",
-          summary: `Storage bucket operation via ${bucketName}`,
-        },
+        endpointId,
+        endpoint: targetEndpoint,
         edge: e,
       };
-    }
-
-    let endpointId: string | undefined;
-    if (handle) {
-      const parts = handle.split("-in-");
-      endpointId = parts[parts.length - 1];
-    }
-
-    let targetEndpoint: Endpoint | undefined;
-    if (endpointId && targetNode) {
-      const storeEndpoints = endpoints.filter(
-        (ep) => ep.nodeId === targetNodeId && ep.id === endpointId,
-      );
-      if (storeEndpoints.length > 0) targetEndpoint = storeEndpoints[0];
-      if (!targetEndpoint && targetNode.data?.endpoints) {
-        targetEndpoint = targetNode.data.endpoints.find(
-          (ep: Endpoint) => ep.id === endpointId,
-        );
-      }
-    }
-
-    return {
-      step: stepNumber,
-      label: stepLabel,
-      edgeId: e.id,
-      targetNodeId,
-      targetNode,
-      endpointId,
-      endpoint: targetEndpoint,
-      edge: e,
-    };
-  });
+    });
+  }, [actionEdges, nodeId, nodes, endpoints]);
 
   const handleDeleteStep = (edgeId: string) => {
     useBackendCanvasStore.getState().deleteEdge(edgeId);
   };
+
+  const actionFlowItem = useMemo(() => ({
+    id: conn.id,
+    name: conn.eventName || "message",
+    event: conn.protocol || "SSE",
+    actionSteps: conn.actionSteps,
+  }), [conn.id, conn.eventName, conn.protocol, conn.actionSteps]);
 
   return (
     <div className="flex flex-col gap-5">
@@ -678,12 +665,7 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
             </AccordionTrigger>
             <AccordionContent className="px-4 pb-5 pt-2">
               <ActionFlowEditor
-                item={{
-                  id: conn.id,
-                  name: conn.eventName || "message",
-                  event: conn.protocol || "SSE",
-                  actionSteps: conn.actionSteps,
-                }}
+                item={actionFlowItem}
                 canvasSteps={canvasSteps}
                 serviceNodes={serviceNodes}
                 allNodes={nodes}

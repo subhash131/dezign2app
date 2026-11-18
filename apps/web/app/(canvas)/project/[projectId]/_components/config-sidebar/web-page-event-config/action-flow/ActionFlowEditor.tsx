@@ -59,27 +59,15 @@ export const ActionFlowEditor: React.FC<ActionFlowEditorProps> = ({
     const effectiveIsItemScoped = isItemScoped ?? Boolean(item?.scope === "item" || item?.itemSourceStateId);
   const effectiveItemKey = itemKeyField || item?.itemContextFields?.[0] || "id";
 
-  const filterValidSteps = (steps?: FrontendActionStepDraft[]) => {
-    if (!steps || steps.length === 0) return steps;
-    return steps.filter((s) => {
-      if (s.serviceNodeId && allNodes.some((n) => n.id === s.serviceNodeId && n.type === "page_ref")) {
-        return false;
-      }
-      return true;
-    });
-  };
-
-  const initialCleanSteps = filterValidSteps(item?.actionSteps);
-
   const [drafts, setDrafts] = useState<FrontendActionStepDraft[]>(() => {
-    if (initialCleanSteps && initialCleanSteps.length > 0) {
+    if (item?.actionSteps && item.actionSteps.length > 0) {
       const hasUnmergedCanvasStep = canvasSteps.some(
-        (c) => !initialCleanSteps.some((s) => s.edgeId === c.edgeId),
+        (c) => !item.actionSteps?.some((s) => s.edgeId === c.edgeId),
       );
       if (hasUnmergedCanvasStep) {
-        return deriveStepsFromEdges(canvasSteps, initialCleanSteps, isProtected);
+        return deriveStepsFromEdges(canvasSteps, item.actionSteps, isProtected);
       }
-      return initialCleanSteps.map((s) => {
+      return item.actionSteps.map((s) => {
         if (s.type === "api_call") {
           const ep = endpoints.find((e) => e.id === s.endpointId);
           const bindings = s.requestBindings && s.requestBindings.length > 0
@@ -93,23 +81,24 @@ export const ActionFlowEditor: React.FC<ActionFlowEditorProps> = ({
         return s;
       });
     }
-    return deriveStepsFromEdges(canvasSteps, initialCleanSteps, isProtected);
+    return deriveStepsFromEdges(canvasSteps, item?.actionSteps, isProtected);
   });
   const [showRuntimePreview, setShowRuntimePreview] = useState(false);
 
   // Sync with item.actionSteps or canvasSteps if external changes happen
   useEffect(() => {
-    const cleanSteps = filterValidSteps(item?.actionSteps);
-    if (cleanSteps && cleanSteps.length > 0) {
+    if (item?.actionSteps && item.actionSteps.length > 0) {
       const hasUnmergedCanvasStep = canvasSteps.some(
-        (c) => !cleanSteps.some((s) => s.edgeId === c.edgeId),
+        (c) => !item.actionSteps?.some((s) => s.edgeId === c.edgeId),
       );
       if (hasUnmergedCanvasStep) {
-        const derived = deriveStepsFromEdges(canvasSteps, cleanSteps, isProtected);
+        const derived = deriveStepsFromEdges(canvasSteps, item.actionSteps, isProtected);
         setDrafts(derived);
-        onSave(derived);
+        if (JSON.stringify(derived) !== JSON.stringify(item.actionSteps)) {
+          onSave(derived);
+        }
       } else {
-        const mapped = cleanSteps.map((s) => {
+        const mapped = item.actionSteps.map((s) => {
           if (s.type === "api_call") {
             const ep = endpoints.find((e) => e.id === s.endpointId);
             const bindings = s.requestBindings && s.requestBindings.length > 0
@@ -125,13 +114,15 @@ export const ActionFlowEditor: React.FC<ActionFlowEditorProps> = ({
         setDrafts(mapped);
       }
     } else if (canvasSteps.length > 0) {
-      const derived = deriveStepsFromEdges(canvasSteps, cleanSteps, isProtected);
+      const derived = deriveStepsFromEdges(canvasSteps, item?.actionSteps, isProtected);
       setDrafts(derived);
-      onSave(derived);
+      if (JSON.stringify(derived) !== JSON.stringify(item?.actionSteps || [])) {
+        onSave(derived);
+      }
     } else {
       setDrafts([]);
     }
-  }, [item?.actionSteps, canvasSteps, isProtected, allNodes]);
+  }, [item?.actionSteps, canvasSteps, isProtected]);
 
   const handleAddStep = (type: FrontendActionStepType) => {
     const newOrder = drafts.length + 1;
