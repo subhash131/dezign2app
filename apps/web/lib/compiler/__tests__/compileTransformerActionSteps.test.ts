@@ -198,9 +198,9 @@ describe("WebPageNode Action Transformer Step Compilation", () => {
       'import { formatOrderConfirmation, prepareOrder } from "@workspace/transformers";',
     );
 
-    // Verify ordering: prepareOrder executes BEFORE onTrigger, formatOrderConfirmation executes AFTER onTrigger
+    // Verify ordering: prepareOrder executes BEFORE executeApiAction, formatOrderConfirmation executes AFTER
     const prepIndex = code.indexOf("await prepareOrder(");
-    const triggerIndex = code.indexOf("await onTrigger?.(");
+    const triggerIndex = code.indexOf("await executeApiAction");
     const postIndex = code.indexOf("await formatOrderConfirmation(");
 
     expect(prepIndex).toBeGreaterThan(-1);
@@ -646,8 +646,8 @@ describe("WebPageNode Action Transformer Step Compilation", () => {
       eventItem,
     );
 
-    // generateChatId executed after onTrigger and before router.push
-    const triggerIdx = code.indexOf("await onTrigger?.(");
+    // generateChatId executed after executeApiAction and before router.push
+    const triggerIdx = code.indexOf("await executeApiAction");
     const transIdx = code.indexOf("await generateChatId(");
     const navIdx = code.indexOf("router.push(");
 
