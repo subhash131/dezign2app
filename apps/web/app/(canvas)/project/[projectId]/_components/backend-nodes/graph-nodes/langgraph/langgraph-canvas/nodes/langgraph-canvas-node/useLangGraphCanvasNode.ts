@@ -363,13 +363,16 @@ export function useLangGraphCanvasNode({
   const updateResponseFormat = (
     changes: Partial<LangGraphAgentResponseFormatConfig>,
   ) => {
-    const updated: LangGraphAgentResponseFormatConfig = {
+    const base: LangGraphAgentResponseFormatConfig = {
       enabled: false,
       strategy: "auto",
       schemaType: "json_schema",
       schemaJson: "",
       handleErrorMode: "default",
       ...responseFormat,
+    };
+    const updated: LangGraphAgentResponseFormatConfig = {
+      ...base,
       ...changes,
     };
     updateAgentData({ responseFormat: updated });
