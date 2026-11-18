@@ -10,6 +10,7 @@ export interface DerivedRealtimeInfo {
   sourceNode: BackendNode | undefined;
   sourceEventId: string | null;
   sourceEndpointId: string | null;
+  stepIndex?: number;
 }
 
 export interface ProtocolOption {

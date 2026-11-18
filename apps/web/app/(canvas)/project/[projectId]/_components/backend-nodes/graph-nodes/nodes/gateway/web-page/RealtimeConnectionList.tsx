@@ -122,9 +122,7 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
 
           const stepName =
             step.name ||
-            (isLangGraphStreaming
-              ? (step.langGraphAgentName ? `LangGraph: ${step.langGraphAgentName}` : "LangGraph Agent")
-              : "Push to Client");
+            (isLangGraphStreaming ? "LangGraph Agent" : "Push to Client");
 
           derived.push({
             id: step.id,
@@ -475,6 +473,20 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
                     </span>
                   )}
                 </div>
+
+                {/* Target handle on the right for PageRef/LayoutRef incoming reference connections */}
+                <Handle
+                  type="target"
+                  position={Position.Right}
+                  id={`rtc-right-in-${item.id}`}
+                  className={cn(
+                    CANVAS_ROW_HANDLE_CLASS,
+                    CANVAS_ROW_HANDLE_RIGHT_OFFSET_CLASS,
+                    "!border-2 !border-background !bg-violet-500",
+                  )}
+                  style={{ top: "50%" }}
+                  title="Incoming from Page/Layout Reference"
+                />
 
                 {/* Source handle for wiring realtime messages to downstream State Store */}
                 <Handle

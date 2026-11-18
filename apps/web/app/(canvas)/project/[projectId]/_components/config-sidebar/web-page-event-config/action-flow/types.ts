@@ -49,6 +49,9 @@ export interface ActionFlowEditorProps {
   realtimeProtocol?: string;
   realtimeSourceLabel?: string;
   realtimeSourceItemName?: string;
+  sourceStepName?: string;
+  sourceStepType?: string;
+  sourceStepIndex?: number;
   incomingPaths?: AvailablePath[];
   isItemScoped?: boolean;
   itemKeyField?: string;

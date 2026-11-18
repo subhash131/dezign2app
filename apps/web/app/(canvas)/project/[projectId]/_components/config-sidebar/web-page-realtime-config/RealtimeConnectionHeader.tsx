@@ -3,7 +3,7 @@
 import React from "react";
 import { RealtimeConnection } from "@workspace/canvas/types";
 import { DerivedRealtimeInfo } from "./types";
-import { Radio, AlertCircle, Sparkles, ExternalLink, Trash2 } from "lucide-react";
+import { Radio, AlertCircle, Sparkles, ExternalLink, Trash2, Bot } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { cn } from "@workspace/ui/lib/utils";
 
@@ -44,9 +44,23 @@ export const RealtimeConnectionHeader: React.FC<RealtimeConnectionHeaderProps> =
           <div>
             <h3 className="text-sm font-semibold text-foreground flex items-center gap-2 flex-wrap">
               <span>{conn.sourceItemName || conn.eventName || "Real-Time Connection"}</span>
-              {conn.sourceStepName && (
-                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-secondary/80 text-foreground/80 border border-border/60">
-                  {conn.sourceStepIndex ? `Step ${conn.sourceStepIndex}: ` : ""}{conn.sourceStepName}
+              {(conn.sourceStepName || derivedInfo?.step) && (
+                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-secondary/80 text-foreground/80 border border-border/70 inline-flex items-center gap-1">
+                  {(conn.sourceStepType || derivedInfo?.step?.type) === "langgraph_invoke" ? (
+                    <Bot size={11} className="text-muted-foreground shrink-0" />
+                  ) : (
+                    <Radio size={11} className="text-muted-foreground shrink-0" />
+                  )}
+                  <span>
+                    {(conn.sourceStepIndex || derivedInfo?.stepIndex)
+                      ? `Step ${conn.sourceStepIndex || derivedInfo?.stepIndex}: `
+                      : ""}
+                    {conn.sourceStepName ||
+                      derivedInfo?.step?.name ||
+                      (derivedInfo?.step?.type === "langgraph_invoke"
+                        ? "LangGraph Agent"
+                        : "Push to Client")}
+                  </span>
                 </span>
               )}
               <span className="text-[10px] font-mono font-normal px-1.5 py-0.5 rounded bg-secondary text-muted-foreground uppercase">
@@ -125,11 +139,12 @@ export const RealtimeConnectionHeader: React.FC<RealtimeConnectionHeaderProps> =
             )}
           </div>
           <p className="text-xs text-muted-foreground">
-            This real-time stream is pushed by a{" "}
+            This real-time stream is pushed by{" "}
             <strong className="text-foreground">
-              {conn.isLangGraph || derivedInfo.step?.type === "langgraph_invoke" ? "LangGraph Stream" : "Push to Client"}
+              {conn.sourceStepIndex ? `Step ${conn.sourceStepIndex}: ` : ""}
+              {conn.sourceStepName || derivedInfo.step?.name || (conn.isLangGraph || derivedInfo.step?.type === "langgraph_invoke" ? "LangGraph Agent" : "Push to Client")}
             </strong>{" "}
-            pipeline step {conn.sourceStepName || derivedInfo.step?.name ? `("${conn.sourceStepName || derivedInfo.step?.name}") ` : ""}on{" "}
+            ({conn.isLangGraph || derivedInfo.step?.type === "langgraph_invoke" ? "LangGraph Stream" : "Push to Client"}) on{" "}
             <strong className="text-foreground">
               {derivedInfo.sourceNode?.data?.label || derivedInfo.sourceNode?.type || "Service"}
             </strong>.

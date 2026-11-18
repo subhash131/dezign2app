@@ -148,7 +148,6 @@ describe("RealtimeConnectionList and action steps integration", () => {
   it("renders step name and index badge for derived pipeline steps", () => {
     const lgStep1: PipelineStepDraft = {
       id: "step-lg-1",
-      order: 1,
       type: "langgraph_invoke",
       name: "LangGraph Agent",
       langGraphStreamingEnabled: true,
@@ -158,7 +157,6 @@ describe("RealtimeConnectionList and action steps integration", () => {
 
     const lgStep2: PipelineStepDraft = {
       id: "step-lg-2",
-      order: 2,
       type: "langgraph_invoke",
       name: "AI Agent",
       langGraphStreamingEnabled: true,

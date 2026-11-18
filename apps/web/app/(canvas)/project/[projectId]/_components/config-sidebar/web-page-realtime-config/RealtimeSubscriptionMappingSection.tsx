@@ -16,6 +16,7 @@ import {
   HelpCircle,
   Wifi,
   Video,
+  Bot,
 } from "lucide-react";
 import { Label } from "@workspace/ui/components/label";
 import { Input } from "@workspace/ui/components/input";
@@ -487,9 +488,17 @@ export const RealtimeSubscriptionMappingSection: React.FC<RealtimeSubscriptionMa
                     <span className="font-mono text-[11px] truncate font-medium text-foreground">
                       {c.eventName || c.id}
                     </span>
-                    {c.sourceStepName && (
-                      <span className="text-[9px] px-1 py-0.2 rounded bg-secondary/80 text-muted-foreground font-mono truncate max-w-[120px]">
-                        {c.sourceStepIndex ? `Step ${c.sourceStepIndex}: ` : ""}{c.sourceStepName}
+                    {(c.sourceStepName || c.isDerived) && (
+                      <span className="text-[9.5px] px-1.5 py-0.5 rounded bg-secondary/80 text-foreground/80 border border-border/70 font-medium inline-flex items-center gap-1 shrink-0 truncate max-w-[150px]">
+                        {c.sourceStepType === "langgraph_invoke" || c.isLangGraph ? (
+                          <Bot size={10} className="text-muted-foreground shrink-0" />
+                        ) : (
+                          <Radio size={10} className="text-muted-foreground shrink-0" />
+                        )}
+                        <span className="truncate">
+                          {c.sourceStepIndex ? `Step ${c.sourceStepIndex}: ` : ""}
+                          {c.sourceStepName || (c.isLangGraph ? "LangGraph Agent" : "Push to Client")}
+                        </span>
                       </span>
                     )}
                     <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 uppercase font-mono">
@@ -630,6 +639,25 @@ export const RealtimeSubscriptionMappingSection: React.FC<RealtimeSubscriptionMa
                 >
                   <Sparkles size={8} /> LangGraph Stream
                 </Badge>
+              )}
+              {(conn.sourceStepName || derivedInfo?.step) && (
+                <span className="text-[9.5px] px-1.5 py-0.2 rounded bg-secondary/80 text-foreground/80 border border-border/70 font-medium inline-flex items-center gap-1 shrink-0">
+                  {(conn.sourceStepType || derivedInfo?.step?.type) === "langgraph_invoke" ? (
+                    <Bot size={10} className="text-muted-foreground shrink-0" />
+                  ) : (
+                    <Radio size={10} className="text-muted-foreground shrink-0" />
+                  )}
+                  <span>
+                    {(conn.sourceStepIndex || derivedInfo?.stepIndex)
+                      ? `Step ${conn.sourceStepIndex || derivedInfo?.stepIndex}: `
+                      : ""}
+                    {conn.sourceStepName ||
+                      derivedInfo?.step?.name ||
+                      (derivedInfo?.step?.type === "langgraph_invoke"
+                        ? "LangGraph Agent"
+                        : "Push to Client")}
+                  </span>
+                </span>
               )}
               {conn.sourceServiceLabel && (
                 <span className="text-[10px] text-muted-foreground font-mono">

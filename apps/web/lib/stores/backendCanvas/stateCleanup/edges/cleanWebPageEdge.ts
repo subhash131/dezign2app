@@ -234,7 +234,7 @@ export function cleanWebPageEdge(
           (e.target === otherNode.id || e.source === otherNode.id),
       );
       const onlyRefEdges = remainingEdges.every(
-        (e) => e.type === "transformer-reference" || e.type === "reference",
+        (e) => e.type === "transformer-reference" || e.type === "reference" || e.type === "page-reference",
       );
       if (onlyRefEdges) {
         remainingEdges.forEach((re) => {
@@ -374,18 +374,20 @@ export function cleanWebPageEdge(
         }
       }
     } else if (webHandle?.startsWith("rtc-")) {
-      const connId = webHandle.replace(/^rtc-(out|in)-/, "");
+      const connId = webHandle.replace(/^rtc-(out|in|right-in)-/, "");
       const hasOtherRtcEdge = ctx.nextEdges.some(
         (e) =>
           e &&
           ((e.source === pageNode.id &&
             e.target === storeNode.id &&
             (e.sourceHandle === `rtc-out-${connId}` ||
-              e.sourceHandle === `rtc-in-${connId}`)) ||
+              e.sourceHandle === `rtc-in-${connId}` ||
+              e.sourceHandle === `rtc-right-in-${connId}`)) ||
             (e.target === pageNode.id &&
               e.source === storeNode.id &&
               (e.targetHandle === `rtc-out-${connId}` ||
-                e.targetHandle === `rtc-in-${connId}`))),
+                e.targetHandle === `rtc-in-${connId}` ||
+                e.targetHandle === `rtc-right-in-${connId}`))),
       );
 
       if (!hasOtherRtcEdge) {

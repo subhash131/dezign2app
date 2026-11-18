@@ -81,7 +81,7 @@ describe("IncomingRealtimePayloadCard", () => {
     expect(screen.getByText("Incoming Real-Time Payload")).toBeDefined();
     expect(screen.getByText("send-message/:id")).toBeDefined();
     expect(screen.getByText("SSE")).toBeDefined();
-    expect(screen.getByText(/Conversations/i)).toBeDefined();
+    expect(screen.getAllByText(/Conversations/i).length).toBeGreaterThanOrEqual(1);
 
     // Verify detected schema field pills
     expect(screen.getByText("message")).toBeDefined();
@@ -94,8 +94,24 @@ describe("IncomingRealtimePayloadCard", () => {
     fireEvent.click(sampleJsonBtn);
 
     // Verify JSON preview is visible
-    expect(screen.getByText(/Hide/i)).toBeDefined();
+    expect(screen.getAllByText(/Hide/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/Hello from realtime stream/i)).toBeDefined();
+  });
+
+  it("renders sourceStepName and step index badge in IncomingRealtimePayloadCard", () => {
+    render(
+      <IncomingRealtimePayloadCard
+        eventName="send-message"
+        protocol="SSE"
+        sourceServiceLabel="Ai Service"
+        sourceItemName="send-message"
+        sourceStepName="LangGraph Agent"
+        sourceStepType="langgraph_invoke"
+        sourceStepIndex={1}
+      />
+    );
+
+    expect(screen.getAllByText(/Step 1: LangGraph Agent/).length).toBeGreaterThanOrEqual(1);
   });
 });
 

@@ -96,12 +96,18 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
           ? (protocol === "WEBSOCKET" ? "agent_stream" : "message")
           : (sourceItemName || "message"));
       const room = manualConn?.room || s.clientDeliveryRoom || (isLangGraph ? s.langGraphStreamingRoom : undefined);
+      const stepName = s.name || (isLangGraph ? "LangGraph Agent" : "Push to Client");
+      const stepType = s.type;
+      const stepIndex = derivedInfo.stepIndex;
 
       return {
         id,
         protocol,
         eventName,
         room,
+        sourceStepName: stepName,
+        sourceStepType: stepType,
+        sourceStepIndex: stepIndex,
         mediaMode: isRtc ? s.clientDeliveryMediaMode : undefined,
         enableDataChannel: isRtc ? (manualConn?.enableDataChannel ?? s.clientDeliveryEnableDataChannel) : undefined,
         enableMic: isRtc ? (manualConn?.enableMic ?? s.clientDeliveryEnableMic ?? s.clientDeliveryEnableAudio) : undefined,
@@ -127,7 +133,14 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
         langGraphTargetNodeId: isLangGraph ? (s.langGraphTargetNodeId || manualConn?.langGraphTargetNodeId) : manualConn?.langGraphTargetNodeId,
       };
     }
-    if (manualConn) return { ...manualConn, actionSteps: manualConn.actionSteps ?? [] };
+    if (manualConn)
+      return {
+        ...manualConn,
+        sourceStepName: manualConn.sourceStepName,
+        sourceStepType: manualConn.sourceStepType,
+        sourceStepIndex: manualConn.sourceStepIndex,
+        actionSteps: manualConn.actionSteps ?? [],
+      };
     return {
       id,
       protocol: "SSE",
@@ -426,8 +439,8 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
 
   const actionEdges = edges.filter(
     (e) =>
-      (e.source === nodeId && (e.sourceHandle === `rtc-out-${id}` || e.sourceHandle === `rtc-in-${id}`)) ||
-      (e.target === nodeId && (e.targetHandle === `rtc-in-${id}` || e.targetHandle === `rtc-out-${id}`)),
+      (e.source === nodeId && (e.sourceHandle === `rtc-out-${id}` || e.sourceHandle === `rtc-in-${id}` || e.sourceHandle === `rtc-right-in-${id}`)) ||
+      (e.target === nodeId && (e.targetHandle === `rtc-in-${id}` || e.targetHandle === `rtc-out-${id}` || e.targetHandle === `rtc-right-in-${id}`)),
   );
 
   const sortedActionEdges = [...actionEdges].sort((a, b) => {
@@ -639,6 +652,9 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
                 realtimeProtocol={conn.protocol}
                 realtimeSourceLabel={conn.sourceServiceLabel || derivedInfo?.sourceNode?.data?.label}
                 realtimeSourceItemName={conn.sourceItemName}
+                sourceStepName={conn.sourceStepName}
+                sourceStepType={conn.sourceStepType}
+                sourceStepIndex={conn.sourceStepIndex}
                 incomingPaths={suggestedPaths}
                 isLangGraph={conn.isLangGraph || Boolean(derivedInfo?.step?.type === "langgraph_invoke")}
                 langGraphStreamModes={conn.langGraphStreamModes || derivedInfo?.step?.langGraphStreamModes}

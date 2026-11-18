@@ -13,6 +13,7 @@ import {
   Info,
   Check,
   Copy,
+  Bot,
 } from "lucide-react";
 import { Badge } from "@workspace/ui/components/badge";
 import { Button } from "@workspace/ui/components/button";
@@ -25,6 +26,9 @@ export interface IncomingRealtimePayloadCardProps {
   protocol?: string;
   sourceServiceLabel?: string;
   sourceItemName?: string;
+  sourceStepName?: string;
+  sourceStepType?: string;
+  sourceStepIndex?: number;
   incomingPaths?: AvailablePath[];
   isLangGraph?: boolean;
   langGraphStreamModes?: string[];
@@ -46,6 +50,9 @@ export const IncomingRealtimePayloadCard: React.FC<IncomingRealtimePayloadCardPr
   protocol = "SSE",
   sourceServiceLabel,
   sourceItemName,
+  sourceStepName,
+  sourceStepType,
+  sourceStepIndex,
   incomingPaths = [],
   isLangGraph = false,
   langGraphStreamModes,
@@ -178,6 +185,19 @@ export const IncomingRealtimePayloadCard: React.FC<IncomingRealtimePayloadCardPr
                   <Sparkles size={8} /> LangGraph Stream
                 </Badge>
               )}
+              {(sourceStepName || isLangGraphStream) && (
+                <span className="text-[9.5px] px-1.5 py-0.2 rounded bg-secondary/80 text-foreground/80 border border-border/70 font-medium inline-flex items-center gap-1 shrink-0">
+                  {sourceStepType === "langgraph_invoke" || isLangGraphStream ? (
+                    <Bot size={10} className="text-muted-foreground shrink-0" />
+                  ) : (
+                    <Radio size={10} className="text-muted-foreground shrink-0" />
+                  )}
+                  <span>
+                    {sourceStepIndex ? `Step ${sourceStepIndex}: ` : ""}
+                    {sourceStepName || (isLangGraphStream ? "LangGraph Agent" : "Push to Client")}
+                  </span>
+                </span>
+              )}
               <Badge
                 variant="secondary"
                 className="text-[9px] px-1 py-0 font-mono text-muted-foreground"
@@ -187,6 +207,11 @@ export const IncomingRealtimePayloadCard: React.FC<IncomingRealtimePayloadCardPr
             </div>
             <p className="text-[10px] text-muted-foreground mt-0.5 truncate">
               Event: <code className="text-foreground font-semibold">{eventName}</code>
+              {sourceStepName && (
+                <span className="text-foreground/90 font-medium ml-1">
+                  • {sourceStepIndex ? `Step ${sourceStepIndex}: ` : ""}{sourceStepName}
+                </span>
+              )}
               {sourceServiceLabel && ` • Pushed by ${sourceServiceLabel}`}
               {sourceItemName && ` (${sourceItemName})`}
               {langGraphStreamModes && langGraphStreamModes.length > 0 && (

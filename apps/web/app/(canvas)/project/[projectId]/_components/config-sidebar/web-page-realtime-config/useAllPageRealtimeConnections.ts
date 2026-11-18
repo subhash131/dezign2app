@@ -114,9 +114,7 @@ export function useAllPageRealtimeConnections({
 
           const stepName =
             step.name ||
-            (isLangGraphStreaming
-              ? (step.langGraphAgentName ? `LangGraph: ${step.langGraphAgentName}` : "LangGraph Agent")
-              : "Push to Client");
+            (isLangGraphStreaming ? "LangGraph Agent" : "Push to Client");
 
           derived.push({
             id: step.id,

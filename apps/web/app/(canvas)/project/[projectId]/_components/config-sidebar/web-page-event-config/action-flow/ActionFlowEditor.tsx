@@ -42,6 +42,9 @@ export const ActionFlowEditor: React.FC<ActionFlowEditorProps> = ({
   realtimeProtocol,
   realtimeSourceLabel,
   realtimeSourceItemName,
+  sourceStepName,
+  sourceStepType,
+  sourceStepIndex,
   incomingPaths,
   isItemScoped,
   itemKeyField,
@@ -340,6 +343,9 @@ export const ActionFlowEditor: React.FC<ActionFlowEditorProps> = ({
           protocol={realtimeProtocol}
           sourceServiceLabel={realtimeSourceLabel}
           sourceItemName={realtimeSourceItemName}
+          sourceStepName={sourceStepName}
+          sourceStepType={sourceStepType}
+          sourceStepIndex={sourceStepIndex}
           incomingPaths={incomingPaths}
           isLangGraph={isLangGraph}
           langGraphStreamModes={langGraphStreamModes}
