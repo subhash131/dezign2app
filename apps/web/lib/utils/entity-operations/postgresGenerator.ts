@@ -57,7 +57,10 @@ export function generatePostgresDbOperations(
     })
     .join(", ");
 
-  const destructuredFields = insertColList.map((c) => c.name).join(", ") || pkVarName;
+  const destructuredFields =
+    insertColList
+      .map((c) => (c.isPrimaryKey ? pkVarName : c.name))
+      .join(", ") || pkVarName;
   const createDestructuredParam = `{ ${destructuredFields} }`;
 
   const updateCols = writableCols.filter((c) => !isCreatedAt(c.name));
