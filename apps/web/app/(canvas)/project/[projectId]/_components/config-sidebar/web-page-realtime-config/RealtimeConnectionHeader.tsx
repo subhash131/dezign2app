@@ -42,8 +42,13 @@ export const RealtimeConnectionHeader: React.FC<RealtimeConnectionHeaderProps> =
             {isConnected ? <Radio size={18} /> : <AlertCircle size={18} />}
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2 flex-wrap">
               <span>{conn.sourceItemName || conn.eventName || "Real-Time Connection"}</span>
+              {conn.sourceStepName && (
+                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-secondary/80 text-foreground/80 border border-border/60">
+                  {conn.sourceStepIndex ? `Step ${conn.sourceStepIndex}: ` : ""}{conn.sourceStepName}
+                </span>
+              )}
               <span className="text-[10px] font-mono font-normal px-1.5 py-0.5 rounded bg-secondary text-muted-foreground uppercase">
                 {conn.protocol}
               </span>
@@ -120,7 +125,11 @@ export const RealtimeConnectionHeader: React.FC<RealtimeConnectionHeaderProps> =
             )}
           </div>
           <p className="text-xs text-muted-foreground">
-            This real-time stream is pushed by a <strong className="text-foreground">Push to Client</strong> pipeline step on{" "}
+            This real-time stream is pushed by a{" "}
+            <strong className="text-foreground">
+              {conn.isLangGraph || derivedInfo.step?.type === "langgraph_invoke" ? "LangGraph Stream" : "Push to Client"}
+            </strong>{" "}
+            pipeline step {conn.sourceStepName || derivedInfo.step?.name ? `("${conn.sourceStepName || derivedInfo.step?.name}") ` : ""}on{" "}
             <strong className="text-foreground">
               {derivedInfo.sourceNode?.data?.label || derivedInfo.sourceNode?.type || "Service"}
             </strong>.

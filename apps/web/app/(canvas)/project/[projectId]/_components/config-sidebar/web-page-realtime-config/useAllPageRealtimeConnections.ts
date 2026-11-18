@@ -83,7 +83,7 @@ export function useAllPageRealtimeConnections({
       sourceItemType: "endpoint" | "event",
     ) => {
       if (!steps) return;
-      for (const step of steps) {
+      steps.forEach((step, idx) => {
         const isPushToClient =
           step.type === "push_to_client" &&
           isStepTargetingThisPage(step, sourceItemId, sourceNodeId);
@@ -112,6 +112,12 @@ export function useAllPageRealtimeConnections({
             step.clientDeliveryRoom ||
             (isLangGraphStreaming ? step.langGraphStreamingRoom : undefined);
 
+          const stepName =
+            step.name ||
+            (isLangGraphStreaming
+              ? (step.langGraphAgentName ? `LangGraph: ${step.langGraphAgentName}` : "LangGraph Agent")
+              : "Push to Client");
+
           derived.push({
             id: step.id,
             protocol: proto,
@@ -123,7 +129,11 @@ export function useAllPageRealtimeConnections({
             sourceEventId: sourceItemId,
             sourceItemName,
             sourceItemType,
+            sourceStepName: stepName,
+            sourceStepType: step.type,
+            sourceStepIndex: idx + 1,
             isDerived: true,
+            isLangGraph: isLangGraphStreaming,
           });
         }
         if (step.thenSteps) checkSteps(step.thenSteps, sourceNodeId, sourceItemName, sourceItemId, sourceItemType);
@@ -138,7 +148,7 @@ export function useAllPageRealtimeConnections({
         if (step.parallelBranches) {
           step.parallelBranches.forEach((b) => checkSteps(b.steps, sourceNodeId, sourceItemName, sourceItemId, sourceItemType));
         }
-      }
+      });
     };
 
     // 1. Check all consumed / published events

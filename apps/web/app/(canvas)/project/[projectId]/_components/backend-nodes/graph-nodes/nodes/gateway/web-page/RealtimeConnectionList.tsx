@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { Handle, Position } from "@xyflow/react";
-import { Plus, Settings, Trash, Radio, AlertCircle, Play } from "lucide-react";
+import { Plus, Settings, Trash, Radio, AlertCircle, Play, Bot } from "lucide-react";
 import { BackendNode, RealtimeConnection, ClientDeliveryProtocol, PipelineStep, PipelineStepDraft } from "@workspace/canvas/types";
 import {
   CANVAS_ROW_HANDLE_CLASS,
@@ -91,7 +91,7 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
       sourceItemType: "endpoint" | "event",
     ) => {
       if (!steps) return;
-      for (const step of steps) {
+      steps.forEach((step, idx) => {
         const isPushToClient =
           step.type === "push_to_client" &&
           isStepTargetingThisPage(step, sourceItemId, sourceNodeId);
@@ -120,6 +120,12 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
             step.clientDeliveryRoom ||
             (isLangGraphStreaming ? step.langGraphStreamingRoom : undefined);
 
+          const stepName =
+            step.name ||
+            (isLangGraphStreaming
+              ? (step.langGraphAgentName ? `LangGraph: ${step.langGraphAgentName}` : "LangGraph Agent")
+              : "Push to Client");
+
           derived.push({
             id: step.id,
             protocol: proto,
@@ -131,7 +137,11 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
             sourceEventId: sourceItemId,
             sourceItemName,
             sourceItemType,
+            sourceStepName: stepName,
+            sourceStepType: step.type,
+            sourceStepIndex: idx + 1,
             isDerived: true,
+            isLangGraph: isLangGraphStreaming,
           });
         }
         if (step.thenSteps) checkSteps(step.thenSteps, sourceNodeId, sourceItemName, sourceItemId, sourceItemType);
@@ -146,7 +156,7 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
         if (step.parallelBranches) {
           step.parallelBranches.forEach((b) => checkSteps(b.steps, sourceNodeId, sourceItemName, sourceItemId, sourceItemType));
         }
-      }
+      });
     };
 
     // 1. Check all consumed / published events
@@ -382,6 +392,22 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
                   >
                     {item.sourceItemName || (item.eventName && item.eventName !== "message" ? item.eventName : undefined) || item.eventName || "message"}
                   </span>
+
+                  {item.sourceStepName && (
+                    <span
+                      className="text-[9.5px] px-1.5 py-0.2 rounded bg-secondary/80 text-foreground/80 border border-border/70 font-medium inline-flex items-center gap-1 shrink-0 truncate max-w-[140px]"
+                      title={item.sourceStepIndex ? `Step ${item.sourceStepIndex}: ${item.sourceStepName}` : item.sourceStepName}
+                    >
+                      {item.sourceStepType === "langgraph_invoke" ? (
+                        <Bot size={10} className="text-muted-foreground shrink-0" />
+                      ) : (
+                        <Radio size={10} className="text-muted-foreground shrink-0" />
+                      )}
+                      <span className="truncate">
+                        {item.sourceStepIndex ? `Step ${item.sourceStepIndex}: ` : ""}{item.sourceStepName}
+                      </span>
+                    </span>
+                  )}
                   {isConnected && item.sourceServiceLabel ? (
                     <span
                       className="text-[9px] px-1 py-0.2 rounded bg-secondary/80 text-muted-foreground font-mono truncate max-w-[100px]"

@@ -487,6 +487,11 @@ export const RealtimeSubscriptionMappingSection: React.FC<RealtimeSubscriptionMa
                     <span className="font-mono text-[11px] truncate font-medium text-foreground">
                       {c.eventName || c.id}
                     </span>
+                    {c.sourceStepName && (
+                      <span className="text-[9px] px-1 py-0.2 rounded bg-secondary/80 text-muted-foreground font-mono truncate max-w-[120px]">
+                        {c.sourceStepIndex ? `Step ${c.sourceStepIndex}: ` : ""}{c.sourceStepName}
+                      </span>
+                    )}
                     <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 uppercase font-mono">
                       {c.protocol}
                     </Badge>

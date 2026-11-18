@@ -107,6 +107,9 @@ export interface RealtimeConnection {
   sourceEventId?: string;
   sourceItemName?: string;
   sourceItemType?: "endpoint" | "event";
+  sourceStepName?: string;
+  sourceStepType?: string;
+  sourceStepIndex?: number;
   /** State Store binding to update when realtime messages arrive */
   storeActionBinding?: StoreActionBinding;
   storeActionBindings?: StoreActionBinding[];
