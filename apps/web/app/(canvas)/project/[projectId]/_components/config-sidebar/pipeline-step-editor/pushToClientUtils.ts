@@ -87,6 +87,8 @@ export function upsertDerivedConnection(
     enableRemoteVideo: isRtc ? (caps ? caps.enableRemoteVideo : false) : undefined,
     iceServerUrl: isRtc ? step.clientDeliveryIceServer : undefined,
     description: sourceItemName || step.name || undefined,
+    sourceStepName: step.name || (isLangGraph ? "LangGraph Agent" : "Push to Client"),
+    sourceStepType: step.type,
     sourceServiceNodeId: serviceNodeId,
     sourceServiceLabel: serviceNode?.data?.label,
     sourceEventId: sourceItemId,
@@ -143,6 +145,9 @@ function isRealtimeConnectionEqual(a?: RealtimeConnection, b?: RealtimeConnectio
     a.sourceEventId === b.sourceEventId &&
     a.sourceItemName === b.sourceItemName &&
     a.sourceItemType === b.sourceItemType &&
+    a.sourceStepName === b.sourceStepName &&
+    a.sourceStepType === b.sourceStepType &&
+    a.sourceStepIndex === b.sourceStepIndex &&
     a.storeActionBinding === b.storeActionBinding &&
     a.isLangGraph === b.isLangGraph &&
     JSON.stringify(a.langGraphStreamModes) === JSON.stringify(b.langGraphStreamModes) &&

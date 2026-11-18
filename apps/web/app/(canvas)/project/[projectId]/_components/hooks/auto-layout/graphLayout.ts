@@ -202,7 +202,8 @@ export function performGraphLayout({
       e.type === "transformer-reference" ||
       e.type === "storage-reference" ||
       e.type === "reference" ||
-      e.type === "type-reference"
+      e.type === "type-reference" ||
+      e.type === "page-reference"
     ) {
       return false;
     }

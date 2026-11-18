@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { Handle, Position } from "@xyflow/react";
-import { Plus, Settings, Trash, Radio, AlertCircle, Play } from "lucide-react";
+import { Plus, Settings, Trash, Radio, AlertCircle, Play, Bot } from "lucide-react";
 import { BackendNode, RealtimeConnection, ClientDeliveryProtocol, PipelineStep, PipelineStepDraft } from "@workspace/canvas/types";
 import {
   CANVAS_ROW_HANDLE_CLASS,
@@ -91,7 +91,7 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
       sourceItemType: "endpoint" | "event",
     ) => {
       if (!steps) return;
-      for (const step of steps) {
+      steps.forEach((step, idx) => {
         const isPushToClient =
           step.type === "push_to_client" &&
           isStepTargetingThisPage(step, sourceItemId, sourceNodeId);
@@ -120,6 +120,10 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
             step.clientDeliveryRoom ||
             (isLangGraphStreaming ? step.langGraphStreamingRoom : undefined);
 
+          const stepName =
+            step.name ||
+            (isLangGraphStreaming ? "LangGraph Agent" : "Push to Client");
+
           derived.push({
             id: step.id,
             protocol: proto,
@@ -131,7 +135,11 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
             sourceEventId: sourceItemId,
             sourceItemName,
             sourceItemType,
+            sourceStepName: stepName,
+            sourceStepType: step.type,
+            sourceStepIndex: idx + 1,
             isDerived: true,
+            isLangGraph: isLangGraphStreaming,
           });
         }
         if (step.thenSteps) checkSteps(step.thenSteps, sourceNodeId, sourceItemName, sourceItemId, sourceItemType);
@@ -146,7 +154,7 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
         if (step.parallelBranches) {
           step.parallelBranches.forEach((b) => checkSteps(b.steps, sourceNodeId, sourceItemName, sourceItemId, sourceItemType));
         }
-      }
+      });
     };
 
     // 1. Check all consumed / published events
@@ -187,13 +195,27 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
     const connectionsMap = new Map((connections || []).map((c) => [c.id, c]));
     const derivedIds = new Set(derivedConnections.map((d) => d.id));
 
+    const filterValidActionSteps = (steps?: RealtimeConnection["actionSteps"]) => {
+      if (!steps || steps.length === 0) return steps;
+      return steps.filter((s) => {
+        if (s.serviceNodeId && nodes.some((n) => n.id === s.serviceNodeId && n.type === "page_ref")) {
+          return false;
+        }
+        if (s.edgeId && edges.some((e) => e.id === s.edgeId && e.type === "page-reference")) {
+          return false;
+        }
+        return true;
+      });
+    };
+
     const derivedWithBindings = derivedConnections.map((d) => {
       const match = connectionsMap.get(d.id);
+      const rawSteps = match?.actionSteps || d.actionSteps;
       return {
         ...d,
         storeActionBinding: match?.storeActionBinding || d.storeActionBinding,
         storeActionBindings: match?.storeActionBindings || d.storeActionBindings,
-        actionSteps: match?.actionSteps || d.actionSteps,
+        actionSteps: filterValidActionSteps(rawSteps),
         subscriptionBindings: match?.subscriptionBindings || d.subscriptionBindings,
       };
     });
@@ -202,6 +224,7 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
       .filter((c) => !derivedIds.has(c.id))
       .map((c) => ({
         ...c,
+        actionSteps: filterValidActionSteps(c.actionSteps),
         isDerived: false,
         sourceServiceNodeId: undefined,
         sourceServiceLabel: undefined,
@@ -209,7 +232,7 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
         sourceItemType: undefined,
       }));
     return [...derivedWithBindings, ...manualOnly];
-  }, [derivedConnections, connections]);
+  }, [derivedConnections, connections, nodes, edges]);
 
   const handleAdd = () => {
     const newId = `rtc-${generateId()}`;
@@ -382,6 +405,22 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
                   >
                     {item.sourceItemName || (item.eventName && item.eventName !== "message" ? item.eventName : undefined) || item.eventName || "message"}
                   </span>
+
+                  {item.sourceStepName && (
+                    <span
+                      className="text-[9.5px] px-1.5 py-0.2 rounded bg-secondary/80 text-foreground/80 border border-border/70 font-medium inline-flex items-center gap-1 shrink-0 truncate max-w-[140px]"
+                      title={item.sourceStepIndex ? `Step ${item.sourceStepIndex}: ${item.sourceStepName}` : item.sourceStepName}
+                    >
+                      {item.sourceStepType === "langgraph_invoke" ? (
+                        <Bot size={10} className="text-muted-foreground shrink-0" />
+                      ) : (
+                        <Radio size={10} className="text-muted-foreground shrink-0" />
+                      )}
+                      <span className="truncate">
+                        {item.sourceStepIndex ? `Step ${item.sourceStepIndex}: ` : ""}{item.sourceStepName}
+                      </span>
+                    </span>
+                  )}
                   {isConnected && item.sourceServiceLabel ? (
                     <span
                       className="text-[9px] px-1 py-0.2 rounded bg-secondary/80 text-muted-foreground font-mono truncate max-w-[100px]"
@@ -449,6 +488,20 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
                     </span>
                   )}
                 </div>
+
+                {/* Target handle on the right for PageRef/LayoutRef incoming reference connections */}
+                <Handle
+                  type="target"
+                  position={Position.Right}
+                  id={`rtc-right-in-${item.id}`}
+                  className={cn(
+                    CANVAS_ROW_HANDLE_CLASS,
+                    CANVAS_ROW_HANDLE_RIGHT_OFFSET_CLASS,
+                    "!border-2 !border-background !bg-violet-500",
+                  )}
+                  style={{ top: "50%" }}
+                  title="Incoming from Page/Layout Reference"
+                />
 
                 {/* Source handle for wiring realtime messages to downstream State Store */}
                 <Handle

@@ -72,7 +72,7 @@ export function computeNodeArchitectureImpact(
         description = `Foreign key link between ${sourceLabel} and ${targetLabel} severed`;
       } else if (edgeType === "message") {
         description = `Message pipeline between ${sourceLabel} and ${targetLabel} severed`;
-      } else if (edgeType === "reference" || edgeType === "transformer-reference") {
+      } else if (edgeType === "reference" || edgeType === "transformer-reference" || edgeType === "page-reference") {
         description = `Reference link between ${sourceLabel} and ${targetLabel} unlinked`;
       } else {
         description = `Link between ${sourceLabel} and ${targetLabel} disconnected`;
