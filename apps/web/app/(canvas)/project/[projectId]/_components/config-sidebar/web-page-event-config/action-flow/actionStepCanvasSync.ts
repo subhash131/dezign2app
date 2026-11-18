@@ -369,6 +369,13 @@ export interface EnsureActionTransformerResult {
 export function getWebPageActionInboundHandle(webPageNodeId: string, actionId: string): string {
   const store = useBackendCanvasStore.getState();
   const wpNode = store.nodes.find((n) => n.id === webPageNodeId);
+  const isRealtime =
+    actionId.startsWith("rtc-") ||
+    Boolean(wpNode?.data?.realtimeConnections?.some((c: RealtimeConnection) => c.id === actionId));
+  if (isRealtime) {
+    return `rtc-in-${actionId}`;
+  }
+
   const sections: PageSection[] = wpNode?.data?.sections || [];
   const action: UIEventItem | undefined = sections
     .flatMap((s: PageSection): UIEventItem[] => s.actions || [])

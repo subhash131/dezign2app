@@ -3,6 +3,9 @@ import {
   getSuggestedReducerCodeForChannelType,
   isReducerCodeCompatibleWithType,
   extractActionsFromReducerCode,
+  extractActionGroupsFromReducerCode,
+  getActionsForReducer,
+  isValuelessAction,
   generateSchemaAwareReducerCode,
   generateSchemaAwareArrayReducerCode,
   REDUCER_CODE_PRESETS,
@@ -133,6 +136,9 @@ describe("StateStore Dynamic Reducer Generation", () => {
     it("dynamically generates schema-aware array reducer for custom type array (User[])", () => {
       const code = getSuggestedReducerCodeForChannelType("User[]", sampleUserType, true);
       expect(code).toContain("Array reducer for User[]");
+      expect(code).toContain('action === "set" || action === "replace"');
+      expect(code).not.toContain('action === "setter"');
+      expect(code).not.toContain('action === "mutate"');
       expect(code).toContain("action === \"append\"");
       expect(code).toContain("action === \"pop\"");
       expect(code).toContain("action === \"remove\"");
@@ -154,6 +160,12 @@ describe("StateStore Dynamic Reducer Generation", () => {
       // Pop removes last item
       const step3 = fn(step2, { action: "pop" });
       expect(step3).toEqual([u1]);
+
+      // Replace and Set overwrite entire array
+      const stepReplace = fn(step3, { action: "replace", value: [u2] });
+      expect(stepReplace).toEqual([u2]);
+      const stepSet = fn(stepReplace, { action: "set", value: [u1, u2] });
+      expect(stepSet).toEqual([u1, u2]);
 
       // Append again then remove by id
       const step4 = fn(step3, { action: "append", value: u2 });
@@ -415,6 +427,67 @@ describe("StateStore Dynamic Reducer Generation", () => {
       const streamed = fn([], { action: "stream", delta: "Hello there!", role: "user" });
       expect(streamed[0].sender).toBe("HUMAN");
       expect(streamed[0].content).toBe("Hello there!");
+    });
+  });
+
+  describe("Reducer Action OR Grouping and Value/No-Value Handling", () => {
+    it("groups OR conditional actions in reducer code into single action groups", () => {
+      const code = `
+        if (action === "reset" || action === "clear") return [];
+        if (action === "replace" || action === "set" || action === "setter" || action === "mutate") return items;
+        if (action === "append" || action === "add") return items;
+        if (action === "prepend") return items;
+        if (action === "pop") return items;
+        if (action === "remove" || action === "filter") return items;
+        if (action === "update" || action === "upsert") return items;
+      `;
+
+      const groups = extractActionGroupsFromReducerCode(code);
+      expect(groups).toEqual([
+        ["reset", "clear"],
+        ["set", "replace", "setter", "mutate"],
+        ["append", "add"],
+        ["prepend"],
+        ["pop"],
+        ["remove", "filter"],
+        ["update", "upsert"],
+      ]);
+    });
+
+    it("formats options with pipe syntax and without (value)/(no value) suffixes", () => {
+      const actions = getActionsForReducer("messages", "conversations_reducer", REDUCER_CODE_PRESETS.chat);
+      const labels = actions.map((a) => a.label);
+
+      // Verify no '(value)' or '(no value)' in any option label
+      for (const label of labels) {
+        expect(label).not.toContain("(value)");
+        expect(label).not.toContain("(no value)");
+      }
+
+      // Verify OR conditions are joined with " | "
+      expect(labels).toContain("default (direct)");
+      expect(labels).toContain("reset | clear");
+      expect(labels).toContain("set | replace");
+      expect(labels).toContain("append | add");
+      expect(labels).toContain("remove | filter");
+      expect(labels).toContain("update | upsert");
+    });
+
+    it("correctly identifies valueless vs value-requiring actions", () => {
+      // Valueless actions
+      expect(isValuelessAction("reset")).toBe(true);
+      expect(isValuelessAction("clear")).toBe(true);
+      expect(isValuelessAction("reset | clear")).toBe(true);
+      expect(isValuelessAction("pop")).toBe(true);
+      expect(isValuelessAction("toggle")).toBe(true);
+
+      // Value-requiring actions (including remove which requires target index or id)
+      expect(isValuelessAction("remove")).toBe(false);
+      expect(isValuelessAction("remove | filter")).toBe(false);
+      expect(isValuelessAction("set")).toBe(false);
+      expect(isValuelessAction("set | replace")).toBe(false);
+      expect(isValuelessAction("append")).toBe(false);
+      expect(isValuelessAction("update")).toBe(false);
     });
   });
 });

@@ -643,56 +643,161 @@ export function extractActionBranchesFromReducerCode(
 }
 
 /**
- * Fast regex parser extracting action names from reducer JavaScript/TypeScript code.
+ * Extracts grouped action names from reducer JavaScript/TypeScript code.
+ * Detects patterns like:
+ * - if (action === "reset" || action === "clear")
+ * - ["set", "replace"].includes(action)
+ * - switch case fallthroughs
  */
-export function extractActionsFromReducerCode(code?: string): string[] {
+export function extractActionGroupsFromReducerCode(code?: string): string[][] {
   if (!code || typeof code !== "string") return [];
-  const actions = new Set<string>();
 
-  // Pattern 1: action === "name" or .action === "name"
-  const eqRegex = /(?:action|\.action)\s*===?\s*["']([^"']+)["']/g;
+  const groups: string[][] = [];
+  const assigned = new Set<string>();
+
+  const addGroup = (rawActions: string[]) => {
+    const cleaned: string[] = [];
+    for (const a of rawActions) {
+      const act = a?.trim();
+      if (act && act !== "default" && act !== "" && !cleaned.includes(act)) {
+        cleaned.push(act);
+      }
+    }
+    if (cleaned.length === 0) return;
+
+    // Filter out actions already assigned to earlier groups
+    const newActions = cleaned.filter((a) => !assigned.has(a));
+    if (newActions.length === 0) return;
+
+    // Prioritize canonical action names to be first in the group
+    const preferredOrder = [
+      "set",
+      "reset",
+      "remove",
+      "append",
+      "prepend",
+      "pop",
+      "update",
+      "increment",
+      "decrement",
+      "toggle",
+      "stream",
+    ];
+    newActions.sort((a, b) => {
+      const idxA = preferredOrder.indexOf(a);
+      const idxB = preferredOrder.indexOf(b);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return 0;
+    });
+
+    for (const a of newActions) assigned.add(a);
+    groups.push(newActions);
+  };
+
+  // 1. Match if (...) or else if (...) statements with balanced parentheses
+  const ifRegex = /\b(?:if|else\s+if)\s*\(/g;
   let match: RegExpExecArray | null;
-  while ((match = eqRegex.exec(code)) !== null) {
-    const act = match[1]?.trim();
-    if (act && act !== "default" && act !== "") {
-      actions.add(act);
+  while ((match = ifRegex.exec(code)) !== null) {
+    const startIdx = match.index + match[0].length;
+    let depth = 1;
+    let endIdx = startIdx;
+    while (depth > 0 && endIdx < code.length) {
+      if (code[endIdx] === "(") depth++;
+      else if (code[endIdx] === ")") depth--;
+      endIdx++;
+    }
+    const cond = code.slice(startIdx, endIdx - 1);
+    const actionsInCond: string[] = [];
+
+    // Check array includes: ['a', 'b'].includes(action)
+    const incRegex = /\[([^\]]+)\]\.includes\(\s*(?:action|\.action)\s*\)/g;
+    let incMatch: RegExpExecArray | null;
+    while ((incMatch = incRegex.exec(cond)) !== null) {
+      const inner = incMatch[1];
+      if (inner) {
+        const strRegex = /["']([^"']+)["']/g;
+        let sm: RegExpExecArray | null;
+        while ((sm = strRegex.exec(inner)) !== null) {
+          if (sm[1]) actionsInCond.push(sm[1]);
+        }
+      }
+    }
+
+    // Check equality checks: action === 'x' or 'x' === action
+    const eqRegex = /(?:action|\.action)\s*===?\s*["']([^"']+)["']/g;
+    let eqMatch: RegExpExecArray | null;
+    while ((eqMatch = eqRegex.exec(cond)) !== null) {
+      if (eqMatch[1]) actionsInCond.push(eqMatch[1]);
+    }
+    const revEqRegex = /["']([^"']+)["']\s*===?\s*(?:action|\.action)/g;
+    let revMatch: RegExpExecArray | null;
+    while ((revMatch = revEqRegex.exec(cond)) !== null) {
+      if (revMatch[1]) actionsInCond.push(revMatch[1]);
+    }
+
+    if (actionsInCond.length > 0) {
+      addGroup(actionsInCond);
     }
   }
 
-  // Pattern 2: "name" === action or "name" === next?.action
-  const revEqRegex = /["']([^"']+)["']\s*===?\s*(?:action|\.action)/g;
-  while ((match = revEqRegex.exec(code)) !== null) {
-    const act = match[1]?.trim();
-    if (act && act !== "default" && act !== "") {
-      actions.add(act);
+  // 2. Match switch statement fallthrough cases
+  const caseBlockRegex = /(?:case\s*["']([^"']+)["']\s*:\s*)+/g;
+  while ((match = caseBlockRegex.exec(code)) !== null) {
+    const strRegex = /case\s*["']([^"']+)["']\s*:/g;
+    const caseActions: string[] = [];
+    let sm: RegExpExecArray | null;
+    while ((sm = strRegex.exec(match[0])) !== null) {
+      if (sm[1]) caseActions.push(sm[1]);
+    }
+    if (caseActions.length > 0) {
+      addGroup(caseActions);
     }
   }
 
-  // Pattern 3: case "name":
-  const caseRegex = /case\s*["']([^"']+)["']\s*:/g;
-  while ((match = caseRegex.exec(code)) !== null) {
-    const act = match[1]?.trim();
-    if (act && act !== "default" && act !== "") {
-      actions.add(act);
-    }
-  }
-
-  // Pattern 4: ["reset", "clear"].includes(action)
+  // 3. Fallback for any other .includes: ['a', 'b'].includes(action)
   const includesRegex = /\[([^\]]+)\]\.includes\(\s*(?:action|\.action)\s*\)/g;
   while ((match = includesRegex.exec(code)) !== null) {
     const inner = match[1];
-    if (!inner) continue;
-    const strRegex = /["']([^"']+)["']/g;
-    let sm: RegExpExecArray | null;
-    while ((sm = strRegex.exec(inner)) !== null) {
-      const act = sm[1]?.trim();
-      if (act && act !== "default" && act !== "") {
-        actions.add(act);
+    if (inner) {
+      const strRegex = /["']([^"']+)["']/g;
+      const incActions: string[] = [];
+      let sm: RegExpExecArray | null;
+      while ((sm = strRegex.exec(inner)) !== null) {
+        if (sm[1]) incActions.push(sm[1]);
+      }
+      if (incActions.length > 0) {
+        addGroup(incActions);
       }
     }
   }
 
-  return Array.from(actions);
+  // 4. Any leftover action === 'x'
+  const leftoverEq = /(?:action|\.action)\s*===?\s*["']([^"']+)["']/g;
+  while ((match = leftoverEq.exec(code)) !== null) {
+    if (match[1]) addGroup([match[1]]);
+  }
+
+  return groups;
+}
+
+/**
+ * Fast regex parser extracting action names from reducer JavaScript/TypeScript code.
+ */
+export function extractActionsFromReducerCode(code?: string): string[] {
+  const groups = extractActionGroupsFromReducerCode(code);
+  const seen = new Set<string>();
+  const actions: string[] = [];
+  for (const group of groups) {
+    for (const act of group) {
+      if (!seen.has(act)) {
+        seen.add(act);
+        actions.push(act);
+      }
+    }
+  }
+  return actions;
 }
 
 /**

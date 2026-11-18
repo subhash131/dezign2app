@@ -56,6 +56,7 @@ import { cn } from "@workspace/ui/lib/utils";
 import {
   getSuggestedReducerCodeForChannelType,
   extractActionsFromReducerCode,
+  extractActionGroupsFromReducerCode,
   generateSchemaAwareReducerCode,
   generateSchemaAwareArrayReducerCode,
   isReducerCodeCompatibleWithType,
@@ -250,8 +251,13 @@ const StoreVariableCard = React.memo(function StoreVariableCard({
         raw &&
         raw.includes("Initial shape guaranteed by type schema"),
     );
+    const hasLegacySetterMutate = Boolean(
+      raw &&
+        (raw.includes('action === "setter"') ||
+          raw.includes('action === "mutate"')),
+    );
 
-    if (typeChanged || isLegacyOrEmpty || isTypeMismatch || isArrayWithObjectReducer || isGenericOnTypedSchema || isSchemaMismatch) {
+    if (typeChanged || isLegacyOrEmpty || isTypeMismatch || isArrayWithObjectReducer || isGenericOnTypedSchema || isSchemaMismatch || hasLegacySetterMutate) {
       const suggested = getSuggestedReducerCodeForChannelType(
         field.type,
         matchedCustomType,
@@ -271,6 +277,15 @@ const StoreVariableCard = React.memo(function StoreVariableCard({
   const detectedActions = useMemo(() => {
     const fromCode = extractActionsFromReducerCode(currentCode);
     if (fromCode.length > 0) return fromCode;
+    return getSupportedActionsForType(field.type, isArray, field.name, matchedCustomType);
+  }, [currentCode, field.type, isArray, field.name, matchedCustomType]);
+
+  // Grouped action names for UI badge display (joins OR branches with ' | ')
+  const detectedActionGroups = useMemo(() => {
+    const groups = extractActionGroupsFromReducerCode(currentCode);
+    if (groups.length > 0) {
+      return groups.map((g) => (g.length > 1 ? g.join(" | ") : g[0]));
+    }
     return getSupportedActionsForType(field.type, isArray, field.name, matchedCustomType);
   }, [currentCode, field.type, isArray, field.name, matchedCustomType]);
 
@@ -493,7 +508,7 @@ const StoreVariableCard = React.memo(function StoreVariableCard({
               <Badge
                 variant="outline"
                 className="text-[9px] px-1.5 py-0 h-4 border-indigo-500/40 bg-indigo-500/10 text-indigo-400 font-mono font-semibold flex items-center gap-1"
-                title={`1 Reducer: ${reducerName} (${detectedActions.length} actions)`}
+                title={`1 Reducer: ${reducerName} (${detectedActionGroups.length} actions)`}
               >
                 <GitMerge size={9} />
                 <span>{reducerName}</span>
@@ -502,7 +517,7 @@ const StoreVariableCard = React.memo(function StoreVariableCard({
                 variant="secondary"
                 className="text-[8.5px] px-1.5 py-0 h-4 font-mono text-muted-foreground"
               >
-                {detectedActions.length} actions
+                {detectedActionGroups.length} actions
               </Badge>
             </div>
           </div>
@@ -858,11 +873,11 @@ const StoreVariableCard = React.memo(function StoreVariableCard({
                 {/* Dispatches to {N} Actions Badges */}
                 <div className="pt-1.5 border-t border-indigo-500/20 space-y-1">
                   <div className="text-[9.5px] text-muted-foreground font-mono flex items-center justify-between">
-                    <span>Dispatches to {detectedActions.length} actions:</span>
+                    <span>Dispatches to {detectedActionGroups.length} actions:</span>
                     <span className="text-[8.5px] text-indigo-400 font-semibold">1 Reducer Architecture</span>
                   </div>
                   <div className="flex items-center gap-1 flex-wrap">
-                    {detectedActions.map((act) => (
+                    {detectedActionGroups.map((act) => (
                       <Badge
                         key={act}
                         variant="outline"
@@ -984,7 +999,7 @@ const StoreVariableCard = React.memo(function StoreVariableCard({
                         </Badge>
                       </DialogTitle>
                       <DialogDescription className="text-xs text-muted-foreground mt-0.5 font-mono">
-                        Target State Variable: <span className="text-foreground font-semibold font-mono">{field.name}</span> • Dispatches to {detectedActions.length} actions
+                        Target State Variable: <span className="text-foreground font-semibold font-mono">{field.name}</span> • Dispatches to {detectedActionGroups.length} actions
                       </DialogDescription>
                     </div>
                   </DialogHeader>
@@ -1139,8 +1154,8 @@ const StoreVariableCard = React.memo(function StoreVariableCard({
                     {/* Dialog Footer Actions Info */}
                     <div className="flex items-center justify-between text-xs pt-1 border-t border-border/40 font-mono shrink-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-muted-foreground text-[10px]">Detected Actions ({detectedActions.length}):</span>
-                        {detectedActions.map((act) => (
+                        <span className="text-muted-foreground text-[10px]">Detected Actions ({detectedActionGroups.length}):</span>
+                        {detectedActionGroups.map((act) => (
                           <Badge
                             key={act}
                             variant="outline"

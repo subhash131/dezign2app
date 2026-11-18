@@ -13,7 +13,7 @@ import { useSimulationStore } from "@/lib/stores/simulationStore";
 import { useSidebarStore, getEffectiveConfigSidebarWidth } from "@/lib/stores/sidebarStore";
 import { nodeTypes } from "../backend-nodes/Nodes";
 import { canvasEdgeTypes } from "../backend-nodes/CustomEdges";
-import { isValidConnection, WebAppZone } from "@workspace/canvas";
+import { isValidConnection, WebAppZone, PageSection } from "@workspace/canvas";
 import { useCanvasHandlers } from "../hooks/useCanvasHandlers";
 import { useGraphAutoLayout, getGraphFlowNodes } from "../hooks/useAutoLayout";
 import { useAutoLayoutShortcut } from "../hooks/useAutoLayoutShortcut";
@@ -91,25 +91,6 @@ export function GraphView({ projectId, projectName }: GraphViewProps) {
           pendingNodeUpserts: healed.pendingNodeUpserts,
         });
       }
-    }
-
-    // Auto-heal orphaned edges connected to WebPage nodes whose handles were removed
-    const storeAfterTrans = useBackendCanvasStore.getState();
-    const orphanedWp = healOrphanedWebPageEdges({
-      nodes: storeAfterTrans.nodes,
-      edges: storeAfterTrans.edges,
-      pendingEdgeRemovals: storeAfterTrans.pendingEdgeRemovals,
-      pendingEdgeUpserts: storeAfterTrans.pendingEdgeUpserts,
-      pendingNodeUpserts: storeAfterTrans.pendingNodeUpserts,
-    });
-    if (orphanedWp.changed) {
-      useBackendCanvasStore.setState({
-        nodes: orphanedWp.nodes,
-        edges: orphanedWp.edges,
-        pendingEdgeRemovals: orphanedWp.pendingEdgeRemovals,
-        pendingEdgeUpserts: orphanedWp.pendingEdgeUpserts,
-        pendingNodeUpserts: orphanedWp.pendingNodeUpserts,
-      });
     }
   }, [nodes.length, edges.length]);
 
@@ -224,6 +205,67 @@ export function GraphView({ projectId, projectName }: GraphViewProps) {
     return keys;
   }, [events, endpoints, nodes]);
 
+  const webPageNodeIdsSet = React.useMemo(() => {
+    const set = new Set<string>();
+    for (const n of nodes) {
+      if (n.type === "webPage") set.add(n.id);
+    }
+    return set;
+  }, [nodes]);
+
+  const validWebPageActionKeys = React.useMemo(() => {
+    const keys = new Set<string>();
+    nodes.forEach((n) => {
+      if (n.type === "webPage") {
+        const sections: PageSection[] = Array.isArray(n.data?.sections) ? n.data.sections : [];
+        sections.forEach((s) => {
+          (s.actions || []).forEach((act) => {
+            if (act?.id) keys.add(`${n.id}::${act.id}`);
+          });
+        });
+        (n.data?.events || []).forEach((act: { id?: string }) => {
+          if (act?.id) keys.add(`${n.id}::${act.id}`);
+        });
+      }
+    });
+    return keys;
+  }, [nodes]);
+
+  const validWebPageRealtimeKeys = React.useMemo(() => {
+    const keys = new Set<string>();
+    nodes.forEach((n) => {
+      if (n.type === "webPage") {
+        const conns = Array.isArray(n.data?.realtimeConnections) ? n.data.realtimeConnections : [];
+        conns.forEach((c: { id?: string }) => {
+          if (c?.id) keys.add(`${n.id}::${c.id}`);
+        });
+      }
+    });
+    return keys;
+  }, [nodes]);
+
+  // Auto-heal orphaned edges connected to WebPage nodes whose handles were removed
+  useEffect(() => {
+    if (nodes.length === 0) return;
+    const store = useBackendCanvasStore.getState();
+    const orphanedWp = healOrphanedWebPageEdges({
+      nodes: store.nodes,
+      edges: store.edges,
+      pendingEdgeRemovals: store.pendingEdgeRemovals,
+      pendingEdgeUpserts: store.pendingEdgeUpserts,
+      pendingNodeUpserts: store.pendingNodeUpserts,
+    });
+    if (orphanedWp.changed) {
+      useBackendCanvasStore.setState({
+        nodes: orphanedWp.nodes,
+        edges: orphanedWp.edges,
+        pendingEdgeRemovals: orphanedWp.pendingEdgeRemovals,
+        pendingEdgeUpserts: orphanedWp.pendingEdgeUpserts,
+        pendingNodeUpserts: orphanedWp.pendingNodeUpserts,
+      });
+    }
+  }, [edges, validWebPageActionKeys, validWebPageRealtimeKeys]);
+
   const graphEdges = React.useMemo(() => {
     const seenIds = new Set<string>();
     return edges.filter((e) => {
@@ -256,17 +298,48 @@ export function GraphView({ projectId, projectName }: GraphViewProps) {
         if (!validEventKeys.has(`${e.target}::${evId}`)) return false;
       }
 
+      if (
+        e.targetHandle &&
+        /^(?:event-in-|pageload-in-|mount-in-|onmount-in-|unmount-in-|interval-in-|effect-in-|sse-in-|websocket-in-|webrtc-in-)/.test(
+          e.targetHandle,
+        )
+      ) {
+        const actId = e.targetHandle.replace(
+          /^(?:event-in-|pageload-in-|mount-in-|onmount-in-|unmount-in-|interval-in-|effect-in-|sse-in-|websocket-in-|webrtc-in-)/,
+          "",
+        );
+        if (webPageNodeIdsSet.has(e.target) && !validWebPageActionKeys.has(`${e.target}::${actId}`)) {
+          return false;
+        }
+      }
+
+      if (e.sourceHandle?.startsWith("events-")) {
+        const actId = e.sourceHandle.replace(/^events-/, "");
+        if (webPageNodeIdsSet.has(e.source) && !validWebPageActionKeys.has(`${e.source}::${actId}`)) {
+          return false;
+        }
+      }
+
+      if (
+        e.targetHandle &&
+        (e.targetHandle.startsWith("rtc-in-") || e.targetHandle.startsWith("rtc-right-in-"))
+      ) {
+        const rtcId = e.targetHandle.replace(/^(?:rtc-in-|rtc-right-in-)/, "");
+        if (webPageNodeIdsSet.has(e.target) && !validWebPageRealtimeKeys.has(`${e.target}::${rtcId}`)) {
+          return false;
+        }
+      }
+
+      if (e.sourceHandle?.startsWith("rtc-out-")) {
+        const rtcId = e.sourceHandle.replace(/^rtc-out-/, "");
+        if (webPageNodeIdsSet.has(e.source) && !validWebPageRealtimeKeys.has(`${e.source}::${rtcId}`)) {
+          return false;
+        }
+      }
+
       return true;
     });
-  }, [edges, graphNodeIds, validEndpointKeys, validEventKeys]);
-
-  const webPageNodeIdsSet = React.useMemo(() => {
-    const set = new Set<string>();
-    for (const n of nodes) {
-      if (n.type === "webPage") set.add(n.id);
-    }
-    return set;
-  }, [nodes]);
+  }, [edges, graphNodeIds, validEndpointKeys, validEventKeys, validWebPageActionKeys, validWebPageRealtimeKeys, webPageNodeIdsSet]);
 
   const visualGraphEdges = React.useMemo(() => {
     if (webPageNodeIdsSet.size === 0) return graphEdges;

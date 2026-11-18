@@ -8,6 +8,7 @@ import { TargetVariableCombobox } from "./TargetVariableCombobox";
 import {
   REDUCER_CODE_PRESETS,
   extractActionsFromReducerCode,
+  extractActionGroupsFromReducerCode,
   getActionMetadata,
 } from "../constants";
 import type { LangGraphStateChannel } from "@/types/canvas";
@@ -46,6 +47,13 @@ export function EditCustomReducerForm({
   onCancel,
 }: EditCustomReducerFormProps) {
   const detectedActions = useMemo(() => {
+    const groups = extractActionGroupsFromReducerCode(editReducerCode);
+    if (groups.length > 0) {
+      return groups.flatMap((group) => {
+        const primary = group[0];
+        return primary ? [getActionMetadata(primary, undefined, group)] : [];
+      });
+    }
     const actions = extractActionsFromReducerCode(editReducerCode);
     return actions.map((act) => getActionMetadata(act));
   }, [editReducerCode]);
@@ -162,10 +170,7 @@ export function EditCustomReducerForm({
                 }`}
                 title={act.description}
               >
-                <span>⚡ {act.action}</span>
-                <span className="ml-1 text-[7px] opacity-75">
-                  {act.requiresValue ? "(value)" : "(no value)"}
-                </span>
+                <span>⚡ {act.label || act.action}</span>
               </Badge>
             ))}
           </div>

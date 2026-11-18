@@ -123,8 +123,18 @@ export function deleteRealtimeConnection({
   // 5. Delete any connected canvas edges for this realtime connection
   const rtcEdges = edges.filter(
     (e) =>
-      (e.source === nodeId && (e.sourceHandle === `rtc-out-${connId}` || e.sourceHandle === `rtc-in-${connId}` || e.sourceHandle === `rtc-right-in-${connId}`)) ||
-      (e.target === nodeId && (e.targetHandle === `rtc-in-${connId}` || e.targetHandle === `rtc-out-${connId}` || e.targetHandle === `rtc-right-in-${connId}`)),
+      (e.source === nodeId &&
+        (e.sourceHandle === `rtc-out-${connId}` ||
+          e.sourceHandle === `rtc-in-${connId}` ||
+          e.sourceHandle === `rtc-right-in-${connId}` ||
+          e.sourceHandle === `events-${connId}` ||
+          e.sourceHandle?.endsWith(`-${connId}`))) ||
+      (e.target === nodeId &&
+        (e.targetHandle === `rtc-in-${connId}` ||
+          e.targetHandle === `rtc-out-${connId}` ||
+          e.targetHandle === `rtc-right-in-${connId}` ||
+          e.targetHandle === `event-in-${connId}` ||
+          e.targetHandle?.endsWith(`-${connId}`))),
   );
   rtcEdges.forEach((e) => deleteEdge(e.id));
 }
