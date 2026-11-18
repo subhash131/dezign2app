@@ -930,9 +930,9 @@ describe("compileNextjsV16WebClient - Configuration-Driven Output", () => {
     expect(content).not.toContain("let payloadBody");
     expect(content).not.toContain("payloadBody,");
 
-    // 4. Should pass undefined for the requestBody argument in onTrigger
-    expect(content).toContain("undefined,");
-    expect(content).toMatch(/await onTrigger\?\.[\s\S]*undefined,\s*\);/);
+    // 4. Should pass undefined for the requestBody argument in executeApiAction (no duplicate onTrigger call)
+    expect(content).toContain("requestBody: undefined,");
+    expect(content).not.toContain("await onTrigger?.(");
   });
 
   it("derives package.json name from appSlug or webAppNode label", () => {
