@@ -35,6 +35,7 @@
     "build:electron:linux": "pnpm --filter desktop run build:electron:linux",
     "build:electron:all": "pnpm --filter desktop run build:electron:all",
     "lint": "turbo lint",
+    "typecheck": "turbo typecheck",
     "test": "turbo test --",
     "test:watch": "turbo test:watch",
     "test:ui": "turbo test:ui",
