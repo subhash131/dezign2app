@@ -74,6 +74,18 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
 
   const derivedInfo = useDerivedRealtimeInfo(id, nodeId, events, endpoints, nodes);
 
+  const validActionSteps = useMemo(() => {
+    return (manualConn?.actionSteps ?? []).filter((step) => {
+      if (step.serviceNodeId && nodes.some((n) => n.id === step.serviceNodeId && n.type === "page_ref")) {
+        return false;
+      }
+      if (step.edgeId && edges.some((e) => e.id === step.edgeId && e.type === "page-reference")) {
+        return false;
+      }
+      return true;
+    });
+  }, [manualConn?.actionSteps, nodes, edges]);
+
   const conn: RealtimeConnection = useMemo(() => {
     if (derivedInfo?.step) {
       const s = derivedInfo.step;
@@ -124,7 +136,7 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
         sourceItemType: ep ? "endpoint" : ev ? "event" : undefined,
         storeActionBinding: manualConn?.storeActionBinding,
         storeActionBindings: manualConn?.storeActionBindings,
-        actionSteps: manualConn?.actionSteps ?? [],
+        actionSteps: validActionSteps,
         subscriptionBindings: manualConn?.subscriptionBindings,
         isLangGraph,
         langGraphStreamModes: isLangGraph ? (s.langGraphStreamModes || manualConn?.langGraphStreamModes) : manualConn?.langGraphStreamModes,
@@ -139,7 +151,7 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
         sourceStepName: manualConn.sourceStepName,
         sourceStepType: manualConn.sourceStepType,
         sourceStepIndex: manualConn.sourceStepIndex,
-        actionSteps: manualConn.actionSteps ?? [],
+        actionSteps: validActionSteps,
       };
     return {
       id,
@@ -147,7 +159,39 @@ export const WebPageRealtimeConnectionConfig: React.FC<WebPageRealtimeConnection
       eventName: "message",
       actionSteps: [],
     };
-  }, [manualConn, derivedInfo, id, events, endpoints]);
+  }, [manualConn, derivedInfo, id, events, endpoints, validActionSteps]);
+
+  // Clean up any stale actionSteps pointing to reference edges or page_ref nodes from the store
+  React.useEffect(() => {
+    if (!pageNode?.data?.realtimeConnections) return;
+    let modified = false;
+    const nextConns = pageNode.data.realtimeConnections.map((c) => {
+      if (!c.actionSteps || c.actionSteps.length === 0) return c;
+      const valid = c.actionSteps.filter((s) => {
+        if (s.serviceNodeId && nodes.some((n) => n.id === s.serviceNodeId && n.type === "page_ref")) {
+          return false;
+        }
+        if (s.edgeId && edges.some((e) => e.id === s.edgeId && e.type === "page-reference")) {
+          return false;
+        }
+        return true;
+      });
+      if (valid.length !== c.actionSteps.length) {
+        modified = true;
+        return { ...c, actionSteps: valid };
+      }
+      return c;
+    });
+
+    if (modified) {
+      updateNode(nodeId, {
+        data: {
+          ...pageNode.data,
+          realtimeConnections: nextConns,
+        },
+      });
+    }
+  }, [pageNode, nodes, edges, nodeId, updateNode]);
 
   const isDerived = Boolean(derivedInfo?.step);
   const isConnected = Boolean(

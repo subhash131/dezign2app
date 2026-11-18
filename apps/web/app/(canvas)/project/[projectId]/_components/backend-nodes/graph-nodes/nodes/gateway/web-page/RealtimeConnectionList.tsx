@@ -195,13 +195,27 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
     const connectionsMap = new Map((connections || []).map((c) => [c.id, c]));
     const derivedIds = new Set(derivedConnections.map((d) => d.id));
 
+    const filterValidActionSteps = (steps?: RealtimeConnection["actionSteps"]) => {
+      if (!steps || steps.length === 0) return steps;
+      return steps.filter((s) => {
+        if (s.serviceNodeId && nodes.some((n) => n.id === s.serviceNodeId && n.type === "page_ref")) {
+          return false;
+        }
+        if (s.edgeId && edges.some((e) => e.id === s.edgeId && e.type === "page-reference")) {
+          return false;
+        }
+        return true;
+      });
+    };
+
     const derivedWithBindings = derivedConnections.map((d) => {
       const match = connectionsMap.get(d.id);
+      const rawSteps = match?.actionSteps || d.actionSteps;
       return {
         ...d,
         storeActionBinding: match?.storeActionBinding || d.storeActionBinding,
         storeActionBindings: match?.storeActionBindings || d.storeActionBindings,
-        actionSteps: match?.actionSteps || d.actionSteps,
+        actionSteps: filterValidActionSteps(rawSteps),
         subscriptionBindings: match?.subscriptionBindings || d.subscriptionBindings,
       };
     });
@@ -210,6 +224,7 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
       .filter((c) => !derivedIds.has(c.id))
       .map((c) => ({
         ...c,
+        actionSteps: filterValidActionSteps(c.actionSteps),
         isDerived: false,
         sourceServiceNodeId: undefined,
         sourceServiceLabel: undefined,
@@ -217,7 +232,39 @@ export const RealtimeConnectionList: React.FC<RealtimeConnectionListProps> = ({
         sourceItemType: undefined,
       }));
     return [...derivedWithBindings, ...manualOnly];
-  }, [derivedConnections, connections]);
+  }, [derivedConnections, connections, nodes, edges]);
+
+  // Auto-clean any bogus action steps created from reference edges or page_ref nodes from node store
+  React.useEffect(() => {
+    if (!connections || connections.length === 0) return;
+    let hasBogus = false;
+    const cleaned = connections.map((c) => {
+      if (!c.actionSteps || c.actionSteps.length === 0) return c;
+      const valid = c.actionSteps.filter((s) => {
+        if (s.serviceNodeId && nodes.some((n) => n.id === s.serviceNodeId && n.type === "page_ref")) {
+          return false;
+        }
+        if (s.edgeId && edges.some((e) => e.id === s.edgeId && e.type === "page-reference")) {
+          return false;
+        }
+        return true;
+      });
+      if (valid.length !== c.actionSteps.length) {
+        hasBogus = true;
+        return { ...c, actionSteps: valid };
+      }
+      return c;
+    });
+
+    if (hasBogus) {
+      updateNode(nodeId, {
+        data: {
+          ...data,
+          realtimeConnections: cleaned,
+        },
+      });
+    }
+  }, [connections, nodes, edges, nodeId, data, updateNode]);
 
   const handleAdd = () => {
     const newId = `rtc-${generateId()}`;
