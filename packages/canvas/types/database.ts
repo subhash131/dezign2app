@@ -67,6 +67,7 @@ export interface CanvasEntityColumn {
   isPrimary?: boolean;
   primaryKey?: boolean;
   isForeignKey?: boolean;
+  isLogical?: boolean;
   isNotNull?: boolean;
   isUnique?: boolean;
   references?: { table: string; column: string };

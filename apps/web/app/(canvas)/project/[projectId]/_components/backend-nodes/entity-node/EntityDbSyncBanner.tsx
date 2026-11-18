@@ -45,6 +45,7 @@ export interface EntityDbSyncBannerProps {
     isNotNull?: boolean;
     isUnique?: boolean;
     isForeignKey?: boolean;
+    isLogical?: boolean;
     references?: {
       table: string;
       column: string;
@@ -91,7 +92,7 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
   const derivedForeignKeys = React.useMemo<CanvasForeignKey[]>(() => {
     if (foreignKeys && foreignKeys.length > 0) return foreignKeys;
     return (columns || [])
-      .filter((c) => c.isForeignKey && c.references?.table && c.references?.column)
+      .filter((c) => c.isForeignKey && !c.isLogical && c.references?.table && c.references?.column)
       .map((c) => ({
         column: c.name,
         foreignTable: c.references!.table,

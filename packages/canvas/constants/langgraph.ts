@@ -258,14 +258,7 @@ export const LANGGRAPH_POSTGRES_TABLE_DEFINITIONS: LangGraphTableDefinition[] = 
     name: "checkpoint_blobs",
     description: "Serialized large-state blobs and message buffers",
     columns: [
-      {
-        name: "thread_id",
-        type: "TEXT",
-        isPrimaryKey: true,
-        isNotNull: true,
-        isForeignKey: true,
-        references: { table: "checkpoints", column: "thread_id" },
-      },
+      { name: "thread_id", type: "TEXT", isPrimaryKey: true, isNotNull: true },
       { name: "checkpoint_ns", type: "TEXT", isPrimaryKey: true, isNotNull: true },
       { name: "channel", type: "TEXT", isPrimaryKey: true, isNotNull: true },
       { name: "version", type: "TEXT", isPrimaryKey: true, isNotNull: true },
@@ -285,14 +278,7 @@ export const LANGGRAPH_POSTGRES_TABLE_DEFINITIONS: LangGraphTableDefinition[] = 
     columns: [
       { name: "thread_id", type: "TEXT", isPrimaryKey: true, isNotNull: true },
       { name: "checkpoint_ns", type: "TEXT", isPrimaryKey: true, isNotNull: true },
-      {
-        name: "checkpoint_id",
-        type: "TEXT",
-        isPrimaryKey: true,
-        isNotNull: true,
-        isForeignKey: true,
-        references: { table: "checkpoints", column: "checkpoint_id" },
-      },
+      { name: "checkpoint_id", type: "TEXT", isPrimaryKey: true, isNotNull: true },
       { name: "task_id", type: "TEXT", isPrimaryKey: true, isNotNull: true },
       { name: "idx", type: "INTEGER", isPrimaryKey: true, isNotNull: true },
       { name: "channel", type: "TEXT", isNotNull: true },
@@ -346,14 +332,7 @@ export const LANGGRAPH_SQLITE_TABLE_DEFINITIONS: LangGraphTableDefinition[] = [
     columns: [
       { name: "thread_id", type: "TEXT", isPrimaryKey: true, isNotNull: true },
       { name: "checkpoint_ns", type: "TEXT", isPrimaryKey: true, isNotNull: true },
-      {
-        name: "checkpoint_id",
-        type: "TEXT",
-        isPrimaryKey: true,
-        isNotNull: true,
-        isForeignKey: true,
-        references: { table: "checkpoints", column: "checkpoint_id" },
-      },
+      { name: "checkpoint_id", type: "TEXT", isPrimaryKey: true, isNotNull: true },
       { name: "task_id", type: "TEXT", isPrimaryKey: true, isNotNull: true },
       { name: "idx", type: "INTEGER", isPrimaryKey: true, isNotNull: true },
       { name: "channel", type: "TEXT", isNotNull: true },

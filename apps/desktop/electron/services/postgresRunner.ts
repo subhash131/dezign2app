@@ -796,14 +796,63 @@ export async function checkPostgresTableSync(
       foreignColumn: r.foreign_column,
     }));
 
-    const missingForeignKeys = foreignKeys.filter(
-      (cFk) =>
-        !dbFks.some(
-          (dFk) =>
-            dFk.column.toLowerCase() === cFk.column.toLowerCase() &&
-            dFk.foreignTable.toLowerCase() === cFk.foreignTable.toLowerCase(),
-        ),
-    );
+    // Query which columns in targetSchema form a valid single-column FK target
+    let candidateKeySet = new Set<string>();
+    try {
+      const candidateRes = await client.query<{ table_name: string; column_name: string }>(
+        `SELECT LOWER(cl.relname) AS table_name, LOWER(att.attname) AS column_name
+         FROM pg_constraint c
+         JOIN pg_class cl ON cl.oid = c.conrelid
+         JOIN pg_namespace n ON n.oid = cl.relnamespace
+         JOIN pg_attribute att ON att.attrelid = c.conrelid AND att.attnum = ANY(c.conkey)
+         WHERE c.contype IN ('p', 'u')
+           AND n.nspname = $1
+           AND cardinality(c.conkey) = 1
+         UNION
+         SELECT LOWER(cl.relname) AS table_name, LOWER(att.attname) AS column_name
+         FROM pg_index ix
+         JOIN pg_class cl ON cl.oid = ix.indrelid
+         JOIN pg_namespace n ON n.oid = cl.relnamespace
+         JOIN pg_attribute att ON att.attrelid = cl.oid AND att.attnum = ANY(ix.indkey::smallint[])
+         WHERE ix.indisunique = true
+           AND n.nspname = $1
+           AND ix.indnatts = 1`,
+        [targetSchema],
+      );
+      candidateKeySet = new Set(
+        (candidateRes.rows || []).map((r) => `${r.table_name}.${r.column_name}`),
+      );
+    } catch {
+      candidateKeySet = new Set();
+    }
+
+    const missingForeignKeys = foreignKeys.filter((cFk) => {
+      const cCol = cFk.column.toLowerCase();
+      const cTargetTable = cFk.foreignTable.toLowerCase();
+      const cTargetCol = cFk.foreignColumn.toLowerCase();
+
+      // Check if this is a known LangGraph checkpointer logical relation (checkpoints has a composite PK)
+      const isLanggraphLogicalFk =
+        (cTargetTable === "checkpoints" || cTargetTable === "langgraph_checkpoints") &&
+        (cTargetCol === "thread_id" || cTargetCol === "checkpoint_id");
+      if (isLanggraphLogicalFk) {
+        return false;
+      }
+
+      // If candidate key information is available and the target column is not a unique candidate key, treat as logical
+      if (
+        candidateKeySet.size > 0 &&
+        !candidateKeySet.has(`${cTargetTable}.${cTargetCol}`)
+      ) {
+        return false;
+      }
+
+      return !dbFks.some(
+        (dFk) =>
+          dFk.column.toLowerCase() === cCol &&
+          dFk.foreignTable.toLowerCase() === cTargetTable,
+      );
+    });
     const extraForeignKeys = dbFks.filter(
       (dFk) =>
         !foreignKeys.some(
@@ -1126,6 +1175,15 @@ export async function applyPostgresTableSync(
       const safeFkName = fk.name || `fk_${safeTable}_${fk.column}`;
       const fSchema = fk.foreignSchema || targetSchema;
       const onDelete = fk.onDelete || "CASCADE";
+
+      // Skip physical constraint creation for LangGraph checkpointer composite PK relations
+      const isLanggraphLogicalFk =
+        (fk.foreignTable.toLowerCase() === "checkpoints" || fk.foreignTable.toLowerCase() === "langgraph_checkpoints") &&
+        (fk.foreignColumn.toLowerCase() === "thread_id" || fk.foreignColumn.toLowerCase() === "checkpoint_id");
+      if (isLanggraphLogicalFk) {
+        continue;
+      }
+
       try {
         await client.query(
           `ALTER TABLE "${targetSchema}"."${safeTable}"

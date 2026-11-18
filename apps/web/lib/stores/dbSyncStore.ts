@@ -59,7 +59,11 @@ export function deriveEntityForeignKeys(node: BackendNode): CanvasForeignKey[] {
   const columns = node.data?.columns || [];
   return columns
     .filter(
-      (c) => c.isForeignKey && c.references?.table && c.references?.column,
+      (c) =>
+        c.isForeignKey &&
+        !c.isLogical &&
+        c.references?.table &&
+        c.references?.column,
     )
     .map((c) => ({
       column: c.name,
