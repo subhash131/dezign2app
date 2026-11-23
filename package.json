@@ -55,6 +55,11 @@
   "overrides": {
     "sharp": "^0.34.5"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron"
+    ]
+  },
   "packageManager": "pnpm@10.4.1",
   "engines": {
     "node": ">=20"
