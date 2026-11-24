@@ -606,25 +606,24 @@ export function compileNextjsV16WebClient(
       return allActs.some((a: UIEventItem) =>
         (a.actionSteps || []).some(
           (s: FrontendActionStepDraft) =>
-            s.type === "transform" ||
-            Boolean(s.transformerName) ||
-            Boolean(s.transformerNodeId) ||
             Boolean(s.transformerRefNodeId) ||
             s.functionRef?.importPath === "@workspace/transformers" ||
-            s.functionRef?.importPath?.startsWith("@workspace/transformers"),
+            Boolean(s.functionRef?.importPath?.startsWith("@workspace/transformers")) ||
+            (s.type === "transform" &&
+              s.functionRef?.isGlobal !== false &&
+              !s.functionRef?.importPath?.startsWith(".")),
         ),
       );
     }) ||
     allNodes.some(
       (n) =>
-        (n.type === "transformer" || n.type === "transformer_ref") &&
+        ((n.type === "transformer" && n.data?.scope !== "local") || n.type === "transformer_ref") &&
         (enrichedWebClientNodes.some((w) => w.id === n.data?.targetWebPageId) ||
           allEdges.some(
             (e) =>
               enrichedWebClientNodes.some((w) => w.id === e.source || w.id === e.target) &&
               (e.source === n.id || e.target === n.id),
-          ) ||
-          allNodes.some((w) => w.type === "webApp")),
+          )),
     ) ||
     deduplicatedCustomDeps.some((d) => d.name === "@workspace/transformers");
 

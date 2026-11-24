@@ -65,6 +65,7 @@ export function compileTransformerHelpers(
 
   const globalHelpers: TransformerHelperNodeData[] = [];
   const localHelpersByService = new Map<string, TransformerHelperNodeData[]>();
+  const localHelpersByApp = new Map<string, TransformerHelperNodeData[]>();
 
   // ── Collect helpers from service nodes ───────────────────────────────────
   serviceNodes.forEach((svc) => {
@@ -89,14 +90,25 @@ export function compileTransformerHelpers(
     const fnName = toVarName(d.functionName || d.label || "transformData");
     const scope = d.scope || "global";
 
-    // Find connected service for local-scope transformers
+    // Find connected service or app for local-scope transformers
     let targetServiceId = d.targetServiceId;
-    if (!targetServiceId) {
+    let targetAppSlug = d.appSlug;
+    if (!targetServiceId && !targetAppSlug && d.targetWebPageId) {
+      const wp = allNodes.find((n) => n.id === d.targetWebPageId && (n.type === "webPage" || n.type === "webApp"));
+      if (wp) {
+        targetAppSlug = wp.data?.appSlug || (wp.data?.label ? wp.data.label.toLowerCase().replace(/[^a-z0-9]+/g, "-") : "web");
+      }
+    }
+    if (!targetServiceId && !targetAppSlug) {
       const edge = allEdges.find((e) => e.source === tNode.id || e.target === tNode.id);
       if (edge) {
         const otherId = edge.source === tNode.id ? edge.target : edge.source;
-        const other = allNodes.find((n) => n.id === otherId && n.type === "service");
-        if (other) targetServiceId = other.id;
+        const other = allNodes.find((n) => n.id === otherId);
+        if (other?.type === "service") {
+          targetServiceId = other.id;
+        } else if (other?.type === "webPage" || other?.type === "webApp") {
+          targetAppSlug = other.data?.appSlug || (other.data?.label ? other.data.label.toLowerCase().replace(/[^a-z0-9]+/g, "-") : "web");
+        }
       }
     }
 
@@ -106,12 +118,13 @@ export function compileTransformerHelpers(
       d.inputSchema,
     );
 
+    const isLocal = scope === "local";
     const helperData: TransformerHelperNodeData = {
       id: tNode.id,
       name: fnName,
       description: d.description,
-      scope: scope === "local" && targetServiceId ? "local" : "global",
-      targetServiceId,
+      scope: isLocal ? "local" : "global",
+      targetServiceId: isLocal ? targetServiceId : undefined,
       inputSchema: d.inputSchema || [],
       logicMode: d.logicMode || "code",
       prompt: d.prompt,
@@ -137,7 +150,17 @@ export function compileTransformerHelpers(
       bucket.push(helperData);
       localHelpersByService.set(targetServiceId, bucket);
     } else {
-      globalHelpers.push(helperData);
+      const appKey = targetAppSlug || (serviceNodes.length === 0 ? "web" : undefined);
+      if (appKey) {
+        const bucket = localHelpersByApp.get(appKey) ?? [];
+        bucket.push(helperData);
+        localHelpersByApp.set(appKey, bucket);
+      } else if (serviceNodes.length > 0) {
+        const defaultSvcId = serviceNodes[0]!.id;
+        const bucket = localHelpersByService.get(defaultSvcId) ?? [];
+        bucket.push(helperData);
+        localHelpersByService.set(defaultSvcId, bucket);
+      }
     }
   });
 
@@ -162,6 +185,9 @@ export function compileTransformerHelpers(
         if (
           globalHelpers.some((h) => h.name === fnName) ||
           Array.from(localHelpersByService.values()).some((list) =>
+            list.some((h) => h.name === fnName),
+          ) ||
+          Array.from(localHelpersByApp.values()).some((list) =>
             list.some((h) => h.name === fnName),
           )
         ) {
@@ -191,11 +217,16 @@ export function compileTransformerHelpers(
           step.functionRef?.inputSchema || matchedTrNode?.data?.inputSchema,
         );
 
+        const isLocalStep =
+          step.functionRef?.isGlobal === false ||
+          Boolean(step.functionRef?.importPath && step.functionRef.importPath.startsWith(".")) ||
+          matchedTrNode?.data?.scope === "local";
+
         const helperData: TransformerHelperNodeData = {
           id: step.transformerNodeId || step.id || `trans-${fnName}`,
           name: fnName,
           description: step.description || `Transformer helper for ${fnName}`,
-          scope: "global",
+          scope: isLocalStep ? "local" : "global",
           inputSchema: step.functionRef?.inputSchema || matchedTrNode?.data?.inputSchema || [],
           logicMode: "code",
           prompt: step.prompt || matchedTrNode?.data?.prompt,
@@ -212,14 +243,25 @@ export function compileTransformerHelpers(
           customDependencies: step.customDependencies || matchedTrNode?.data?.customDependencies || [],
         };
 
-        globalHelpers.push(helperData);
+        if (isLocalStep) {
+          const appKey = wp.data?.appSlug || "web";
+          const bucket = localHelpersByApp.get(appKey) ?? [];
+          bucket.push(helperData);
+          localHelpersByApp.set(appKey, bucket);
+        } else {
+          globalHelpers.push(helperData);
+        }
       });
     });
   });
 
   // Map of all helpers by ID and name for cross-transformer dependency resolution
   const allHelpersById = new Map<string, TransformerHelperNodeData>();
-  [...globalHelpers, ...Array.from(localHelpersByService.values()).flat()].forEach((h) => {
+  [
+    ...globalHelpers,
+    ...Array.from(localHelpersByService.values()).flat(),
+    ...Array.from(localHelpersByApp.values()).flat(),
+  ].forEach((h) => {
     allHelpersById.set(h.id, h);
     if (h.name) allHelpersById.set(h.name, h);
   });
@@ -455,6 +497,74 @@ export function compileTransformerHelpers(
       filename: `apps/${svcLabel}/src/transformers/index.ts`,
       language: "typescript",
       content: `/**\n * Local Transformation Functions for ${svcLabel}\n */\n${localBarrelExports.join("\n")}\n`,
+    });
+  });
+
+  // ── Compile local transformers → apps/<appSlug>/src/transformers/ ─────────
+  localHelpersByApp.forEach((helpers, appKey) => {
+    const cleanAppSlug = appKey.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    const localBarrelExports: string[] = [];
+
+    helpers.forEach((helper) => {
+      const cleanName = toVarName(helper.name || "transform");
+      const localImportPath = `../transformers/${cleanName}`;
+
+      const resolvedImports = (helper.importedTransformerIds || [])
+        .map((depId) => allHelpersById.get(depId))
+        .filter((dep): dep is TransformerHelperNodeData => {
+          if (!dep || dep.id === helper.id) return false;
+          if (causesCycle(helper.id, dep.id)) {
+            console.warn(`[compileTransformerHelpers] Circular dependency detected between ${helper.name} and ${dep.name}. User must ensure base cases exist in logic.`);
+          }
+          return true;
+        })
+        .map((dep) => {
+          const depName = toVarName(dep.name || "transform");
+          const importPath =
+            dep.scope === "global"
+              ? GLOBAL_PKG
+              : `./${depName}`;
+          return {
+            name: depName,
+            importPath,
+          };
+        });
+
+      const file = generateTransformerFile(helper, localImportPath, resolvedImports);
+
+      // ✦ emits: apps/<appSlug>/src/transformers/<name>.ts
+      allFiles.push({
+        filename: `apps/${cleanAppSlug}/src/transformers/${cleanName}.ts`,
+        language: file.language,
+        content: file.content,
+      });
+
+      localBarrelExports.push(`export * from "./${cleanName}";`);
+
+      const inputTypeName = `${toPascalCase(cleanName)}Input`;
+      const outputTypeName = `${toPascalCase(cleanName)}Output`;
+      const inputParamNames = (helper.inputSchema || [])
+        .map((f) => f.name?.trim())
+        .filter(Boolean);
+      const paramSignature =
+        inputParamNames.length > 0
+          ? `{ ${inputParamNames.join(", ")} }: ${inputTypeName}`
+          : "";
+
+      allReusable.push({
+        name: cleanName,
+        importPath: localImportPath,
+        signature: `${cleanName}(${paramSignature}): ${outputTypeName}`,
+        targetName: cleanName,
+        kind: "custom",
+      });
+    });
+
+    // ✦ emits: apps/<appSlug>/src/transformers/index.ts
+    allFiles.push({
+      filename: `apps/${cleanAppSlug}/src/transformers/index.ts`,
+      language: "typescript",
+      content: `/**\n * Local Transformation Functions for ${cleanAppSlug}\n */\n${localBarrelExports.join("\n")}\n`,
     });
   });
 

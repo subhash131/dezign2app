@@ -27,7 +27,24 @@ export function hasTransformerActionSteps(eventItem?: UIEventItem): boolean {
       Boolean(s.transformerNodeId) ||
       Boolean(s.transformerRefNodeId) ||
       s.functionRef?.importPath === "@workspace/transformers" ||
-      s.functionRef?.importPath?.startsWith("@workspace/transformers"),
+      Boolean(s.functionRef?.importPath?.startsWith("@workspace/transformers")),
+  );
+}
+
+/**
+ * Detects whether an event item has global transformer action steps or transformer ref nodes
+ * that require the shared @workspace/transformers package.
+ */
+export function hasGlobalTransformerActionSteps(eventItem?: UIEventItem): boolean {
+  if (!eventItem?.actionSteps || !Array.isArray(eventItem.actionSteps)) return false;
+  return eventItem.actionSteps.some(
+    (s) =>
+      Boolean(s.transformerRefNodeId) ||
+      s.functionRef?.importPath === "@workspace/transformers" ||
+      Boolean(s.functionRef?.importPath?.startsWith("@workspace/transformers")) ||
+      ((s.type === "transform" || Boolean(s.transformerName)) &&
+        s.functionRef?.isGlobal !== false &&
+        !s.functionRef?.importPath?.startsWith(".")),
   );
 }
 

@@ -3,6 +3,7 @@ import { generateKeyBetween } from "fractional-indexing";
 import { getLastIndex } from "../../utils";
 import { ConnectionContext } from "../types";
 import { handleWebPageActionConnect } from "./webPageActionConnect";
+import { toVarName } from "@/lib/compiler/utils";
 
 /**
  * Handles transformer to service endpoint, consumed event, or WebPage action connections.
@@ -632,12 +633,14 @@ export function healDirectTransformerEdges({
   pendingEdgeRemovals = [],
   pendingEdgeUpserts = [],
   pendingNodeUpserts = [],
+  pendingNodeRemovals = [],
 }: {
   nodes: BackendNode[];
   edges: BackendEdge[];
   pendingEdgeRemovals?: string[];
   pendingEdgeUpserts?: BackendEdge[];
   pendingNodeUpserts?: BackendNode[];
+  pendingNodeRemovals?: string[];
 }): {
   changed: boolean;
   nodes: BackendNode[];
@@ -645,8 +648,24 @@ export function healDirectTransformerEdges({
   pendingEdgeRemovals: string[];
   pendingEdgeUpserts: BackendEdge[];
   pendingNodeUpserts: BackendNode[];
+  pendingNodeRemovals: string[];
 } {
-  const isGlobalTrans = (node?: BackendNode) => node?.type === "transformer";
+  const isGlobalTrans = (node?: BackendNode): boolean =>
+    Boolean(node?.type === "transformer" && node.data?.scope !== "local");
+
+  // Identify any invalid transformer_ref nodes that reference a local transformer
+  const invalidLocalRefNodes = nodes.filter((n) => {
+    if (n.type !== "transformer_ref") return false;
+    const masterId = n.data?.transformerRef;
+    if (!masterId) return false;
+    const master = nodes.find(
+      (m) =>
+        m.id === masterId ||
+        (m.type === "transformer" &&
+          (m.data?.functionName === masterId || m.data?.label === masterId)),
+    );
+    return master?.type === "transformer" && master.data?.scope === "local";
+  });
 
   const directEdges = edges.filter((e) => {
     if (e.type === "transformer-reference" || e.type === "reference") return false;
@@ -682,6 +701,18 @@ export function healDirectTransformerEdges({
 
   const unconnectedRefNodes = nodes.filter((n) => {
     if (n.type !== "transformer_ref") return false;
+    // Don't try to reconnect ref nodes whose master is a local transformer (they get cleaned up)
+    const masterId = n.data?.transformerRef;
+    const master = masterId
+      ? nodes.find(
+          (m) =>
+            m.id === masterId ||
+            (m.type === "transformer" &&
+              (m.data?.functionName === masterId || m.data?.label === masterId)),
+        )
+      : undefined;
+    if (master && master.data?.scope === "local") return false;
+
     const hasOutgoing = edges.some(
       (e) =>
         e.source === n.id &&
@@ -699,7 +730,8 @@ export function healDirectTransformerEdges({
   if (
     directEdges.length === 0 &&
     invertedRefEdges.length === 0 &&
-    unconnectedRefNodes.length === 0
+    unconnectedRefNodes.length === 0 &&
+    invalidLocalRefNodes.length === 0
   ) {
     return {
       changed: false,
@@ -708,6 +740,7 @@ export function healDirectTransformerEdges({
       pendingEdgeRemovals,
       pendingEdgeUpserts,
       pendingNodeUpserts,
+      pendingNodeRemovals,
     };
   }
 
@@ -716,6 +749,98 @@ export function healDirectTransformerEdges({
   const nextEdgeRemovals = new Set(pendingEdgeRemovals);
   let nextEdgeUpserts = [...pendingEdgeUpserts];
   let nextNodeUpserts = [...pendingNodeUpserts];
+  const nextNodeRemovals = new Set(pendingNodeRemovals);
+
+  // Clean up any transformer_ref nodes that reference local transformers
+  for (const refNode of invalidLocalRefNodes) {
+    const masterId = refNode.data?.transformerRef;
+    const localMaster = nextNodes.find(
+      (m) =>
+        m.id === masterId ||
+        (m.type === "transformer" &&
+          (m.data?.functionName === masterId || m.data?.label === masterId)),
+    );
+
+    const connectedEdges = nextEdges.filter(
+      (e) => e.source === refNode.id || e.target === refNode.id,
+    );
+
+    for (const edge of connectedEdges) {
+      nextEdges = nextEdges.filter((e) => e.id !== edge.id);
+      nextEdgeUpserts = nextEdgeUpserts.filter((e) => e.id !== edge.id);
+      nextEdgeRemovals.add(edge.id);
+
+      // If this was an outgoing connection edge to WebPage or Service, rewire it directly from the local transformer
+      if (localMaster && edge.source === refNode.id && (edge.type === "connection" || !edge.type)) {
+        const targetNode = nextNodes.find((n) => n.id === edge.target);
+        if (targetNode) {
+          const rewiredEdge: BackendEdge = {
+            id: `edge-local-tr-${localMaster.id}-${edge.targetHandle || "conn"}-${Date.now()}`,
+            source: localMaster.id,
+            target: edge.target,
+            sourceHandle: "transformer-out",
+            targetHandle: edge.targetHandle,
+            type: "connection",
+            data: edge.data,
+            fractionalIndex: safeGenerateKey(getLastIndex(nextEdges)),
+          };
+          nextEdges.push(rewiredEdge);
+          nextEdgeUpserts.push(rewiredEdge);
+
+          if (targetNode.type === "webPage") {
+            const fnName = localMaster.data?.functionName || localMaster.data?.label || "transformer";
+            const cleanFn = toVarName(fnName);
+            const sections: PageSection[] = targetNode.data?.sections || [];
+            let updated = false;
+            const updatedSections = sections.map((sec) => ({
+              ...sec,
+              actions: (sec.actions || []).map((act) => {
+                const steps: FrontendActionStepDraft[] = act.actionSteps || [];
+                const stepIdx = steps.findIndex(
+                  (s) =>
+                    s.transformerRefNodeId === refNode.id ||
+                    (s.type === "transform" && s.transformerNodeId === localMaster.id),
+                );
+                if (stepIdx >= 0) {
+                  const step = steps[stepIdx];
+                  if (!step) return act;
+                  updated = true;
+                  const updatedSteps = [...steps];
+                  updatedSteps[stepIdx] = {
+                    ...step,
+                    edgeId: rewiredEdge.id,
+                    transformerRefNodeId: undefined,
+                    transformerNodeId: localMaster.id,
+                    functionRef: {
+                      ...(step.functionRef || { name: cleanFn }),
+                      name: cleanFn,
+                      isGlobal: false,
+                      importPath: `../transformers/${cleanFn}`,
+                    },
+                  };
+                  return { ...act, actionSteps: updatedSteps };
+                }
+                return act;
+              }),
+            }));
+
+            if (updated) {
+              const updatedPage: BackendNode = {
+                ...targetNode,
+                data: { ...targetNode.data, sections: updatedSections },
+              };
+              nextNodes = nextNodes.map((n) => (n.id === updatedPage.id ? updatedPage : n));
+              nextNodeUpserts = [...nextNodeUpserts.filter((n) => n.id !== updatedPage.id), updatedPage];
+            }
+          }
+        }
+      }
+    }
+
+    nextNodes = nextNodes.filter((n) => n.id !== refNode.id);
+    nextNodeUpserts = nextNodeUpserts.filter((n) => n.id !== refNode.id);
+    nextNodeRemovals.add(refNode.id);
+  }
 
   for (const directEdge of directEdges) {
     const src = nextNodes.find((n) => n.id === directEdge.source);
@@ -1339,5 +1464,6 @@ export function healDirectTransformerEdges({
     pendingEdgeRemovals: Array.from(nextEdgeRemovals),
     pendingEdgeUpserts: nextEdgeUpserts,
     pendingNodeUpserts: nextNodeUpserts,
+    pendingNodeRemovals: Array.from(nextNodeRemovals),
   };
 }

@@ -653,4 +653,163 @@ describe("healDirectTransformerEdges", () => {
     // Must NOT mutate state if already healthy
     expect(result.changed).toBe(false);
   });
+
+  it("does NOT intercept or create transformer_ref for local transformer and preserves direct connection", () => {
+    const serviceNode: BackendNode = {
+      id: "srv-orders",
+      type: "service",
+      position: { x: 800, y: 200 },
+      data: {
+        label: "orders-service",
+      },
+      fractionalIndex: "a0",
+    };
+
+    const localTransNode: BackendNode = {
+      id: "trans-local-1",
+      type: "transformer",
+      position: { x: 400, y: 200 },
+      data: {
+        label: "formatOrder",
+        functionName: "formatOrder",
+        scope: "local",
+      },
+      fractionalIndex: "a1",
+    };
+
+    const directLocalEdge: BackendEdge = {
+      id: "edge-local-direct",
+      source: "trans-local-1",
+      target: "srv-orders",
+      sourceHandle: "transformer-out",
+      targetHandle: "endpoint-in-createOrder",
+      type: "connection",
+      fractionalIndex: "a2",
+    };
+
+    const result = healDirectTransformerEdges({
+      nodes: [serviceNode, localTransNode],
+      edges: [directLocalEdge],
+      pendingEdgeRemovals: [],
+      pendingEdgeUpserts: [],
+      pendingNodeUpserts: [],
+    });
+
+    // Should NOT change anything because local transformers connect directly
+    expect(result.changed).toBe(false);
+    expect(result.nodes.some((n) => n.type === "transformer_ref")).toBe(false);
+    expect(result.edges.some((e) => e.id === "edge-local-direct")).toBe(true);
+  });
+
+  it("cleans up invalid transformer_ref nodes referencing local transformers and re-wires directly", () => {
+    const webPageNode: BackendNode = {
+      id: "page-1",
+      type: "webPage",
+      position: { x: 1000, y: 200 },
+      data: {
+        label: "HomePage",
+        sections: [
+          {
+            id: "sec-1",
+            name: "Main",
+            actions: [
+              {
+                id: "act-1",
+                name: "onClick",
+                event: "click",
+                actionSteps: [
+                  {
+                    id: "step-1",
+                    order: 1,
+                    type: "transform",
+                    transformerNodeId: "trans-local-1",
+                    transformerRefNodeId: "ref-invalid-1",
+                    edgeId: "e-conn-invalid",
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      fractionalIndex: "a0",
+    };
+
+    const localTransNode: BackendNode = {
+      id: "trans-local-1",
+      type: "transformer",
+      position: { x: 300, y: 200 },
+      data: {
+        label: "formatTitle",
+        functionName: "formatTitle",
+        scope: "local",
+      },
+      fractionalIndex: "a1",
+    };
+
+    const invalidRefNode: BackendNode = {
+      id: "ref-invalid-1",
+      type: "transformer_ref",
+      position: { x: 700, y: 200 },
+      data: {
+        label: "formatTitle (Ref)",
+        transformerRef: "trans-local-1",
+        targetWebPageId: "page-1",
+        targetActionId: "act-1",
+      },
+      fractionalIndex: "a2",
+    };
+
+    const refEdge: BackendEdge = {
+      id: "e-ref-link",
+      source: "trans-local-1",
+      target: "ref-invalid-1",
+      sourceHandle: "transformer-out",
+      targetHandle: "transformer-in",
+      type: "transformer-reference",
+      fractionalIndex: "a3",
+    };
+
+    const connEdge: BackendEdge = {
+      id: "e-conn-invalid",
+      source: "ref-invalid-1",
+      target: "page-1",
+      sourceHandle: "transformer-out",
+      targetHandle: "event-in-act-1",
+      type: "connection",
+      fractionalIndex: "a4",
+    };
+
+    const result = healDirectTransformerEdges({
+      nodes: [webPageNode, localTransNode, invalidRefNode],
+      edges: [refEdge, connEdge],
+      pendingEdgeRemovals: [],
+      pendingEdgeUpserts: [],
+      pendingNodeUpserts: [],
+    });
+
+    expect(result.changed).toBe(true);
+
+    // The invalid transformer_ref node must be removed
+    expect(result.nodes.some((n) => n.id === "ref-invalid-1")).toBe(false);
+    expect(result.pendingNodeRemovals).toContain("ref-invalid-1");
+
+    // The transformer-reference edge must be removed
+    expect(result.edges.some((e) => e.id === "e-ref-link")).toBe(false);
+    expect(result.pendingEdgeRemovals).toContain("e-ref-link");
+
+    // A direct connection from the local transformer to the WebPage must be established
+    const directEdge = result.edges.find((e) => e.source === "trans-local-1" && e.target === "page-1");
+    expect(directEdge).toBeDefined();
+    expect(directEdge?.sourceHandle).toBe("transformer-out");
+    expect(directEdge?.targetHandle).toBe("event-in-act-1");
+
+    // WebPage action step must be re-wired to the local transformer directly
+    const updatedPage = result.nodes.find((n) => n.id === "page-1");
+    const step = updatedPage?.data?.sections?.[0]?.actions?.[0]?.actionSteps?.[0];
+    expect(step?.transformerRefNodeId).toBeUndefined();
+    expect(step?.transformerNodeId).toBe("trans-local-1");
+    expect(step?.functionRef?.isGlobal).toBe(false);
+    expect(step?.functionRef?.importPath).toBe("../transformers/formatTitle");
+  });
 });
