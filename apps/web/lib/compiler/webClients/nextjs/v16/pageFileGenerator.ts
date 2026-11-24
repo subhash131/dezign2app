@@ -11,6 +11,7 @@ import {
   EventComponentMeta,
   SectionMeta,
   hasTransformerActionSteps,
+  hasGlobalTransformerActionSteps,
 } from "./componentTemplates";
 import { resolveBaseUrlInfo, type StorageUploadConfig } from "./event-generators";
 import {
@@ -1030,7 +1031,7 @@ export function generatePageAndComponentFiles({
         };
         secActionMetas.push(actionMeta);
 
-        if (hasTransformerActionSteps(evt)) {
+        if (hasGlobalTransformerActionSteps(evt)) {
           hasTransformers = true;
         }
 
@@ -1367,14 +1368,13 @@ export default async function ${pageMeta.componentName}() {
     !hasTransformers &&
     allNodes.some(
       (n) =>
-        (n.type === "transformer" || n.type === "transformer_ref") &&
+        ((n.type === "transformer" && n.data?.scope !== "local") || n.type === "transformer_ref") &&
         (webClientNodes.some((w) => w.id === n.data?.targetWebPageId) ||
           allEdges.some(
             (e) =>
               webClientNodes.some((w) => w.id === e.source || w.id === e.target) &&
               (e.source === n.id || e.target === n.id),
-          ) ||
-          allNodes.some((w) => w.type === "webApp")),
+          )),
     )
   ) {
     hasTransformers = true;

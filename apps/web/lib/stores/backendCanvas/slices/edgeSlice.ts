@@ -94,8 +94,7 @@ export const createEdgeSlice = (
     if (!sourceNode || !targetNode) return;
 
     const isGlobalTrans = (node?: BackendNode) =>
-      node?.type === "transformer" &&
-      (node.data?.scope === "global" || !node.data?.scope || node.data?.isGlobal === true);
+      Boolean(node?.type === "transformer" && node.data?.scope !== "local");
 
     const isDirectTransConnect =
       (isGlobalTrans(sourceNode) && (targetNode.type === "webPage" || targetNode.type === "service")) ||

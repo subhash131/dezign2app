@@ -680,6 +680,25 @@ const TransformerConfigContent: React.FC<
         targetEventIds: [],
       });
     } else {
+      // Clean up any transformer_ref nodes created for this transformer while it was global
+      const existingRefNodes = allNodes.filter(
+        (n) =>
+          n.type === "transformer_ref" &&
+          (n.data?.transformerRef === node.id ||
+            n.data?.transformerRef === functionName ||
+            n.data?.label?.startsWith(functionName)),
+      );
+      existingRefNodes.forEach((ref) => deleteNode(ref.id));
+
+      // Clean up any transformer-reference edges from this node
+      allEdges
+        .filter(
+          (e) =>
+            (e.type === "transformer-reference" || e.type === "reference") &&
+            (e.source === node.id || e.target === node.id),
+        )
+        .forEach((e) => deleteEdge(e.id));
+
       updateData({
         scope: "local",
       });

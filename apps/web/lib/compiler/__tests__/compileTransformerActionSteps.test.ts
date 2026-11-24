@@ -368,6 +368,88 @@ describe("WebPageNode Action Transformer Step Compilation", () => {
     expect(nextConfigFile?.content).toContain('"@workspace/transformers"');
   });
 
+  it("does NOT add @workspace/transformers when web page has only local transformer action steps and compiles helper locally", () => {
+    const localTransNode: BackendNode = {
+      id: "node-trans-local",
+      type: "transformer",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "formatLocalText",
+        functionName: "formatLocalText",
+        scope: "local",
+        appSlug: "web",
+        inputSchema: [{ id: "p-in-1", name: "text", type: "string", required: true }],
+        returnSchema: [{ id: "p-out-1", name: "formatted", type: "string", required: true }],
+        code: "return { formatted: text.trim() };",
+      },
+    };
+
+    const pageNode: BackendNode = {
+      id: "node-page-local-trans",
+      type: "webPage",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "/local-demo",
+        appSlug: "web",
+        sections: [
+          {
+            id: "sec-local",
+            name: "Local Section",
+            actions: [
+              {
+                id: "act-local-transform",
+                name: "Format Text",
+                event: "click",
+                actionSteps: [
+                  {
+                    id: "step-trans-local",
+                    order: 1,
+                    type: "transform",
+                    transformerNodeId: "node-trans-local",
+                    transformerName: "formatLocalText",
+                    functionRef: {
+                      name: "formatLocalText",
+                      isGlobal: false,
+                      importPath: "../transformers/formatLocalText",
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = compileWebPageNode(pageNode, [], [], [pageNode, localTransNode], []);
+
+    // 1. package.json must NOT include @workspace/transformers
+    const pkgFile = result.files.find((f: CompiledFile) => f.filename === "package.json");
+    expect(pkgFile).toBeDefined();
+    const pkgJson = JSON.parse(pkgFile!.content);
+    expect(pkgJson.dependencies?.["@workspace/transformers"]).toBeUndefined();
+
+    // 2. tsconfig.json must NOT map @workspace/transformers
+    const tsconfigFile = result.files.find((f: CompiledFile) => f.filename === "tsconfig.json");
+    expect(tsconfigFile).toBeDefined();
+    const tsconfigJson = JSON.parse(tsconfigFile!.content);
+    expect(tsconfigJson.compilerOptions?.paths?.["@workspace/transformers"]).toBeUndefined();
+
+    // 3. next.config must NOT transpile @workspace/transformers
+    const nextConfigFile = result.files.find((f: CompiledFile) => f.filename.startsWith("next.config"));
+    expect(nextConfigFile).toBeDefined();
+    expect(nextConfigFile?.content).not.toContain('"@workspace/transformers"');
+
+    // 4. compileTransformerHelpers should compile helper to apps/web/src/transformers/ and NOT generate packages/transformers
+    const transHelpersResult = compileTransformerHelpers([pageNode, localTransNode], []);
+    expect(transHelpersResult.globalPackageName).toBeUndefined();
+    expect(transHelpersResult.files.some((f) => f.filename.startsWith("packages/transformers"))).toBe(false);
+    const localFile = transHelpersResult.files.find((f) => f.filename.includes("apps/web/src/transformers/formatLocalText.ts"));
+    expect(localFile).toBeDefined();
+  });
+
   it("compileTransformerHelpers collects transformer action steps from WebPage nodes when no standalone transformer node exists", () => {
     const pageNode: BackendNode = {
       id: "node-page-new",
