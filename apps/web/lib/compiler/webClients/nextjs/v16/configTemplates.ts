@@ -85,6 +85,8 @@ export function generateProjectConfigFiles(
         paths: {
           "@/*": ["./*"],
           "@workspace/ui/*": ["../../packages/ui/src/*"],
+          "../transformers/*": ["./src/transformers/*", "./transformers/*"],
+          "../transformers": ["./src/transformers/index.ts", "./transformers/index.ts"],
           ...(hasTrans
             ? {
                 "@workspace/transformers": [

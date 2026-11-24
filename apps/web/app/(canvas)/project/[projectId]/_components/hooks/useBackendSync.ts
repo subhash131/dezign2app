@@ -629,6 +629,7 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
       pendingEdgeRemovals: Array.from(pendingEdgeRemovalIds),
       pendingEdgeUpserts: store.pendingEdgeUpserts,
       pendingNodeUpserts: store.pendingNodeUpserts,
+      pendingNodeRemovals: store.pendingNodeRemovals,
     });
 
     if (healedTrans.changed) {
@@ -638,6 +639,7 @@ export function useBackendSync(projectId: string, view: BackendCanvasView) {
         pendingEdgeRemovals: healedTrans.pendingEdgeRemovals,
         pendingEdgeUpserts: healedTrans.pendingEdgeUpserts,
         pendingNodeUpserts: healedTrans.pendingNodeUpserts,
+        pendingNodeRemovals: healedTrans.pendingNodeRemovals,
       });
     }
 

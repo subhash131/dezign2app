@@ -52,11 +52,22 @@ export function GraphView({ projectId, projectName }: GraphViewProps) {
       const tgt = nodes.find((n) => n.id === e.target);
       if (!src || !tgt) return false;
       return (
-        (src.type === "transformer" && (tgt.type === "webPage" || tgt.type === "service")) ||
-        (tgt.type === "transformer" && (src.type === "webPage" || src.type === "service")) ||
+        (src.type === "transformer" && src.data?.scope !== "local" && (tgt.type === "webPage" || tgt.type === "service")) ||
+        (tgt.type === "transformer" && tgt.data?.scope !== "local" && (src.type === "webPage" || src.type === "service")) ||
         (src.type === "webPage" && tgt.type === "transformer_ref") ||
         (src.type === "transformer_ref" && tgt.type === "webPage" && e.sourceHandle === "transformer-in")
       );
+    });
+
+    const hasInvalidLocalTransformerRef = nodes.some((n) => {
+      if (n.type !== "transformer_ref") return false;
+      const master = nodes.find(
+        (m) =>
+          m.id === n.data?.transformerRef ||
+          (m.type === "transformer" &&
+            (m.data?.functionName === n.data?.transformerRef || m.data?.label === n.data?.transformerRef)),
+      );
+      return master?.type === "transformer" && master.data?.scope === "local";
     });
 
     const hasUnconnectedTransformerRef = nodes.some((n) => {
@@ -75,7 +86,7 @@ export function GraphView({ projectId, projectName }: GraphViewProps) {
       return !hasOutgoing || !hasIncomingRef;
     });
 
-    if (hasDirectEdge || hasUnconnectedTransformerRef) {
+    if (hasDirectEdge || hasUnconnectedTransformerRef || hasInvalidLocalTransformerRef) {
       const store = useBackendCanvasStore.getState();
       const healed = healDirectTransformerEdges({
         nodes: store.nodes,
@@ -83,6 +94,7 @@ export function GraphView({ projectId, projectName }: GraphViewProps) {
         pendingEdgeRemovals: store.pendingEdgeRemovals,
         pendingEdgeUpserts: store.pendingEdgeUpserts,
         pendingNodeUpserts: store.pendingNodeUpserts,
+        pendingNodeRemovals: store.pendingNodeRemovals,
       });
       if (healed.changed) {
         useBackendCanvasStore.setState({
@@ -91,6 +103,7 @@ export function GraphView({ projectId, projectName }: GraphViewProps) {
           pendingEdgeRemovals: healed.pendingEdgeRemovals,
           pendingEdgeUpserts: healed.pendingEdgeUpserts,
           pendingNodeUpserts: healed.pendingNodeUpserts,
+          pendingNodeRemovals: healed.pendingNodeRemovals,
         });
       }
     }
