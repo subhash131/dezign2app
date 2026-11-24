@@ -123,6 +123,9 @@ declare module "@xyflow/react" {
   }>;
   export const NodeResizer: React.ComponentType<Record<string, unknown>>;
   export const Panel: React.ComponentType<Record<string, unknown>>;
+  export const ControlButton: React.ComponentType<
+    React.ButtonHTMLAttributes<HTMLButtonElement>
+  >;
   export const ReactFlowProvider: React.ComponentType<{
     children?: React.ReactNode;
   }>;
@@ -141,6 +144,49 @@ declare module "@xyflow/react" {
     zoom: number;
   }
 
+  export interface ViewportTransformOptions {
+    duration?: number;
+    ease?: (t: number) => number;
+    interpolate?: "smooth" | "linear";
+  }
+
+  export function useViewport(): Viewport;
+
+  export interface ReactFlowStoreState {
+    nodesDraggable: boolean;
+    nodesConnectable: boolean;
+    elementsSelectable: boolean;
+    nodes: Node[];
+    edges: Edge[];
+    /** Internal viewport transform as [x, y, zoom] */
+    transform: [number, number, number];
+    minZoom: number;
+    maxZoom: number;
+    translateExtent: [[number, number], [number, number]];
+    nodeExtent: [[number, number], [number, number]];
+    fitViewOnInit: boolean;
+    snapToGrid: boolean;
+    snapGrid: [number, number];
+    panOnScroll: boolean;
+    panOnDrag: boolean | number[];
+    zoomOnScroll: boolean;
+    zoomOnPinch: boolean;
+    zoomOnDoubleClick: boolean;
+    width: number;
+    height: number;
+  }
+
+  export function useStore<T>(
+    selector: (state: ReactFlowStoreState) => T,
+    equalityFn?: (a: T, b: T) => boolean,
+  ): T;
+
+  export function useStoreApi(): {
+    getState: () => ReactFlowStoreState;
+    setState: (state: Partial<ReactFlowStoreState>) => void;
+    subscribe: (listener: (state: ReactFlowStoreState, prevState: ReactFlowStoreState) => void) => () => void;
+  };
+
   export function useReactFlow<TNode = Node, TEdge = Edge>(): {
     fitView: (options?: Record<string, unknown>) => void;
     screenToFlowPosition: (position: XYPosition) => XYPosition;
@@ -158,6 +204,13 @@ declare module "@xyflow/react" {
       nodes?: { id: string }[];
       edges?: { id: string }[];
     }) => void;
+    zoomIn: (options?: ViewportTransformOptions) => Promise<boolean>;
+    zoomOut: (options?: ViewportTransformOptions) => Promise<boolean>;
+    zoomTo: (
+      zoomLevel: number,
+      options?: ViewportTransformOptions,
+    ) => Promise<boolean>;
+    getZoom: () => number;
   };
 
   export function useUpdateNodeInternals(): (nodeId: string | string[]) => void;

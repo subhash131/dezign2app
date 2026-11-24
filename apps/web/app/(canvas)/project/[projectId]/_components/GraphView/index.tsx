@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   ReactFlow,
   Background,
-  Controls,
   MiniMap,
   Connection,
   useReactFlow,
@@ -19,6 +18,9 @@ import { useGraphAutoLayout, getGraphFlowNodes } from "../hooks/useAutoLayout";
 import { useAutoLayoutShortcut } from "../hooks/useAutoLayoutShortcut";
 import { TopToolbarPanel } from "./TopToolbarPanel";
 import { TestCaseDialogs } from "./TestCaseDialogs";
+import { GraphControls } from "./GraphControls";
+import { useSmoothWheelZoom } from "./useSmoothWheelZoom";
+import { useSmoothPan } from "./useSmoothPan";
 import { sortZonePages } from "@/app/(canvas)/project/[projectId]/_components/backend-nodes/graph-nodes/nodes/gateway/web-page";
 import { buildServiceStepHandMap } from "@/app/(canvas)/project/[projectId]/_components/backend-nodes/graph-nodes/common";
 import { healDirectTransformerEdges, resolveWebPageActionInboundHandle } from "@/lib/stores/backendCanvas/edge/handlers/transformerConnect";
@@ -121,13 +123,26 @@ export function GraphView({ projectId, projectName }: GraphViewProps) {
   } | null>(null);
   const [deleteCaseOpen, setDeleteCaseOpen] = useState(false);
 
+  const containerRef = useRef<HTMLDivElement>(null);
   const {
     handleNodesChange,
     handleNodeDragStart,
     handleSelectionDragStart,
     handleMoveEnd,
   } = useCanvasHandlers(projectId, "graph");
-  const { fitView, setViewport } = useReactFlow();
+  const { fitView, setViewport, zoomIn, zoomOut } = useReactFlow();
+
+  useSmoothWheelZoom({
+    containerRef,
+    minZoom: 0.01,
+    maxZoom: 3,
+    onMoveEnd: handleMoveEnd,
+  });
+
+  useSmoothPan({
+    containerRef,
+    onMoveEnd: handleMoveEnd,
+  });
 
   const endpoints = useBackendCanvasStore((s) => s.endpoints);
   const events = useBackendCanvasStore((s) => s.events);
@@ -774,8 +789,48 @@ export function GraphView({ projectId, projectName }: GraphViewProps) {
     [],
   );
 
+  // Keyboard shortcuts for smooth zoom
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeEl = typeof document !== "undefined" ? document.activeElement : null;
+      if (
+        activeEl instanceof HTMLElement &&
+        (activeEl.tagName === "INPUT" ||
+          activeEl.tagName === "TEXTAREA" ||
+          activeEl.tagName === "SELECT" ||
+          activeEl.isContentEditable ||
+          Boolean(
+            activeEl.closest(
+              "input, textarea, select, [contenteditable='true'], [role='textbox'], [role='combobox'], [data-inspector], .inspector-sidebar, .nodrag"
+            )
+          ))
+      ) {
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && (e.key === "=" || e.key === "+")) {
+        e.preventDefault();
+        zoomIn({ duration: 250 });
+      } else if ((e.ctrlKey || e.metaKey) && (e.key === "-" || e.key === "_")) {
+        e.preventDefault();
+        zoomOut({ duration: 250 });
+      } else if ((e.ctrlKey || e.metaKey) && e.key === "0") {
+        e.preventDefault();
+        fitView({
+          nodes: flowNodesToFit.length > 0 ? flowNodesToFit : undefined,
+          duration: 350,
+          padding: 0.35,
+          maxZoom: 0.65,
+        });
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [zoomIn, zoomOut, fitView, flowNodesToFit]);
+
   return (
-    <div className="w-full h-full bg-muted/20">
+    <div ref={containerRef} className="w-full h-full bg-muted/20">
       <ReactFlow
         nodes={visualGraphNodes}
         edges={visualGraphEdges}
@@ -826,17 +881,24 @@ export function GraphView({ projectId, projectName }: GraphViewProps) {
         attributionPosition="bottom-right"
         minZoom={0.01}
         maxZoom={3}
+        panOnDrag={false}
+        zoomOnScroll={false}
+        zoomOnPinch={false}
+        zoomOnDoubleClick={false}
+        onDoubleClick={(event: React.MouseEvent) => {
+          if (
+            event.target instanceof HTMLElement &&
+            event.target.classList.contains("react-flow__pane")
+          ) {
+            zoomIn({ duration: 300 });
+          }
+        }}
       >
         <Background gap={12} size={1} />
-        <Controls
-          position="bottom-left"
-          fitViewOptions={React.useMemo(
-            () => ({
-              padding: 0.35,
-              maxZoom: 0.65,
-            }),
-            [],
-          )}
+        <GraphControls
+          minZoom={0.01}
+          maxZoom={3}
+          flowNodesToFit={flowNodesToFit}
           style={{
             bottom: terminalOpen ? `${terminalHeight + 14}px` : "16px",
             left: paletteOpen ? `${paletteWidth + 14}px` : "16px",
