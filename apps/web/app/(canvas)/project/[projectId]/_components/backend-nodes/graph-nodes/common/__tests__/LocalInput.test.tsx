@@ -110,6 +110,30 @@ describe("LocalTextarea", () => {
     expect(onChange.mock.calls[0]![0].target.value).toBe("unmounting save");
     vi.useRealTimers();
   });
+
+  it("flushes immediately on Enter keypress", () => {
+    vi.useFakeTimers();
+    const onChange = vi.fn();
+    const { getByRole } = render(
+      <LocalTextarea value="draft" onChange={onChange} debounceMs={250} />,
+    );
+
+    const textarea = getByRole("textbox") as HTMLTextAreaElement;
+
+    act(() => {
+      fireEvent.change(textarea, { target: { value: "full prompt text" } });
+    });
+
+    expect(onChange).not.toHaveBeenCalled();
+
+    act(() => {
+      fireEvent.keyDown(textarea, { key: "Enter" });
+    });
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange.mock.calls[0]![0].target.value).toBe("full prompt text");
+    vi.useRealTimers();
+  });
 });
 
 describe("LocalInput", () => {
@@ -129,7 +153,7 @@ describe("LocalInput", () => {
     expect(onChange).toHaveBeenCalledTimes(1);
   });
 
-  it("debounces by default (150ms)", () => {
+  it("debounces by default (300ms)", () => {
     vi.useFakeTimers();
     const onChange = vi.fn();
     const { getByRole } = render(
@@ -146,7 +170,13 @@ describe("LocalInput", () => {
     expect(onChange).not.toHaveBeenCalled();
 
     act(() => {
-      vi.advanceTimersByTime(160);
+      vi.advanceTimersByTime(250);
+    });
+
+    expect(onChange).not.toHaveBeenCalled();
+
+    act(() => {
+      vi.advanceTimersByTime(60);
     });
 
     expect(onChange).toHaveBeenCalledTimes(1);

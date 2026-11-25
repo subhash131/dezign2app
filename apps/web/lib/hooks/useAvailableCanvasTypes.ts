@@ -18,8 +18,44 @@ export interface UseAvailableCanvasTypesOptions {
   includeDatabaseTables?: boolean;
   excludeTypeName?: string;
   extraTypes?: AvailableTypeItem[];
+  /**
+   * Controls which built-in type preset is included:
+   * - `"schema"` (default): includes schema/DB-oriented pseudo-types (`UUID`, `timestamp`, `enum`, `array`, `Date`) for schema builders.
+   * - `"typescript"`: strictly TypeScript-valid variable types (`TS_PRIMITIVE_TYPE_ITEMS`) for code-emitting editors like `VariableStepSection`.
+   */
+  primitivePreset?: "schema" | "typescript";
 }
 
+/**
+ * TypeScript-valid primitive & built-in types (`primitivePreset: "typescript"`).
+ *
+ * Used by:
+ * - `VariableStepSection` (via `TypeCombobox` and `useAvailableCanvasTypes`) for pipeline variable declarations.
+ *
+ * Excludes schema/DB-only pseudo-types (`UUID`, `timestamp`, `enum`, `array`) and `Date`
+ * so generated `let`/`const` annotations always compile cleanly in TypeScript; arrays are
+ * toggled via the adjacent `[]` button instead of a separate `"array"` item.
+ */
+export const TS_PRIMITIVE_TYPE_ITEMS: AvailableTypeItem[] = [
+  { name: "string", kind: "primitive", category: "primitive", description: "Text string" },
+  { name: "number", kind: "primitive", category: "primitive", description: "Numeric value" },
+  { name: "boolean", kind: "primitive", category: "primitive", description: "True or false" },
+  { name: "object", kind: "primitive", category: "primitive", description: "Object value" },
+  { name: "Record<string, string>", kind: "primitive", category: "primitive", description: "String dictionary" },
+  { name: "Record<string, number>", kind: "primitive", category: "primitive", description: "Number dictionary" },
+  { name: "any", kind: "primitive", category: "primitive", description: "Arbitrary unconstrained type" },
+  { name: "unknown", kind: "primitive", category: "primitive", description: "Type-safe unknown value" },
+];
+
+/**
+ * Schema-oriented primitive & pseudo-types (default `primitivePreset: "schema"`).
+ *
+ * Used by `TypeCombobox` in field/schema editors where downstream codegen maps schema types
+ * to SQL/validation/TypeScript types:
+ * - Endpoint & schema editors: `RequestBodyEditor`, `ResponseBodyEditor`, `NestedResponseSchemaEditor`, `ResponseSchemaEditor`, `Editors`
+ * - Custom types & functions: `TypesConfig` (`TypePropertyRow`, `FunctionTypeEditor`), `TransformerHelperPanel`, `FunctionParamsSection`
+ * - State stores: `StoreFieldsSection`, `StoreActionsSection`, `StoreDefaultManipulatorsSection`, `WebAppGlobalStoresTab`
+ */
 export const PRIMITIVE_TYPE_ITEMS: AvailableTypeItem[] = [
   { name: "string", kind: "primitive", category: "primitive", description: "Text string" },
   { name: "number", kind: "primitive", category: "primitive", description: "Numeric value" },
@@ -145,9 +181,13 @@ export function useAvailableCanvasTypes(
     });
 
     const extra = options?.extraTypes || [];
+    const basePrimitives =
+      options?.primitivePreset === "typescript"
+        ? TS_PRIMITIVE_TYPE_ITEMS
+        : PRIMITIVE_TYPE_ITEMS;
 
     const allTypes: AvailableTypeItem[] = [
-      ...PRIMITIVE_TYPE_ITEMS,
+      ...basePrimitives,
       ...customTypes,
       ...packageTypes,
       ...databaseTypes,
@@ -155,11 +195,17 @@ export function useAvailableCanvasTypes(
     ];
 
     return {
-      primitives: PRIMITIVE_TYPE_ITEMS,
+      primitives: basePrimitives,
       customTypes,
       packageTypes,
       databaseTypes,
       allTypes,
     };
-  }, [nodes, options?.includeDatabaseTables, options?.excludeTypeName, options?.extraTypes]);
+  }, [
+    nodes,
+    options?.includeDatabaseTables,
+    options?.excludeTypeName,
+    options?.extraTypes,
+    options?.primitivePreset,
+  ]);
 }

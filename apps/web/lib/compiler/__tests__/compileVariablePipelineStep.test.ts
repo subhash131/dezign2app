@@ -462,4 +462,63 @@ describe("compileVariablePipelineStep", () => {
     expect(counterVar?.declarationKind).toBe("let");
     expect(counterVar?.isMutable).toBe(true);
   });
+
+  it("compiles stringified numeric/boolean inline values according to variableDataType", () => {
+    const numZeroStep: PipelineStep = {
+      id: "var-num-str-zero",
+      name: "Zero count",
+      type: "variable",
+      outputVariable: "count",
+      declarationKind: "let",
+      variableOperation: "declare",
+      variableDataType: "number",
+      variableSource: { kind: "inline", value: "0" },
+    };
+
+    const numEmptyStep: PipelineStep = {
+      id: "var-num-empty",
+      name: "Empty count",
+      type: "variable",
+      outputVariable: "emptyCount",
+      declarationKind: "let",
+      variableOperation: "declare",
+      variableDataType: "number",
+      variableSource: { kind: "inline", value: "" },
+    };
+
+    const boolStrStep: PipelineStep = {
+      id: "var-bool-str",
+      name: "Flag",
+      type: "variable",
+      outputVariable: "isReady",
+      declarationKind: "const",
+      variableOperation: "declare",
+      variableDataType: "boolean",
+      variableSource: { kind: "inline", value: "false" },
+    };
+
+    const arrayStrStep: PipelineStep = {
+      id: "var-arr-str",
+      name: "Items",
+      type: "variable",
+      outputVariable: "items",
+      declarationKind: "const",
+      variableOperation: "declare",
+      variableDataType: "string[]",
+      variableSource: { kind: "inline", value: "[]" },
+    };
+
+    expect(
+      renderPipelineStep(numZeroStep, { priorOutputs: new Map(), bodyVar: "body" }),
+    ).toEqual(["let count: number = 0;"]);
+    expect(
+      renderPipelineStep(numEmptyStep, { priorOutputs: new Map(), bodyVar: "body" }),
+    ).toEqual(["let emptyCount: number = 0;"]);
+    expect(
+      renderPipelineStep(boolStrStep, { priorOutputs: new Map(), bodyVar: "body" }),
+    ).toEqual(["const isReady: boolean = false;"]);
+    expect(
+      renderPipelineStep(arrayStrStep, { priorOutputs: new Map(), bodyVar: "body" }),
+    ).toEqual(["const items: string[] = [];"]);
+  });
 });

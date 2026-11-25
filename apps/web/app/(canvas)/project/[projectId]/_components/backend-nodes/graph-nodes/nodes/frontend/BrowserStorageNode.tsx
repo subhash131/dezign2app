@@ -66,8 +66,8 @@ export const BrowserStorageNode = ({
   const keys: BrowserStorageKey[] = data.keys || [];
   const keyCount = keys.length;
 
-  const handleSaveName = () => {
-    const trimmed = name.trim();
+  const handleSaveName = (rawValue?: string) => {
+    const trimmed = (rawValue ?? inputRef.current?.value ?? name).trim();
     if (!trimmed) {
       setName(data.storageName || data.label || "BrowserStorage");
       setIsEditing(false);
@@ -186,14 +186,15 @@ export const BrowserStorageNode = ({
                   <LocalInput
                     ref={inputRef}
                     value={name}
+                    debounceMs={0}
                     placeholder="Enter storage name..."
                     onChange={(e) => setName(e.target.value)}
                     className="h-6 text-xs font-bold px-1.5 py-0 bg-background/90 border-border/80 w-full"
                     autoFocus
-                    onKeyDown={(e: React.KeyboardEvent) => {
+                    onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
-                        handleSaveName();
+                        handleSaveName(e.currentTarget.value);
                       }
                       if (e.key === "Escape") {
                         e.preventDefault();
@@ -201,7 +202,7 @@ export const BrowserStorageNode = ({
                         setIsEditing(false);
                       }
                     }}
-                    onBlur={handleSaveName}
+                    onBlur={(e) => handleSaveName(e.currentTarget.value)}
                   />
                 </div>
               ) : (

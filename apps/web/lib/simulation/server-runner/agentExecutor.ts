@@ -31,6 +31,7 @@ import {
   runTransformer,
   resolveInputValue,
 } from "./stepExecutor";
+import { normalizeInlineSourceForCompiler } from "@/lib/compiler/variableValueUtils";
 import type { LangGraphNodePipelineStep } from "@workspace/canvas";
 
 export interface ExecuteAgentNodeParams {
@@ -723,7 +724,10 @@ export async function executeAgentNode(
         outputDelta[outVar] = result;
       } else if (step.type === "variable") {
         const valBinding = step.inputBindings?.find((b) => b.argName === "value" || b.argName === "val");
-        const source = valBinding?.source || step.variableSource;
+        const rawSource = valBinding?.source || step.variableSource;
+        const source = rawSource
+          ? normalizeInlineSourceForCompiler(rawSource, step.variableDataType)
+          : undefined;
         const val: StepStateValue = source ? resolveInputValue(source, { state, stepOutputs }) : null;
         const outVar = step.outputVariable || step.id;
         stepOutputs.set(step.id, val);

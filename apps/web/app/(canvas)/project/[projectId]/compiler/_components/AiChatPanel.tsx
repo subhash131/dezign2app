@@ -267,11 +267,14 @@ export function AiChatPanel({
         <div className="flex items-center gap-2">
           <LocalTextarea
             value={inputText}
+            debounceMs={0}
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
-                handleSendMessage();
+                const val = e.currentTarget.value;
+                setInputText("");
+                handleSendMessage(val);
               }
             }}
             placeholder="Ask AI Agent to write or edit code..."

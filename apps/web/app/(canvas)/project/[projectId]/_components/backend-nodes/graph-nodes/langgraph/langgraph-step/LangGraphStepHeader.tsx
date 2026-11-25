@@ -33,7 +33,7 @@ interface LangGraphStepHeaderProps {
   setIsEditingName: (editing: boolean) => void;
   nameValue: string;
   setNameValue: (val: string) => void;
-  onSaveName: () => void;
+  onSaveName: (rawValue?: string) => void;
   onDelete: (e: React.MouseEvent) => void;
 }
 
@@ -101,11 +101,12 @@ export const LangGraphStepHeader: React.FC<LangGraphStepHeaderProps> = ({
               placeholder="Enter step name..."
               className="h-6 text-xs bg-background p-1 font-semibold flex-1 nodrag"
               value={nameValue}
+              debounceMs={0}
               onChange={(e) => setNameValue(e.target.value)}
-              onBlur={onSaveName}
+              onBlur={(e) => onSaveName(e.currentTarget.value)}
               onKeyDown={(e) => {
                 e.stopPropagation();
-                if (e.key === "Enter") onSaveName();
+                if (e.key === "Enter") onSaveName(e.currentTarget.value);
                 if (e.key === "Escape") {
                   if (!data.label || data.label.trim() === "") {
                     useBackendCanvasStore.getState().deleteNode(id);

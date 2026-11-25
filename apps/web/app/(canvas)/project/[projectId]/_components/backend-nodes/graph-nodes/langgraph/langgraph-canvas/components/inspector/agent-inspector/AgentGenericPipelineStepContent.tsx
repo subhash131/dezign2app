@@ -314,6 +314,7 @@ export function AgentGenericPipelineStepContent({
               step={step}
               priorSteps={priorSteps}
               availableSources={availableSources}
+              allNodes={allNodes}
               onChange={onUpdateStep}
             />
           );

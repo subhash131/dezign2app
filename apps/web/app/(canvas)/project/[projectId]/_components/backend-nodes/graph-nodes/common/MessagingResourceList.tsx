@@ -303,6 +303,7 @@ export const MessagingResourceRow = ({
             <div className="flex items-center gap-1 nodrag">
               <LocalInput
                 value={editingName}
+                debounceMs={0}
                 onChange={(e) => {
                   const val = isTopicOrEvent
                     ? formatTopicName(e.target.value)
@@ -312,11 +313,14 @@ export const MessagingResourceRow = ({
                 className="h-6 text-xs flex-1 nodrag"
                 placeholder={isTopicOrEvent ? "e.g. order.created" : "e.g. OrderCreated"}
                 autoFocus
-                onKeyDown={(e: React.KeyboardEvent) => {
+                onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
                   if (e.key === "Enter") {
+                    const raw = isTopicOrEvent
+                      ? formatTopicName(e.currentTarget.value)
+                      : e.currentTarget.value;
                     const sanitized = isTopicOrEvent
-                      ? sanitizeTopicName(editingName)
-                      : editingName.trim();
+                      ? sanitizeTopicName(raw)
+                      : raw.trim();
                     if (!sanitized) handleDelete(item.id);
                     else {
                       const wasEmpty = !item.name;
