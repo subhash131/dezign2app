@@ -119,6 +119,15 @@ function disambiguateStepOutputs(
       result.push(step);
       continue;
     }
+    // Reassignment / update steps do not declare a new variable; they assign to an existing one.
+    const isReassign =
+      (step.type === "variable" && step.variableOperation === "assign") ||
+      step.declarationKind === "reassign";
+    if (isReassign) {
+      result.push(step);
+      continue;
+    }
+
     let outVar = step.outputVariable?.trim();
     if (!outVar && step.type === "langgraph_invoke") {
       outVar = toVarName(step.name || "agentResult") || "agentResult";

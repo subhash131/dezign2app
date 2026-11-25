@@ -55,9 +55,9 @@ export const VariableStepSection: React.FC<VariableStepSectionProps> = ({
   const variablePropertyPath = step.variablePropertyPath || "";
   const variableMutationKind = step.variableMutationKind || (variableOperator === "push" ? "array_push" : variablePropertyPath ? "property" : "variable");
 
-  // Collect all prior variables with rich metadata (const/let, object, array, properties)
+  // Collect prior variable declarations (ignoring other step types like transform, db_operation, etc.)
   const priorVariables = useMemo(
-    () => getPriorVariables(priorSteps),
+    () => getPriorVariables(priorSteps.filter((s) => s.type === "variable")),
     [priorSteps],
   );
 
@@ -324,7 +324,7 @@ export const VariableStepSection: React.FC<VariableStepSectionProps> = ({
             <div className="flex items-center gap-2 p-2 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs">
               <AlertCircle size={14} className="shrink-0" />
               <span>
-                No variables declared in prior steps yet. Declare a variable or add an operation step above first.
+                No variables declared in prior steps yet. Declare a variable step above first.
               </span>
             </div>
           )}
