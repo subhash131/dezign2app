@@ -633,6 +633,7 @@ const StepRowComponent = ({
                       step={step}
                       priorSteps={priorSteps}
                       availableSources={availableSources}
+                      allNodes={allNodes}
                       serviceNodeId={serviceNodeId}
                       onChange={onChange}
                     />
