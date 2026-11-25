@@ -210,6 +210,62 @@ describe("compileVariablePipelineStep", () => {
     expect(code).toContain("return res.status(200).json({");
   });
 
+  it("does not append a numeric suffix to variable reassignment steps during disambiguation", () => {
+    const steps: PipelineStep[] = [
+      {
+        id: "step-1",
+        name: "Variable: simpleTest",
+        type: "variable",
+        outputVariable: "simpleTest",
+        declarationKind: "let",
+        variableOperation: "declare",
+        variableDataType: "string",
+        variableSource: { kind: "inline", value: "" },
+      },
+      {
+        id: "step-2",
+        name: "transformData1Result",
+        type: "transform",
+        outputVariable: "transformData1Result",
+        declarationKind: "const",
+        functionRef: {
+          name: "transformData1",
+          importPath: "@/transformers/transformData1",
+        },
+        inputBindings: [
+          { argName: "input", source: { kind: "req_body", field: "inputText" } },
+        ],
+      },
+      {
+        id: "step-3",
+        name: "Assign simpleTest",
+        type: "variable",
+        outputVariable: "simpleTest",
+        variableOperation: "assign",
+        declarationKind: "reassign",
+        variableOperator: "=",
+        variableSource: { kind: "step_output", stepId: "step-2", field: "result" },
+      },
+      {
+        id: "step-4",
+        name: "Return Response",
+        type: "return_response",
+        statusCode: 201,
+        inputBindings: [
+          { argName: "data", source: { kind: "step_output", stepId: "step-1" } },
+        ],
+      },
+    ];
+
+    const lines = renderPipeline(steps, "body");
+    const code = lines.join("\n");
+
+    expect(code).toContain('let simpleTest: string = "";');
+    expect(code).toContain("simpleTest = transformData1Result.result;");
+    expect(code).not.toContain("simpleTest2");
+    expect(code).toContain("data: simpleTest");
+  });
+
   it("adds declared variables to getAvailableSources for downstream steps", () => {
     const priorSteps: PipelineStep[] = [
       {

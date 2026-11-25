@@ -318,7 +318,7 @@ const StepRowComponent = ({
                     {step.declarationKind === "reassign" ? (
                       <TargetVariableCombobox
                         value={step.outputVariable ?? ""}
-                        priorVariables={getPriorVariables(priorSteps)}
+                        priorVariables={getPriorVariables(priorSteps.filter((s) => s.type === "variable"))}
                         onSelect={(chosenName) => {
                           onChange({
                             ...step,
