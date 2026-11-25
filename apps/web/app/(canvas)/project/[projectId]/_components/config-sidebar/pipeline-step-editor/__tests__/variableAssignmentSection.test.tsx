@@ -111,9 +111,11 @@ describe("VariableStepSection with TargetVariableCombobox and mutation modes", (
     {
       id: "step-1",
       name: "Fetch User",
-      type: "db_operation",
+      type: "variable",
       outputVariable: "userObj",
       declarationKind: "const",
+      variableOperation: "declare",
+      variableDataType: "object",
       outputSchema: [
         { name: "id", type: "string" },
         { name: "email", type: "string" },
@@ -137,6 +139,13 @@ describe("VariableStepSection with TargetVariableCombobox and mutation modes", (
       declarationKind: "let",
       variableOperation: "declare",
       variableDataType: "number",
+    },
+    {
+      id: "step-4",
+      name: "Transform Step",
+      type: "transform",
+      outputVariable: "transformedResult",
+      declarationKind: "const",
     },
   ];
 
@@ -172,6 +181,7 @@ describe("VariableStepSection with TargetVariableCombobox and mutation modes", (
     expect(parsedItems).toContain("userObj");
     expect(parsedItems).toContain("items");
     expect(parsedItems).toContain("totalCount");
+    expect(parsedItems).not.toContain("transformedResult");
   });
 
   it("renders object property mutation options when target variable is an object", () => {

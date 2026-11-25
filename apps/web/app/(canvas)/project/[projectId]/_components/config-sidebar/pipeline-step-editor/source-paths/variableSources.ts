@@ -135,7 +135,7 @@ export function getPriorVariables(
 export function getPriorMutableVariables(
   priorSteps: readonly PipelineStepDraft[] = [],
 ): Array<{ name: string; type?: string; stepId?: string }> {
-  return getPriorVariables(priorSteps)
+  return getPriorVariables(priorSteps.filter((s) => s.type === "variable"))
     .filter((v) => v.isMutable)
     .map((v) => ({
       name: v.name,
