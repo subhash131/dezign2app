@@ -26,7 +26,15 @@ export function renderResponseStep(
       !firstBinding.argName)
   ) {
     const expr = resolveBinding(firstBinding, ctx);
-    return [`return res.status(${statusCode}).json(${expr});`];
+    const exprLines = expr.split("\n");
+    if (exprLines.length === 1) {
+      return [`return res.status(${statusCode}).json(${expr});`];
+    }
+    return [
+      `return res.status(${statusCode}).json(${exprLines[0]}`,
+      ...exprLines.slice(1, -1),
+      `${exprLines[exprLines.length - 1]});`,
+    ];
   }
 
   if (inputBindings.length > 0) {
@@ -41,10 +49,26 @@ export function renderResponseStep(
     });
 
     if (uniqueBindings.length > 0) {
-      const fields = uniqueBindings
-        .map((b) => `  ${b.argName}: ${resolveBinding(b, ctx)}`)
-        .join(",\n");
-      return [`return res.status(${statusCode}).json({\n${fields}\n});`];
+      const fieldLines: string[] = [];
+      uniqueBindings.forEach((b, idx) => {
+        const comma = idx < uniqueBindings.length - 1 ? "," : "";
+        const valExpr = resolveBinding(b, ctx);
+        const valLines = valExpr.split("\n");
+        if (valLines.length === 1) {
+          fieldLines.push(`  ${b.argName}: ${valExpr}${comma}`);
+        } else {
+          fieldLines.push(`  ${b.argName}: ${valLines[0]}`);
+          for (let i = 1; i < valLines.length; i++) {
+            const suffix = i === valLines.length - 1 ? comma : "";
+            fieldLines.push(`  ${valLines[i]}${suffix}`);
+          }
+        }
+      });
+      return [
+        `return res.status(${statusCode}).json({`,
+        ...fieldLines,
+        `});`,
+      ];
     }
   }
 

@@ -1105,7 +1105,9 @@ describe("Step Pipeline & Transformer Helpers", () => {
         usedFileNames: new Set(),
       });
 
-      expect(result.file.content).toContain("return res.status(200).json({\n  data: body.items\n});");
+      expect(result.file.content).toContain(
+        "    return res.status(200).json({\n      data: body.items\n    });",
+      );
     });
   });
 });
