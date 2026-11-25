@@ -42,6 +42,7 @@ export const NodeHeader: React.FC<NodeHeaderProps> = ({
                 autoFocus
                 className="h-6 text-xs bg-background p-1 font-bold font-mono text-sky-500 flex-1 nodrag nokey nowheel nopan"
                 value={nameValue}
+                debounceMs={0}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setNameValue(e.target.value)
                 }

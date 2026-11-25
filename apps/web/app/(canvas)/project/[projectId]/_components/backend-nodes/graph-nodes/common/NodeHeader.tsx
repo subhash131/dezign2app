@@ -181,6 +181,7 @@ export const NodeHeader = React.memo(({
   const [isEditing, setIsEditing] = useState(!data.label || data.label.trim() === "");
   const [name, setName] = useState(data.label || "");
   const inputRef = React.useRef<HTMLInputElement>(null);
+  const skipBlurSaveRef = React.useRef(false);
 
   const { isInputDuplicate, inputConflictType } = useMemo(() => {
     if (!isEditing || !name.trim()) return { isInputDuplicate: false, inputConflictType: undefined };
@@ -198,6 +199,7 @@ export const NodeHeader = React.memo(({
 
   React.useEffect(() => {
     if (isEditing) {
+      skipBlurSaveRef.current = false;
       const focus = () => {
         if (inputRef.current) {
           inputRef.current.focus();
@@ -239,8 +241,16 @@ export const NodeHeader = React.memo(({
     store.deleteNode(id);
   };
 
-  const handleSave = () => {
-    let trimmed = name.trim();
+  const handleSave = (rawValue?: string) => {
+    const baseValue =
+      rawValue !== undefined
+        ? rawValue
+        : inputRef.current?.value !== undefined
+          ? inputRef.current.value
+          : name;
+    const normalized =
+      nodeType === "webPage" ? baseValue.replace(/\s+/g, "-") : baseValue;
+    let trimmed = normalized.trim();
     if (!trimmed) {
       if (data.label && data.label.trim() !== "") {
         setName(data.label);
@@ -346,6 +356,7 @@ export const NodeHeader = React.memo(({
               <LocalInput
                 ref={inputRef}
                 value={name}
+                debounceMs={0}
                 placeholder={
                   placeholder || `Enter ${title ? title.toLowerCase() : "node"} name...`
                 }
@@ -363,17 +374,25 @@ export const NodeHeader = React.memo(({
                     "border-red-500 ring-1 ring-red-500/50 text-red-600 dark:text-red-400 focus-visible:ring-red-500",
                 )}
                 autoFocus
-                onKeyDown={(e: React.KeyboardEvent) => {
+                onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
                   if (e.key === "Enter") {
                     e.preventDefault();
-                    handleSave();
+                    skipBlurSaveRef.current = true;
+                    handleSave(e.currentTarget.value);
                   }
                   if (e.key === "Escape") {
                     e.preventDefault();
+                    skipBlurSaveRef.current = true;
                     handleCancel();
                   }
                 }}
-                onBlur={handleSave}
+                onBlur={(e) => {
+                  if (skipBlurSaveRef.current) {
+                    skipBlurSaveRef.current = false;
+                    return;
+                  }
+                  handleSave(e.currentTarget.value);
+                }}
               />
               {isInputDuplicate && (
                 <span className="text-[10px] text-red-600 dark:text-red-400 font-medium flex items-center gap-1 mt-0.5 animate-pulse">
@@ -385,7 +404,11 @@ export const NodeHeader = React.memo(({
           ) : (
             <div
               className="flex flex-col cursor-pointer flex-1 min-w-0"
-              onClick={() => setIsEditing(true)}
+              onClick={() => {
+                skipBlurSaveRef.current = false;
+                setName(data.label || "");
+                setIsEditing(true);
+              }}
             >
               <div className="flex items-center gap-1.5 flex-wrap">
                 {title && (

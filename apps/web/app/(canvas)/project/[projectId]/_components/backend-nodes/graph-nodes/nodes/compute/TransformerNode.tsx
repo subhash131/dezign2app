@@ -83,8 +83,8 @@ export const TransformerNode = ({
     }
   }, [isEditing]);
 
-  const handleSave = () => {
-    const trimmed = name.trim();
+  const handleSave = (rawValue?: string) => {
+    const trimmed = (rawValue ?? inputRef.current?.value ?? name).trim();
     if (!trimmed) {
       if (!data.label && !data.functionName) {
         deleteNode(id);
@@ -254,14 +254,15 @@ export const TransformerNode = ({
                 <LocalInput
                   ref={inputRef}
                   value={name}
+                  debounceMs={0}
                   placeholder="Enter transformer name..."
                   onChange={(e) => setName(e.target.value)}
                   className="h-5 text-xs font-semibold px-1 py-0 bg-background/80 border-border/80 w-full"
                   autoFocus
-                  onKeyDown={(e: React.KeyboardEvent) => {
+                  onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
-                      handleSave();
+                      handleSave(e.currentTarget.value);
                     }
                     if (e.key === "Escape") {
                       e.preventDefault();
@@ -273,7 +274,7 @@ export const TransformerNode = ({
                       setIsEditing(false);
                     }
                   }}
-                  onBlur={handleSave}
+                  onBlur={(e) => handleSave(e.currentTarget.value)}
                 />
               </div>
             ) : (

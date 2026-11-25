@@ -143,14 +143,15 @@ export const TypesNodeHeader: React.FC<TypesNodeHeaderProps> = ({
               <LocalInput
                 ref={inputRef}
                 value={name}
+                debounceMs={0}
                 placeholder="Enter types label..."
                 onChange={(e) => setName(e.target.value)}
                 className="h-5 text-xs font-semibold px-1 py-0 bg-background/80 border-border/80 w-full"
                 autoFocus
-                onKeyDown={(e: React.KeyboardEvent) => {
+                onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
                   if (e.key === "Enter") {
                     e.preventDefault();
-                    onSave();
+                    onSave(e.currentTarget.value);
                   }
                   if (e.key === "Escape") {
                     e.preventDefault();
@@ -162,7 +163,7 @@ export const TypesNodeHeader: React.FC<TypesNodeHeaderProps> = ({
                     setIsEditing(false);
                   }
                 }}
-                onBlur={onSave}
+                onBlur={(e) => onSave(e.currentTarget.value)}
               />
             </div>
           ) : (
