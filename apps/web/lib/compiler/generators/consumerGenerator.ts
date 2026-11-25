@@ -103,6 +103,15 @@ export async function initConsumers(): Promise<void> {
         (s) => s.type !== "return_response",
       );
       const pipelineImports = collectPipelineImports(executableSteps, allNodes);
+      const pipelineWorkspaceTypes = pipelineImports.get("@workspace/types");
+      if (pipelineWorkspaceTypes) {
+        pipelineWorkspaceTypes.forEach((t) => {
+          if (!typeImportsList.includes(t)) {
+            typeImportsList.push(t);
+          }
+        });
+        pipelineImports.delete("@workspace/types");
+      }
       const importStatements: string[] = [];
       pipelineImports.forEach((names, importPath) => {
         if (names.size > 0 && importPath) {

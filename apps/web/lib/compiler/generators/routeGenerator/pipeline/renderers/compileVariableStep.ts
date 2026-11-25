@@ -120,7 +120,19 @@ export function renderVariableStep(
 
   if (variableSource) {
     const normalizedSource = normalizeInlineSourceForCompiler(variableSource, rawType);
-    const valExpr = resolveSource(normalizedSource, ctx);
+    let valExpr = resolveSource(normalizedSource, ctx);
+    // Custom interface/object types initialized to an empty `{}` placeholder need a cast
+    // so required interface properties do not trigger TS2739 in generated routes.
+    const isCustomNamedObjectType =
+      Boolean(rawType) &&
+      !["object", "any", "unknown", "string", "number", "boolean"].includes(rawType.toLowerCase()) &&
+      !rawType.startsWith("Record<") &&
+      !rawType.startsWith("{") &&
+      !rawType.endsWith("[]") &&
+      !rawType.startsWith("Array<");
+    if (valExpr === "{}" && isCustomNamedObjectType) {
+      valExpr = `{} as ${rawType}`;
+    }
     return [`${keyword} ${varName}${typeAnnotation} = ${valExpr};`];
   }
 
