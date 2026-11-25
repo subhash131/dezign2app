@@ -56,6 +56,59 @@ export function resolveLangGraphTarget(
   return { graphName, importPath, rawLabel };
 }
 
+function buildCanvasTypeImportMap(allNodes?: BackendNode[]): Map<string, string> {
+  const map = new Map<string, string>();
+  if (!Array.isArray(allNodes) || allNodes.length === 0) {
+    return map;
+  }
+
+  for (const n of allNodes) {
+    if (n.type !== "types") continue;
+
+    const isLangGraphDerivedNode = Boolean(
+      n.data?.isLangGraphPackage ||
+        n.data?.sourceLangGraphId ||
+        n.id.startsWith("types-langgraph-") ||
+        (n.data?.isPackageNode && n.data?.packageName?.startsWith("@workspace/")),
+    );
+    if (isLangGraphDerivedNode) continue;
+
+    const isPackageNode = Boolean(
+      n.data?.isPackageNode ||
+        (n.data?.packageSources && n.data.packageSources.length > 0 && !n.data?.isExtended),
+    );
+
+    if (n.data?.definitionMode === "raw" && n.data?.rawTypeScript) {
+      const matches = n.data.rawTypeScript.matchAll(
+        /export\s+(?:type|interface|enum|const|function|class)\s+([A-Za-z0-9_]+)/g,
+      );
+      for (const m of matches) {
+        const name = m[1]?.trim();
+        if (name) {
+          map.set(name, "@workspace/types");
+        }
+      }
+    }
+
+    const typesList = Array.isArray(n.data?.types) ? n.data.types : [];
+    for (const item of typesList) {
+      const name = item.name?.trim();
+      if (!name) continue;
+      const isPackageType =
+        (isPackageNode || Boolean(item.packageSource) || Boolean(n.data?.packageName)) &&
+        !item.extendedFrom;
+      const importPath = isPackageType
+        ? item.packageSource || n.data?.packageName || "@workspace/types"
+        : "@workspace/types";
+      if (!map.has(name) || !isPackageType) {
+        map.set(name, importPath);
+      }
+    }
+  }
+
+  return map;
+}
+
 /**
  * Builds an import map from pipeline steps (including recursive nested branches).
  * Returns a map of { importPath -> Set<functionName> }.
@@ -65,8 +118,34 @@ export function collectPipelineImports(
   allNodes?: BackendNode[],
 ): Map<string, Set<string>> {
   const imports = new Map<string, Set<string>>();
+  const canvasTypeImportMap = buildCanvasTypeImportMap(allNodes);
+
+  function addImport(importPath: string, symbolName: string): void {
+    if (!importPath || !symbolName) return;
+    const existing = imports.get(importPath);
+    if (existing) {
+      existing.add(symbolName);
+    } else {
+      imports.set(importPath, new Set([symbolName]));
+    }
+  }
 
   function addStepImports(s: PipelineStep): void {
+    if (
+      s.type === "variable" &&
+      s.enabled !== false &&
+      s.variableOperation !== "assign" &&
+      s.variableDataType &&
+      canvasTypeImportMap.size > 0
+    ) {
+      const tokens = s.variableDataType.match(/\b[A-Za-z_$][A-Za-z0-9_$]*\b/g) || [];
+      for (const token of tokens) {
+        const typeImportPath = canvasTypeImportMap.get(token);
+        if (typeImportPath) {
+          addImport(typeImportPath, token);
+        }
+      }
+    }
     if (s.functionRef && s.enabled !== false) {
       const name = toVarName(s.functionRef.name || "fn");
       let importPath = s.functionRef.importPath || "";
