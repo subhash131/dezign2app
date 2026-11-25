@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { renderPipeline, renderPipelineStep } from "../generators/routeGenerator/pipeline";
+import { collectPipelineImports } from "../generators/routeGenerator/pipeline/importCollector";
+import { emitHandlerPreamble } from "../generators/routeGenerator/handlers/handlerPreambleEmitter";
 import { PipelineStep } from "@workspace/canvas/types";
+import type { BackendNode } from "@/types/canvas";
 import {
   getAvailableSources,
   getPriorMutableVariables,
@@ -520,5 +523,82 @@ describe("compileVariablePipelineStep", () => {
     expect(
       renderPipelineStep(arrayStrStep, { priorOutputs: new Map(), bodyVar: "body" }),
     ).toEqual(["const items: string[] = [];"]);
+  });
+
+  it("imports custom TypesNode types from @workspace/types and safely initializes custom object/array variables", () => {
+    const typesNode: BackendNode = {
+      id: "types-node-1",
+      type: "types",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "Domain Types",
+        types: [
+          {
+            id: "t-user",
+            name: "UserProfile",
+            kind: "interface",
+            fields: [{ id: "f1", name: "id", type: "string", required: true }],
+          },
+        ],
+      },
+    } as unknown as BackendNode;
+
+    const singleCustomStep: PipelineStep = {
+      id: "var-custom-obj",
+      name: "Profile",
+      type: "variable",
+      outputVariable: "profile",
+      declarationKind: "let",
+      variableOperation: "declare",
+      variableDataType: "UserProfile",
+      variableSource: { kind: "inline", value: "{}" },
+    };
+
+    const arrayCustomStep: PipelineStep = {
+      id: "var-custom-arr",
+      name: "Profiles",
+      type: "variable",
+      outputVariable: "profiles",
+      declarationKind: "let",
+      variableOperation: "declare",
+      variableDataType: "UserProfile[]",
+      variableSource: { kind: "inline", value: "[]" },
+    };
+
+    expect(
+      renderPipelineStep(singleCustomStep, { priorOutputs: new Map(), bodyVar: "body" }),
+    ).toEqual(["let profile: UserProfile = {} as UserProfile;"]);
+    expect(
+      renderPipelineStep(arrayCustomStep, { priorOutputs: new Map(), bodyVar: "body" }),
+    ).toEqual(["let profiles: UserProfile[] = [];"]);
+
+    const imports = collectPipelineImports([singleCustomStep, arrayCustomStep], [typesNode]);
+    expect(Array.from(imports.get("@workspace/types") || [])).toEqual(["UserProfile"]);
+
+    const { preambleCode } = emitHandlerPreamble({
+      serviceName: "Users",
+      routeFileName: "getUsers",
+      handlerName: "getUsers",
+      pascalName: "UsersGetUsers",
+      schemaVarPrefix: "usersGetUsers",
+      method: "GET",
+      path: "/users",
+      summary: "Get users",
+      pickedDbOps: [],
+      dbFunctions: [],
+      redisFunctions: [],
+      kafkaFunctions: [],
+      pickedKafka: null,
+      codeBlockText: "",
+      hasStreamingStep: false,
+      queryTypeResHasContent: false,
+      isBodyMethod: false,
+      bodyTypeResHasContent: false,
+      pipelineSteps: [singleCustomStep, arrayCustomStep],
+      allNodes: [typesNode],
+    });
+
+    expect(preambleCode).toContain("UserProfile");
+    expect(preambleCode.match(/from "@workspace\/types"/g)?.length).toBe(1);
   });
 });

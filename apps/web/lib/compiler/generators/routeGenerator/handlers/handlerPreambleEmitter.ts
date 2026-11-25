@@ -124,11 +124,7 @@ export function emitHandlerPreamble(params: HandlerPreambleParams): HandlerPream
     });
   }
 
-  const allExtraImportLines = Array.from(extraImports.entries())
-    .map(([pkg, names]) => `import { ${Array.from(names).join(", ")} } from "${pkg}";`)
-    .join("\n");
-
-  // Build imports from @workspace/types
+  // Build imports from @workspace/types (merging any custom TypesNode imports from pipeline steps)
   const typeImportsList = [
     `${pascalName}Params`,
     `${pascalName}Query`,
@@ -144,6 +140,19 @@ export function emitHandlerPreamble(params: HandlerPreambleParams): HandlerPream
   if (requiresAuth) {
     typeImportsList.push("AuthUser");
   }
+  const pipelineWorkspaceTypes = extraImports.get("@workspace/types");
+  if (pipelineWorkspaceTypes) {
+    pipelineWorkspaceTypes.forEach((t) => {
+      if (!typeImportsList.includes(t)) {
+        typeImportsList.push(t);
+      }
+    });
+    extraImports.delete("@workspace/types");
+  }
+
+  const allExtraImportLines = Array.from(extraImports.entries())
+    .map(([pkg, names]) => `import { ${Array.from(names).join(", ")} } from "${pkg}";`)
+    .join("\n");
 
   let code = `import { Request, Response } from "express";
 import { createLogger } from "@workspace/logger";
