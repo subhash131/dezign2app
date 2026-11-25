@@ -2,6 +2,7 @@
 
 import React, { useMemo } from "react";
 import { Label } from "@workspace/ui/components/label";
+import { Button } from "@workspace/ui/components/button";
 import {
   Select,
   SelectContent,
@@ -9,7 +10,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select";
-import { Variable, ArrowRight, Code2, AlertCircle, PlusCircle, Layers, Brackets } from "lucide-react";
+import { cn } from "@workspace/ui/lib/utils";
+import { Variable, ArrowRight, Code2, AlertCircle, Layers, Brackets } from "lucide-react";
+import type { BackendNode } from "@/types/canvas";
+import {
+  useAvailableCanvasTypes,
+  AvailableTypeItem,
+} from "@/lib/hooks/useAvailableCanvasTypes";
+import { TypeCombobox } from "../TypeCombobox";
 import { BufferedInput } from "./BufferedInput";
 import { BindingSourceEditor } from "./BindingSourceEditor";
 import { TargetVariableCombobox } from "./TargetVariableCombobox";
@@ -24,33 +32,26 @@ import {
   adaptInlineValueOnTypeChange,
   coerceInlineValueForType,
   formatInlineValueForPreview,
+  formatVariableType,
   getArrayElementType,
   getDefaultInlineValueForType,
+  parseVariableTypeParts,
 } from "@/lib/compiler/variableValueUtils";
 
 export interface VariableStepSectionProps {
   step: PipelineStepDraft;
   priorSteps: PipelineStepDraft[];
   availableSources: AvailableSource[];
+  allNodes?: BackendNode[];
   serviceNodeId?: string;
   onChange: (updated: PipelineStepDraft) => void;
 }
-
-const COMMON_DATA_TYPES: readonly string[] = [
-  "string",
-  "number",
-  "boolean",
-  "Record<string, string>",
-  "Record<string, number>",
-  "string[]",
-  "number[]",
-  "object",
-];
 
 export const VariableStepSection: React.FC<VariableStepSectionProps> = ({
   step,
   priorSteps,
   availableSources,
+  allNodes,
   serviceNodeId,
   onChange,
 }) => {
@@ -86,6 +87,50 @@ export const VariableStepSection: React.FC<VariableStepSectionProps> = ({
     return "";
   }, [variableOperation, variableDataType, variableMutationKind, selectedVarInfo]);
 
+  const { baseType: baseDataType, isArray: isArrayType } = useMemo(
+    () => parseVariableTypeParts(variableDataType),
+    [variableDataType],
+  );
+
+  const { allTypes } = useAvailableCanvasTypes(allNodes, {
+    primitivePreset: "typescript",
+  });
+
+  const isObjectLikeType = useMemo(() => {
+    const map = new Map<string, AvailableTypeItem>();
+    for (const item of allTypes) {
+      map.set(item.name, item);
+    }
+    return (rawType: string): boolean => {
+      const { baseType, isArray } = parseVariableTypeParts(rawType);
+      if (isArray || !baseType) return false;
+      return map.get(baseType)?.kind === "interface";
+    };
+  }, [allTypes]);
+
+  const applyDataTypeChange = (nextType: string) => {
+    const nextStep: PipelineStepDraft = {
+      ...step,
+      variableDataType: nextType,
+    };
+    if (!step.variableSource || step.variableSource.kind === "inline") {
+      const adaptedValue = adaptInlineValueOnTypeChange(
+        step.variableSource?.value,
+        variableDataType,
+        nextType,
+        {
+          prevIsObjectLike: isObjectLikeType(variableDataType),
+          nextIsObjectLike: isObjectLikeType(nextType),
+        },
+      );
+      nextStep.variableSource = {
+        kind: "inline",
+        value: adaptedValue,
+      };
+    }
+    onChange(nextStep);
+  };
+
   // Synthesize binding object for BindingSourceEditor
   const currentBinding: StepBinding = useMemo(
     () => ({
@@ -102,7 +147,9 @@ export const VariableStepSection: React.FC<VariableStepSectionProps> = ({
         step.variableSource?.kind !== "inline" &&
         (nextSource.value === "" || nextSource.value === undefined);
       const nextVal = switchedToInline
-        ? getDefaultInlineValueForType(effectiveValueType)
+        ? getDefaultInlineValueForType(effectiveValueType, {
+            isObjectLike: isObjectLikeType(effectiveValueType),
+          })
         : coerceInlineValueForType(nextSource.value, effectiveValueType);
       nextSource = { kind: "inline", value: nextVal };
     }
@@ -253,9 +300,9 @@ export const VariableStepSection: React.FC<VariableStepSectionProps> = ({
       {/* Mode A: Declare Variable */}
       {variableOperation === "declare" && (
         <div className="flex flex-col gap-2.5 p-2.5 rounded-lg border border-border/50 bg-background/40">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
             {/* Variable Name */}
-            <div className="flex flex-col gap-1 sm:col-span-1">
+            <div className="flex flex-col gap-1 sm:col-span-4">
               <Label className="text-[10px] text-muted-foreground font-medium">Variable Name</Label>
               <BufferedInput
                 className="h-7 text-xs font-mono bg-background/60 border-border/60"
@@ -273,7 +320,7 @@ export const VariableStepSection: React.FC<VariableStepSectionProps> = ({
             </div>
 
             {/* Declaration Kind: let vs const */}
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1 sm:col-span-3">
               <Label className="text-[10px] text-muted-foreground font-medium">Declaration</Label>
               <div className="flex items-center gap-1 h-7 p-0.5 bg-background/60 border border-border/60 rounded-md">
                 <button
@@ -303,45 +350,44 @@ export const VariableStepSection: React.FC<VariableStepSectionProps> = ({
               </div>
             </div>
 
-            {/* Data Type Annotation */}
-            <div className="flex flex-col gap-1">
-              <Label className="text-[10px] text-muted-foreground font-medium">Type (optional)</Label>
-              <Select
-                value={variableDataType || "inferred"}
-                onValueChange={(val) => {
-                  const nextType = val === "inferred" ? "" : val;
-                  const nextStep: PipelineStepDraft = {
-                    ...step,
-                    variableDataType: nextType,
-                  };
-                  if (!step.variableSource || step.variableSource.kind === "inline") {
-                    const adaptedValue = adaptInlineValueOnTypeChange(
-                      step.variableSource?.value,
-                      variableDataType,
-                      nextType,
-                    );
-                    nextStep.variableSource = {
-                      kind: "inline",
-                      value: adaptedValue,
-                    };
+            {/* Data Type Annotation: TypeScript Primitives + TypesNode Custom Types + [] Array Toggle */}
+            <div className="flex flex-col gap-1 sm:col-span-5">
+              <Label className="text-[10px] text-muted-foreground font-medium">Type</Label>
+              <div className="flex items-center gap-1">
+                <TypeCombobox
+                  value={baseDataType || "string"}
+                  onValueChange={(selected) => {
+                    const { baseType: cleanBase } = parseVariableTypeParts(selected);
+                    applyDataTypeChange(formatVariableType(cleanBase || selected, isArrayType));
+                  }}
+                  allNodes={allNodes}
+                  primitivePreset="typescript"
+                  wrapperClassName="flex-1 min-w-0"
+                  className="h-7 w-full text-xs font-mono bg-background/60 border border-border/60"
+                  placeholder="Type..."
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  title={
+                    isArrayType
+                      ? "Array type active (click to make single)"
+                      : "Single type (click to make array [])"
                   }
-                  onChange(nextStep);
-                }}
-              >
-                <SelectTrigger className="h-7 text-xs font-mono bg-background/60 border-border/60">
-                  <SelectValue placeholder="Inferred / any" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="inferred" className="text-xs font-mono text-muted-foreground">
-                    (inferred)
-                  </SelectItem>
-                  {COMMON_DATA_TYPES.map((t) => (
-                    <SelectItem key={t} value={t} className="text-xs font-mono">
-                      {t}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                  className={cn(
+                    "h-7 px-2 font-mono text-xs font-bold shrink-0 rounded transition-all cursor-pointer",
+                    isArrayType
+                      ? "bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 ring-1 ring-primary/30"
+                      : "bg-secondary/60 text-muted-foreground/80 hover:bg-secondary hover:text-foreground border border-border/40",
+                  )}
+                  onClick={() => {
+                    applyDataTypeChange(formatVariableType(baseDataType, !isArrayType));
+                  }}
+                >
+                  []
+                </Button>
+              </div>
             </div>
           </div>
 

@@ -65,10 +65,50 @@ export function getArrayElementType(dataType?: string): string {
 }
 
 /**
+ * Splits a variable type annotation into its base type name and whether it is an array.
+ */
+export function parseVariableTypeParts(dataType?: string): {
+  baseType: string;
+  isArray: boolean;
+} {
+  const trimmed = (dataType || "").trim();
+  if (!trimmed || trimmed === "inferred" || trimmed === "(inferred)") {
+    return { baseType: "", isArray: false };
+  }
+  if (trimmed.endsWith("[]")) {
+    let base = trimmed.slice(0, -2).trim();
+    if (base.startsWith("(") && base.endsWith(")")) {
+      base = base.slice(1, -1).trim();
+    }
+    return { baseType: base, isArray: true };
+  }
+  const genericMatch = /^Array<(.+)>$/i.exec(trimmed);
+  if (genericMatch?.[1]) {
+    return { baseType: genericMatch[1].trim(), isArray: true };
+  }
+  return { baseType: trimmed, isArray: false };
+}
+
+/**
+ * Formats a base type and array flag back into a TypeScript type annotation.
+ */
+export function formatVariableType(baseType: string, isArray: boolean): string {
+  const clean = baseType.trim();
+  if (!clean || clean === "inferred" || clean === "(inferred)") {
+    return isArray ? "any[]" : "";
+  }
+  if (!isArray) return clean;
+  return clean.includes("=>") || clean.includes("|") || clean.includes("&")
+    ? `(${clean})[]`
+    : `${clean}[]`;
+}
+
+/**
  * Returns the default inline literal value for a variable type.
  */
 export function getDefaultInlineValueForType(
   dataType?: string,
+  options?: { isObjectLike?: boolean },
 ): string | number | boolean {
   switch (getVariableTypeCategory(dataType)) {
     case "number":
@@ -80,9 +120,10 @@ export function getDefaultInlineValueForType(
     case "object":
       return "{}";
     case "string":
+      return "";
     case "inferred":
     default:
-      return "";
+      return options?.isObjectLike ? "{}" : "";
   }
 }
 
@@ -163,9 +204,14 @@ export function adaptInlineValueOnTypeChange(
   currentValue: string | number | boolean | undefined,
   prevType?: string,
   nextType?: string,
+  options?: { prevIsObjectLike?: boolean; nextIsObjectLike?: boolean },
 ): string | number | boolean {
-  const prevDefault = getDefaultInlineValueForType(prevType);
-  const nextDefault = getDefaultInlineValueForType(nextType);
+  const prevDefault = getDefaultInlineValueForType(prevType, {
+    isObjectLike: options?.prevIsObjectLike,
+  });
+  const nextDefault = getDefaultInlineValueForType(nextType, {
+    isObjectLike: options?.nextIsObjectLike,
+  });
 
   const isEmpty = currentValue === undefined || currentValue === "";
   const isPrevDefault =
@@ -199,6 +245,10 @@ export function adaptInlineValueOnTypeChange(
       return String(currentValue);
     case "inferred":
     default:
+      if (options?.nextIsObjectLike) {
+        const str = String(currentValue);
+        return isJsonObjectString(str) ? str.trim() : nextDefault;
+      }
       return currentValue;
   }
 }

@@ -21,11 +21,13 @@ export interface TypeComboboxProps {
   value: string;
   onValueChange: (val: string) => void;
   className?: string;
+  wrapperClassName?: string;
   disabled?: boolean;
   allNodes?: BackendNode[];
   includeDatabaseTables?: boolean;
   excludeTypeName?: string;
   extraTypes?: AvailableTypeItem[];
+  primitivePreset?: "schema" | "typescript";
   placeholder?: string;
 }
 
@@ -37,17 +39,20 @@ export const TypeCombobox: React.FC<TypeComboboxProps> = ({
   value,
   onValueChange,
   className,
+  wrapperClassName,
   disabled = false,
   allNodes,
   includeDatabaseTables = false,
   excludeTypeName,
   extraTypes,
+  primitivePreset = "schema",
   placeholder = "Select type...",
 }) => {
   const { allTypes } = useAvailableCanvasTypes(allNodes, {
     includeDatabaseTables,
     excludeTypeName,
     extraTypes,
+    primitivePreset,
   });
 
   // Map for fast metadata lookup (category, kind, packageSource, sourceLabel)
@@ -65,7 +70,10 @@ export const TypeCombobox: React.FC<TypeComboboxProps> = ({
   }, [allTypes, value]);
 
   return (
-    <div className="relative nodrag" onClick={(e) => e.stopPropagation()}>
+    <div
+      className={cn("relative nodrag", wrapperClassName)}
+      onClick={(e) => e.stopPropagation()}
+    >
       <Combobox
         items={allTypeNames}
         value={value || "string"}
