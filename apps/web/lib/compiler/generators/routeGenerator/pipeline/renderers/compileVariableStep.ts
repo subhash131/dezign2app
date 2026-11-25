@@ -7,6 +7,7 @@
 
 import { PipelineStep } from "@workspace/canvas/types";
 import { toVarName } from "../../../../utils";
+import { normalizeInlineSourceForCompiler } from "../../../../variableValueUtils";
 import { PipelineRenderContext } from "../types";
 import { resolveSource } from "../sourceResolver";
 
@@ -54,7 +55,11 @@ export function renderVariableStep(
   }
 
   if (variableOperation === "assign") {
-    const valExpr = variableSource ? resolveSource(variableSource, ctx) : "undefined";
+    const normalizedAssignSource =
+      variableSource && variableOperator === "-="
+        ? normalizeInlineSourceForCompiler(variableSource, "number")
+        : variableSource;
+    const valExpr = normalizedAssignSource ? resolveSource(normalizedAssignSource, ctx) : "undefined";
     const cleanProp = variablePropertyPath ? formatPropertyPath(variablePropertyPath) : "";
 
     const mutationKind =
@@ -114,7 +119,8 @@ export function renderVariableStep(
   const typeAnnotation = effectiveType ? `: ${effectiveType}` : "";
 
   if (variableSource) {
-    const valExpr = resolveSource(variableSource, ctx);
+    const normalizedSource = normalizeInlineSourceForCompiler(variableSource, rawType);
+    const valExpr = resolveSource(normalizedSource, ctx);
     return [`${keyword} ${varName}${typeAnnotation} = ${valExpr};`];
   }
 

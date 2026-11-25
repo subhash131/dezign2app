@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { DraggableProvidedDragHandleProps } from "@hello-pangea/dnd";
 import { PipelineStepDraft } from "./types";
+import { formatInlineValueForPreview } from "@/lib/compiler/variableValueUtils";
 import { StepTypeMeta, formatConditionSummary } from "./utils";
 
 export interface StepRowHeaderProps {
@@ -114,7 +115,7 @@ export const StepRowHeader = ({
                 <span className="text-amber-400 font-bold select-none">{step.variableOperator || "="}</span>
                 <span className="text-[11px] text-muted-foreground/70 font-mono truncate max-w-[160px]">
                   {step.variableSource?.kind === "inline"
-                    ? `"${step.variableSource.value}"`
+                    ? formatInlineValueForPreview(step.variableSource.value)
                     : step.variableSource?.kind || "..."}
                 </span>
               </>
@@ -132,7 +133,7 @@ export const StepRowHeader = ({
                 <span className="text-muted-foreground/35 font-normal select-none">=</span>
                 <span className="text-[11px] text-muted-foreground/70 font-mono truncate max-w-[150px]">
                   {step.variableSource?.kind === "inline"
-                    ? `"${step.variableSource.value}"`
+                    ? formatInlineValueForPreview(step.variableSource.value, step.variableDataType)
                     : step.variableSource?.kind || "..."}
                 </span>
               </>

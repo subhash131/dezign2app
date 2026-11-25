@@ -20,6 +20,13 @@ import {
 } from "./types";
 import { getPriorVariables } from "./utils";
 import { toVarName } from "@/lib/compiler/utils";
+import {
+  adaptInlineValueOnTypeChange,
+  coerceInlineValueForType,
+  formatInlineValueForPreview,
+  getArrayElementType,
+  getDefaultInlineValueForType,
+} from "@/lib/compiler/variableValueUtils";
 
 export interface VariableStepSectionProps {
   step: PipelineStepDraft;
@@ -66,6 +73,19 @@ export const VariableStepSection: React.FC<VariableStepSectionProps> = ({
     [priorVariables, varName],
   );
 
+  const effectiveValueType = useMemo(() => {
+    if (variableOperation === "declare") {
+      return variableDataType;
+    }
+    if (variableMutationKind === "variable") {
+      return selectedVarInfo?.dataType || "";
+    }
+    if (variableMutationKind === "array_push") {
+      return getArrayElementType(selectedVarInfo?.dataType);
+    }
+    return "";
+  }, [variableOperation, variableDataType, variableMutationKind, selectedVarInfo]);
+
   // Synthesize binding object for BindingSourceEditor
   const currentBinding: StepBinding = useMemo(
     () => ({
@@ -76,9 +96,19 @@ export const VariableStepSection: React.FC<VariableStepSectionProps> = ({
   );
 
   const handleSourceChange = (updatedBinding: StepBinding) => {
+    let nextSource = updatedBinding.source;
+    if (nextSource.kind === "inline") {
+      const switchedToInline =
+        step.variableSource?.kind !== "inline" &&
+        (nextSource.value === "" || nextSource.value === undefined);
+      const nextVal = switchedToInline
+        ? getDefaultInlineValueForType(effectiveValueType)
+        : coerceInlineValueForType(nextSource.value, effectiveValueType);
+      nextSource = { kind: "inline", value: nextVal };
+    }
     onChange({
       ...step,
-      variableSource: updatedBinding.source,
+      variableSource: nextSource,
     });
   };
 
@@ -90,10 +120,7 @@ export const VariableStepSection: React.FC<VariableStepSectionProps> = ({
 
     if (source) {
       if (source.kind === "inline") {
-        sourceStr =
-          typeof source.value === "string"
-            ? `"${source.value}"`
-            : String(source.value ?? '""');
+        sourceStr = formatInlineValueForPreview(source.value, effectiveValueType);
       } else if (source.kind === "req_body") {
         sourceStr = source.field ? `req.body.${source.field}` : `req.body`;
       } else if (source.kind === "req_params") {
@@ -150,6 +177,7 @@ export const VariableStepSection: React.FC<VariableStepSectionProps> = ({
     declarationKind,
     variableOperator,
     variableDataType,
+    effectiveValueType,
     variablePropertyPath,
     step.variableMutationKind,
     step.variableSource,
@@ -281,10 +309,23 @@ export const VariableStepSection: React.FC<VariableStepSectionProps> = ({
               <Select
                 value={variableDataType || "inferred"}
                 onValueChange={(val) => {
-                  onChange({
+                  const nextType = val === "inferred" ? "" : val;
+                  const nextStep: PipelineStepDraft = {
                     ...step,
-                    variableDataType: val === "inferred" ? "" : val,
-                  });
+                    variableDataType: nextType,
+                  };
+                  if (!step.variableSource || step.variableSource.kind === "inline") {
+                    const adaptedValue = adaptInlineValueOnTypeChange(
+                      step.variableSource?.value,
+                      variableDataType,
+                      nextType,
+                    );
+                    nextStep.variableSource = {
+                      kind: "inline",
+                      value: adaptedValue,
+                    };
+                  }
+                  onChange(nextStep);
                 }}
               >
                 <SelectTrigger className="h-7 text-xs font-mono bg-background/60 border-border/60">
