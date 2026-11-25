@@ -81,8 +81,8 @@ export const LangGraphStepNode = ({
     });
   };
 
-  const handleNameSave = () => {
-    const trimmed = nameValue.trim();
+  const handleNameSave = (rawValue?: string) => {
+    const trimmed = (rawValue ?? nameValue).trim();
     if (!trimmed) {
       if (!data.label || data.label.trim() === "") {
         deleteNode(id);

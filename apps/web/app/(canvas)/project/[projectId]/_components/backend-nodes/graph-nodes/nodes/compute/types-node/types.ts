@@ -28,7 +28,7 @@ export interface TypesNodeHeaderProps {
   isRefreshing: boolean;
   totalCount: number;
   inputRef: React.RefObject<HTMLInputElement | null>;
-  onSave: () => void;
+  onSave: (rawValue?: string) => void;
   onDeleteNode: () => void;
   onRefresh: (e: React.MouseEvent) => void;
   onAddType: (e: React.MouseEvent) => void;

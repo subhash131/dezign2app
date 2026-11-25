@@ -17,6 +17,10 @@ import {
   escapeTemplateLiteral,
   indent,
 } from "../utils";
+import {
+  getVariableTypeCategory,
+  normalizeInlineSourceForCompiler,
+} from "../../../../variableValueUtils";
 
 export interface StepImportItem {
   source: string;
@@ -356,11 +360,41 @@ function renderSinglePipelineStep(
       const valBinding = step.inputBindings?.find(
         (b) => b.argName === "value" || b.argName === "val",
       );
-      const valExpr = valBinding
-        ? resolveLangGraphBinding(valBinding, stepOutputVars)
-        : step.variableSource
-          ? resolveLangGraphBinding({ argName: "val", source: step.variableSource }, stepOutputVars)
+      const rawSource = valBinding?.source || step.variableSource;
+      const normalizedSource = rawSource
+        ? normalizeInlineSourceForCompiler(rawSource, step.variableDataType)
+        : undefined;
+      const typeCategory = getVariableTypeCategory(step.variableDataType);
+      let valExpr: string;
+      if (
+        normalizedSource?.kind === "inline" &&
+        (typeCategory === "array" || typeCategory === "object") &&
+        typeof normalizedSource.value === "string"
+      ) {
+        const trimmed = normalizedSource.value.trim();
+        let isJsonLiteral = false;
+        if (
+          (typeCategory === "array" && trimmed.startsWith("[") && trimmed.endsWith("]")) ||
+          (typeCategory === "object" && trimmed.startsWith("{") && trimmed.endsWith("}"))
+        ) {
+          try {
+            JSON.parse(trimmed);
+            isJsonLiteral = true;
+          } catch {
+            isJsonLiteral = false;
+          }
+        }
+        valExpr = isJsonLiteral
+          ? trimmed
+          : resolveLangGraphBinding({ argName: "val", source: normalizedSource }, stepOutputVars);
+      } else {
+        valExpr = normalizedSource
+          ? resolveLangGraphBinding(
+              valBinding ? { ...valBinding, source: normalizedSource } : { argName: "val", source: normalizedSource },
+              stepOutputVars,
+            )
           : '""';
+      }
       bodyLines.push(`  ${decl}${outVar} = ${valExpr};`);
       break;
     }

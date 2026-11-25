@@ -274,6 +274,9 @@ export const LocalTextarea = React.forwardRef<
         e.stopPropagation();
         e.nativeEvent?.stopImmediatePropagation?.();
       }
+      if (e.key === "Enter") {
+        flush();
+      }
       if (e.key === "Tab") {
         e.preventDefault();
         const target = e.target as HTMLTextAreaElement;

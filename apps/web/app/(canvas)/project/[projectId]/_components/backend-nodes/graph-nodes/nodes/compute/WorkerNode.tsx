@@ -235,16 +235,18 @@ const WorkerTaskList = ({
                 <div className="flex items-center gap-1 nodrag">
                   <LocalInput
                     value={editingName}
+                    debounceMs={0}
                     onChange={(e) => setEditingName(e.target.value)}
                     className="h-6 text-xs flex-1 nodrag"
                     placeholder="Task Name"
                     autoFocus
-                    onKeyDown={(e: React.KeyboardEvent) => {
+                    onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
                       if (e.key === "Enter") {
-                        if (!editingName.trim()) handleDelete(item.id);
+                        const val = e.currentTarget.value.trim();
+                        if (!val) handleDelete(item.id);
                         else {
                           const wasEmpty = !item.name;
-                          handleUpdate(item.id, editingName.trim());
+                          handleUpdate(item.id, val);
                           if (wasEmpty)
                             setActiveConfigItem({
                               type: "task",

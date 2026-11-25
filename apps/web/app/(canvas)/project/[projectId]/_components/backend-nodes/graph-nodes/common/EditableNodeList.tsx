@@ -94,13 +94,15 @@ export const EditableNodeList = <T extends BaseItem>({
               {isEditing ? (
                 <LocalInput
                   value={editingName}
+                  debounceMs={0}
                   onChange={(e) => setEditingName(e.target.value)}
                   className="h-6 text-xs"
                   autoFocus
-                  onKeyDown={(e: React.KeyboardEvent) => {
+                  onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
                     if (e.key === "Enter") {
-                      if (!editingName.trim()) handleDelete(item.id);
-                      else handleUpdate(item.id, editingName.trim());
+                      const val = e.currentTarget.value.trim();
+                      if (!val) handleDelete(item.id);
+                      else handleUpdate(item.id, val);
                       setEditingId(null);
                     }
                     if (e.key === "Escape") {
@@ -108,9 +110,10 @@ export const EditableNodeList = <T extends BaseItem>({
                       setEditingId(null);
                     }
                   }}
-                  onBlur={() => {
-                    if (!editingName.trim()) handleDelete(item.id);
-                    else handleUpdate(item.id, editingName.trim());
+                  onBlur={(e) => {
+                    const val = e.currentTarget.value.trim();
+                    if (!val) handleDelete(item.id);
+                    else handleUpdate(item.id, val);
                     setEditingId(null);
                   }}
                 />

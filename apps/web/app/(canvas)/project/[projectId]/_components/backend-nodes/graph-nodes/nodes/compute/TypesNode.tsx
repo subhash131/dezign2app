@@ -127,8 +127,8 @@ export const TypesNode = ({
     }
   }, [isEditing]);
 
-  const handleSave = () => {
-    const trimmed = name.trim();
+  const handleSave = (rawValue?: string) => {
+    const trimmed = (rawValue ?? inputRef.current?.value ?? name).trim();
     if (!trimmed) {
       if (!data.label || !data.label.trim()) {
         deleteNode(id);

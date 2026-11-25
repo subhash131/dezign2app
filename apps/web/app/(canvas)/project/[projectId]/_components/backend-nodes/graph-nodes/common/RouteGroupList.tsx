@@ -69,8 +69,8 @@ export const RouteGroupEditor = ({
     updateNode(nodeId, { data: { ...data, routeGroups: newGroups } });
   };
 
-  const handleSaveName = () => {
-    const trimmed = nameValue.trim();
+  const handleSaveName = (rawValue?: string) => {
+    const trimmed = (rawValue ?? nameValue).trim();
     if (!trimmed && !group.endpoints?.length) {
       deleteGroup();
       return;
@@ -79,8 +79,8 @@ export const RouteGroupEditor = ({
     setEditingName(false);
   };
 
-  const handleSaveBasePath = () => {
-    updateGroup({ basePath: basePathValue.trim() });
+  const handleSaveBasePath = (rawValue?: string) => {
+    updateGroup({ basePath: (rawValue ?? basePathValue).trim() });
     setEditingBasePath(false);
   };
 
@@ -222,18 +222,19 @@ export const RouteGroupEditor = ({
           {editingName ? (
             <LocalInput
               value={nameValue || ""}
+              debounceMs={0}
               onChange={(e) => setNameValue(e.target.value)}
               className="h-5 text-xs px-1 w-24 nodrag"
               autoFocus
               onClick={(e: React.MouseEvent) => e.stopPropagation()}
-              onKeyDown={(e: React.KeyboardEvent) => {
-                if (e.key === "Enter") handleSaveName();
+              onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                if (e.key === "Enter") handleSaveName(e.currentTarget.value);
                 if (e.key === "Escape") {
                   setNameValue(group.name || "");
                   setEditingName(false);
                 }
               }}
-              onBlur={handleSaveName}
+              onBlur={(e) => handleSaveName(e.currentTarget.value)}
             />
           ) : (
             <span
@@ -251,19 +252,20 @@ export const RouteGroupEditor = ({
           {editingBasePath ? (
             <LocalInput
               value={basePathValue}
+              debounceMs={0}
               onChange={(e) => setBasePathValue(e.target.value)}
               className="h-5 text-[10px] px-1 w-20 text-muted-foreground nodrag"
               placeholder="/path"
               autoFocus
               onClick={(e: React.MouseEvent) => e.stopPropagation()}
-              onKeyDown={(e: React.KeyboardEvent) => {
-                if (e.key === "Enter") handleSaveBasePath();
+              onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                if (e.key === "Enter") handleSaveBasePath(e.currentTarget.value);
                 if (e.key === "Escape") {
                   setBasePathValue(group.basePath || "");
                   setEditingBasePath(false);
                 }
               }}
-              onBlur={handleSaveBasePath}
+              onBlur={(e) => handleSaveBasePath(e.currentTarget.value)}
             />
           ) : (
             <span

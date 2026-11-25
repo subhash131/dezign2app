@@ -179,13 +179,16 @@ export const EndpointRow = ({
             </Select>
             <LocalInput
               value={editingName}
+              debounceMs={0}
               onChange={(e) => setEditingName(formatEndpointRoute(e.target.value))}
               className="h-6 text-xs flex-1 nodrag"
               placeholder="e.g. /users"
               autoFocus
-              onKeyDown={(e: React.KeyboardEvent) => {
+              onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
                 if (e.key === "Enter") {
-                  const sanitized = sanitizeEndpointRoute(editingName);
+                  const sanitized = sanitizeEndpointRoute(
+                    formatEndpointRoute(e.currentTarget.value),
+                  );
                   if (!sanitized) handleDelete(item.id);
                   else {
                     const wasEmpty = !item.name;

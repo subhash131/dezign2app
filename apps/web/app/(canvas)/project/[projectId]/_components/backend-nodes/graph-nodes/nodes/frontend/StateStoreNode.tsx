@@ -202,8 +202,8 @@ export const StateStoreNode = ({
     }
   }, [isEditing]);
 
-  const handleSave = () => {
-    const trimmed = name.trim();
+  const handleSave = (rawValue?: string) => {
+    const trimmed = (rawValue ?? inputRef.current?.value ?? name).trim();
     if (!trimmed) {
       if (!data.label && !data.storeName) {
         deleteNode(id);
@@ -628,14 +628,15 @@ export const StateStoreNode = ({
                   <LocalInput
                     ref={inputRef}
                     value={name}
+                    debounceMs={0}
                     placeholder="Enter store name..."
                     onChange={(e) => setName(e.target.value)}
                     className="h-6 text-xs font-bold px-1.5 py-0 bg-background/90 border-border/80 w-full"
                     autoFocus
-                    onKeyDown={(e: React.KeyboardEvent) => {
+                    onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
-                        handleSave();
+                        handleSave(e.currentTarget.value);
                       }
                       if (e.key === "Escape") {
                         e.preventDefault();
@@ -647,11 +648,11 @@ export const StateStoreNode = ({
                         }
                       }
                     }}
-                    onBlur={() => {
-                      if (!data.label && !data.storeName && !name.trim()) {
+                    onBlur={(e) => {
+                      if (!data.label && !data.storeName && !e.currentTarget.value.trim()) {
                         deleteNode(id);
                       } else {
-                        handleSave();
+                        handleSave(e.currentTarget.value);
                       }
                     }}
                   />
