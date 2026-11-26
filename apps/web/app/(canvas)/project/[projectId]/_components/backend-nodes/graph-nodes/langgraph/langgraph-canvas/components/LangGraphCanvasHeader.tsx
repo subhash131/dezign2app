@@ -96,7 +96,7 @@ export function LangGraphCanvasHeader({
                 : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
             }`}
             onClick={onToggleTerminal}
-            title={terminalOpen ? "Hide Terminal" : "Open Terminal"}
+            title={terminalOpen ? "Hide Terminal (Ctrl+J)" : "Open Terminal (Ctrl+J)"}
           >
             <Terminal className="w-4 h-4 text-sky-400" />
             <span>Terminal</span>

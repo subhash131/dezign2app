@@ -10,6 +10,7 @@ import {
   XTermTerminalHandle,
   cleanTerminalText,
   copyToClipboard,
+  isTerminalToggleShortcut,
 } from "@/components/terminal";
 import { TerminalProps, TerminalType } from "./types";
 import { useSidebarStore } from "@/lib/stores/sidebarStore";
@@ -55,6 +56,23 @@ export function Terminal({
 
   const isOpen = controlledIsOpen !== undefined ? controlledIsOpen : storeTerminalOpen;
   const handleToggleOpen = controlledOnToggleOpen || storeToggleTerminal;
+  const handleToggleOpenRef = useRef(handleToggleOpen);
+  handleToggleOpenRef.current = handleToggleOpen;
+
+  // Global shortcut: Ctrl+J / Cmd+J expands or collapses the terminal drawer
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.repeat) return;
+      if (isTerminalToggleShortcut(event)) {
+        event.preventDefault();
+        event.stopPropagation();
+        handleToggleOpenRef.current();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
+  }, []);
   const handleClose = () => {
     if (controlledOnToggleOpen && isOpen) {
       controlledOnToggleOpen();

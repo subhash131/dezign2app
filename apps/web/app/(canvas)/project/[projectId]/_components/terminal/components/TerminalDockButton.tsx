@@ -57,10 +57,14 @@ export function TerminalDockButton({
         <button
           type="button"
           onClick={onToggleOpen}
-          className="flex items-center gap-1 px-2.5 py-1 rounded-md hover:bg-sidebar-accent text-muted-foreground hover:text-sidebar-foreground transition-colors"
+          title="Toggle Terminal (Ctrl+J)"
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-md hover:bg-sidebar-accent text-muted-foreground hover:text-sidebar-foreground transition-colors"
         >
           <ChevronUp className="w-3.5 h-3.5" />
           <span>Toggle Terminal</span>
+          <kbd className="hidden sm:inline-flex items-center px-1 py-0.2 text-[10px] font-mono rounded bg-sidebar border border-sidebar-border text-muted-foreground/80">
+            Ctrl+J
+          </kbd>
         </button>
       </div>
     </div>

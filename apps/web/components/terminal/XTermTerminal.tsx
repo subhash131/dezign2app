@@ -11,7 +11,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import "@xterm/xterm/css/xterm.css";
-import { copyToClipboard } from "./terminalUtils";
+import { copyToClipboard, isTerminalToggleShortcut } from "./terminalUtils";
 import { openExternalUrl } from "@/lib/electron";
 import { toast } from "sonner";
 
@@ -38,6 +38,7 @@ export interface XTermTerminalProps {
   onReady?: () => void;
   onSelectionChange?: (selectedText: string) => void;
   onLinkClick?: (url: string, event?: MouseEvent) => void;
+  onToggleExpand?: () => void;
   className?: string;
   interactive?: boolean;
   rawStream?: boolean;
@@ -88,6 +89,7 @@ export const XTermTerminal = forwardRef<XTermTerminalHandle, XTermTerminalProps>
       onReady,
       onSelectionChange,
       onLinkClick,
+      onToggleExpand,
       className = "",
       interactive = true,
       rawStream = false,
@@ -106,12 +108,14 @@ export const XTermTerminal = forwardRef<XTermTerminalHandle, XTermTerminalProps>
     const onReadyRef = useRef(onReady);
     const onSelectionChangeRef = useRef(onSelectionChange);
     const onLinkClickRef = useRef(onLinkClick);
+    const onToggleExpandRef = useRef(onToggleExpand);
     const interactiveRef = useRef(interactive);
     onDataRef.current = onData;
     onResizeRef.current = onResize;
     onReadyRef.current = onReady;
     onSelectionChangeRef.current = onSelectionChange;
     onLinkClickRef.current = onLinkClick;
+    onToggleExpandRef.current = onToggleExpand;
     interactiveRef.current = interactive;
 
     useEffect(() => {
@@ -217,6 +221,13 @@ export const XTermTerminal = forwardRef<XTermTerminalHandle, XTermTerminalProps>
           if (isCtrlOrCmd && event.shiftKey && isA) {
             term.selectAll();
             return false;
+          }
+
+          // 4. Toggle/expand terminal panel shortcut: Ctrl+J / Cmd+J
+          if (isTerminalToggleShortcut(event)) {
+            event.preventDefault();
+            onToggleExpandRef.current?.();
+            return false; // Prevent xterm from sending \n (LF) to the shell
           }
         }
 
