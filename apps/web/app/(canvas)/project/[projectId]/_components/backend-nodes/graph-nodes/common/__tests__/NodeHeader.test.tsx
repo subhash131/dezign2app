@@ -179,4 +179,50 @@ describe("NodeHeader", () => {
     expect(queryByRole("textbox")).toBeNull();
     expect(getByText("ExistingService")).toBeTruthy();
   });
+
+  it("displays and saves parsed snake_case table names for entity nodes", () => {
+    const onSaveSpy = vi.fn();
+    useBackendCanvasStore.setState({
+      nodes: [
+        {
+          ...baseNode,
+          id: "node-entity-1",
+          type: "entity",
+          data: { label: "test conversations" },
+        },
+      ],
+    });
+
+    const { getByText, getByRole, rerender } = render(
+      <NodeHeader
+        id="node-entity-1"
+        data={{ label: "test conversations" }}
+        nodeType="entity"
+        title="Table"
+        onSave={onSaveSpy}
+      />,
+    );
+
+    // Existing unparsed label is displayed as parsed SQL table name in the header
+    expect(getByText("test_conversations")).toBeTruthy();
+
+    rerender(
+      <NodeHeader
+        id="node-entity-1"
+        data={{ label: "" }}
+        nodeType="entity"
+        title="Table"
+        onSave={onSaveSpy}
+      />,
+    );
+
+    const input = getByRole("textbox") as HTMLInputElement;
+    act(() => {
+      fireEvent.change(input, { target: { value: "test conversations" } });
+      fireEvent.keyDown(input, { key: "Enter" });
+    });
+
+    expect(onSaveSpy).toHaveBeenCalledTimes(1);
+    expect(onSaveSpy).toHaveBeenCalledWith("test_conversations");
+  });
 });
