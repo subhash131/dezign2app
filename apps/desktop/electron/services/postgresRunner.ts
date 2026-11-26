@@ -217,7 +217,7 @@ export function resolveEnvValue(envKey: string, projectDir?: string): string | u
           return val;
         }
       }
-    } catch {}
+    } catch { }
   }
   return undefined;
 }
@@ -340,7 +340,7 @@ export async function ensurePostgresTable(
   tableName: string,
   columns?: CanvasEntityColumn[],
 ): Promise<void> {
-  const safeTable = (tableName || "records").replace(/[^a-zA-Z0-9_]/g, "") || "records";
+  const safeTable = (tableName || "records").trim().replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_]/g, "_") || "records";
 
   const checkRes = await client.query<{ exists: boolean }>(
     `SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = $1) AS exists`,
@@ -399,7 +399,7 @@ export async function ensurePostgresTable(
         await client.query(
           `ALTER TABLE "${safeTable}" ADD COLUMN IF NOT EXISTS "${colName}" ${pgType}`,
         );
-      } catch {}
+      } catch { }
     }
   }
 }
@@ -530,7 +530,7 @@ export async function executePostgresLiveOperation(
   opts: ExecutePostgresOptions,
 ): Promise<TestDbOperationResult> {
   const { client, connectionString } = createPostgresClient(opts.connection);
-  const tableName = (opts.entity?.name || "records").replace(/[^a-zA-Z0-9_]/g, "") || "records";
+  const tableName = (opts.entity?.name || "records").trim().replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_]/g, "_") || "records";
   const start = performance.now();
 
   try {
@@ -606,7 +606,7 @@ export async function executePostgresLiveOperation(
         : undefined,
     };
   } finally {
-    await client.end().catch(() => {});
+    await client.end().catch(() => { });
   }
 }
 
@@ -656,7 +656,7 @@ export async function checkPostgresConnection(
       info: { reachable: false, status: "unreachable" },
     };
   } finally {
-    await client.end().catch(() => {});
+    await client.end().catch(() => { });
   }
 }
 
@@ -664,7 +664,7 @@ export async function checkPostgresTableSync(
   payload: CheckDbTableSyncPayload,
 ): Promise<CheckDbTableSyncResult> {
   const { tableName, schema = "public", columns = [], indexes = [], foreignKeys = [] } = payload;
-  const safeTable = tableName.trim();
+  const safeTable = tableName.replace(/["\0;\\]/g, "").trim().replace(/\s+/g, "_");
   const targetSchema = schema.trim() || "public";
   const { client } = createPostgresClient(payload.connection);
 
@@ -914,7 +914,7 @@ export async function checkPostgresTableSync(
       error: err instanceof Error ? err.message : String(err),
     };
   } finally {
-    await client.end().catch(() => {});
+    await client.end().catch(() => { });
   }
 }
 
@@ -929,7 +929,7 @@ export async function applyPostgresTableSync(
     foreignKeys = [],
     prerequisiteTables = [],
   } = payload;
-  const safeTable = tableName.trim();
+  const safeTable = tableName.replace(/["\0;\\]/g, "").trim().replace(/\s+/g, "_");
   const targetSchema = schema.trim() || "public";
   const { client } = createPostgresClient(payload.connection);
 
@@ -953,7 +953,7 @@ export async function applyPostgresTableSync(
 
     // 1. Create prerequisite tables if needed
     for (const prereq of prerequisiteTables) {
-      const pTable = prereq.tableName.trim();
+      const pTable = prereq.tableName.replace(/["\0;\\]/g, "").trim().replace(/\s+/g, "_");
       const pSchema = prereq.schema?.trim() || targetSchema;
       if (pSchema && pSchema !== "public") {
         await client.query(`CREATE SCHEMA IF NOT EXISTS "${pSchema}"`);
@@ -1069,7 +1069,7 @@ export async function applyPostgresTableSync(
         } else if (!areTypesEquivalent(col.type, dbType)) {
           try {
             await client.query(`ALTER TABLE "${targetSchema}"."${safeTable}" ALTER COLUMN "${col.name}" DROP DEFAULT`);
-          } catch {}
+          } catch { }
 
           await client.query(
             `ALTER TABLE "${targetSchema}"."${safeTable}" ALTER COLUMN "${col.name}" TYPE ${targetType} USING "${col.name}"::text::${targetType}`,
@@ -1090,7 +1090,7 @@ export async function applyPostgresTableSync(
           try {
             await client.query(`ALTER TABLE "${targetSchema}"."${safeTable}" DROP COLUMN IF EXISTS "${row.column_name}" CASCADE`);
             droppedColumns.push(row.column_name);
-          } catch {}
+          } catch { }
         }
       }
     }
@@ -1137,7 +1137,7 @@ export async function applyPostgresTableSync(
         try {
           await client.query(`DROP INDEX IF EXISTS "${targetSchema}"."${dIdx.name}" CASCADE`);
           droppedIndexes.push(dIdx.name);
-        } catch {}
+        } catch { }
       }
     }
 
@@ -1204,7 +1204,7 @@ export async function applyPostgresTableSync(
         try {
           await client.query(`ALTER TABLE "${targetSchema}"."${safeTable}" DROP CONSTRAINT IF EXISTS "${dFk.name}" CASCADE`);
           droppedForeignKeys.push(dFk.name);
-        } catch {}
+        } catch { }
       }
     }
 
@@ -1228,14 +1228,14 @@ export async function applyPostgresTableSync(
       error: err instanceof Error ? err.message : String(err),
     };
   } finally {
-    await client.end().catch(() => {});
+    await client.end().catch(() => { });
   }
 }
 
 export async function dropPostgresTable(
   payload: DropDbTablePayload,
 ): Promise<DropDbTableResult> {
-  const safeTable = payload.tableName.trim();
+  const safeTable = payload.tableName.replace(/["\0;\\]/g, "").trim().replace(/\s+/g, "_");
   const { schema = "public" } = payload;
   const targetSchema = schema.trim() || "public";
   const { client } = createPostgresClient(payload.connection);
@@ -1251,15 +1251,15 @@ export async function dropPostgresTable(
       error: err instanceof Error ? err.message : String(err),
     };
   } finally {
-    await client.end().catch(() => {});
+    await client.end().catch(() => { });
   }
 }
 
 export async function renamePostgresTable(
   payload: RenameDbTablePayload,
 ): Promise<RenameDbTableResult> {
-  const oldName = payload.oldTableName.trim();
-  const newName = payload.newTableName.trim();
+  const oldName = payload.oldTableName.replace(/["\0;\\]/g, "").trim().replace(/\s+/g, "_");
+  const newName = payload.newTableName.replace(/["\0;\\]/g, "").trim().replace(/\s+/g, "_");
   const { schema = "public" } = payload;
   const targetSchema = schema.trim() || "public";
   const { client } = createPostgresClient(payload.connection);
@@ -1278,14 +1278,14 @@ export async function renamePostgresTable(
       error: err instanceof Error ? err.message : String(err),
     };
   } finally {
-    await client.end().catch(() => {});
+    await client.end().catch(() => { });
   }
 }
 
 export async function renamePostgresColumn(
   payload: RenameDbColumnPayload,
 ): Promise<RenameDbColumnResult> {
-  const table = payload.tableName.trim();
+  const table = payload.tableName.replace(/["\0;\\]/g, "").trim().replace(/\s+/g, "_");
   const oldCol = payload.oldColumnName.trim();
   const newCol = payload.newColumnName.trim();
   const { schema = "public" } = payload;
@@ -1307,6 +1307,6 @@ export async function renamePostgresColumn(
       error: err instanceof Error ? err.message : String(err),
     };
   } finally {
-    await client.end().catch(() => {});
+    await client.end().catch(() => { });
   }
 }

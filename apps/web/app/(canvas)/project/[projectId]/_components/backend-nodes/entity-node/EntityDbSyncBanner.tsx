@@ -14,6 +14,7 @@ import {
   Download,
 } from "lucide-react";
 import { BackendNode } from "@/types/canvas";
+import { toTableName } from "@/lib/compiler/utils";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { useDbSyncStore } from "@/lib/stores/dbSyncStore";
 import {
@@ -88,14 +89,21 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
   const engine = (dbData.dbEngine || "postgres").toLowerCase();
   const isSupportedEngine = engine === "postgres" || engine === "sqlite";
 
+  const normalizedTableName = toTableName(tableName || "table");
+
   // Derive foreign keys from columns or explicit prop
   const derivedForeignKeys = React.useMemo<CanvasForeignKey[]>(() => {
-    if (foreignKeys && foreignKeys.length > 0) return foreignKeys;
+    if (foreignKeys && foreignKeys.length > 0) {
+      return foreignKeys.map((fk) => ({
+        ...fk,
+        foreignTable: toTableName(fk.foreignTable),
+      }));
+    }
     return (columns || [])
       .filter((c) => c.isForeignKey && !c.isLogical && c.references?.table && c.references?.column)
       .map((c) => ({
         column: c.name,
-        foreignTable: c.references!.table,
+        foreignTable: toTableName(c.references!.table),
         foreignColumn: c.references!.column,
         onDelete: "CASCADE",
       }));
@@ -125,7 +133,7 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
     const visited = new Set<string>();
 
     for (const fk of missingFks) {
-      const targetTableName = fk.foreignTable.trim().toLowerCase();
+      const targetTableName = toTableName(fk.foreignTable);
       if (!targetTableName || visited.has(targetTableName)) continue;
       visited.add(targetTableName);
 
@@ -133,12 +141,12 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
         (n) =>
           n.type === "entity" &&
           n.id !== entityId &&
-          (n.data?.label || "").trim().toLowerCase() === targetTableName,
+          toTableName(n.data?.tableName || n.data?.label || "") === targetTableName,
       );
 
       if (targetNode && targetNode.data) {
         prereqs.push({
-          tableName: targetNode.data.label || fk.foreignTable,
+          tableName: toTableName(targetNode.data.tableName || targetNode.data.label || fk.foreignTable),
           schema: targetNode.data.schema || schema || "public",
           columns: (targetNode.data.columns || []).map((c) => ({
             name: c.name,
@@ -186,7 +194,7 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
           dbFilePath: dbData.dbFilePath,
           dbFilePathEnv: dbData.dbFilePathEnv,
         },
-        tableName,
+        tableName: normalizedTableName,
         schema,
         columns,
         indexes,
@@ -202,7 +210,7 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
           const idxMsg = res.appliedIndexes && res.appliedIndexes.length > 0
             ? ` with ${res.appliedIndexes.length} index(es)`
             : "";
-          toast.success(`Created table "${tableName}" in ${dbLabel}${idxMsg}!`);
+          toast.success(`Created table "${normalizedTableName}" in ${dbLabel}${idxMsg}!`);
         } else {
           const parts: string[] = [];
           if (res.appliedColumns.length > 0) {
@@ -269,12 +277,12 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
           dbFilePath: dbData.dbFilePath,
           dbFilePathEnv: dbData.dbFilePathEnv,
         },
-        tableName,
+        tableName: normalizedTableName,
         schema: schema || dbData.schema || "public",
       });
 
       if (res.success) {
-        toast.success(`Dropped table "${tableName}" from ${dbLabel}`);
+        toast.success(`Dropped table "${normalizedTableName}" from ${dbLabel}`);
         setShowDropConfirm(false);
         await performCheck();
       } else {

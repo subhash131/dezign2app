@@ -762,7 +762,7 @@ export async function checkDbTableSync(payload: CheckDbTableSyncPayload): Promis
           error: "node:sqlite not available in this environment",
         };
       }
-      const safeTable = payload.tableName.trim();
+      const safeTable = payload.tableName.replace(/["\0;\\]/g, "").trim().replace(/\s+/g, "_");
       const chk = db.prepare(
         "SELECT name FROM sqlite_master WHERE type='table' AND LOWER(name) = LOWER(?)"
       ).get(safeTable);
@@ -864,7 +864,7 @@ export async function applyDbTableSync(payload: ApplyDbTableSyncPayload): Promis
           error: "node:sqlite not available in this environment",
         };
       }
-      const safeTable = payload.tableName.trim();
+      const safeTable = payload.tableName.replace(/["\0;\\]/g, "").trim().replace(/\s+/g, "_");
       const chk = db.prepare(
         "SELECT name FROM sqlite_master WHERE type='table' AND LOWER(name) = LOWER(?)"
       ).get(safeTable);
@@ -916,7 +916,7 @@ export async function applyDbTableSync(payload: ApplyDbTableSyncPayload): Promis
 
 export async function dropDbTable(payload: DropDbTablePayload): Promise<DropDbTableResult> {
   const engine = (payload.engine || "postgres").toLowerCase();
-  const safeTable = payload.tableName.trim();
+  const safeTable = payload.tableName.replace(/["\0;\\]/g, "").trim().replace(/\s+/g, "_");
 
   if (engine === "sqlite") {
     try {
@@ -939,8 +939,8 @@ export async function dropDbTable(payload: DropDbTablePayload): Promise<DropDbTa
 
 export async function renameDbTable(payload: RenameDbTablePayload): Promise<RenameDbTableResult> {
   const engine = (payload.engine || "postgres").toLowerCase();
-  const oldName = payload.oldTableName.trim();
-  const newName = payload.newTableName.trim();
+  const oldName = payload.oldTableName.replace(/["\0;\\]/g, "").trim().replace(/\s+/g, "_");
+  const newName = payload.newTableName.replace(/["\0;\\]/g, "").trim().replace(/\s+/g, "_");
 
   if (engine === "sqlite") {
     try {
@@ -964,7 +964,7 @@ export async function renameDbTable(payload: RenameDbTablePayload): Promise<Rena
 
 export async function renameDbColumn(payload: RenameDbColumnPayload): Promise<RenameDbColumnResult> {
   const engine = (payload.engine || "postgres").toLowerCase();
-  const table = payload.tableName.trim();
+  const table = payload.tableName.replace(/["\0;\\]/g, "").trim().replace(/\s+/g, "_");
   const oldCol = payload.oldColumnName.trim();
   const newCol = payload.newColumnName.trim();
 

@@ -291,6 +291,50 @@ describe("databaseActions Table Sync Actions", () => {
       safeTable: "My_Table",
       targetSchema: "custom_schema",
     });
+
+    // 6. Normalizes spaces in table names to underscores so live DB matches compiled DB helpers
+    expect(resolveTableAndSchema("test table")).toEqual({
+      safeTable: "test_table",
+      targetSchema: "public",
+    });
+  });
+
+  it('should normalize table names with spaces (e.g. "test table" -> "test_table") in SQLite sync actions', async () => {
+    const applyRes = await applyDbTableSyncAction({
+      engine: "sqlite",
+      connection: { dbFilePath: TEST_ACTION_DB },
+      tableName: "test table",
+      columns: [
+        { name: "id", type: "TEXT", isPrimaryKey: true },
+        { name: "name", type: "TEXT" },
+      ],
+    });
+    expect(applyRes.success).toBe(true);
+    expect(applyRes.createdTable).toBe(true);
+
+    const checkNormalized = await checkDbTableSyncAction({
+      engine: "sqlite",
+      connection: { dbFilePath: TEST_ACTION_DB },
+      tableName: "test_table",
+      columns: [
+        { name: "id", type: "TEXT", isPrimaryKey: true },
+        { name: "name", type: "TEXT" },
+      ],
+    });
+    expect(checkNormalized.tableExists).toBe(true);
+    expect(checkNormalized.inSync).toBe(true);
+
+    const checkWithSpace = await checkDbTableSyncAction({
+      engine: "sqlite",
+      connection: { dbFilePath: TEST_ACTION_DB },
+      tableName: "test table",
+      columns: [
+        { name: "id", type: "TEXT", isPrimaryKey: true },
+        { name: "name", type: "TEXT" },
+      ],
+    });
+    expect(checkWithSpace.tableExists).toBe(true);
+    expect(checkWithSpace.inSync).toBe(true);
   });
 
   it("should sync table indexes via server actions", async () => {

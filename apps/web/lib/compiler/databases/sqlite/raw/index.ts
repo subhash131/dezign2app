@@ -79,6 +79,7 @@ function generateTableHelpers(
       ? allNodes.find((n) => n.id === tableNode.data.tableRef)?.data?.label
       : undefined) ||
     tableNode.data?.label ||
+    tableNode.data?.tableName ||
     "table";
   const tableName = toTableName(rawLabel);
   const varName = toVarName(tableName);
@@ -194,7 +195,7 @@ function generateTableHelpers(
 
   // DB operations defined on entity node (or fallback defaults)
   const defaultDbOps = generateDefaultDbOperations(
-    tableNode.data.label || "table",
+    tableNode.data.label || tableNode.data.tableName || "table",
     cols,
     tableNode.data.indexes || [],
     allNodes,
@@ -641,12 +642,12 @@ export function compileRawSqliteDatabase(
   const viewsToRefresh: Array<{ view: string; target: string }> = [];
 
   tables.forEach((tableNode) => {
-    const tableName = toTableName(tableNode.data.label || "table");
+    const tableName = toTableName(tableNode.data.label || tableNode.data.tableName || "table");
     createdTableNames.add(tableName.toLowerCase());
   });
 
   tables.forEach((tableNode) => {
-    const tableName = toTableName(tableNode.data.label || "table");
+    const tableName = toTableName(tableNode.data.label || tableNode.data.tableName || "table");
     const cols = getColumns(tableNode, allNodes);
 
     tableSchemas[tableName] = cols
@@ -1022,7 +1023,7 @@ try {
   const seenExportedSymbols = new Set<string>();
 
   tables.forEach((tableNode) => {
-    const tableName = toTableName(tableNode.data.label || "table");
+    const tableName = toTableName(tableNode.data.label || tableNode.data.tableName || "table");
     const varName = toVarName(tableName);
     const { code, fns, typeExports, valueExports } = generateTableHelpers(tableNode, tables);
 
