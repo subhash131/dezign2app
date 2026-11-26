@@ -1,5 +1,5 @@
 import { PersonaSeed } from "../../types/testPersona";
-import { isUuid, toValidUuid } from "../../utils";
+import { isUuid, toTableName, toValidUuid } from "../../utils";
 
 export interface GeneratePersonaSeedOptions {
   knownTableNames?: Set<string>;
@@ -121,9 +121,14 @@ export function generatePersonaSeedStatements(
       if (!rawTableName) continue;
 
       const lowerTable = rawTableName.toLowerCase();
+      const normalizedTable = toTableName(rawTableName).toLowerCase();
 
       // Table validation: if knownTableNames is provided, skip unknown tables
-      if (knownTableNamesLower && !knownTableNamesLower.has(lowerTable)) {
+      if (
+        knownTableNamesLower &&
+        !knownTableNamesLower.has(lowerTable) &&
+        !knownTableNamesLower.has(normalizedTable)
+      ) {
         continue;
       }
 
@@ -236,7 +241,10 @@ export function generatePersonaSeedStatements(
         .map(([, val]) => escapeSqlValue(val, dialect))
         .join(", ");
 
-      const cleanTableName = rawTableName.replace(/"/g, "");
+      const cleanTableName =
+        knownTableNamesLower && !knownTableNamesLower.has(lowerTable) && knownTableNamesLower.has(normalizedTable)
+          ? normalizedTable
+          : rawTableName.replace(/"/g, "").trim().replace(/\s+/g, "_");
 
       if (dialect === "sqlite") {
         if (options.upsert) {

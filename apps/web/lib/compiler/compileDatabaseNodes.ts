@@ -93,7 +93,7 @@ export function compileDatabaseNodes(
     const existingEntityNames = new Set<string>();
     entityNodes.forEach((n) => {
       const resolved = resolveMasterEntityNode(n, allNodes);
-      const raw = resolved.data?.label || resolved.data?.tableRef || "";
+      const raw = resolved.data?.label || resolved.data?.tableName || resolved.data?.tableRef || "";
       if (!raw) return;
       const clean = toTableName(raw);
       existingEntityNames.add(clean.toLowerCase());
@@ -141,7 +141,7 @@ export function compileDatabaseNodes(
         }
 
         const existingEntity = entityNodes.find((n) => {
-          const raw = (n.data?.label || n.data?.tableRef || "").trim();
+          const raw = (n.data?.label || n.data?.tableName || n.data?.tableRef || "").trim();
           if (!raw) return false;
           const normRaw = raw.toLowerCase().replace(/[-_\s]/g, "");
           const normDef = def.name.toLowerCase().replace(/[-_\s]/g, "");

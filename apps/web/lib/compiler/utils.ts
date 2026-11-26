@@ -199,7 +199,9 @@ export function toPascalCase(str: string): string {
 
 export function toTableName(str: string): string {
   if (!str) return "table";
-  const snake = str.replace(/([a-z0-9])([A-Z])/g, "$1_$2");
+  const trimmed = str.trim();
+  if (!trimmed) return "table";
+  const snake = trimmed.replace(/([a-z0-9])([A-Z])/g, "$1_$2");
   return toSqlIdentifier(snake.toLowerCase(), "table");
 }
 
@@ -221,7 +223,7 @@ export function resolveMasterEntityNode<
  * proxies and resolving `db_ref` nodes to their master `entity` before deduplicating by table name.
  */
 export function deduplicateEntityTableNodes<
-  T extends { id: string; type?: string; data?: { label?: string; tableRef?: string } },
+  T extends { id: string; type?: string; data?: { label?: string; tableName?: string; tableRef?: string } },
 >(allNodes: T[]): T[] {
   const entityNodes = allNodes.filter((n) => n.type === "entity");
   const dbRefNodes = allNodes.filter((n) => n.type === "db_ref");
@@ -231,7 +233,9 @@ export function deduplicateEntityTableNodes<
 
   for (const node of prioritized) {
     const resolved = resolveMasterEntityNode(node, allNodes);
-    const name = toTableName(resolved.data?.label || resolved.data?.tableRef || "table");
+    const name = toTableName(
+      resolved.data?.label || resolved.data?.tableName || resolved.data?.tableRef || "table",
+    );
     if (seenTableNames.has(name)) continue;
     seenTableNames.add(name);
     tables.push(resolved);

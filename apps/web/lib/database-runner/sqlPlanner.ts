@@ -21,7 +21,7 @@ export function extractTableName(op: TestDbOperationPayload["operation"]): strin
   }
 
   const idMatch = id.match(
-    /^auto-(?:find-all|find-by-id|create|update|delete)-(?:by-[a-z0-9_]+-)?(.+)$/i,
+    /^auto-(?:find-all|find-by-id|create|update|upsert|delete)-(?:by-[a-z0-9_]+-)?(.+)$/i,
   );
   if (idMatch && idMatch[1]) {
     return idMatch[1].toLowerCase();

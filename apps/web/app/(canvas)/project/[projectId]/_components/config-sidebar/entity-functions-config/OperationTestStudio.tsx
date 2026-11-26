@@ -7,6 +7,7 @@ import {
 import { BackendNode } from "@/types/canvas";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { sanitizeForConvex } from "@/lib/utils/convexSanitizer";
+import { toTableName } from "@/lib/compiler/utils";
 import {
   generateDefaultParams,
   TestStudioHeader,
@@ -366,7 +367,7 @@ export const OperationTestStudio: React.FC<OperationTestStudioProps> = React.mem
         engine,
         connection: connectionConfig,
         entity: {
-          name: label,
+          name: toTableName(label),
           schema: effectiveSchema,
           columns,
         },

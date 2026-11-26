@@ -519,4 +519,50 @@ describe("compilePostgresDatabase", () => {
     expect(postRoute!.content).not.toContain("createConversation(");
     expect(postRoute!.content).not.toContain("@workspace/db/helpers/conversations");
   });
+
+  it('should normalize "test table" consistently to "test_table" across DDL, sync, and CRUD helpers for Postgres and SQLite', () => {
+    const testTableEntity: BackendNode = {
+      id: "ent-test-table",
+      type: "entity",
+      fractionalIndex: "a0",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "test table",
+        columns: [
+          { name: "id", type: "UUID", isPrimaryKey: true, isNotNull: true },
+          { name: "title", type: "TEXT", isNotNull: true },
+        ],
+      },
+    };
+
+    // 1. SQLite (no explicit dbNode)
+    const sqliteCompiled = compileDatabaseNodes([testTableEntity], []);
+    const sqliteConn = sqliteCompiled.files.find((f) => f.filename.endsWith("connection.ts"));
+    const sqliteHelper = sqliteCompiled.files.find((f) => f.filename.endsWith("helpers/testTable.ts"));
+    expect(sqliteConn?.content).toContain('CREATE TABLE IF NOT EXISTS \\"test_table\\"');
+    expect(sqliteConn?.content).not.toContain('\\"test table\\"');
+    expect(sqliteHelper?.content).toContain("FROM test_table");
+    expect(sqliteHelper?.content).toContain("INTO test_table");
+    expect(sqliteHelper?.content).toContain("UPDATE test_table");
+    expect(sqliteHelper?.content).not.toContain("test table");
+
+    // 2. Postgres
+    const pgDbNode: BackendNode = {
+      id: "db-pg",
+      type: "database",
+      fractionalIndex: "a0",
+      position: { x: 0, y: 0 },
+      data: { label: "pg", dbEngine: "postgres" },
+    };
+    const pgCompiled = compileDatabaseNodes([pgDbNode, { ...testTableEntity, data: { ...testTableEntity.data, databaseId: "db-pg" } }], []);
+    const pgSchema = pgCompiled.files.find((f) => f.filename.endsWith("schema.sql"));
+    const pgHelper = pgCompiled.files.find((f) => f.filename.endsWith("helpers/testTable.ts"));
+    const pgSync = pgCompiled.files.find((f) => f.filename.endsWith("sync.ts"));
+    expect(pgSchema?.content).toContain('CREATE TABLE IF NOT EXISTS "test_table"');
+    expect(pgSchema?.content).not.toContain('"test table"');
+    expect(pgHelper?.content).toContain('FROM "test_table"');
+    expect(pgHelper?.content).toContain('INTO "test_table"');
+    expect(pgHelper?.content).toContain('UPDATE "test_table"');
+    expect(pgSync?.content).toContain("def?.tableName || tableName.trim().replace(/\\s+/g, \"_\")");
+  });
 });
