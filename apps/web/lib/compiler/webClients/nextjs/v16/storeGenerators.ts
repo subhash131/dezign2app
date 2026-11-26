@@ -1166,12 +1166,21 @@ ${allImpls.map((l) => `  ${l.trim()}`).join("\n")}
 }));`;
 
   const customImports = new Set<string>();
-  fields.forEach((f) => {
-    const rawType = (f.type || "string").trim();
+  const collectCustomImport = (raw?: string) => {
+    const rawType = (raw || "string").trim();
     const baseType = rawType.replace(/\[\]$/, "").trim();
-    if (baseType && !STANDARD_TS_TYPES.has(baseType) && !STANDARD_TS_TYPES.has(rawType)) {
+    if (
+      baseType &&
+      /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(baseType) &&
+      !STANDARD_TS_TYPES.has(baseType) &&
+      !STANDARD_TS_TYPES.has(rawType)
+    ) {
       customImports.add(baseType);
     }
+  };
+  fields.forEach((f) => collectCustomImport(f.type));
+  (store.actions || []).forEach((act) => {
+    (act.parameters || []).forEach((p) => collectCustomImport(p.type));
   });
 
   const typesImportStmt =

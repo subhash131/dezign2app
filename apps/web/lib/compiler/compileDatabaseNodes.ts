@@ -12,7 +12,15 @@ import {
   PAYMENTS_SUBSCRIPTION_TABLE_DEFINITION,
   CanvasEntityColumn,
 } from "@workspace/canvas";
-import { toTableName, toVarName, toSingular, toPlural } from "./utils";
+import {
+  toTableName,
+  toVarName,
+  toSingular,
+  toPlural,
+  normalizeDbEngine,
+  toDbFolderBase,
+  resolveMasterEntityNode,
+} from "./utils";
 import { compileRawSqliteDatabase } from "./databases/sqlite/raw";
 import { compilePostgresDatabase } from "./databases/postgres";
 import { compileMysqlDatabase } from "./databases/mysql";
@@ -21,45 +29,14 @@ import { generateCentralDbTest } from "./generators/databaseTestGenerator";
 import { PersonaSeed } from "./types/testPersona";
 
 /**
- * Normalizes a database engine string.
- */
-function normalizeEngine(engine?: string): string {
-  const e = (engine || "").toLowerCase().trim();
-  if (e.includes("postgres") || e.includes("pg") || e.includes("cockroach")) {
-    return "postgres";
-  }
-  if (e.includes("mysql") || e.includes("mariadb")) {
-    return "mysql";
-  }
-  if (e.includes("convex")) {
-    return "convex";
-  }
-  if (e.includes("mongo")) {
-    return "mongodb";
-  }
-  if (e.includes("redis")) {
-    return "redis";
-  }
-  return "sqlite";
-}
-
-/**
  * Resolves a unique, clean folder name for a database package under packages/db/.
  */
 function resolveDbFolderName(dbNode: BackendNode, existingFolders: Set<string>): string {
-  const engine = normalizeEngine(
-    dbNode.data?.dbEngine ||
-    dbNode.data?.provider ||
-    dbNode.data?.dbType,
+  const base = toDbFolderBase(
+    dbNode.data?.label,
+    dbNode.data?.dbEngine || dbNode.data?.provider || dbNode.data?.dbType,
+    dbNode.id,
   );
-  const label = dbNode.data?.label || dbNode.data?.dbEngine || dbNode.id || "db";
-  let base = label
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "") || "db";
-  if (base === "db") {
-    base = `${engine}-db`;
-  }
   let folder = base || "db";
   let counter = 1;
   while (existingFolders.has(folder)) {
@@ -115,7 +92,8 @@ export function compileDatabaseNodes(
   if (effectiveAuthNodes.length > 0) {
     const existingEntityNames = new Set<string>();
     entityNodes.forEach((n) => {
-      const raw = n.data?.label || n.data?.tableRef || "";
+      const resolved = resolveMasterEntityNode(n, allNodes);
+      const raw = resolved.data?.label || resolved.data?.tableRef || "";
       if (!raw) return;
       const clean = toTableName(raw);
       existingEntityNames.add(clean.toLowerCase());
@@ -403,9 +381,13 @@ export function compileDatabaseNodes(
     }
   }
 
+  const existingEntityIds = new Set(
+    effectiveNodes.filter((n) => n.type === "entity").map((n) => n.id),
+  );
   const allEntityNodes = effectiveNodes.filter(
     (n) =>
-      (n.type === "entity" || n.type === "db_ref") &&
+      ((n.type === "entity") ||
+        (n.type === "db_ref" && (!n.data?.tableRef || !existingEntityIds.has(n.data.tableRef)))) &&
       n.data?.dbType !== "redis",
   );
 
@@ -496,7 +478,7 @@ export function compileDatabaseNodes(
   // Compile each database node in isolation
   dbNodes.forEach((dbNode) => {
     const dbEntities = entitiesByDbId.get(dbNode.id) || [];
-    const engine = normalizeEngine(
+    const engine = normalizeDbEngine(
       dbNode.data?.dbEngine ||
       dbNode.data?.provider ||
       dbNode.data?.dbType,

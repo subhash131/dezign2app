@@ -1,7 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { compilePostgresDatabase } from "../databases/postgres";
-import type { BackendNode } from "@/types/canvas";
-import type { CanvasEntityColumn } from "@workspace/canvas/types";
+import { compileDatabaseNodes } from "../compileDatabaseNodes";
+import { compileServiceNode } from "../compileServiceNode";
+import { generateEntitiesModule } from "../generators/typesGenerator/entitiesGenerator";
+import type { BackendNode, BackendEdge } from "@/types/canvas";
+import type { CanvasEntityColumn, Endpoint } from "@workspace/canvas/types";
 
 
 
@@ -293,5 +296,227 @@ describe("compilePostgresDatabase", () => {
 
     const interfaceUpdatedAt = rateLimitInterface.match(/\bupdatedAt\??:/g);
     expect(interfaceUpdatedAt?.length).toBe(1);
+  });
+
+  it("should uniformly parse lowercase names with spaces across DDL, types, and CRUD helpers", () => {
+    const dbNode: BackendNode = {
+      id: "node-db-test",
+      type: "database",
+      fractionalIndex: "a0",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "test db",
+        dbEngine: "postgres",
+      },
+    };
+
+    const testUserEntity: BackendNode = {
+      id: "node-test-user",
+      type: "entity",
+      fractionalIndex: "a1",
+      position: { x: 0, y: 200 },
+      data: {
+        label: "test user",
+        databaseId: "node-db-test",
+        columns: [
+          { name: "id", type: "UUID", isPrimaryKey: true, isNotNull: true },
+          { name: "created_at", type: "TIMESTAMPTZ" },
+          { name: "updated_at", type: "TIMESTAMPTZ" },
+          { name: "username", type: "TEXT", isNotNull: true },
+        ],
+      },
+    };
+
+    const edge: BackendEdge = {
+      id: "edge-db-entity",
+      source: "node-db-test",
+      target: "node-test-user",
+      type: "database-connection",
+      fractionalIndex: "a0",
+    };
+
+    const compiled = compileDatabaseNodes([dbNode, testUserEntity], [edge]);
+    const dbPkg = compiled.packages?.find((p) => p.packageName === "@workspace/db-test-db");
+    expect(dbPkg).toBeDefined();
+    expect(dbPkg?.packageFolder).toBe("test-db");
+
+    const schemaFile = dbPkg?.files.find((f) => f.filename === "schema.sql");
+    expect(schemaFile?.content).toContain('CREATE TABLE IF NOT EXISTS "test_user"');
+
+    const helperFile = dbPkg?.files.find((f) => f.filename === "helpers/testUser.ts");
+    expect(helperFile).toBeDefined();
+    const code = helperFile!.content;
+
+    // Interfaces and Data types
+    expect(code).toContain("export interface TestUser {");
+    expect(code).toContain("export interface CreateTestUserData {");
+    expect(code).toContain("export type UpdateTestUserData = Partial<CreateTestUserData>;");
+    expect(code).toContain("export type UpsertTestUserData = CreateTestUserData;");
+
+    // CRUD operations use uniform PascalCase and snake_case SQL table name
+    expect(code).toContain("export async function findAllTestUsers(limit = 20, offset = 0): Promise<TestUser[]>");
+    expect(code).toContain("export async function findTestUserById(id: string): Promise<TestUser | null>");
+    expect(code).toContain("CreateTestUserData): Promise<TestUser>");
+    expect(code).toContain("UpdateTestUserData): Promise<TestUser | null>");
+    expect(code).toContain("UpsertTestUserData): Promise<TestUser>");
+    expect(code).toContain("export async function createTestUser(");
+    expect(code).toContain("export async function updateTestUser(");
+    expect(code).toContain("export async function upsertTestUser(");
+    expect(code).toContain("export async function deleteTestUserById(");
+    expect(code).toContain('FROM "test_user"');
+    expect(code).toContain('INTO "test_user"');
+    expect(code).toContain('UPDATE "test_user"');
+
+    // Regression check: must never emit unparsed "Testuser" / "testuser"
+    expect(code).not.toContain("Testuser");
+    expect(code).not.toContain('"testuser"');
+    expect(code).not.toContain("createTestuser");
+    expect(code).not.toContain("updateTestuser");
+    expect(code).not.toContain("upsertTestuser");
+
+    // Shared @workspace/types entities module matches
+    const entitiesCode = generateEntitiesModule([testUserEntity]);
+    expect(entitiesCode).toContain("export interface TestUser {");
+    expect(entitiesCode).toContain("export type CreateTestUserData =");
+  });
+
+  it("should dereference stale db_ref nodes and re-resolve renamed entity pipeline steps (conversations -> conversati)", () => {
+    const pgDbNode: BackendNode = {
+      id: "db-pg",
+      type: "database",
+      fractionalIndex: "a0",
+      position: { x: 0, y: 0 },
+      data: { label: "Primary PostgreSQL DB", dbEngine: "postgres" },
+    };
+
+    const renamedEntity: BackendNode = {
+      id: "entity-conv",
+      type: "entity",
+      fractionalIndex: "a1",
+      position: { x: 200, y: 0 },
+      data: {
+        label: "conversati",
+        tableName: "conversati",
+        databaseId: "db-pg",
+        columns: [
+          { name: "id", type: "UUID", isPrimaryKey: true, isNotNull: true },
+          { name: "title", type: "TEXT", isNotNull: true },
+          { name: "created_by", type: "UUID", isNotNull: true },
+        ],
+        indexes: [
+          { name: "idx_creator", columns: "created_by", isUnique: false },
+        ],
+      },
+    };
+
+    // Stale db_ref left with old label "conversations" and no columns
+    const staleDbRef: BackendNode = {
+      id: "db-ref-conv",
+      type: "db_ref",
+      fractionalIndex: "a2",
+      position: { x: 200, y: 150 },
+      data: {
+        label: "conversations",
+        tableRef: "entity-conv",
+      },
+    };
+
+    const serviceNode: BackendNode = {
+      id: "srv-ai",
+      type: "service",
+      fractionalIndex: "a3",
+      position: { x: 400, y: 0 },
+      data: { label: "ai-service", techStack: "express", port: "8080" },
+    };
+
+    const allNodes = [pgDbNode, renamedEntity, staleDbRef, serviceNode];
+    const allEdges: BackendEdge[] = [
+      { id: "e-db", source: "db-pg", target: "entity-conv", type: "database-connection", fractionalIndex: "a0" },
+      { id: "e-srv", source: "srv-ai", target: "db-ref-conv", type: "database-connection", fractionalIndex: "a1" },
+    ];
+
+    const compiledDb = compileDatabaseNodes(allNodes, allEdges);
+    const dbFilePaths = compiledDb.files.map((f) => f.filename);
+    // Must NOT emit ghost helpers/conversation.ts or helpers/conversations.ts from the stale db_ref
+    expect(dbFilePaths.some((f) => f.includes("helpers/conversation.ts"))).toBe(false);
+    expect(dbFilePaths.some((f) => f.includes("helpers/conversations.ts"))).toBe(false);
+    expect(dbFilePaths.some((f) => f.endsWith("helpers/conversati.ts"))).toBe(true);
+
+    const endpoints: (Endpoint & { nodeId: string })[] = [
+      {
+        id: "ep-get",
+        nodeId: "srv-ai",
+        name: "/conversations/user",
+        type: "GET",
+        pipelineSteps: [
+          {
+            id: "step-get",
+            name: "getByCreator",
+            type: "db_operation",
+            enabled: true,
+            outputVariable: "rows",
+            tableNodeId: "entity-conv",
+            dbRefNodeId: "db-ref-conv",
+            operationId: "auto-index-conversations-idx_creator-0",
+            functionRef: {
+              name: "findAllConversationsByCreator",
+              importPath: "@workspace/db/helpers/conversations",
+              signature: "findAllConversationsByCreator(createdBy: string): Promise<Conversations[]>",
+            },
+            inputBindings: [{ argName: "createdBy", source: { kind: "inline", value: "u1" } }],
+          },
+        ],
+      },
+      {
+        id: "ep-post",
+        nodeId: "srv-ai",
+        name: "/create-conversation",
+        type: "POST",
+        pipelineSteps: [
+          {
+            id: "step-post",
+            name: "createConv",
+            type: "db_operation",
+            enabled: true,
+            outputVariable: "created",
+            tableNodeId: "entity-conv",
+            operationId: "auto-create-conversations",
+            functionRef: {
+              name: "createConversation",
+              importPath: "@workspace/db/helpers/conversations",
+              signature: "createConversation({ title, created_by }: CreateConversationsData): Promise<Conversations>",
+            },
+            inputBindings: [
+              { argName: "title", source: { kind: "req_body", field: "title" } },
+              { argName: "created_by", source: { kind: "req_body", field: "created_by" } },
+            ],
+          },
+        ],
+      },
+    ];
+
+    const compiledSvc = compileServiceNode(
+      serviceNode,
+      endpoints,
+      [],
+      allNodes,
+      allEdges,
+      [],
+      compiledDb.reusableFunctions,
+    );
+
+    const getRoute = compiledSvc.files.find((f) => f.filename.includes("getConversationsUser.ts"));
+    expect(getRoute).toBeDefined();
+    expect(getRoute!.content).toContain('@workspace/db/helpers/conversati"');
+    expect(getRoute!.content).toContain("findAllConversatisByCreator");
+    expect(getRoute!.content).not.toContain("findAllConversationsByCreator");
+    expect(getRoute!.content).not.toContain("@workspace/db/helpers/conversations");
+
+    const postRoute = compiledSvc.files.find((f) => f.filename.includes("postCreateConversation.ts"));
+    expect(postRoute).toBeDefined();
+    expect(postRoute!.content).toContain('@workspace/db/helpers/conversati"');
+    expect(postRoute!.content).toContain("createConversati(");
+    expect(postRoute!.content).not.toContain("createConversation(");
+    expect(postRoute!.content).not.toContain("@workspace/db/helpers/conversations");
   });
 });

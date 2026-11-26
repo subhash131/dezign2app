@@ -4,7 +4,7 @@ import type {
   CompiledDatabaseResult,
   ReusableFunction,
 } from "@workspace/canvas/types";
-import { toTableName, toVarName, toSingular, toPlural } from "../../utils";
+import { toTableName, toVarName, toSingular, toPlural, deduplicateEntityTableNodes } from "../../utils";
 import type { PostgresOptions } from "./types";
 import { getColumns } from "./utils";
 import {
@@ -62,20 +62,10 @@ export function compilePostgresDatabase(
   _allEdges: BackendEdge[],
   options: PostgresOptions = {},
 ): CompiledDatabaseResult {
-  const entityNodes = allNodes.filter(
-    (n) => n.type === "entity" || n.type === "db_ref",
-  );
-
   const files: CompiledFile[] = [];
   const allReusableFunctions: ReusableFunction[] = [];
 
-  const seenTableNames = new Set<string>();
-  const tables: BackendNode[] = entityNodes.filter((node) => {
-    const name = toTableName(node.data?.label || node.data?.tableRef || "table");
-    if (seenTableNames.has(name)) return false;
-    seenTableNames.add(name);
-    return true;
-  });
+  const tables: BackendNode[] = deduplicateEntityTableNodes(allNodes);
 
   const packageName = options.packageName || "@workspace/db-postgres";
   const connEnvKey =
@@ -120,7 +110,7 @@ export function compilePostgresDatabase(
   tables.forEach((tableNode) => {
     const tableName = toTableName(tableNode.data?.label || "table");
     createdTableNames.add(tableName.toLowerCase());
-    const cols = getColumns(tableNode);
+    const cols = getColumns(tableNode, allNodes);
     const rawIndexes = (tableNode.data?.indexes || []).filter(
       (idx: { name?: string; columns?: string }) => idx && idx.columns,
     );

@@ -1,5 +1,7 @@
 import { BackendNode } from "@/types/canvas";
-import { toVarName } from "../../../compiler/utils";
+import { toVarName, normalizeDbEngine } from "../../../compiler/utils";
+import { resolvePipelineDbSteps } from "../../../compiler/resolveDbStepRefs";
+import { getEntityDbOperations } from "../../../utils/entityOperationsHelper";
 import { applyNodeChanges, NodeChange } from "@xyflow/react";
 import { pageRouteToUrl, pageRouteToFolderPath, arePageRoutesEqual } from "@workspace/canvas";
 import { BackendCanvasState, SyncServiceTypesSummary } from "../types";
@@ -293,9 +295,10 @@ export const createNodeSlice = (
       });
     }
 
-    // 1. Sync entity table rename references across referencing columns
+    // 1. Sync entity table rename references across referencing columns, db_ref nodes, and state_store nodes
+    const nodesBeforeSync = get().nodes;
     const currentNodes = syncEntityRenameReferences(
-      get().nodes,
+      nodesBeforeSync,
       id,
       updatedNode,
       effectiveChanges,
@@ -405,6 +408,84 @@ export const createNodeSlice = (
           ...(update.pendingNodeUpserts || []),
           companionRes.typesNode,
         ];
+      }
+    }
+    // 4b. Synchronize entity rename/column updates to dbOperations and endpoint/event pipeline steps
+    if (
+      updated.type === "entity" &&
+      effectiveChanges.data &&
+      (("label" in effectiveChanges.data &&
+        effectiveChanges.data.label !== updatedNode.data?.label) ||
+        ("tableName" in effectiveChanges.data &&
+          effectiveChanges.data.tableName !== updatedNode.data?.tableName))
+    ) {
+      const parentDb = nextNodes.find(
+        (n) => n.type === "database" && (n.id === updated.data?.databaseId || n.nodeId === updated.data?.databaseId),
+      );
+      const engine = normalizeDbEngine(
+        parentDb?.data?.dbEngine || parentDb?.data?.provider || parentDb?.data?.dbType,
+      );
+      const refreshedOps = getEntityDbOperations({ ...updated, data: { ...updated.data } }, nextNodes, engine);
+      const refreshedEntity: BackendNode = {
+        ...updated,
+        data: {
+          ...updated.data,
+          dbOperations: refreshedOps,
+        },
+      };
+      nextNodes = nextNodes.map((n) => (n.id === id ? refreshedEntity : n));
+      update.nodes = nextNodes;
+      const syncedModifiedNodes = nextNodes.filter((n) => {
+        if (n.id === id) return false;
+        const prev = nodesBeforeSync.find((pn) => pn.id === n.id);
+        return prev !== n;
+      });
+      const syncedIds = new Set([id, ...syncedModifiedNodes.map((n) => n.id)]);
+      update.pendingNodeUpserts = [
+        ...(update.pendingNodeUpserts || []).filter((n) => !syncedIds.has(n.id)),
+        refreshedEntity,
+        ...syncedModifiedNodes,
+      ];
+
+      const currentEndpoints = get().endpoints;
+      const modifiedEndpoints: typeof currentEndpoints = [];
+      const nextEndpoints = currentEndpoints.map((ep) => {
+        if (!ep.pipelineSteps || ep.pipelineSteps.length === 0) return ep;
+        const resolvedSteps = resolvePipelineDbSteps(ep.pipelineSteps, nextNodes);
+        if (
+          resolvedSteps &&
+          resolvedSteps.some((s, idx) => s !== ep.pipelineSteps![idx])
+        ) {
+          const nextEp = { ...ep, pipelineSteps: resolvedSteps };
+          modifiedEndpoints.push(nextEp);
+          return nextEp;
+        }
+        return ep;
+      });
+      if (modifiedEndpoints.length > 0) {
+        update.endpoints = nextEndpoints;
+        update.pendingEndpointUpserts = [
+          ...get().pendingEndpointUpserts,
+          ...modifiedEndpoints,
+        ];
+      }
+
+      const currentEvents = get().events || [];
+      let eventsChanged = false;
+      const nextEvents = currentEvents.map((ev) => {
+        if (!ev.pipelineSteps || ev.pipelineSteps.length === 0) return ev;
+        const resolvedSteps = resolvePipelineDbSteps(ev.pipelineSteps, nextNodes);
+        if (
+          resolvedSteps &&
+          resolvedSteps.some((s, idx) => s !== ev.pipelineSteps![idx])
+        ) {
+          eventsChanged = true;
+          return { ...ev, pipelineSteps: resolvedSteps };
+        }
+        return ev;
+      });
+      if (eventsChanged) {
+        update.events = nextEvents;
       }
     }
     set(update);
