@@ -1,7 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import {
   ReactFlow,
-  Background,
   Controls,
   MiniMap,
   Panel,
@@ -232,7 +231,6 @@ export function SchemaView({ projectId }: SchemaViewProps) {
         minZoom={0.01}
         maxZoom={3}
       >
-        <Background gap={12} size={1} />
         <Controls
           position="bottom-left"
           fitViewOptions={{ padding: 0.35, maxZoom: 0.65 }}
