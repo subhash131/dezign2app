@@ -183,7 +183,7 @@ export function handleDatabaseRefConnect({
 
     if (!hasMatchingStep) {
       const tableLabel = selectedTable?.data?.label || selectedTable?.data?.tableRef || dbRefNode.data?.label || "table";
-      const importPath = `@workspace/db/helpers/${toTableName(tableLabel)}`;
+      const importPath = `@workspace/db/helpers/${toVarName(toTableName(tableLabel))}`;
       const defaultVar = targetOp ? `${toVarName(targetOp.name)}Result` : "dbResult";
 
       let varName = defaultVar;
@@ -199,25 +199,25 @@ export function handleDatabaseRefConnect({
 
       const returnTypeStr = targetOp
         ? (targetOp.code && targetOp.code.trim() ? inferDbOperationReturnType(targetOp.code) : null) ||
-          targetOp.returnType ||
-          "any"
+        targetOp.returnType ||
+        "any"
         : undefined;
 
       const isArrayOp = Boolean(
         targetOp &&
-          (targetOp.kind === "findAll" ||
-            (targetOp.name || "").toLowerCase().includes("findall") ||
-            (returnTypeStr && (returnTypeStr.includes("[]") || returnTypeStr.includes("Array<")))),
+        (targetOp.kind === "findAll" ||
+          (targetOp.name || "").toLowerCase().includes("findall") ||
+          (returnTypeStr && (returnTypeStr.includes("[]") || returnTypeStr.includes("Array<")))),
       );
 
       const schemaFields: StepSchemaField[] = isArrayOp
         ? []
         : targetOp?.kind === "delete"
-        ? [
+          ? [
             { name: "success", type: "boolean", required: true },
             { name: "message", type: "string", required: true },
           ]
-        : (selectedTable?.data?.columns || []).map((c: CanvasEntityColumn) => ({
+          : (selectedTable?.data?.columns || []).map((c: CanvasEntityColumn) => ({
             name: c.name,
             type: c.type || "string",
             required: Boolean(c.isPrimaryKey || c.isNotNull),
@@ -269,11 +269,11 @@ export function handleDatabaseRefConnect({
         operationId: targetOp?.id,
         functionRef: targetOp
           ? {
-              name: targetOp.name,
-              importPath,
-              signature: liveSig,
-              returnIsArray: isArrayOp,
-            }
+            name: targetOp.name,
+            importPath,
+            signature: liveSig,
+            returnIsArray: isArrayOp,
+          }
           : undefined,
         outputSchema: schemaFields,
         inputBindings: nextBindings,
@@ -283,10 +283,10 @@ export function handleDatabaseRefConnect({
       const nextPipelineSteps =
         returnIdx !== -1
           ? [
-              ...existingSteps.slice(0, returnIdx),
-              newStep,
-              ...existingSteps.slice(returnIdx),
-            ]
+            ...existingSteps.slice(0, returnIdx),
+            newStep,
+            ...existingSteps.slice(returnIdx),
+          ]
           : [...existingSteps, newStep];
 
       const currentDbIds =
@@ -337,19 +337,19 @@ export function handleDatabaseRefConnect({
       edges: currentEdges.map((e) =>
         e.id === newEdge.id
           ? {
-              ...e,
-              source: dbRefNode.id,
-              target: serviceNode.id,
-              sourceHandle: expectedSourceHandle,
-              targetHandle: expectedTargetHandle,
-              data: {
-                ...e.data,
-                isDbOperation: true,
-                operationName: targetOp?.name,
-                tableRef: selectedTable?.id,
-                dbRefNodeId: dbRefNode.id,
-              },
-            }
+            ...e,
+            source: dbRefNode.id,
+            target: serviceNode.id,
+            sourceHandle: expectedSourceHandle,
+            targetHandle: expectedTargetHandle,
+            data: {
+              ...e.data,
+              isDbOperation: true,
+              operationName: targetOp?.name,
+              tableRef: selectedTable?.id,
+              dbRefNodeId: dbRefNode.id,
+            },
+          }
           : e,
       ),
     });
@@ -374,7 +374,7 @@ export function handleDatabaseRefConnect({
 
     if (!hasMatchingStep) {
       const tableLabel = selectedTable?.data?.label || selectedTable?.data?.tableRef || dbRefNode.data?.label || "table";
-      const importPath = `@workspace/db/helpers/${toTableName(tableLabel)}`;
+      const importPath = `@workspace/db/helpers/${toVarName(toTableName(tableLabel))}`;
       const defaultVar = targetOp ? `${toVarName(targetOp.name)}Result` : "dbResult";
 
       let varName = defaultVar;
@@ -390,25 +390,25 @@ export function handleDatabaseRefConnect({
 
       const returnTypeStr = targetOp
         ? (targetOp.code && targetOp.code.trim() ? inferDbOperationReturnType(targetOp.code) : null) ||
-          targetOp.returnType ||
-          "any"
+        targetOp.returnType ||
+        "any"
         : undefined;
 
       const isArrayOp = Boolean(
         targetOp &&
-          (targetOp.kind === "findAll" ||
-            (targetOp.name || "").toLowerCase().includes("findall") ||
-            (returnTypeStr && (returnTypeStr.includes("[]") || returnTypeStr.includes("Array<")))),
+        (targetOp.kind === "findAll" ||
+          (targetOp.name || "").toLowerCase().includes("findall") ||
+          (returnTypeStr && (returnTypeStr.includes("[]") || returnTypeStr.includes("Array<")))),
       );
 
       const schemaFields: StepSchemaField[] = isArrayOp
         ? []
         : targetOp?.kind === "delete"
-        ? [
+          ? [
             { name: "success", type: "boolean", required: true },
             { name: "message", type: "string", required: true },
           ]
-        : (selectedTable?.data?.columns || []).map((c: CanvasEntityColumn) => ({
+          : (selectedTable?.data?.columns || []).map((c: CanvasEntityColumn) => ({
             name: c.name,
             type: c.type || "string",
             required: Boolean(c.isPrimaryKey || c.isNotNull),
@@ -426,11 +426,11 @@ export function handleDatabaseRefConnect({
         operationId: targetOp?.id,
         functionRef: targetOp
           ? {
-              name: targetOp.name,
-              importPath,
-              signature: liveSig,
-              returnIsArray: isArrayOp,
-            }
+            name: targetOp.name,
+            importPath,
+            signature: liveSig,
+            returnIsArray: isArrayOp,
+          }
           : undefined,
         outputSchema: schemaFields,
         inputBindings: [],
@@ -470,19 +470,19 @@ export function handleDatabaseRefConnect({
       edges: currentEdges.map((e) =>
         e.id === newEdge.id
           ? {
-              ...e,
-              source: dbRefNode.id,
-              target: serviceNode.id,
-              sourceHandle: expectedSourceHandle,
-              targetHandle: expectedTargetHandle,
-              data: {
-                ...e.data,
-                isDbOperation: true,
-                operationName: targetOp?.name,
-                tableRef: selectedTable?.id,
-                dbRefNodeId: dbRefNode.id,
-              },
-            }
+            ...e,
+            source: dbRefNode.id,
+            target: serviceNode.id,
+            sourceHandle: expectedSourceHandle,
+            targetHandle: expectedTargetHandle,
+            data: {
+              ...e.data,
+              isDbOperation: true,
+              operationName: targetOp?.name,
+              tableRef: selectedTable?.id,
+              dbRefNodeId: dbRefNode.id,
+            },
+          }
           : e,
       ),
     });

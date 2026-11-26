@@ -203,6 +203,42 @@ export function toTableName(str: string): string {
   return toSqlIdentifier(snake.toLowerCase(), "table");
 }
 
+/**
+ * Resolves a `db_ref` node to its underlying master `entity` node when present in `allNodes`.
+ */
+export function resolveMasterEntityNode<
+  T extends { id: string; type?: string; data?: { tableRef?: string } },
+>(node: T, allNodes: T[]): T {
+  if (node.type === "db_ref" && node.data?.tableRef) {
+    const master = allNodes.find((n) => n.id === node.data?.tableRef);
+    if (master) return master;
+  }
+  return node;
+}
+
+/**
+ * Filters `allNodes` to unique entity table nodes, prioritizing `entity` nodes over `db_ref`
+ * proxies and resolving `db_ref` nodes to their master `entity` before deduplicating by table name.
+ */
+export function deduplicateEntityTableNodes<
+  T extends { id: string; type?: string; data?: { label?: string; tableRef?: string } },
+>(allNodes: T[]): T[] {
+  const entityNodes = allNodes.filter((n) => n.type === "entity");
+  const dbRefNodes = allNodes.filter((n) => n.type === "db_ref");
+  const prioritized = [...entityNodes, ...dbRefNodes];
+  const seenTableNames = new Set<string>();
+  const tables: T[] = [];
+
+  for (const node of prioritized) {
+    const resolved = resolveMasterEntityNode(node, allNodes);
+    const name = toTableName(resolved.data?.label || resolved.data?.tableRef || "table");
+    if (seenTableNames.has(name)) continue;
+    seenTableNames.add(name);
+    tables.push(resolved);
+  }
+  return tables;
+}
+
 export function toEnvVarName(str: string): string {
   if (!str) return "SERVICE";
   const clean = str.replace(/[^a-zA-Z0-9]/g, "_").replace(/([a-z])([A-Z])/g, "$1_$2");
@@ -229,6 +265,40 @@ export function toFolderName(label: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9-]+/g, "")
     .replace(/^-+|-+$/g, "") || "item";
+}
+
+export function normalizeDbEngine(engine?: string): string {
+  const e = (engine || "").toLowerCase().trim();
+  if (e.includes("postgres") || e.includes("pg") || e.includes("cockroach")) {
+    return "postgres";
+  }
+  if (e.includes("mysql") || e.includes("mariadb")) {
+    return "mysql";
+  }
+  if (e.includes("convex")) {
+    return "convex";
+  }
+  if (e.includes("mongo")) {
+    return "mongodb";
+  }
+  if (e.includes("redis")) {
+    return "redis";
+  }
+  return "sqlite";
+}
+
+export function toDbFolderBase(label?: string, engine?: string, fallbackId?: string): string {
+  const normEngine = normalizeDbEngine(engine);
+  const rawLabel = label || engine || fallbackId || "db";
+  let base =
+    rawLabel
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "db";
+  if (base === "db") {
+    base = `${normEngine}-db`;
+  }
+  return base;
 }
 
 /**

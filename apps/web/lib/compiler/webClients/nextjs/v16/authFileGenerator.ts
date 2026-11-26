@@ -3,6 +3,7 @@ import { DEFAULT_BETTER_AUTH_VERSION, arePageRoutesEqual } from "@workspace/canv
 import { Endpoint, AnyMessagingResource, CompiledFile } from "@workspace/canvas/types";
 import { PageInfo } from "./types";
 import { compileAuth } from "../../../compileAuth";
+import { toDbFolderBase } from "../../../utils";
 import { generateAuthClient } from "../../../generators/auth-providers/better-auth/v1.6/generateAuthClient";
 
 export interface GenerateAuthFilesParams {
@@ -617,7 +618,11 @@ export function ensureDatabaseDependencies(
         const isSingleDb = dbNodes.length <= 1;
         const dbPkgName = isSingleDb
           ? "@workspace/db"
-          : `@workspace/db-${(dbNodes[0]?.data?.label || "db").toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+          : `@workspace/db-${toDbFolderBase(
+              dbNodes[0]?.data?.label,
+              dbNodes[0]?.data?.dbEngine || dbNodes[0]?.data?.provider || dbNodes[0]?.data?.dbType,
+              dbNodes[0]?.id,
+            )}`;
         pkgObj.dependencies[dbPkgName] = "workspace:*";
         pkgObj.dependencies["@workspace/types"] = "workspace:*";
 

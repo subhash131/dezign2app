@@ -14,7 +14,8 @@ import { compileNextjsV16Service } from "./services/nextjs/v16";
 import { compileDatabaseNodes } from "./compileDatabaseNodes";
 import { compileKafkaNodes, isServiceConnectedToKafka } from "./compileKafkaNodes";
 import { compileRedisNodes, isServiceConnectedToRedis } from "./compileRedisNodes";
-import { cleanUnusedImports, toTableName, toSingular, toPlural, normalizeEndpointRequestBody } from "./utils";
+import { cleanUnusedImports, toTableName, toSingular, toPlural, normalizeEndpointRequestBody, resolveMasterEntityNode } from "./utils";
+import { resolvePipelineDbSteps } from "./resolveDbStepRefs";
 
 /**
  * Determines whether a service node is actively configured to use WebSocket connections.
@@ -318,7 +319,8 @@ export function compileServiceNode(
     const existingDbNodeIds = new Set(entityAndDbNodes.map((n) => n.id));
     const existingEntityNames = new Set(
       entityAndDbNodes.flatMap((n) => {
-        const raw = n.data?.label || n.data?.tableRef || "";
+        const resolved = resolveMasterEntityNode(n, effectiveAllNodes);
+        const raw = resolved.data?.label || resolved.data?.tableRef || "";
         const clean = toTableName(raw).toLowerCase();
         return [raw.toLowerCase(), clean, toSingular(clean), toPlural(clean)].filter(Boolean);
       }),
@@ -374,15 +376,20 @@ export function compileServiceNode(
       }
 
       if (pipelineSteps && pipelineSteps.length > 0) {
-        const cleanedSteps = pipelineSteps.filter((step) => {
+        const resolvedSteps =
+          resolvePipelineDbSteps(pipelineSteps, effectiveAllNodes, dbFunctions) || pipelineSteps;
+        const cleanedSteps = resolvedSteps.filter((step) => {
           if (step.type === "db_operation") {
             if (step.tableNodeId && !existingNodeIds.has(step.tableNodeId)) {
+              return false;
+            }
+            if (step.dbRefNodeId && !existingNodeIds.has(step.dbRefNodeId)) {
               return false;
             }
             if (step.databaseId && !existingNodeIds.has(step.databaseId)) {
               return false;
             }
-            if (step.functionRef?.importPath?.includes("/helpers/")) {
+            if (!step.tableNodeId && !step.dbRefNodeId && step.functionRef?.importPath?.includes("/helpers/")) {
               const helperMatch = step.functionRef.importPath.match(/\/helpers\/([^/]+)$/);
               if (helperMatch && helperMatch[1]) {
                 const helperName = helperMatch[1].toLowerCase();
@@ -398,7 +405,10 @@ export function compileServiceNode(
           }
           return true;
         });
-        if (cleanedSteps.length !== pipelineSteps.length) {
+        if (
+          cleanedSteps.length !== pipelineSteps.length ||
+          cleanedSteps.some((s, idx) => s !== pipelineSteps![idx])
+        ) {
           pipelineSteps = cleanedSteps;
           changed = true;
         }

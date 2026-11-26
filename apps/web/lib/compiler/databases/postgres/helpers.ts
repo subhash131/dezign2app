@@ -3,7 +3,7 @@ import type {
   ReusableFunction,
   DbOperationFunction,
 } from "@workspace/canvas/types";
-import { toTableName, toVarName, toSingular, toPlural } from "../../utils";
+import { toTableName, toVarName, toSingular, toPlural, resolveMasterEntityNode } from "../../utils";
 import {
   generateDefaultDbOperationsForEngine,
   getEntityDbOperations,
@@ -329,7 +329,8 @@ export function generatePostgresTableHelpers(
   allNodes: BackendNode[] = [],
   packageName: string = "@workspace/db",
 ): TableHelperResult {
-  const rawName = tableNode.data?.label || tableNode.data?.tableRef || "table";
+  const resolvedNode = resolveMasterEntityNode(tableNode, allNodes);
+  const rawName = resolvedNode.data?.label || resolvedNode.data?.tableRef || "table";
   const tableName = toTableName(rawName);
   const singularName = toSingular(tableName);
   const pluralName = toPlural(tableName);
@@ -337,7 +338,7 @@ export function generatePostgresTableHelpers(
   const pascalSingular = toPascal(singularName);
   const pascalPlural = toPascal(pluralName);
   const varName = toVarName(singularName);
-  const rawCols = getColumns(tableNode);
+  const rawCols = getColumns(resolvedNode, allNodes);
   // Deduplicate columns by variable name to prevent TS2300 duplicate identifier errors
   const seenColVars = new Set<string>();
   const cols = rawCols.filter((c) => {
@@ -416,20 +417,26 @@ export function generatePostgresTableHelpers(
   }
   if (pascalPlural !== pascal && pascalPlural !== pascalSingular) {
     code += `export type ${pascalPlural} = ${pascal};\n`;
+    code += `export type Create${pascalPlural}Data = Create${pascal}Data;\n`;
+    code += `export type Update${pascalPlural}Data = Update${pascal}Data;\n`;
+    code += `export type Upsert${pascalPlural}Data = Upsert${pascal}Data;\n`;
     declaredTypes.add(pascalPlural);
+    declaredTypes.add(`Create${pascalPlural}Data`);
+    declaredTypes.add(`Update${pascalPlural}Data`);
+    declaredTypes.add(`Upsert${pascalPlural}Data`);
   }
   code += `\n`;
 
   // ── Canvas DB Operations ──────────────────────────────────────────────────
   const dbOps: DbOperationFunction[] = getEntityDbOperations(
-    tableNode,
+    resolvedNode,
     allNodes,
     "postgres",
   );
   const defaultOps = generateDefaultDbOperationsForEngine(
-    tableNode.data?.label || "table",
+    rawName,
     cols,
-    tableNode.data?.indexes || [],
+    resolvedNode.data?.indexes || [],
     allNodes,
     "postgres",
   );
