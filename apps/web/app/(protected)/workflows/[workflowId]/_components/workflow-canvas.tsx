@@ -2,8 +2,6 @@
 
 import React, { useEffect } from "react";
 import {
-  Background,
-  BackgroundVariant,
   Controls,
   MiniMap,
   ReactFlow,
@@ -274,12 +272,6 @@ export const WorkflowCanvas = () => {
           animated: false,
         }}
       >
-        <Background
-          variant={BackgroundVariant.Dots}
-          gap={20}
-          size={1.2}
-          color="var(--color-border)"
-        />
         <MiniMap
           pannable
           zoomable

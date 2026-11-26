@@ -2,10 +2,8 @@ import React, { useCallback, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   ReactFlow,
-  Background,
   Controls,
   MiniMap,
-  BackgroundVariant,
   Panel,
   MarkerType,
 } from "@xyflow/react";
@@ -798,12 +796,6 @@ export function LangGraphStudioView({
               interactionWidth: 20,
             }}
           >
-            <Background
-              variant={BackgroundVariant.Dots}
-              gap={20}
-              color="#3f3f46"
-              size={1.5}
-            />
             <Controls
               className="!bg-background !border-border !text-foreground"
               style={{
