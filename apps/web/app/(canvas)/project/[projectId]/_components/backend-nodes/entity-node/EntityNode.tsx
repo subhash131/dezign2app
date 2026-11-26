@@ -276,9 +276,21 @@ export const EntityNode = React.memo(({ id, data, selected }: NodeProps<BackendN
   };
 
   const handleSaveName = (finalName: string) => {
-    const cleanNew = finalName.trim();
-    const currentName = data.tableName || data.label || "";
-    if (!cleanNew || cleanNew === currentName) return;
+    const cleanNew = isVector ? finalName.trim() : toTableName(finalName);
+    const currentRaw = data.tableName || data.label || "";
+    const currentName = isVector ? currentRaw : toTableName(currentRaw);
+    if (!cleanNew || cleanNew === currentName) {
+      if (!isVector && finalName.trim() && data.label !== cleanNew) {
+        updateNode(id, {
+          data: {
+            ...data,
+            label: cleanNew,
+            tableName: cleanNew,
+          },
+        });
+      }
+      return;
+    }
 
     if (hasLiveConnection && currentName) {
       setPendingRename({ oldName: currentName, newName: cleanNew });
