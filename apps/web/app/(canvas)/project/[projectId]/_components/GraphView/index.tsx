@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
   ReactFlow,
-  Background,
   MiniMap,
   Connection,
   useReactFlow,
@@ -907,7 +906,6 @@ export function GraphView({ projectId, projectName }: GraphViewProps) {
           }
         }}
       >
-        <Background gap={12} size={1} />
         <GraphControls
           minZoom={0.01}
           maxZoom={3}
