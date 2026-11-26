@@ -447,5 +447,55 @@ describe("dbSyncStore", () => {
       expect(databaseService.checkDbTableSync).toHaveBeenCalledTimes(1);
       expect(useDbSyncStore.getState().validatingDatabases["db-1"]).toBeUndefined();
     });
+
+    it('should normalize entity table name "test table" to "test_table" when validating', async () => {
+      const dbNode: BackendNode = {
+        id: "db-1",
+        fractionalIndex: "a0",
+        type: "database",
+        position: { x: 0, y: 0 },
+        data: {
+          label: "Primary Postgres",
+          dbEngine: "postgres",
+          connectionString: "postgresql://postgres:postgres@localhost:5432/postgres",
+        },
+      };
+      const entity: BackendNode = {
+        id: "ent-space",
+        fractionalIndex: "a1",
+        type: "entity",
+        position: { x: 0, y: 100 },
+        data: {
+          label: "test table",
+          tableName: "test table",
+          databaseId: "db-1",
+          columns: [{ name: "id", type: "UUID", isPrimaryKey: true }],
+        },
+      };
+
+      useBackendCanvasStore.setState({ nodes: [dbNode, entity] });
+
+      vi.mocked(databaseService.checkDbTableSync).mockResolvedValueOnce({
+        success: true,
+        serverReachable: true,
+        tableExists: false,
+        inSync: false,
+        missingColumns: [{ name: "id", type: "UUID" }],
+        extraColumns: [],
+        existingColumns: [],
+        missingIndexes: [],
+        extraIndexes: [],
+        existingIndexes: [],
+        missingForeignKeys: [],
+        extraForeignKeys: [],
+      });
+
+      await useDbSyncStore.getState().validateEntity("ent-space");
+      expect(databaseService.checkDbTableSync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tableName: "test_table",
+        }),
+      );
+    });
   });
 });

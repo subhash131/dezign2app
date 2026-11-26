@@ -6,6 +6,7 @@ import {
   CanvasForeignKey,
 } from "@/lib/services/databaseService";
 import { BackendNode } from "@/types/canvas";
+import { toTableName } from "@/lib/compiler/utils";
 import { toast } from "sonner";
 
 export interface EntitySyncState {
@@ -238,9 +239,10 @@ export const useDbSyncStore = create<DbSyncStore>((set, get) => ({
     const dbInfo = getEntityDbConnectionInfo(entityNode, allNodes);
     if (!dbInfo) return null;
 
-    const tableName =
+    const rawTableName =
       entityNode.data?.tableName || entityNode.data?.label || "";
-    if (!tableName) return null;
+    if (!rawTableName) return null;
+    const tableName = toTableName(rawTableName);
 
     set((state) => ({
       entitySyncStatus: {
@@ -267,7 +269,10 @@ export const useDbSyncStore = create<DbSyncStore>((set, get) => ({
     });
 
     try {
-      const foreignKeys = deriveEntityForeignKeys(entityNode);
+      const foreignKeys = deriveEntityForeignKeys(entityNode).map((fk) => ({
+        ...fk,
+        foreignTable: toTableName(fk.foreignTable),
+      }));
       const checkPromise = checkDbTableSync({
         engine: dbInfo.engine,
         connection: dbInfo.connection,
@@ -432,7 +437,7 @@ export const useDbSyncStore = create<DbSyncStore>((set, get) => ({
 
       const table = attachedTables[i];
       if (!table) continue;
-      const tableName = table.data?.tableName || table.data?.label || table.id;
+      const tableName = toTableName(table.data?.tableName || table.data?.label || table.id);
 
       try {
         const res = await get().validateEntity(table.id, controller.signal);

@@ -108,7 +108,7 @@ export function compilePostgresDatabase(
   }> = {};
 
   tables.forEach((tableNode) => {
-    const tableName = toTableName(tableNode.data?.label || "table");
+    const tableName = toTableName(tableNode.data?.label || tableNode.data?.tableName || "table");
     createdTableNames.add(tableName.toLowerCase());
     const cols = getColumns(tableNode, allNodes);
     const rawIndexes = (tableNode.data?.indexes || []).filter(
@@ -285,7 +285,7 @@ export function compilePostgresDatabase(
 
   // ── 8. Per-table helpers ──────────────────────────────────────────────────
   tables.forEach((tableNode) => {
-    const rawName = tableNode.data?.label || tableNode.data?.tableRef || "table";
+    const rawName = tableNode.data?.label || tableNode.data?.tableName || tableNode.data?.tableRef || "table";
     const tableName = toTableName(rawName);
     const varName = toVarName(toSingular(tableName));
 

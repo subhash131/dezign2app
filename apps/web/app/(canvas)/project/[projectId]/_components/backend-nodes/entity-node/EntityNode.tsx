@@ -29,6 +29,7 @@ import { NodeHeader } from "../graph-nodes/common";
 import { EntityRenameDialog } from "./EntityRenameDialog";
 import { renameDbTable } from "@/lib/services/databaseService";
 import { syncDerivedTypesForEntity } from "@/lib/stores/backendCanvas/packageTypesSync";
+import { toTableName } from "@/lib/compiler/utils";
 import { toast } from "sonner";
 
 export const EntityNode = React.memo(({ id, data, selected }: NodeProps<BackendNode>) => {
@@ -244,8 +245,8 @@ export const EntityNode = React.memo(({ id, data, selected }: NodeProps<BackendN
           dbFilePath: dbData.dbFilePath,
           dbFilePathEnv: dbData.dbFilePathEnv,
         },
-        oldTableName: currentName,
-        newTableName: finalName,
+        oldTableName: toTableName(currentName),
+        newTableName: toTableName(finalName),
         schema: data.schema || parentDbNode?.data?.schema || "public",
       });
 
@@ -607,7 +608,7 @@ export const EntityNode = React.memo(({ id, data, selected }: NodeProps<BackendN
       {!isVector && (
         <EntityDbSyncBanner
           entityId={id}
-          tableName={data.label || "table"}
+          tableName={toTableName(data.tableName || data.label || "table")}
           schema={data.schema || parentDbNode?.data?.schema || "public"}
           columns={columns}
           indexes={indexes}

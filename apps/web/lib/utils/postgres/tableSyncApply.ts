@@ -108,9 +108,9 @@ export async function applyForeignKeysToTable(
 
   // Add missing foreign keys
   for (const missingFk of missingFks) {
-    const colName = (missingFk.column || "").replace(/[^a-zA-Z0-9_]/g, "");
-    const targetTable = (missingFk.foreignTable || "").replace(/[^a-zA-Z0-9_]/g, "");
-    const targetCol = (missingFk.foreignColumn || "").replace(/[^a-zA-Z0-9_]/g, "");
+    const colName = (missingFk.column || "").trim().replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_]/g, "");
+    const targetTable = (missingFk.foreignTable || "").trim().replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_]/g, "");
+    const targetCol = (missingFk.foreignColumn || "").trim().replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_]/g, "");
     const targetFkSchema =
       (missingFk.foreignSchema || targetSchema).replace(/[^a-zA-Z0-9_]/g, "").toLowerCase() || "public";
 

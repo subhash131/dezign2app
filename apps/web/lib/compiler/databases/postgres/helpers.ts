@@ -330,7 +330,7 @@ export function generatePostgresTableHelpers(
   packageName: string = "@workspace/db",
 ): TableHelperResult {
   const resolvedNode = resolveMasterEntityNode(tableNode, allNodes);
-  const rawName = resolvedNode.data?.label || resolvedNode.data?.tableRef || "table";
+  const rawName = resolvedNode.data?.label || resolvedNode.data?.tableName || resolvedNode.data?.tableRef || "table";
   const tableName = toTableName(rawName);
   const singularName = toSingular(tableName);
   const pluralName = toPlural(tableName);

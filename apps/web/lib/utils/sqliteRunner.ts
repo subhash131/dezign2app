@@ -41,7 +41,12 @@ export function resolveSqlitePath(dbFilePath = "dev.db", projectDir?: string): s
  * Sanitize SQL identifier against injection.
  */
 export function sanitizeIdentifier(identifier: string, fallback = "item"): string {
-  const cleaned = identifier.replace(/[^a-zA-Z0-9_]/g, "");
+  const cleaned = identifier
+    .trim()
+    .replace(/\s+/g, "_")
+    .replace(/[^a-zA-Z0-9_]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^[^a-zA-Z_]+/, "");
   return cleaned || fallback;
 }
 
@@ -1539,7 +1544,7 @@ export function dropSqliteTable(
   tableName: string,
   projectDir?: string,
 ): SqliteDropTableResult {
-  const safeTable = tableName.replace(/[^a-zA-Z0-9_]/g, "");
+  const safeTable = sanitizeIdentifier(tableName, "");
   if (!safeTable) {
     return {
       success: false,
@@ -1595,8 +1600,8 @@ export function renameSqliteTable(
   newTableName: string,
   projectDir?: string,
 ): SqliteRenameTableResult {
-  const safeOld = oldTableName.replace(/[^a-zA-Z0-9_]/g, "");
-  const safeNew = newTableName.replace(/[^a-zA-Z0-9_]/g, "");
+  const safeOld = sanitizeIdentifier(oldTableName, "");
+  const safeNew = sanitizeIdentifier(newTableName, "");
 
   if (!safeOld || !safeNew) {
     return {
@@ -1659,9 +1664,9 @@ export function renameSqliteColumn(
   newColumnName: string,
   projectDir?: string,
 ): SqliteRenameColumnResult {
-  const safeTable = tableName.replace(/[^a-zA-Z0-9_]/g, "");
-  const safeOldCol = oldColumnName.replace(/[^a-zA-Z0-9_]/g, "");
-  const safeNewCol = newColumnName.replace(/[^a-zA-Z0-9_]/g, "");
+  const safeTable = sanitizeIdentifier(tableName, "");
+  const safeOldCol = sanitizeIdentifier(oldColumnName, "");
+  const safeNewCol = sanitizeIdentifier(newColumnName, "");
 
   if (!safeTable || !safeOldCol || !safeNewCol) {
     return {
