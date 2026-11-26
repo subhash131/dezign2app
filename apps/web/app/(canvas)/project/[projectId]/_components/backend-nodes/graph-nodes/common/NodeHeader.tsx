@@ -23,6 +23,7 @@ import {
   arePageRoutesEqual,
 } from "@workspace/canvas";
 import { LocalInput } from "./LocalInput";
+import { toTableName } from "@/lib/compiler/utils";
 import { toast } from "sonner";
 
 export interface DuplicateCheckResult {
@@ -90,11 +91,14 @@ export function checkNodeNameDuplicate(
 
   // 3. Database Entity (Table): collides with other entities
   if (nodeType === "entity") {
+    const normLower = toTableName(trimmed).toLowerCase();
     const conflict = nodes.find(
       (n) =>
         n.id !== id &&
         n.type === "entity" &&
-        (n.data?.label || "").trim().toLowerCase() === lower,
+        (n.data?.dbType === "vector"
+          ? (n.data?.label || "").trim().toLowerCase() === lower
+          : toTableName(n.data?.label || n.data?.tableName || "").toLowerCase() === normLower),
     );
     if (conflict) {
       return { isDuplicate: true, conflictType: "Table", conflictNodeId: conflict.id };
@@ -178,8 +182,16 @@ export const NodeHeader = React.memo(({
     useShallow((s) => checkNodeNameDuplicate(id, data.label, nodeType, s.nodes, s.edges)),
   );
 
+  const isSqlEntity = nodeType === "entity" && data?.dbType !== "vector";
+  const resolvedDisplayLabel =
+    !data.label || data.label.trim() === ""
+      ? ""
+      : isSqlEntity
+        ? toTableName(data.label)
+        : data.label;
+
   const [isEditing, setIsEditing] = useState(!data.label || data.label.trim() === "");
-  const [name, setName] = useState(data.label || "");
+  const [name, setName] = useState(resolvedDisplayLabel);
   const inputRef = React.useRef<HTMLInputElement>(null);
   const skipBlurSaveRef = React.useRef(false);
 
@@ -191,11 +203,11 @@ export const NodeHeader = React.memo(({
   }, [id, name, isEditing, nodeType]);
 
   React.useEffect(() => {
-    setName(data.label || "");
+    setName(resolvedDisplayLabel);
     if (!data.label || data.label.trim() === "") {
       setIsEditing(true);
     }
-  }, [data.label]);
+  }, [data.label, resolvedDisplayLabel]);
 
   React.useEffect(() => {
     if (isEditing) {
@@ -249,11 +261,15 @@ export const NodeHeader = React.memo(({
           ? inputRef.current.value
           : name;
     const normalized =
-      nodeType === "webPage" ? baseValue.replace(/\s+/g, "-") : baseValue;
+      nodeType === "webPage"
+        ? baseValue.replace(/\s+/g, "-")
+        : isSqlEntity
+          ? baseValue.replace(/\s+/g, "_")
+          : baseValue;
     let trimmed = normalized.trim();
     if (!trimmed) {
       if (data.label && data.label.trim() !== "") {
-        setName(data.label);
+        setName(resolvedDisplayLabel);
         setIsEditing(false);
         return;
       }
@@ -276,6 +292,8 @@ export const NodeHeader = React.memo(({
     let finalLabel = trimmed;
     if (nodeType === "webPage") {
       finalLabel = parsePageRoute(finalLabel) || finalLabel;
+    } else if (isSqlEntity) {
+      finalLabel = toTableName(finalLabel);
     }
 
     const { nodes: latestNodes, edges: latestEdges } = useBackendCanvasStore.getState();
@@ -300,7 +318,7 @@ export const NodeHeader = React.memo(({
       removeNode();
       return;
     }
-    setName(data.label);
+    setName(resolvedDisplayLabel);
     setIsEditing(false);
   };
 
@@ -365,6 +383,8 @@ export const NodeHeader = React.memo(({
                   if (nodeType === "webPage") {
                     // In real-time, replace spaces with hyphen for Next.js route format
                     val = val.replace(/\s+/g, "-");
+                  } else if (isSqlEntity) {
+                    val = val.replace(/\s+/g, "_");
                   }
                   setName(val);
                 }}
@@ -406,7 +426,7 @@ export const NodeHeader = React.memo(({
               className="flex flex-col cursor-pointer flex-1 min-w-0"
               onClick={() => {
                 skipBlurSaveRef.current = false;
-                setName(data.label || "");
+                setName(resolvedDisplayLabel);
                 setIsEditing(true);
               }}
             >
@@ -438,7 +458,7 @@ export const NodeHeader = React.memo(({
                   isDuplicate && "text-red-600 dark:text-red-400 font-bold",
                 )}
               >
-                {data.label || "Untitled"}
+                {resolvedDisplayLabel || "Untitled"}
               </span>
               {isDuplicate && (
                 <span className="text-[9px] text-red-500 dark:text-red-400 font-medium flex items-center gap-1 mt-0.5">

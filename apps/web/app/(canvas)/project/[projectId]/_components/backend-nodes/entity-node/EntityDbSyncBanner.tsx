@@ -238,7 +238,7 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
           if (res.droppedForeignKeys && res.droppedForeignKeys.length > 0) {
             parts.push(`removed ${res.droppedForeignKeys.length} FK(s)`);
           }
-          toast.success(`Updated "${tableName}" in ${dbLabel}: ${parts.join(", ") || "synced"}!`);
+          toast.success(`Updated "${normalizedTableName}" in ${dbLabel}: ${parts.join(", ") || "synced"}!`);
         }
         if (res.error) {
           toast.warning(res.error);
@@ -286,7 +286,7 @@ export const EntityDbSyncBanner: React.FC<EntityDbSyncBannerProps> = ({
         setShowDropConfirm(false);
         await performCheck();
       } else {
-        toast.error(`Failed to drop table "${tableName}": ${res.error || "Unknown error"}`);
+        toast.error(`Failed to drop table "${normalizedTableName}": ${res.error || "Unknown error"}`);
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Error dropping table");
