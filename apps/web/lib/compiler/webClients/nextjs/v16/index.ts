@@ -15,6 +15,7 @@ import {
   JsonValue,
 } from "@workspace/canvas/types";
 import { generateWebClientE2ETests } from "../../../generators/testGenerator";
+import { toDbFolderBase } from "../../../utils";
 
 import {
   LinkedEndpointInfo,
@@ -42,6 +43,7 @@ import {
   ensureTransformerDependencies,
 } from "./pageFileGenerator";
 import { generateZustandStores, toPascalCase } from "./storeGenerators";
+import { resolveStoresEntityTypeRefs } from "./resolveStoreTypeRefs";
 import { generateBrowserStorageHelper } from "./browserStorageGenerator";
 import { resolveAppProviders } from "./providerGenerators";
 import { isServiceAssociatedWithWebApp } from "./serviceResolver";
@@ -495,7 +497,13 @@ export function compileNextjsV16WebClient(
         s.customTypes = canvasCustomTypes;
       }
     });
-    files.push(...generateZustandStores(allStores, { localStorePaths, customTypes: canvasCustomTypes }));
+    const resolvedStores = resolveStoresEntityTypeRefs(allStores, {
+      allNodes: enrichedAllNodes,
+      endpoints,
+      allActionsInApp,
+      allEdges,
+    });
+    files.push(...generateZustandStores(resolvedStores, { localStorePaths, customTypes: canvasCustomTypes }));
   }
 
   // 2.6 Resolve Browser Storage Nodes (localStorage / sessionStorage)
@@ -593,7 +601,11 @@ export function compileNextjsV16WebClient(
   const isSingleDb = dbNodes.length <= 1;
   const dbPackageName = isSingleDb
     ? "@workspace/db"
-    : `@workspace/db-${(dbNodes[0]?.data?.label || "db").toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+    : `@workspace/db-${toDbFolderBase(
+        dbNodes[0]?.data?.label,
+        dbNodes[0]?.data?.dbEngine || dbNodes[0]?.data?.provider || dbNodes[0]?.data?.dbType,
+        dbNodes[0]?.id,
+      )}`;
 
   const hasTransformers =
     enrichedWebClientNodes.some((p) => {
@@ -915,7 +927,13 @@ export function compileNextjsV16WebClient(
       storage: "memory",
       scope: "global",
     };
-    files.push(...generateZustandStores([fallbackStore], { customTypes: canvasCustomTypes }));
+    const [resolvedFallbackStore] = resolveStoresEntityTypeRefs([fallbackStore], {
+      allNodes: enrichedAllNodes,
+      endpoints,
+      allActionsInApp,
+      allEdges,
+    });
+    files.push(...generateZustandStores([resolvedFallbackStore || fallbackStore], { customTypes: canvasCustomTypes }));
   }
 
   // Ensure package.json includes zustand dependency if stores are referenced

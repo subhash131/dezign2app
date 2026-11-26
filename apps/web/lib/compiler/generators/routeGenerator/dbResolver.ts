@@ -1,7 +1,7 @@
 import { Endpoint, TargetDbOperation, ReusableFunction } from "@workspace/canvas/types";
 import { BackendNode, BackendEdge } from "@/types/canvas";
 import { getEntityDbOperations } from "@/lib/utils/entityOperationsHelper";
-import { toFolderName } from "../../utils";
+import { toFolderName, toTableName, toVarName, toSingular } from "../../utils";
 
 function isValidDbOpKind(kind: string): kind is ReusableFunction["kind"] {
   return (
@@ -149,7 +149,7 @@ export function pickDbFunctionsForEndpoint(
 
     if (targetEntityNode) {
       const ops = getEntityDbOperations(targetEntityNode, allNodes);
-      const varName = rawTableName.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const varName = toVarName(toSingular(toTableName(rawTableName)));
       let importPath = "@workspace/redis";
       if (isRedis) {
         const targetDbId = targetEntityNode?.data?.databaseId;

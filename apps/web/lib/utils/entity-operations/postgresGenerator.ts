@@ -13,11 +13,12 @@ export function generatePostgresDbOperations(
   indexes: { name: string; columns: string; isUnique?: boolean }[] = [],
   _allNodes: BackendNode[] = [],
 ): DbOperationFunction[] {
-  const rawCleanLabel = (label || "").trim().replace(/[^a-zA-Z0-9_]/g, "");
-  const tableName = rawCleanLabel || toTableName(label || "table");
+  const tableName = toTableName(label || "table");
+  const singularName = toSingular(tableName);
+  const pluralName = toPlural(tableName);
   const pascal = toPascal(tableName);
-  const pascalSingular = toSingular(pascal);
-  const pascalPlural = toPlural(pascal);
+  const pascalSingular = toPascal(singularName);
+  const pascalPlural = toPascal(pluralName);
 
   const columns = rawColumns.map((c) => ({
     ...c,

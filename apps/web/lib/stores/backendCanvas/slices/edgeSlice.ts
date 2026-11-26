@@ -275,9 +275,6 @@ export const createEdgeSlice = (
     // 1. Synchronize Database, Redis, and Auth nodes
     handleDatabaseConnect(context);
 
-    // 1.5. Handle DatabaseTableRefNode (db_ref) -> ServiceNode connections
-    handleDatabaseRefConnect(context);
-
     // 2. Synchronize Event Broker IDs
     handleEventBrokerConnect(context);
 
@@ -308,7 +305,10 @@ export const createEdgeSlice = (
       return;
     }
 
-    // 6. Handle LangGraph connections
+    // 6. Handle DatabaseTableRefNode (db_ref) -> ServiceNode connections
+    handleDatabaseRefConnect(context);
+
+    // 7. Handle LangGraph connections
     handleLangGraphConnect(context);
 
     // 7. Handle Redis Cache connections

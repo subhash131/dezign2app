@@ -7,7 +7,7 @@ import {
   CanvasDatabaseNodeData,
 } from "@workspace/canvas/types";
 import { sqlColumnToTsType, isSqlNumericType, isSqlBooleanType } from "@workspace/canvas/constants";
-import { toTableName, toVarName, toSqlIdentifier, toSingular, toPlural } from "../../utils";
+import { toTableName, toVarName, toSqlIdentifier, toSingular, toPlural, deduplicateEntityTableNodes } from "../../utils";
 import { generateDatabaseConnectionTest } from "../../generators/databaseTestGenerator";
 
 // ---------------------------------------------------------------------------
@@ -86,20 +86,10 @@ export function compileConvexDatabase(
   _allEdges: BackendEdge[],
   options: ConvexOptions = {},
 ): CompiledDatabaseResult {
-  const entityNodes = allNodes.filter(
-    (n) => n.type === "entity" || n.type === "db_ref",
-  );
-
   const files: CompiledFile[] = [];
   const allReusableFunctions: ReusableFunction[] = [];
 
-  const seenTableNames = new Set<string>();
-  const tables: BackendNode[] = entityNodes.filter((node) => {
-    const name = toTableName(node.data?.label || node.data?.tableRef || "table");
-    if (seenTableNames.has(name)) return false;
-    seenTableNames.add(name);
-    return true;
-  });
+  const tables: BackendNode[] = deduplicateEntityTableNodes(allNodes);
 
   const packageName = options.packageName || "@workspace/db-convex";
 

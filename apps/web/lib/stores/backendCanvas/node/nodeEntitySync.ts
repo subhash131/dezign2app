@@ -7,6 +7,12 @@ import {
 } from "@/types/canvas";
 import { generateKeyBetween } from "fractional-indexing";
 import { getLastIndex } from "../utils";
+import {
+  toPascalCase as toCompilerPascalCase,
+  toPlural,
+  toSingular,
+  toTableName,
+} from "@/lib/compiler/utils";
 
 /**
  * Converts a snake_case, kebab-case, or space-separated name to PascalCase.
@@ -675,8 +681,56 @@ export function syncEntityDerivedTypes(
   };
 }
 
+const STATE_STORE_PRIMITIVE_TYPES = new Set([
+  "string",
+  "number",
+  "boolean",
+  "unknown",
+  "any",
+  "void",
+  "null",
+  "undefined",
+  "never",
+  "Date",
+  "object",
+  "array",
+  "Record<string, unknown>",
+  "Record<string, any>",
+]);
+
+function rewriteEntityTypeReference(
+  rawType: string | undefined,
+  oldNames: Set<string>,
+  newPascal: string,
+  matchesCustomTypeId: boolean,
+): string | undefined {
+  if (!rawType) return rawType;
+  const trimmed = rawType.trim();
+  const isArr = trimmed.endsWith("[]");
+  const base = isArr ? trimmed.slice(0, -2).trim() : trimmed;
+  const suffix = isArr ? "[]" : "";
+  if (
+    !base ||
+    STATE_STORE_PRIMITIVE_TYPES.has(trimmed) ||
+    STATE_STORE_PRIMITIVE_TYPES.has(base) ||
+    /[\s{|&<>()=>]/.test(base)
+  ) {
+    return rawType;
+  }
+
+  const crudMatch = base.match(/^(Create|Update|Upsert)(.+)Data$/);
+  if (crudMatch && oldNames.has(crudMatch[2]!)) {
+    return `${crudMatch[1]}${newPascal}Data${suffix}`;
+  }
+  if (matchesCustomTypeId || oldNames.has(base)) {
+    return `${newPascal}${suffix}`;
+  }
+  return rawType;
+}
+
 /**
- * If an entity node's label changes, update referencing columns across all other entity tables.
+ * If an entity node's label changes, update referencing columns, db_ref nodes,
+ * and state_store nodes referencing the renamed entity's types.
  */
 export function syncEntityRenameReferences(
   currentNodes: BackendNode[],
@@ -684,16 +738,18 @@ export function syncEntityRenameReferences(
   updatedNode: BackendNode,
   changes: Partial<BackendNode>,
 ): BackendNode[] {
+  const nextLabel = changes.data?.label ?? changes.data?.tableName;
+  const prevLabel = updatedNode.data.label ?? updatedNode.data.tableName;
   if (
     updatedNode.type !== "entity" ||
-    changes.data?.label === undefined ||
-    changes.data.label === updatedNode.data.label
+    nextLabel === undefined ||
+    nextLabel === prevLabel
   ) {
     return currentNodes;
   }
 
-  const oldLabel = updatedNode.data.label;
-  const newLabel = changes.data.label;
+  const oldLabel = prevLabel;
+  const newLabel = nextLabel;
 
   if (
     !oldLabel ||
@@ -704,8 +760,92 @@ export function syncEntityRenameReferences(
     return currentNodes;
   }
 
+  const oldTable = toTableName(oldLabel);
+  const oldTypeCandidates = new Set(
+    [
+      toPascalCase(oldLabel),
+      toCompilerPascalCase(oldLabel),
+      toCompilerPascalCase(toSingular(oldTable)),
+      toCompilerPascalCase(toPlural(oldTable)),
+    ].filter(Boolean),
+  );
+  const newCanonicalPascal = toCompilerPascalCase(newLabel);
+  const entityTypeId = `type-entity-${id}`;
+
   return currentNodes.map((node) => {
-    if (node.id === id || node.type !== "entity" || !node.data.columns) {
+    if (node.id === id) {
+      return node;
+    }
+    if (node.type === "db_ref" && node.data?.tableRef === id) {
+      return {
+        ...node,
+        data: {
+          ...node.data,
+          label: newLabel,
+          ...(node.data.tableName !== undefined ? { tableName: newLabel } : {}),
+        },
+      };
+    }
+    if (node.type === "state_store") {
+      let storeChanged = false;
+      const nextFields = (node.data?.fields || []).map((field) => {
+        const nextType = rewriteEntityTypeReference(
+          field.type,
+          oldTypeCandidates,
+          newCanonicalPascal,
+          field.customTypeId === entityTypeId,
+        );
+        if (nextType && nextType !== field.type) {
+          storeChanged = true;
+          return { ...field, type: nextType };
+        }
+        return field;
+      });
+      const nextActions = (node.data?.actions || []).map((act) => {
+        if (!Array.isArray(act.parameters) || act.parameters.length === 0) {
+          return act;
+        }
+        let paramsChanged = false;
+        const nextParams = act.parameters.map((param) => {
+          const nextType = rewriteEntityTypeReference(
+            param.type,
+            oldTypeCandidates,
+            newCanonicalPascal,
+            false,
+          );
+          if (nextType && nextType !== param.type) {
+            paramsChanged = true;
+            return { ...param, type: nextType };
+          }
+          return param;
+        });
+        if (!paramsChanged) return act;
+        storeChanged = true;
+        return { ...act, parameters: nextParams };
+      });
+      const nextCustomTypes = Array.isArray(node.data?.customTypes)
+        ? node.data.customTypes.map((ct) => {
+            if (ct.id === entityTypeId && ct.name !== newCanonicalPascal) {
+              storeChanged = true;
+              return { ...ct, name: newCanonicalPascal };
+            }
+            return ct;
+          })
+        : node.data?.customTypes;
+
+      return storeChanged
+        ? {
+            ...node,
+            data: {
+              ...node.data,
+              ...(node.data?.fields ? { fields: nextFields } : {}),
+              ...(node.data?.actions ? { actions: nextActions } : {}),
+              ...(node.data?.customTypes ? { customTypes: nextCustomTypes } : {}),
+            },
+          }
+        : node;
+    }
+    if (node.type !== "entity" || !node.data.columns) {
       return node;
     }
     let colsChanged = false;

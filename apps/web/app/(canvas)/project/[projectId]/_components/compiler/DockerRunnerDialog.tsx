@@ -203,7 +203,7 @@ export function DockerRunnerDialog({
         filename: f.filename,
         content: f.content,
       }));
-      await api.fs.writeProject(targetDir, exportFiles);
+      await api.fs.writeProject(targetDir, exportFiles, { cleanStale: true });
       setLogs((prev) => [
         ...prev,
         `✅ Project files exported successfully!\n🚀 Running: docker compose up --build\n`,
