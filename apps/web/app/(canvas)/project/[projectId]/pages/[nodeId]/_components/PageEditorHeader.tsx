@@ -283,7 +283,7 @@ export function PageEditorHeader({
               <span className="hidden md:inline">Terminal</span>
             </Button>
           </TooltipTrigger>
-          <TooltipContent>{terminalOpen ? "Hide Terminal" : "Open Terminal (Run dev server)"}</TooltipContent>
+          <TooltipContent>{terminalOpen ? "Hide Terminal (Ctrl+J)" : "Open Terminal (Run dev server) (Ctrl+J)"}</TooltipContent>
         </Tooltip>
 
         {/* Full Project Compiler IDE Link */}
