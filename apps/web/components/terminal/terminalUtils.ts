@@ -1,6 +1,21 @@
 /**
- * Utility functions for terminal text processing and clipboard copying.
+ * Utility functions for terminal text processing, clipboard copying, and keyboard shortcuts.
  */
+
+/**
+ * Returns true when a KeyboardEvent matches the Ctrl+J / Cmd+J shortcut
+ * used to toggle/expand the terminal panel.
+ */
+export function isTerminalToggleShortcut(
+  event: Pick<
+    KeyboardEvent,
+    "ctrlKey" | "metaKey" | "altKey" | "shiftKey" | "key" | "code"
+  >,
+): boolean {
+  const isCtrlOrCmd = event.ctrlKey || event.metaKey;
+  if (!isCtrlOrCmd || event.altKey || event.shiftKey) return false;
+  return event.key === "j" || event.key === "J" || event.code === "KeyJ";
+}
 
 /**
  * Strips ANSI escape sequences, terminal control characters, and orphaned CSI codes

@@ -86,6 +86,7 @@ export function IdeToolbar({
             variant={terminalOpen ? "secondary" : "outline"}
             size="sm"
             onClick={onToggleTerminal}
+            title={terminalOpen ? "Hide Terminal (Ctrl+J)" : "Open Terminal (Ctrl+J)"}
             className={`h-8 gap-1.5 text-xs ${
               terminalOpen
                 ? "bg-primary/20 text-primary border-primary/40"
