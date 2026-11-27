@@ -152,6 +152,17 @@ function isPathMatchInternal(path: string, argName: string): boolean {
   return cleanPath.length > 0 && cleanPath === cleanArg;
 }
 
+/**
+ * Fields that automapping should ignore so the user can configure them manually if needed.
+ */
+export function isIgnoredAutoMapField(argName: string): boolean {
+  const trimmed = argName.trim().toLowerCase();
+  if (!trimmed) return false;
+  if (trimmed === "id") return true;
+  const compact = trimmed.replace(/[^a-z0-9]/g, "");
+  return compact === "createdat" || compact === "updatedat";
+}
+
 export function computeDbOpBindings(
   op: DbOperationFunction | undefined,
   targetNode: BackendNode | undefined,
@@ -172,13 +183,21 @@ export function computeDbOpBindings(
   const authSource = availableSources.find((s) => s.kind === "auth");
   const stepSources = availableSources.filter((s) => s.kind === "step_output");
 
-  const mappedBindings: StepBinding[] = expectedArgs.map((arg) => {
+  const mappedBindings: StepBinding[] = [];
+
+  for (const arg of expectedArgs) {
     // 1. Preserve existing configured binding if present
     const existing = currentBindings.find(
       (b) => (b.argName || "").trim().toLowerCase() === arg.name.toLowerCase(),
     );
     if (existing) {
-      return existing;
+      mappedBindings.push(existing);
+      continue;
+    }
+
+    // Ignore id, created_at, and updated_at during automapping; user configures if needed
+    if (isIgnoredAutoMapField(arg.name)) {
+      continue;
     }
 
     const normArg = arg.name.toLowerCase();
@@ -186,63 +205,72 @@ export function computeDbOpBindings(
     // 2. Check path params
     const matchParam = reqParamsSource?.paths.find((p) => isPathMatchInternal(p.path, arg.name));
     if (matchParam) {
-      return {
+      mappedBindings.push({
         argName: arg.name,
         source: { kind: "req_params", field: matchParam.path },
-      };
+      });
+      continue;
     }
 
     // 3. Check query params
     const matchQuery = reqQuerySource?.paths.find((p) => isPathMatchInternal(p.path, arg.name));
     if (matchQuery) {
-      return {
+      mappedBindings.push({
         argName: arg.name,
         source: { kind: "req_query", field: matchQuery.path },
-      };
+      });
+      continue;
     }
 
     // 4. Check prior step outputs
+    let stepMatched = false;
     for (const ps of stepSources) {
       const matchStep = ps.paths.find((p) => isPathMatchInternal(p.path, arg.name));
       if (matchStep && ps.stepId) {
-        return {
+        mappedBindings.push({
           argName: arg.name,
           source: { kind: "step_output", stepId: ps.stepId, field: matchStep.path },
-        };
+        });
+        stepMatched = true;
+        break;
       }
     }
+    if (stepMatched) continue;
 
     // 5. Check request body
     const matchBody = reqBodySource?.paths.find((p) => isPathMatchInternal(p.path, arg.name));
     if (matchBody) {
-      return {
+      mappedBindings.push({
         argName: arg.name,
         source: { kind: "req_body", field: matchBody.path },
-      };
+      });
+      continue;
     }
 
     // 6. Check auth session
     const matchAuth = authSource?.paths.find((p) => isPathMatchInternal(p.path, arg.name));
     if (matchAuth) {
-      return {
+      mappedBindings.push({
         argName: arg.name,
         source: { kind: "auth", field: matchAuth.path },
-      };
+      });
+      continue;
     }
 
     // Default if unmapped: query param for limit/offset
     if (normArg === "limit" || normArg === "offset") {
-      return {
+      mappedBindings.push({
         argName: arg.name,
         source: { kind: "req_query", field: reqQuerySource ? normArg : "" },
-      };
+      });
+      continue;
     }
 
-    return {
+    mappedBindings.push({
       argName: arg.name,
       source: { kind: "req_body", field: "" },
-    };
-  });
+    });
+  }
 
   return mappedBindings;
 }
