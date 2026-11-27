@@ -107,13 +107,7 @@ export function generateTableHelperTest(
     normEngine.includes("postgres") ||
     normEngine.includes("mysql") ||
     normEngine.includes("pg");
-  const varName =
-    customVarName ||
-    (hasCollision
-      ? toVarName(tableName)
-      : isPostgresOrMysql
-        ? toVarName(toSingular(tableName))
-        : toVarName(tableName));
+  const varName = customVarName || toVarName(tableName);
   const Pascal = toPascal(tableName);
   const pascalSingular = hasCollision ? Pascal : toSingular(Pascal);
   const pascalPlural = hasCollision ? Pascal : toPlural(Pascal);

@@ -79,7 +79,7 @@ function generateMysqlTableHelpers(
   const hasCollision = hasSingularPluralTableCollision(tableName, allNodes);
   const singularName = hasCollision ? tableName : toSingular(tableName);
   const typeName = toPascal(singularName);
-  const varName = toVarName(singularName);
+  const varName = toVarName(tableName);
   const cols = getColumns(tableNode);
   const pkCol = cols.find((c) => c.isPrimaryKey) || cols[0] || { name: "id", type: "string" };
   const pkTsType = toTsType(pkCol.type);
@@ -272,8 +272,7 @@ export function compileMysqlDatabase(
   tables.forEach((tableNode) => {
     const rawName = tableNode.data?.label || tableNode.data?.tableRef || "table";
     const tableName = toTableName(rawName);
-    const hasCollision = hasSingularPluralTableCollision(tableName, tables);
-    const varName = hasCollision ? toVarName(tableName) : toVarName(toSingular(tableName));
+    const varName = toVarName(tableName);
 
     const { code, fns, typeExports } = generateMysqlTableHelpers(tableNode, packageName, tables);
 
@@ -282,17 +281,6 @@ export function compileMysqlDatabase(
       language: "typescript",
       content: code,
     });
-
-    if (!hasCollision) {
-      const pluralVarName = toVarName(toPlural(tableName));
-      if (pluralVarName !== varName) {
-        files.push({
-          filename: `helpers/${pluralVarName}.ts`,
-          language: "typescript",
-          content: `export * from "./${varName}";\n`,
-        });
-      }
-    }
 
     allReusableFunctions.push(...fns);
 

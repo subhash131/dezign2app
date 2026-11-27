@@ -159,13 +159,13 @@ describe("compileDatabaseUnitTests — Automated Unit Test Generation for Databa
     expect(connTest?.content).toContain('describe("@workspace/db-main-postgres — PostgreSQL Connection"');
     expect(connTest?.content).toContain('import * as connection from "../connection"');
 
-    // Helper test for Postgres singularized helper
+    // Helper test uses exact table helper name (no singularization/double helper shims)
     const productHelperTest = result.files.find(
-      (f) => f.filename === "packages/db/main-postgres/tests/helpers/product.test.ts",
+      (f) => f.filename === "packages/db/main-postgres/tests/helpers/products.test.ts",
     );
     expect(productHelperTest).toBeDefined();
     expect(productHelperTest?.content).toContain('describe("Table Helper: products (Products)"');
-    expect(productHelperTest?.content).toContain('import * as helper from "../../helpers/product"');
+    expect(productHelperTest?.content).toContain('import * as helper from "../../helpers/products"');
 
     const pkgJson = result.files.find(
       (f) => f.filename === "packages/db/package.json",

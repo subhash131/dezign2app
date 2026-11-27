@@ -338,7 +338,7 @@ export function generatePostgresTableHelpers(
   const pascal = toPascal(tableName);
   const pascalSingular = toPascal(singularName);
   const pascalPlural = toPascal(pluralName);
-  const varName = toVarName(singularName);
+  const varName = toVarName(tableName);
   const rawCols = getColumns(resolvedNode, allNodes);
   // Deduplicate columns by variable name to prevent TS2300 duplicate identifier errors
   const seenColVars = new Set<string>();
