@@ -78,7 +78,7 @@ export const BetterAuthTableMappingSection: React.FC<
                   (def.key === "userEntityId"
                     ? userData.userEntityId || userData.userSchemaId
                     : undefined) ||
-                  schemaEntities.find((e) => isEntityMatch(e, def))?.id;
+                  schemaEntities.find((e) => isEntityMatch(e, def, schemaEntities))?.id;
 
                 return (
                   <BetterAuthTableRow

@@ -1,7 +1,7 @@
 import { Endpoint, TargetDbOperation, ReusableFunction } from "@workspace/canvas/types";
 import { BackendNode, BackendEdge } from "@/types/canvas";
 import { getEntityDbOperations } from "@/lib/utils/entityOperationsHelper";
-import { toFolderName, toTableName, toVarName, toSingular } from "../../utils";
+import { toFolderName, toTableName, toVarName, toSingular, hasSingularPluralTableCollision } from "../../utils";
 
 function isValidDbOpKind(kind: string): kind is ReusableFunction["kind"] {
   return (
@@ -149,7 +149,9 @@ export function pickDbFunctionsForEndpoint(
 
     if (targetEntityNode) {
       const ops = getEntityDbOperations(targetEntityNode, allNodes);
-      const varName = toVarName(toSingular(toTableName(rawTableName)));
+      const sqlTableName = toTableName(rawTableName);
+      const hasCollision = hasSingularPluralTableCollision(sqlTableName, allNodes);
+      const varName = hasCollision ? toVarName(sqlTableName) : toVarName(toSingular(sqlTableName));
       let importPath = "@workspace/redis";
       if (isRedis) {
         const targetDbId = targetEntityNode?.data?.databaseId;
@@ -184,8 +186,10 @@ export function pickDbFunctionsForEndpoint(
       ...combinedFunctions.filter((f) => {
         const targetClean = (f.targetName || "").toLowerCase().replace(/[^a-z0-9]/g, "");
         const fnNameClean = f.name.toLowerCase();
+        if (cleanTableName && targetClean) {
+          return targetClean === cleanTableName;
+        }
         return (
-          (cleanTableName && targetClean && targetClean === cleanTableName) ||
           (cleanTableName && fnNameClean.includes(cleanTableName)) ||
           (targetClean && cleanTableName && cleanTableName.includes(targetClean))
         );

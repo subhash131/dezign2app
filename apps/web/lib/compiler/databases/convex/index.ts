@@ -7,7 +7,7 @@ import {
   CanvasDatabaseNodeData,
 } from "@workspace/canvas/types";
 import { sqlColumnToTsType, isSqlNumericType, isSqlBooleanType } from "@workspace/canvas/constants";
-import { toTableName, toVarName, toSqlIdentifier, toSingular, toPlural, deduplicateEntityTableNodes } from "../../utils";
+import { toTableName, toVarName, toSqlIdentifier, toSingular, toPlural, deduplicateEntityTableNodes, hasSingularPluralTableCollision } from "../../utils";
 import { generateDatabaseConnectionTest } from "../../generators/databaseTestGenerator";
 
 // ---------------------------------------------------------------------------
@@ -135,7 +135,8 @@ export function compileConvexDatabase(
   tables.forEach((tNode) => {
     const rawName = tNode.data?.label || tNode.data?.tableRef || "table";
     const tableName = toTableName(rawName);
-    const singularName = toSingular(tableName);
+    const hasCollision = hasSingularPluralTableCollision(tableName, tables);
+    const singularName = hasCollision ? tableName : toSingular(tableName);
     const typeName = toPascal(singularName);
     const cols = getColumns(tNode);
 
@@ -145,7 +146,7 @@ export function compileConvexDatabase(
       .join("\n");
 
     const getFnName = `get${typeName}ById`;
-    const listFnName = `list${toPascal(toPlural(tableName))}`;
+    const listFnName = `list${toPascal(hasCollision ? tableName : toPlural(tableName))}`;
     const insertFnName = `create${typeName}`;
     const deleteFnName = `delete${typeName}`;
 

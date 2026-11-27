@@ -5,7 +5,7 @@ import {
   ReusableFunction,
 } from "@workspace/canvas/types";
 import { sqlColumnToTsType } from "@workspace/canvas/constants";
-import { toTableName, toVarName, toSqlIdentifier, toSingular, toPlural, deduplicateEntityTableNodes } from "../../utils";
+import { toTableName, toVarName, toSqlIdentifier, toSingular, toPlural, deduplicateEntityTableNodes, hasSingularPluralTableCollision } from "../../utils";
 import {
   generateDatabaseConnectionTest,
   generateTableHelperTest,
@@ -68,6 +68,7 @@ export interface MysqlOptions {
 function generateMysqlTableHelpers(
   tableNode: BackendNode,
   packageName: string = "@workspace/db",
+  allNodes: BackendNode[] = [],
 ): {
   code: string;
   fns: ReusableFunction[];
@@ -75,7 +76,8 @@ function generateMysqlTableHelpers(
 } {
   const rawName = tableNode.data?.label || tableNode.data?.tableRef || "table";
   const tableName = toTableName(rawName);
-  const singularName = toSingular(tableName);
+  const hasCollision = hasSingularPluralTableCollision(tableName, allNodes);
+  const singularName = hasCollision ? tableName : toSingular(tableName);
   const typeName = toPascal(singularName);
   const varName = toVarName(singularName);
   const cols = getColumns(tableNode);
@@ -149,7 +151,7 @@ function generateMysqlTableHelpers(
   });
 
   // Helper 2: findAll
-  const findAllFnName = `findAll${toPascal(toPlural(tableName))}`;
+  const findAllFnName = `findAll${toPascal(hasCollision ? tableName : toPlural(tableName))}`;
   codeBlocks.push(
     `export async function ${findAllFnName}(limit = 50, offset = 0): Promise<${typeName}[]> {`,
     `  const rows = await query<(${typeName} & RowDataPacket)[]>(`,
@@ -270,9 +272,10 @@ export function compileMysqlDatabase(
   tables.forEach((tableNode) => {
     const rawName = tableNode.data?.label || tableNode.data?.tableRef || "table";
     const tableName = toTableName(rawName);
-    const varName = toVarName(toSingular(tableName));
+    const hasCollision = hasSingularPluralTableCollision(tableName, tables);
+    const varName = hasCollision ? toVarName(tableName) : toVarName(toSingular(tableName));
 
-    const { code, fns, typeExports } = generateMysqlTableHelpers(tableNode, packageName);
+    const { code, fns, typeExports } = generateMysqlTableHelpers(tableNode, packageName, tables);
 
     files.push({
       filename: `helpers/${varName}.ts`,
@@ -280,13 +283,15 @@ export function compileMysqlDatabase(
       content: code,
     });
 
-    const pluralVarName = toVarName(toPlural(tableName));
-    if (pluralVarName !== varName) {
-      files.push({
-        filename: `helpers/${pluralVarName}.ts`,
-        language: "typescript",
-        content: `export * from "./${varName}";\n`,
-      });
+    if (!hasCollision) {
+      const pluralVarName = toVarName(toPlural(tableName));
+      if (pluralVarName !== varName) {
+        files.push({
+          filename: `helpers/${pluralVarName}.ts`,
+          language: "typescript",
+          content: `export * from "./${varName}";\n`,
+        });
+      }
     }
 
     allReusableFunctions.push(...fns);

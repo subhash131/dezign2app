@@ -74,10 +74,23 @@ export const EntityNode = React.memo(({ id, data, selected }: NodeProps<BackendN
 
     if (isAuth && data.columns && data.columns.length > 0) {
       const entityLabel = (data.tableName || data.label || "").toLowerCase().replace(/[-_\s]/g, "");
-      const matchingDef = BETTER_AUTH_TABLE_DEFINITIONS.find((d) => {
-        const dName = d.name.toLowerCase().replace(/[-_\s]/g, "");
-        return dName === entityLabel || `${dName}s` === entityLabel;
-      });
+      const storeNodes = useBackendCanvasStore.getState().nodes;
+      const matchingDef =
+        BETTER_AUTH_TABLE_DEFINITIONS.find((d) => {
+          const dName = d.name.toLowerCase().replace(/[-_\s]/g, "");
+          return dName === entityLabel;
+        }) ||
+        BETTER_AUTH_TABLE_DEFINITIONS.find((d) => {
+          const dName = d.name.toLowerCase().replace(/[-_\s]/g, "");
+          if (`${dName}s` !== entityLabel) return false;
+          // Do not treat a plural table (e.g. "users") as the Better Auth table if a distinct exact table (e.g. "user") exists
+          const hasExactAuthTable = storeNodes.some((n) => {
+            if (n.id === id || (n.type !== "entity" && n.type !== "db_ref")) return false;
+            const nLabel = (n.data?.tableName || n.data?.label || "").toLowerCase().replace(/[-_\s]/g, "");
+            return nLabel === dName;
+          });
+          return !hasExactAuthTable;
+        });
 
       if (matchingDef) {
         const allowedTimestamps = new Set(
