@@ -105,6 +105,8 @@ export function generateLayoutEventsDrawer(
             customHeaders,
             queryParams,
             requestBody,
+            emitLog: false,
+            logId,
           });
           if (isMounted) {
             const entry: LayoutLogEntry = {

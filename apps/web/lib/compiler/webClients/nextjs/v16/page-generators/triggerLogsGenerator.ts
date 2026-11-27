@@ -30,7 +30,7 @@ export function generateTriggerLogsState(hasLogsSection: boolean, hasStreamingAc
     }
   }, []);
 
-  // Bridge layout-level stream and action events into page Output Log
+  // Listen for page/layout action and stream events for Page Output Log
   useEffect(() => {
     const handleLayoutLog = (e: Event) => {
       if (
@@ -109,6 +109,8 @@ export function generateTriggerHandler(hasApiActions: boolean, hasStreamingActio
         customHeaders,
         queryParams,
         requestBody,
+        emitLog: false,
+        logId,
       });
       const logEntry = {
         id: logId,
@@ -194,6 +196,8 @@ export function generateTriggerHandler(hasApiActions: boolean, hasStreamingActio
         customHeaders,
         queryParams,
         requestBody,
+        emitLog: false,
+        logId,
         onStreamStart: (info) => {
           if (!streamInitialized) {
             streamInitialized = true;

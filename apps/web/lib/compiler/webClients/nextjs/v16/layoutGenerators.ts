@@ -1039,6 +1039,8 @@ export function SidebarActionButton({
           customHeaders,
           queryParams,
           requestBody,
+          emitLog: false,
+          logId,
         });
         if (typeof window !== "undefined") {
           window.dispatchEvent(
@@ -1089,7 +1091,20 @@ export function SidebarActionButton({
         (clean && actionHandlers[clean]);
 
       if (handler) {
-        const result = await handler({ onTrigger, router });
+        const markLogged = () => {
+          loggedViaTrigger = true;
+        };
+        if (typeof window !== "undefined") {
+          window.addEventListener("dezign:layout-log", markLogged);
+        }
+        let result: unknown;
+        try {
+          result = await handler({ onTrigger, router });
+        } finally {
+          if (typeof window !== "undefined") {
+            window.removeEventListener("dezign:layout-log", markLogged);
+          }
+        }
         if (!loggedViaTrigger && typeof window !== "undefined") {
           window.dispatchEvent(
             new CustomEvent("dezign:layout-log", {

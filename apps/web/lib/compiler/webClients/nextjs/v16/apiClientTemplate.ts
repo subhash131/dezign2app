@@ -20,6 +20,8 @@ ${hasAuth ? `import { getAuthBearerToken } from "./auth-token";\n` : ""}export i
   customHeaders?: Record<string, string>;
   queryParams?: Record<string, string>;
   requestBody?: TBody;
+  emitLog?: boolean;
+  logId?: string;
   onStream?: (streamResult: ApiStreamResult) => void;
   onStreamStart?: (info: { threadId?: string }) => void;
   onStreamEnd?: (finalResult: ApiStreamResult) => void;
@@ -71,6 +73,8 @@ export async function executeApiAction<TData = unknown, TBody = unknown>(
     customHeaders,
     queryParams,
     requestBody,
+    emitLog = true,
+    logId: providedLogId,
     onStream,
     onStreamStart,
     onStreamEnd,
@@ -79,7 +83,12 @@ export async function executeApiAction<TData = unknown, TBody = unknown>(
   } = options;
 
   const timestamp = new Date().toLocaleTimeString();
-  const logId = Math.random().toString(36).substring(2, 9);
+  const logId = providedLogId || Math.random().toString(36).substring(2, 9);
+  const dispatchActionLog = (entry: ApiActionResult<TData>) => {
+    if (emitLog && typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("dezign:layout-log", { detail: entry }));
+    }
+  };
 
   try {
     const headers: Record<string, string> = {
@@ -409,7 +418,7 @@ export async function executeApiAction<TData = unknown, TBody = unknown>(
       };
     }
 
-    return {
+    const actionResult: ApiActionResult<TData> = {
       id: logId,
       eventName,
       eventType,
@@ -421,10 +430,12 @@ export async function executeApiAction<TData = unknown, TBody = unknown>(
       payload: requestBody,
       data: resData as TData,
     };
+    dispatchActionLog(actionResult);
+    return actionResult;
   } catch (err) {
     onStreamError?.(err);
     const errorMessage = err instanceof Error ? err.message : "Request failed";
-    return {
+    const errorResult: ApiActionResult<TData> = {
       id: logId,
       eventName,
       eventType,
@@ -435,6 +446,8 @@ export async function executeApiAction<TData = unknown, TBody = unknown>(
       error: errorMessage,
       data: null as unknown as TData,
     };
+    dispatchActionLog(errorResult);
+    return errorResult;
   }
 }
 `;

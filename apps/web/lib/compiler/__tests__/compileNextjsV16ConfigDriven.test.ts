@@ -1430,6 +1430,108 @@ describe("compileNextjsV16WebClient - Configuration-Driven Output", () => {
     expect(content).not.toContain('demo <span className="text-destructive font-sans">*</span>');
     expect(content).toContain("required={false}");
   });
+
+  it("logs click action executeApiAction calls to the Page Output Log even when layout has 0 events", () => {
+    const pageNode: BackendNode = {
+      id: "node-landing-page",
+      type: "webPage",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "/",
+        appSlug: "demo-app",
+        sections: [
+          {
+            id: "sec-main",
+            name: "Main Section",
+            renderMode: "server",
+            loadStrategy: "eager",
+            actions: [
+              {
+                id: "act-create-user",
+                name: "create test user",
+                event: "click",
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const serviceNode: BackendNode = {
+      id: "node-demo-service",
+      type: "service",
+      position: { x: 300, y: 0 },
+      fractionalIndex: "a1",
+      data: {
+        label: "Demo Service",
+        port: "8081",
+      },
+    };
+
+    const endpoints: (Endpoint & { nodeId: string })[] = [
+      {
+        id: "ep-create-users",
+        nodeId: "node-demo-service",
+        name: "/create-users",
+        type: "POST",
+        requestBody: {
+          id: "req-body-create-users",
+          fields: [
+            {
+              id: "field-username",
+              name: "username",
+              type: "string",
+              required: true,
+            },
+          ],
+        },
+      },
+    ];
+
+    const edges: BackendEdge[] = [
+      {
+        id: "edge-create-user",
+        source: "node-landing-page",
+        target: "node-demo-service",
+        sourceHandle: "events-act-create-user",
+        targetHandle: "endpoint-in-ep-create-users",
+        type: "connection",
+        fractionalIndex: "a0",
+      },
+    ];
+
+    const result = compileWebPageNode(
+      pageNode,
+      endpoints,
+      [],
+      [pageNode, serviceNode],
+      edges,
+      "DemoApp",
+    );
+
+    const pageFile = result.files.find((f: CompiledFile) => f.filename === "app/(public)/page.tsx");
+    expect(pageFile).toBeDefined();
+    const pageContent = pageFile?.content || "";
+    expect(pageContent).toContain('import React, { useState, useEffect, Suspense } from "react";');
+    expect(pageContent).toContain('aria-label="Page Output Log"');
+    expect(pageContent).toContain('window.addEventListener("dezign:layout-log"');
+    expect(pageContent).toContain("emitLog: false");
+
+    const apiClientFile = result.files.find((f: CompiledFile) => f.filename === "lib/api-client.ts");
+    expect(apiClientFile).toBeDefined();
+    const apiClientContent = apiClientFile?.content || "";
+    expect(apiClientContent).toContain("emitLog = true");
+    expect(apiClientContent).toContain('window.dispatchEvent(new CustomEvent("dezign:layout-log", { detail: entry }))');
+    expect(apiClientContent).toContain("dispatchActionLog(actionResult)");
+    expect(apiClientContent).toContain("dispatchActionLog(errorResult)");
+
+    const actionFile = result.files.find((f: CompiledFile) =>
+      f.filename.endsWith("CreateTestUserAction.tsx"),
+    );
+    expect(actionFile).toBeDefined();
+    expect(actionFile?.content).toContain("await executeApiAction<CreateTestUserActionResponse>");
+  });
 });
 
 
