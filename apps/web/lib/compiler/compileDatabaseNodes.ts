@@ -676,45 +676,21 @@ export function compileDatabaseNodes(
       generateCentralDbTest(packages, primaryFolder),
     ];
 
-    // Helper forwarders for every helper file in child packages (exact file stems first, then singular/plural aliases)
+    // Helper forwarders for every helper file in child packages (one canonical forwarder per table)
     const seenHelperFiles = new Set<string>();
-    const helperEntries: Array<{ folder: string; helperBase: string }> = [];
     packages.forEach((p) => {
       p.files.forEach((f) => {
         if (f.filename.startsWith("helpers/") && f.filename !== "helpers/index.ts") {
           const helperSubPath = f.filename.slice("helpers/".length);
           const helperBase = helperSubPath.replace(/\.ts$/, "");
-          if (helperBase) {
-            helperEntries.push({ folder: p.packageFolder, helperBase });
+          if (helperBase && !seenHelperFiles.has(helperBase)) {
+            seenHelperFiles.add(helperBase);
+            centralFiles.push({
+              filename: `helpers/${helperBase}.ts`,
+              language: "typescript",
+              content: `export * from "../${p.packageFolder}/helpers/${helperBase}";\n`,
+            });
           }
-        }
-      });
-    });
-
-    helperEntries.forEach(({ folder, helperBase }) => {
-      if (!seenHelperFiles.has(helperBase)) {
-        seenHelperFiles.add(helperBase);
-        centralFiles.push({
-          filename: `helpers/${helperBase}.ts`,
-          language: "typescript",
-          content: `export * from "../${folder}/helpers/${helperBase}";\n`,
-        });
-      }
-    });
-
-    helperEntries.forEach(({ folder, helperBase }) => {
-      const singularBase = toSingular(helperBase);
-      const pluralBase = toPlural(helperBase);
-      const aliases = Array.from(new Set([singularBase, pluralBase])).filter(Boolean);
-
-      aliases.forEach((alias) => {
-        if (!seenHelperFiles.has(alias)) {
-          seenHelperFiles.add(alias);
-          centralFiles.push({
-            filename: `helpers/${alias}.ts`,
-            language: "typescript",
-            content: `export * from "../${folder}/helpers/${helperBase}";\n`,
-          });
         }
       });
     });

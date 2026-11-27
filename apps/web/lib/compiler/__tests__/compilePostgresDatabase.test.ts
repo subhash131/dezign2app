@@ -39,6 +39,7 @@ describe("compilePostgresDatabase", () => {
     expect(filenames).toContain("scripts/sync.ts");
     expect(filenames).not.toContain("scripts/server.ts");
     expect(filenames).toContain("helpers/order.ts");
+    expect(filenames).not.toContain("helpers/orders.ts");
     expect(filenames).toContain("helpers/index.ts");
     expect(filenames).toContain("index.ts");
     expect(filenames).toContain("package.json");
@@ -93,6 +94,21 @@ describe("compilePostgresDatabase", () => {
     expect(sql).toContain('CREATE TABLE IF NOT EXISTS "user"');
     expect(sql).toContain('CREATE TABLE IF NOT EXISTS "session"');
     expect(sql).toContain('CREATE TABLE IF NOT EXISTS "subscription"');
+  });
+
+  it("should generate exactly one helper file per table without double singular/plural shims", () => {
+    const userOnly = makeEntityNode("ent-user", "user", [
+      { name: "id", type: "UUID", isPrimaryKey: true, isNotNull: true },
+    ]);
+    const jwksEntity = makeEntityNode("ent-jwks", "jwks", [
+      { name: "id", type: "UUID", isPrimaryKey: true, isNotNull: true },
+    ]);
+    const result = compilePostgresDatabase([userOnly, jwksEntity], []);
+    const helperFiles = result.files
+      .filter((f) => f.filename.startsWith("helpers/") && f.filename !== "helpers/index.ts")
+      .map((f) => f.filename)
+      .sort();
+    expect(helperFiles).toEqual(["helpers/jwks.ts", "helpers/user.ts"]);
   });
 
   it("should generate schema.sql with seed data when personas are provided", () => {
@@ -181,7 +197,7 @@ describe("compilePostgresDatabase", () => {
       { name: "v", type: "number", isPrimaryKey: true },
     ]);
     const result = compilePostgresDatabase([migrationEntity], []);
-    const helper = result.files.find((f) => f.filename === "helpers/langgraphCheckpointMigration.ts");
+    const helper = result.files.find((f) => f.filename === "helpers/langgraphCheckpointMigrations.ts");
     expect(helper).toBeDefined();
     const code = helper!.content;
     expect(code).not.toContain("{ id }");

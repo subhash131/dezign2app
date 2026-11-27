@@ -406,7 +406,7 @@ export async function handler(req: any, res: any) {
     expect(cleaned).toContain("logger");
   });
 
-  it("generates both singular and plural alias files for database helpers across postgres, mysql, and sqlite raw", () => {
+  it("generates a single canonical helper file per table (no double singular/plural shims) across postgres, mysql, and sqlite raw", () => {
     const entityNode: BackendNode = {
       id: "entity-conversations",
       type: "entity",
@@ -425,25 +425,22 @@ export async function handler(req: any, res: any) {
     const pgResult = compilePostgresDatabase([entityNode], []);
     const pgSingular = pgResult.files.find((f) => f.filename === "helpers/conversation.ts");
     const pgPlural = pgResult.files.find((f) => f.filename === "helpers/conversations.ts");
-    expect(pgSingular).toBeDefined();
+    expect(pgSingular).toBeUndefined();
     expect(pgPlural).toBeDefined();
-    expect(pgPlural!.content).toContain('export * from "./conversation";');
 
     // MySQL
     const mysqlResult = compileMysqlDatabase([entityNode], []);
     const mysqlSingular = mysqlResult.files.find((f) => f.filename === "helpers/conversation.ts");
     const mysqlPlural = mysqlResult.files.find((f) => f.filename === "helpers/conversations.ts");
-    expect(mysqlSingular).toBeDefined();
+    expect(mysqlSingular).toBeUndefined();
     expect(mysqlPlural).toBeDefined();
-    expect(mysqlPlural!.content).toContain('export * from "./conversation";');
 
     // SQLite Raw
     const sqliteResult = compileRawSqliteDatabase([entityNode], []);
     const sqliteSingular = sqliteResult.files.find((f) => f.filename === "helpers/conversation.ts");
     const sqlitePlural = sqliteResult.files.find((f) => f.filename === "helpers/conversations.ts");
-    expect(sqliteSingular).toBeDefined();
+    expect(sqliteSingular).toBeUndefined();
     expect(sqlitePlural).toBeDefined();
-    expect(sqliteSingular!.content).toContain('export * from "./conversations";');
   });
 
   it("stateCleanup cleans up db_operation pipeline steps when database nodes or edges are removed", () => {
@@ -1637,7 +1634,7 @@ app.use(express.json());
 
     // 1. Database helpers compilation
     const pgDb = compilePostgresDatabase([entityNode], []);
-    const pgHelper = pgDb.files.find((f) => f.filename === "helpers/conversation.ts");
+    const pgHelper = pgDb.files.find((f) => f.filename === "helpers/conversations.ts");
     expect(pgHelper).toBeDefined();
     expect(pgHelper!.content).toContain("created_by: string;");
     expect(pgHelper!.content).not.toContain("createdBy?: string;");
@@ -1770,7 +1767,7 @@ app.use(express.json());
     ];
 
     const pgDb = compilePostgresDatabase([entityNode], []);
-    const pgHelper = pgDb.files.find((f) => f.filename === "helpers/conversation.ts");
+    const pgHelper = pgDb.files.find((f) => f.filename === "helpers/conversations.ts");
     expect(pgHelper).toBeDefined();
     expect(pgHelper!.content).toContain("export interface CreateConversationsData");
     expect(pgHelper!.content).toContain("created_by: string;");
