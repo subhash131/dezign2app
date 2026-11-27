@@ -140,17 +140,25 @@ export function compileDatabaseNodes(
           return;
         }
 
-        const existingEntity = entityNodes.find((n) => {
+        const isExactDefMatch = (n: BackendNode) => {
           const raw = (n.data?.label || n.data?.tableName || n.data?.tableRef || "").trim();
           if (!raw) return false;
           const normRaw = raw.toLowerCase().replace(/[-_\s]/g, "");
           const normDef = def.name.toLowerCase().replace(/[-_\s]/g, "");
           if (normRaw === normDef) return true;
-          if (toSingular(normRaw) === normDef || toPlural(normRaw) === normDef) return true;
           const cleanRaw = toTableName(raw).replace(/[-_\s]/g, "");
           const cleanDef = toTableName(def.name).replace(/[-_\s]/g, "");
           return cleanRaw === cleanDef;
-        });
+        };
+        const existingEntity =
+          entityNodes.find(isExactDefMatch) ||
+          entityNodes.find((n) => {
+            const raw = (n.data?.label || n.data?.tableName || n.data?.tableRef || "").trim();
+            if (!raw) return false;
+            const normRaw = raw.toLowerCase().replace(/[-_\s]/g, "");
+            const normDef = def.name.toLowerCase().replace(/[-_\s]/g, "");
+            return toSingular(normRaw) === normDef || toPlural(normRaw) === normDef;
+          });
 
         if (existingEntity) {
           const existingCols: CanvasEntityColumn[] = existingEntity.data?.columns || [];
@@ -305,12 +313,18 @@ export function compileDatabaseNodes(
   const paymentsNodes = allNodes.filter((n) => n.type === "payments");
   const hasPayments = paymentsNodes.length > 0 || connectedAuthNodes.some((a) => Boolean(a.data?.paymentsPlugin));
   if (hasPayments) {
-    // Ensure User entity has plan and creemCustomerId columns
-    const userEntity = effectiveNodes.find((n) => {
-      if (n.type !== "entity" && n.type !== "db_ref") return false;
-      const lbl = (n.data?.label || n.data?.tableRef || "").toLowerCase();
-      return lbl === "user" || lbl === "users";
-    });
+    // Ensure User entity has plan and creemCustomerId columns (preferring exact "user" over "users")
+    const userEntity =
+      effectiveNodes.find((n) => {
+        if (n.type !== "entity" && n.type !== "db_ref") return false;
+        const lbl = (n.data?.label || n.data?.tableRef || "").toLowerCase();
+        return lbl === "user";
+      }) ||
+      effectiveNodes.find((n) => {
+        if (n.type !== "entity" && n.type !== "db_ref") return false;
+        const lbl = (n.data?.label || n.data?.tableRef || "").toLowerCase();
+        return lbl === "users";
+      });
     if (userEntity) {
       const existingCols = userEntity.data?.columns || [];
       const existingColNames = new Set(existingCols.map((c: { name?: string }) => (c.name || "").toLowerCase()));
@@ -662,26 +676,44 @@ export function compileDatabaseNodes(
       generateCentralDbTest(packages, primaryFolder),
     ];
 
-    // Helper forwarders for every helper file in child packages (supporting both singular and plural imports)
+    // Helper forwarders for every helper file in child packages (exact file stems first, then singular/plural aliases)
     const seenHelperFiles = new Set<string>();
+    const helperEntries: Array<{ folder: string; helperBase: string }> = [];
     packages.forEach((p) => {
       p.files.forEach((f) => {
         if (f.filename.startsWith("helpers/") && f.filename !== "helpers/index.ts") {
           const helperSubPath = f.filename.slice("helpers/".length);
           const helperBase = helperSubPath.replace(/\.ts$/, "");
-          const singularBase = toSingular(helperBase);
-          const pluralBase = toPlural(helperBase);
-          const aliases = Array.from(new Set([helperBase, singularBase, pluralBase])).filter(Boolean);
+          if (helperBase) {
+            helperEntries.push({ folder: p.packageFolder, helperBase });
+          }
+        }
+      });
+    });
 
-          aliases.forEach((alias) => {
-            if (!seenHelperFiles.has(alias)) {
-              seenHelperFiles.add(alias);
-              centralFiles.push({
-                filename: `helpers/${alias}.ts`,
-                language: "typescript",
-                content: `export * from "../${p.packageFolder}/helpers/${helperBase}";\n`,
-              });
-            }
+    helperEntries.forEach(({ folder, helperBase }) => {
+      if (!seenHelperFiles.has(helperBase)) {
+        seenHelperFiles.add(helperBase);
+        centralFiles.push({
+          filename: `helpers/${helperBase}.ts`,
+          language: "typescript",
+          content: `export * from "../${folder}/helpers/${helperBase}";\n`,
+        });
+      }
+    });
+
+    helperEntries.forEach(({ folder, helperBase }) => {
+      const singularBase = toSingular(helperBase);
+      const pluralBase = toPlural(helperBase);
+      const aliases = Array.from(new Set([singularBase, pluralBase])).filter(Boolean);
+
+      aliases.forEach((alias) => {
+        if (!seenHelperFiles.has(alias)) {
+          seenHelperFiles.add(alias);
+          centralFiles.push({
+            filename: `helpers/${alias}.ts`,
+            language: "typescript",
+            content: `export * from "../${folder}/helpers/${helperBase}";\n`,
           });
         }
       });

@@ -1,5 +1,5 @@
 import { DbOperationFunction } from "@workspace/canvas/types";
-import { toTableName } from "@/lib/compiler/utils";
+import { toTableName, hasSingularPluralTableCollision } from "@/lib/compiler/utils";
 import type { BackendNode } from "@/types/canvas";
 import { toPascal, toSingular } from "./naming";
 import { generateRedisOperations } from "./redisGenerator";
@@ -20,7 +20,7 @@ export function getEntityDbOperations(
   engine = "sqlite",
 ): DbOperationFunction[] {
   if (!entityNode || !entityNode.data) return [];
-  const label = entityNode.data.label || "table";
+  const label = entityNode.data.label || entityNode.data.tableName || "table";
   const columns = entityNode.data.columns || [];
   const indexes = entityNode.data.indexes || [];
 
@@ -281,7 +281,8 @@ export function getEntityDbOperations(
 
   const tableName = toTableName(label || "table");
   const pascal = toPascal(tableName);
-  const pascalSingular = toSingular(pascal);
+  const hasCollision = hasSingularPluralTableCollision(tableName, allNodes);
+  const pascalSingular = hasCollision ? pascal : toSingular(pascal);
 
   // If node already has dbOperations but lacks an upsert operation, inject default upsert
   const hasUpsert = rawOps.some(

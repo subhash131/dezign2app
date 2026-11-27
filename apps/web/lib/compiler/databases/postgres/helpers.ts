@@ -3,7 +3,7 @@ import type {
   ReusableFunction,
   DbOperationFunction,
 } from "@workspace/canvas/types";
-import { toTableName, toVarName, toSingular, toPlural, resolveMasterEntityNode } from "../../utils";
+import { toTableName, toVarName, toSingular, toPlural, resolveMasterEntityNode, hasSingularPluralTableCollision } from "../../utils";
 import {
   generateDefaultDbOperationsForEngine,
   getEntityDbOperations,
@@ -332,8 +332,9 @@ export function generatePostgresTableHelpers(
   const resolvedNode = resolveMasterEntityNode(tableNode, allNodes);
   const rawName = resolvedNode.data?.label || resolvedNode.data?.tableName || resolvedNode.data?.tableRef || "table";
   const tableName = toTableName(rawName);
-  const singularName = toSingular(tableName);
-  const pluralName = toPlural(tableName);
+  const hasCollision = hasSingularPluralTableCollision(tableName, allNodes);
+  const singularName = hasCollision ? tableName : toSingular(tableName);
+  const pluralName = hasCollision ? tableName : toPlural(tableName);
   const pascal = toPascal(tableName);
   const pascalSingular = toPascal(singularName);
   const pascalPlural = toPascal(pluralName);

@@ -565,4 +565,147 @@ describe("compilePostgresDatabase", () => {
     expect(pgHelper?.content).toContain('UPDATE "test_table"');
     expect(pgSync?.content).toContain("def?.tableName || tableName.trim().replace(/\\s+/g, \"_\")");
   });
+
+  it('should disambiguate "user" and "users" tables without overwriting helpers, types, or DB operations in Postgres and SQLite', () => {
+    const userEntity = makeEntityNode("ent-user", "user", [
+      { name: "id", type: "UUID", isPrimaryKey: true, isNotNull: true },
+      { name: "email", type: "TEXT", isNotNull: true },
+    ]);
+    const usersEntity = makeEntityNode("ent-users", "users", [
+      { name: "id", type: "UUID", isPrimaryKey: true, isNotNull: true },
+      { name: "handle", type: "TEXT", isNotNull: true },
+    ]);
+
+    // 1. PostgreSQL
+    const pgDbNode: BackendNode = {
+      id: "db-pg",
+      type: "database",
+      fractionalIndex: "a0",
+      position: { x: 0, y: 0 },
+      data: { label: "Primary DB", dbEngine: "postgres" },
+    };
+    const pgNodes = [
+      pgDbNode,
+      { ...userEntity, data: { ...userEntity.data, databaseId: "db-pg" } },
+      { ...usersEntity, data: { ...usersEntity.data, databaseId: "db-pg" } },
+    ];
+    const pgCompiled = compileDatabaseNodes(pgNodes, []);
+    const pgPkg = pgCompiled.packages?.find((p) => p.packageName === "@workspace/db-primary-db");
+    expect(pgPkg).toBeDefined();
+
+    const pgUserHelper = pgPkg!.files.find((f) => f.filename === "helpers/user.ts");
+    const pgUsersHelper = pgPkg!.files.find((f) => f.filename === "helpers/users.ts");
+    expect(pgUserHelper).toBeDefined();
+    expect(pgUsersHelper).toBeDefined();
+
+    // Each helper file keeps its own table SQL and non-colliding symbols
+    expect(pgUserHelper!.content).toContain('FROM "user"');
+    expect(pgUserHelper!.content).toContain("export async function findAllUser(");
+    expect(pgUserHelper!.content).toContain("export async function createUser(");
+    expect(pgUserHelper!.content).not.toContain('FROM "users"');
+    expect(pgUserHelper!.content).not.toContain("export type Users = User");
+
+    expect(pgUsersHelper!.content).toContain('FROM "users"');
+    expect(pgUsersHelper!.content).toContain("export async function findAllUsers(");
+    expect(pgUsersHelper!.content).toContain("export async function createUsers(");
+    expect(pgUsersHelper!.content).not.toContain('FROM "user"');
+    expect(pgUsersHelper!.content).not.toContain("export type User = Users");
+
+    // Barrel exports both sets without dropping either
+    const pgBarrel = pgPkg!.files.find((f) => f.filename === "helpers/index.ts");
+    expect(pgBarrel!.content).toContain("findAllUser");
+    expect(pgBarrel!.content).toContain("createUser");
+    expect(pgBarrel!.content).toContain("findAllUsers");
+    expect(pgBarrel!.content).toContain("createUsers");
+
+    // Root @workspace/db forwarders point each path to its own file
+    const rootUserForwarder = pgCompiled.files.find((f) => f.filename === "packages/db/helpers/user.ts");
+    const rootUsersForwarder = pgCompiled.files.find((f) => f.filename === "packages/db/helpers/users.ts");
+    expect(rootUserForwarder?.content).toContain("helpers/user");
+    expect(rootUsersForwarder?.content).toContain("helpers/users");
+
+    // Shared @workspace/types emits both interfaces separately
+    const entitiesCode = generateEntitiesModule([userEntity, usersEntity]);
+    expect(entitiesCode).toContain("export interface User {");
+    expect(entitiesCode).toContain("export interface Users {");
+    expect(entitiesCode).not.toContain("export type Users = User;");
+    expect(entitiesCode).not.toContain("export type User = Users;");
+
+    // Service pipeline resolution keeps user vs users routes pointed at their respective helper & function
+    const serviceNode: BackendNode = {
+      id: "srv-users",
+      type: "service",
+      fractionalIndex: "a3",
+      position: { x: 400, y: 0 },
+      data: { label: "users-service", techStack: "express", port: "8080" },
+    };
+    const endpoints: (Endpoint & { nodeId: string })[] = [
+      {
+        id: "ep-user",
+        nodeId: "srv-users",
+        name: "/auth-user",
+        type: "POST",
+        pipelineSteps: [
+          {
+            id: "step-user",
+            name: "createAuthUser",
+            type: "db_operation",
+            enabled: true,
+            outputVariable: "created",
+            tableNodeId: "ent-user",
+            operationId: "auto-create-user",
+            functionRef: { name: "createUser", importPath: "@workspace/db/helpers/user" },
+            inputBindings: [{ argName: "email", source: { kind: "req_body", field: "email" } }],
+          },
+        ],
+      },
+      {
+        id: "ep-users",
+        nodeId: "srv-users",
+        name: "/directory-users",
+        type: "POST",
+        pipelineSteps: [
+          {
+            id: "step-users",
+            name: "createDirUsers",
+            type: "db_operation",
+            enabled: true,
+            outputVariable: "created",
+            tableNodeId: "ent-users",
+            operationId: "auto-create-users",
+            functionRef: { name: "createUsers", importPath: "@workspace/db/helpers/users" },
+            inputBindings: [{ argName: "handle", source: { kind: "req_body", field: "handle" } }],
+          },
+        ],
+      },
+    ];
+    const svcCompiled = compileServiceNode(
+      serviceNode,
+      endpoints,
+      [],
+      [...pgNodes, serviceNode],
+      [],
+      [],
+      pgCompiled.reusableFunctions,
+    );
+    const userRoute = svcCompiled.files.find((f) => f.filename.includes("postAuthUser.ts"));
+    const usersRoute = svcCompiled.files.find((f) => f.filename.includes("postDirectoryUsers.ts"));
+    expect(userRoute?.content).toContain('@workspace/db/helpers/user"');
+    expect(userRoute?.content).toContain("createUser(");
+    expect(usersRoute?.content).toContain('@workspace/db/helpers/users"');
+    expect(usersRoute?.content).toContain("createUsers(");
+
+    // 2. SQLite (default raw sqlite)
+    const sqliteCompiled = compileDatabaseNodes([userEntity, usersEntity], []);
+    const sqliteUserHelper = sqliteCompiled.files.find((f) => f.filename === "helpers/user.ts");
+    const sqliteUsersHelper = sqliteCompiled.files.find((f) => f.filename === "helpers/users.ts");
+    expect(sqliteUserHelper).toBeDefined();
+    expect(sqliteUsersHelper).toBeDefined();
+    expect(sqliteUserHelper!.content).toContain("FROM user ");
+    expect(sqliteUserHelper!.content).toContain("export function findAllUser(");
+    expect(sqliteUserHelper!.content).toContain("export function createUser(");
+    expect(sqliteUsersHelper!.content).toContain("FROM users ");
+    expect(sqliteUsersHelper!.content).toContain("export function findAllUsers(");
+    expect(sqliteUsersHelper!.content).toContain("export function createUsers(");
+  });
 });

@@ -1,6 +1,6 @@
 import { DbOperationFunction } from "@workspace/canvas/types";
 import { sqlColumnToTsType } from "@workspace/canvas/constants";
-import { toSqlIdentifier, toTableName, toVarName } from "@/lib/compiler/utils";
+import { toSqlIdentifier, toTableName, toVarName, hasSingularPluralTableCollision } from "@/lib/compiler/utils";
 import type { BackendNode } from "@/types/canvas";
 import { toPascal, toSingular, toPlural, RawTableColumn } from "./naming";
 
@@ -16,9 +16,10 @@ export function generateDefaultDbOperations(
   _allNodes: BackendNode[] = [],
 ): DbOperationFunction[] {
   const tableName = toTableName(label || "table");
+  const hasCollision = hasSingularPluralTableCollision(tableName, _allNodes);
   const pascal = toPascal(tableName);
-  const pascalSingular = toSingular(pascal);
-  const pascalPlural = toPlural(pascal);
+  const pascalSingular = hasCollision ? pascal : toSingular(pascal);
+  const pascalPlural = hasCollision ? pascal : toPlural(pascal);
 
   // Sanitize all column names against SQL identifier injections
   const columns = rawColumns.map((c) => ({

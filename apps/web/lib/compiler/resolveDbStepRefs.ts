@@ -7,6 +7,7 @@ import {
   toPlural,
   normalizeDbEngine,
   resolveMasterEntityNode,
+  hasSingularPluralTableCollision,
 } from "./utils";
 import { getEntityDbOperations } from "@/lib/utils/entityOperationsHelper";
 
@@ -111,16 +112,19 @@ function resolveSingleDbStep(
   const targetEntity = findTargetEntityNode(step, allNodes);
   if (!targetEntity) return step;
 
-  const rawLabel = targetEntity.data?.label || targetEntity.data?.tableRef || "table";
+  const rawLabel = targetEntity.data?.label || targetEntity.data?.tableName || targetEntity.data?.tableRef || "table";
   const tableName = toTableName(rawLabel);
-  const varName = toVarName(toSingular(tableName));
-  const pluralVarName = toVarName(toPlural(tableName));
+  const hasCollision = hasSingularPluralTableCollision(tableName, allNodes);
   const fullVarName = toVarName(tableName);
-  const validAliases = new Set([
-    varName.toLowerCase(),
-    pluralVarName.toLowerCase(),
-    fullVarName.toLowerCase(),
-  ]);
+  const varName = hasCollision ? fullVarName : toVarName(toSingular(tableName));
+  const pluralVarName = hasCollision ? fullVarName : toVarName(toPlural(tableName));
+  const validAliases = hasCollision
+    ? new Set([fullVarName.toLowerCase()])
+    : new Set([
+        varName.toLowerCase(),
+        pluralVarName.toLowerCase(),
+        fullVarName.toLowerCase(),
+      ]);
 
   const engine = resolveEntityDbEngine(targetEntity, allNodes);
   const entityOps: DbOperationFunction[] = getEntityDbOperations(targetEntity, allNodes, engine);

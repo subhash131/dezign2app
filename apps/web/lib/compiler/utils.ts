@@ -206,6 +206,62 @@ export function toTableName(str: string): string {
 }
 
 /**
+ * Returns true if `allNodes` contains another distinct relational entity table whose
+ * singular/plural form collides with `tableName` (e.g., both "user" and "users").
+ */
+export function hasSingularPluralTableCollision<
+  T extends {
+    id?: string;
+    type?: string;
+    data?: { label?: string; tableName?: string; tableRef?: string; dbType?: string };
+  },
+>(tableName: string, allNodes: T[] = []): boolean {
+  if (!tableName || !Array.isArray(allNodes) || allNodes.length === 0) {
+    return false;
+  }
+
+  const clean = toTableName(tableName);
+  const sing = toSingular(clean);
+  const plur = toPlural(clean);
+
+  for (const node of allNodes) {
+    if (!node || (node.type !== "entity" && node.type !== "db_ref")) continue;
+    if (node.data?.dbType === "redis") continue;
+
+    const resolved =
+      node.type === "db_ref" && node.data?.tableRef
+        ? allNodes.find((n) => n.id === node.data?.tableRef) || node
+        : node;
+
+    const raw =
+      resolved.data?.label ||
+      resolved.data?.tableName ||
+      resolved.data?.tableRef ||
+      "";
+    if (!raw) continue;
+
+    const otherClean = toTableName(raw);
+    if (!otherClean || otherClean === clean) continue;
+
+    const otherSing = toSingular(otherClean);
+    const otherPlur = toPlural(otherClean);
+
+    if (
+      otherClean === sing ||
+      otherClean === plur ||
+      otherSing === clean ||
+      otherPlur === clean ||
+      otherSing === sing ||
+      otherPlur === plur
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
  * Resolves a `db_ref` node to its underlying master `entity` node when present in `allNodes`.
  */
 export function resolveMasterEntityNode<
