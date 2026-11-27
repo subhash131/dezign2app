@@ -114,17 +114,9 @@ function resolveSingleDbStep(
 
   const rawLabel = targetEntity.data?.label || targetEntity.data?.tableName || targetEntity.data?.tableRef || "table";
   const tableName = toTableName(rawLabel);
-  const hasCollision = hasSingularPluralTableCollision(tableName, allNodes);
   const fullVarName = toVarName(tableName);
-  const varName = hasCollision ? fullVarName : toVarName(toSingular(tableName));
-  const pluralVarName = hasCollision ? fullVarName : toVarName(toPlural(tableName));
-  const validAliases = hasCollision
-    ? new Set([fullVarName.toLowerCase()])
-    : new Set([
-        varName.toLowerCase(),
-        pluralVarName.toLowerCase(),
-        fullVarName.toLowerCase(),
-      ]);
+  const varName = fullVarName;
+  const validAliases = new Set([fullVarName.toLowerCase()]);
 
   const engine = resolveEntityDbEngine(targetEntity, allNodes);
   const entityOps: DbOperationFunction[] = getEntityDbOperations(targetEntity, allNodes, engine);

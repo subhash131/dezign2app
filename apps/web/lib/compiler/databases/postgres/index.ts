@@ -4,7 +4,7 @@ import type {
   CompiledDatabaseResult,
   ReusableFunction,
 } from "@workspace/canvas/types";
-import { toTableName, toVarName, toSingular, toPlural, deduplicateEntityTableNodes, hasSingularPluralTableCollision } from "../../utils";
+import { toTableName, toVarName, deduplicateEntityTableNodes } from "../../utils";
 import type { PostgresOptions } from "./types";
 import { getColumns } from "./utils";
 import {
@@ -287,8 +287,7 @@ export function compilePostgresDatabase(
   tables.forEach((tableNode) => {
     const rawName = tableNode.data?.label || tableNode.data?.tableName || tableNode.data?.tableRef || "table";
     const tableName = toTableName(rawName);
-    const hasCollision = hasSingularPluralTableCollision(tableName, tables);
-    const varName = hasCollision ? toVarName(tableName) : toVarName(toSingular(tableName));
+    const varName = toVarName(tableName);
 
     const { code, fns, typeExports, valueExports } =
       generatePostgresTableHelpers(tableNode, tables, packageName);
@@ -298,17 +297,6 @@ export function compilePostgresDatabase(
       language: "typescript",
       content: code,
     });
-
-    if (!hasCollision) {
-      const pluralVarName = toVarName(toPlural(tableName));
-      if (pluralVarName !== varName) {
-        files.push({
-          filename: `helpers/${pluralVarName}.ts`,
-          language: "typescript",
-          content: `export * from "./${varName}";\n`,
-        });
-      }
-    }
 
     allReusableFunctions.push(...fns);
 
