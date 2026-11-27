@@ -84,8 +84,11 @@ export async function executeApiAction<TData = unknown, TBody = unknown>(
 
   const timestamp = new Date().toLocaleTimeString();
   const logId = providedLogId || Math.random().toString(36).substring(2, 9);
+  const isDebugLogsEnabled =
+    process.env.NEXT_PUBLIC_ENABLE_DEBUG_LOGS?.trim().toLowerCase() === "true" ||
+    process.env.NEXT_PUBLIC_ENABLE_DEBUG_UI?.trim().toLowerCase() === "true";
   const dispatchActionLog = (entry: ApiActionResult<TData>) => {
-    if (emitLog && typeof window !== "undefined") {
+    if (emitLog && isDebugLogsEnabled && typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("dezign:layout-log", { detail: entry }));
     }
   };

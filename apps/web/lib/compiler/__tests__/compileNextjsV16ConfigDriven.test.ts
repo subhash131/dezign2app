@@ -1516,12 +1516,15 @@ describe("compileNextjsV16WebClient - Configuration-Driven Output", () => {
     expect(pageContent).toContain('import React, { useState, useEffect, Suspense } from "react";');
     expect(pageContent).toContain('aria-label="Page Output Log"');
     expect(pageContent).toContain('window.addEventListener("dezign:layout-log"');
+    expect(pageContent).toContain("if (!showDebugLogs) return;");
     expect(pageContent).toContain("emitLog: false");
 
     const apiClientFile = result.files.find((f: CompiledFile) => f.filename === "lib/api-client.ts");
     expect(apiClientFile).toBeDefined();
     const apiClientContent = apiClientFile?.content || "";
     expect(apiClientContent).toContain("emitLog = true");
+    expect(apiClientContent).toContain("isDebugLogsEnabled");
+    expect(apiClientContent).toContain("if (emitLog && isDebugLogsEnabled && typeof window !== \"undefined\")");
     expect(apiClientContent).toContain('window.dispatchEvent(new CustomEvent("dezign:layout-log", { detail: entry }))');
     expect(apiClientContent).toContain("dispatchActionLog(actionResult)");
     expect(apiClientContent).toContain("dispatchActionLog(errorResult)");
