@@ -4,6 +4,7 @@ import { renderHook, act } from "@testing-library/react";
 import { useStepRowState } from "../useStepRowState";
 import { PipelineStepDraft } from "../types";
 import { Endpoint, BackendNode } from "@workspace/canvas/types";
+import { computeDbOpBindings } from "@/lib/utils/entityOperationsHelper";
 
 describe("pipeline-step-editor: isPathMatch", () => {
   it("matches exact path and argument name", () => {
@@ -424,5 +425,156 @@ describe("pipeline-step-editor: useStepRowState handleAutoMapArguments", () => {
       kind: "env",
       field: "STRIPE_SECRET_KEY",
     });
+  });
+
+  it("ignores id, created_at, createdAt, updated_at, and updatedAt during automapping while mapping other fields and preserving manual bindings", () => {
+    const endpointWithTimestampsAndId: Endpoint = {
+      id: "ep-ts",
+      name: "Update Item",
+      type: "POST",
+      pathParams: [{ id: "p-id", name: "id", type: "string", required: true }],
+      queryParams: [],
+      requestBody: {
+        id: "rb-ts",
+        fields: [
+          { id: "f-id", name: "id", type: "string", required: true },
+          { id: "f-title", name: "title", type: "string", required: true },
+          { id: "f-user-id", name: "user_id", type: "string", required: true },
+          { id: "f-ca", name: "created_at", type: "string", required: false },
+          { id: "f-ua", name: "updated_at", type: "string", required: false },
+        ],
+      },
+    };
+
+    const step: PipelineStepDraft = {
+      id: "step-transform-ts",
+      name: "transformItem",
+      type: "transform",
+      enabled: true,
+      functionRef: {
+        name: "transformItem",
+        importPath: "@workspace/transformers",
+        inputSchema: [
+          { name: "id", type: "string", required: false },
+          { name: "title", type: "string", required: true },
+          { name: "user_id", type: "string", required: true },
+          { name: "created_at", type: "string", required: false },
+          { name: "createdAt", type: "string", required: false },
+          { name: "updated_at", type: "string", required: false },
+          { name: "updatedAt", type: "string", required: false },
+        ],
+      },
+      inputBindings: [],
+    };
+
+    let updatedStep: PipelineStepDraft = step;
+    const onChange = vi.fn((updated) => {
+      updatedStep = updated;
+    });
+
+    const { result, rerender } = renderHook(
+      ({ currentStep }) =>
+        useStepRowState({
+          step: currentStep,
+          index: 0,
+          priorSteps: [],
+          endpoint: endpointWithTimestampsAndId,
+          allNodes: [],
+          allEdges: [],
+          onChange,
+        }),
+      { initialProps: { currentStep: step } },
+    );
+
+    act(() => {
+      result.current.handleAutoMapArguments();
+    });
+
+    expect(onChange).toHaveBeenCalled();
+    const mappedNames = (updatedStep.inputBindings || []).map((b) => b.argName);
+    expect(mappedNames).toEqual(["title", "user_id"]);
+    expect(mappedNames).not.toContain("id");
+    expect(mappedNames).not.toContain("created_at");
+    expect(mappedNames).not.toContain("createdAt");
+    expect(mappedNames).not.toContain("updated_at");
+    expect(mappedNames).not.toContain("updatedAt");
+
+    // Manual configuration of id / created_at must still be preserved on re-run
+    const manuallyConfiguredStep: PipelineStepDraft = {
+      ...step,
+      inputBindings: [
+        { argName: "id", source: { kind: "req_params", field: "id" } },
+        { argName: "created_at", source: { kind: "inline", value: "2026-01-01" } },
+      ],
+    };
+    rerender({ currentStep: manuallyConfiguredStep });
+
+    act(() => {
+      result.current.handleAutoMapArguments();
+    });
+
+    expect(updatedStep.inputBindings).toEqual([
+      { argName: "id", source: { kind: "req_params", field: "id" } },
+      { argName: "title", source: { kind: "req_body", field: "title" } },
+      { argName: "user_id", source: { kind: "req_body", field: "user_id" } },
+      { argName: "created_at", source: { kind: "inline", value: "2026-01-01" } },
+    ]);
+  });
+
+  it("computeDbOpBindings ignores id, created_at, and updated_at while mapping other DB columns", () => {
+    const entityNode: BackendNode = {
+      id: "table-items",
+      type: "entity",
+      position: { x: 0, y: 0 },
+      fractionalIndex: "a0",
+      data: {
+        label: "items",
+        tableRef: "items",
+        columns: [
+          { name: "id", type: "string", isPrimaryKey: true },
+          { name: "title", type: "string", isNotNull: true },
+          { name: "created_at", type: "timestamptz", isNotNull: false },
+          { name: "updated_at", type: "timestamptz", isNotNull: false },
+        ],
+      },
+    };
+
+    const availableSources = [
+      {
+        id: "req_params",
+        kind: "req_params",
+        paths: [{ path: "id", type: "string" }],
+      },
+      {
+        id: "req_body",
+        kind: "req_body",
+        paths: [
+          { path: "id", type: "string" },
+          { path: "title", type: "string" },
+          { path: "created_at", type: "string" },
+          { path: "updated_at", type: "string" },
+        ],
+      },
+    ];
+
+    const createBindings = computeDbOpBindings(
+      { id: "op-create", name: "createItem", kind: "create" } as any,
+      entityNode,
+      [],
+      availableSources,
+    );
+    expect(createBindings).toEqual([
+      { argName: "title", source: { kind: "req_body", field: "title" } },
+    ]);
+
+    const updateBindings = computeDbOpBindings(
+      { id: "op-update", name: "updateItem", kind: "update" } as any,
+      entityNode,
+      [],
+      availableSources,
+    );
+    expect(updateBindings).toEqual([
+      { argName: "title", source: { kind: "req_body", field: "title" } },
+    ]);
   });
 });

@@ -19,6 +19,7 @@ import { isStepInputUnconfigured } from "@/lib/utils/pipelineValidation";
 import {
   getEntityDbOperations,
   getDbOperationExpectedArgs,
+  isIgnoredAutoMapField,
 } from "@/lib/utils/entityOperationsHelper";
 import {
   getStorageOperations,
@@ -690,6 +691,14 @@ export function useStepRowState({
           newBindings.push(existing);
           continue;
         }
+      }
+
+      // Ignore id, created_at, and updated_at during automapping; let user configure if needed
+      if (isIgnoredAutoMapField(arg.name)) {
+        if (existing) {
+          newBindings.push(existing);
+        }
+        continue;
       }
 
       // 2. Path param match
