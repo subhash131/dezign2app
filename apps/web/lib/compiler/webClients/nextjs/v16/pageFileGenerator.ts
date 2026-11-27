@@ -516,22 +516,24 @@ export function generatePageAndComponentFiles({
         pageLoadFetchStatements = `${statements.join("\n        ")}
         if (isMounted) {
           setPageLoadData(data);
-          ${storePopulationLines ? `${storePopulationLines}\n          ` : ""}const pageLoadEntry = {
-            id: Math.random().toString(36).substring(2, 9),
-            eventName: "${pageLoadEvents[0]?.name || "pageLoad"}",
-            eventType: "pageLoad",
-            timestamp: new Date().toLocaleTimeString(),
-            url: ${firstPageLoadLink ? (resolveBaseUrlInfo(firstPageLoadLink.fullUrl, firstPageLoadLink.serviceName || firstPageLoadLink.targetNodeName).hasBaseUrl ? resolveBaseUrlInfo(firstPageLoadLink.fullUrl, firstPageLoadLink.serviceName || firstPageLoadLink.targetNodeName).urlExpression : `"${firstPageLoadLink.fullUrl}"`) : `"N/A"`},
-            method: "${firstPageLoadLink?.method || "GET"}",
-            status: res.status,
-            data: data,
-          };
-          setTriggerLogs((prev) => [
-            pageLoadEntry,
-            ...prev,
-          ]);
-          if (typeof window !== "undefined") {
-            window.dispatchEvent(new CustomEvent("dezign:layout-log", { detail: pageLoadEntry }));
+          ${storePopulationLines ? `${storePopulationLines}\n          ` : ""}if (showDebugLogs) {
+            const pageLoadEntry = {
+              id: Math.random().toString(36).substring(2, 9),
+              eventName: "${pageLoadEvents[0]?.name || "pageLoad"}",
+              eventType: "pageLoad",
+              timestamp: new Date().toLocaleTimeString(),
+              url: ${firstPageLoadLink ? (resolveBaseUrlInfo(firstPageLoadLink.fullUrl, firstPageLoadLink.serviceName || firstPageLoadLink.targetNodeName).hasBaseUrl ? resolveBaseUrlInfo(firstPageLoadLink.fullUrl, firstPageLoadLink.serviceName || firstPageLoadLink.targetNodeName).urlExpression : `"${firstPageLoadLink.fullUrl}"`) : `"N/A"`},
+              method: "${firstPageLoadLink?.method || "GET"}",
+              status: res.status,
+              data: data,
+            };
+            setTriggerLogs((prev) => [
+              pageLoadEntry,
+              ...prev,
+            ]);
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(new CustomEvent("dezign:layout-log", { detail: pageLoadEntry }));
+            }
           }
         };`;
       } else {
@@ -563,17 +565,19 @@ export function generatePageAndComponentFiles({
         ${statements.join("\n        ")}
         if (isMounted) {
           setPageLoadData(${pageLoadDataExpr} ?? null);
-          ${storePopulationLines ? `${storePopulationLines}\n          ` : ""}const pageLoadEntries = [
-            ${logEntries}
-          ];
-          setTriggerLogs((prev) => [
-            ...pageLoadEntries,
-            ...prev,
-          ]);
-          if (typeof window !== "undefined") {
-            pageLoadEntries.forEach((entry) => {
-              window.dispatchEvent(new CustomEvent("dezign:layout-log", { detail: entry }));
-            });
+          ${storePopulationLines ? `${storePopulationLines}\n          ` : ""}if (showDebugLogs) {
+            const pageLoadEntries = [
+              ${logEntries}
+            ];
+            setTriggerLogs((prev) => [
+              ...pageLoadEntries,
+              ...prev,
+            ]);
+            if (typeof window !== "undefined") {
+              pageLoadEntries.forEach((entry) => {
+                window.dispatchEvent(new CustomEvent("dezign:layout-log", { detail: entry }));
+              });
+            }
           }
         };`;
       }
