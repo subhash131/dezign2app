@@ -28,6 +28,7 @@ import { toTableName, toSingular, toPlural } from "@/lib/compiler/utils";
 export function isEntityMatch(
   entity: BackendNode,
   def: BetterAuthTableDefinition,
+  allNodes?: BackendNode[],
 ): boolean {
   if (entity.type !== BACKEND_NODE_ENTITY) return false;
   const raw = (entity.data?.label || entity.data?.tableRef || "").trim();
@@ -41,11 +42,22 @@ export function isEntityMatch(
   const normDef = defNameLower.replace(/[-_\s]/g, "");
   if (normRaw === normDef) return true;
 
-  if (toSingular(normRaw) === normDef || toPlural(normRaw) === normDef) return true;
-
   const cleanRaw = toTableName(raw).replace(/[-_\s]/g, "");
   const cleanDef = toTableName(def.name).replace(/[-_\s]/g, "");
-  return cleanRaw === cleanDef;
+  if (cleanRaw === cleanDef) return true;
+
+  if (toSingular(normRaw) === normDef || toPlural(normRaw) === normDef) {
+    if (allNodes && allNodes.some((n) => {
+      if (n.id === entity.id || n.type !== BACKEND_NODE_ENTITY) return false;
+      const otherRaw = (n.data?.label || n.data?.tableRef || "").trim().toLowerCase().replace(/[-_\s]/g, "");
+      return otherRaw === normDef;
+    })) {
+      return false;
+    }
+    return true;
+  }
+
+  return false;
 }
 
 export type EntityIndexDef = { name: string; columns: string; isUnique?: boolean };
@@ -370,7 +382,7 @@ export function useBetterAuthTableSync({
       (n) =>
         n.type === BACKEND_NODE_ENTITY &&
         (!selectedDatabaseId || n.data?.databaseId === selectedDatabaseId) &&
-        isEntityMatch(n, def),
+        isEntityMatch(n, def, storeNodes),
     );
 
     let targetEntityId: string;
@@ -596,7 +608,7 @@ export function useBetterAuthTableSync({
       const mappedId = activeMappings[def.key];
       const matchingEntity = mappedId
         ? existingEntities.find((e) => e.id === mappedId)
-        : existingEntities.find((e) => isEntityMatch(e, def));
+        : existingEntities.find((e) => isEntityMatch(e, def, existingEntities));
 
       if (matchingEntity) {
         activeMappings[def.key] = matchingEntity.id;
@@ -701,7 +713,7 @@ export function useBetterAuthTableSync({
         (def.key === BETTER_AUTH_TABLE_KEYS.USER ? rawUserMapping : undefined);
       const matching = rawId
         ? existingEntities.find((e) => e.id === rawId)
-        : existingEntities.find((e) => isEntityMatch(e, def));
+        : existingEntities.find((e) => isEntityMatch(e, def, existingEntities));
       if (matching) {
         activeMappings[def.key] = matching.id;
       }
@@ -778,7 +790,7 @@ export function useBetterAuthTableSync({
       (def.key === "userEntityId" ? data.userEntityId || data.userSchemaId : undefined);
     return Boolean(
       (rawId && schemaEntities.some((e) => e.id === rawId)) ||
-      schemaEntities.some((e) => isEntityMatch(e, def))
+      schemaEntities.some((e) => isEntityMatch(e, def, schemaEntities))
     );
   }).length;
 

@@ -525,5 +525,56 @@ describe("entityOperationsHelper - Redis Operations Generator", () => {
       const updatedNodeCreate = node.data.dbOperations?.find((o) => o.kind === "create");
       expect(updatedNodeCreate?.signature).toContain("namede");
     });
+
+    it('disambiguates operations when both "user" and "users" tables exist on the canvas', () => {
+      const userNode: BackendNode = {
+        id: "entity-user",
+        type: "entity",
+        position: { x: 0, y: 0 },
+        fractionalIndex: "a0",
+        data: {
+          label: "user",
+          columns: [
+            { name: "id", type: "UUID", isPrimaryKey: true },
+            { name: "email", type: "TEXT" },
+          ],
+        },
+      };
+
+      const usersNode: BackendNode = {
+        id: "entity-users",
+        type: "entity",
+        position: { x: 200, y: 0 },
+        fractionalIndex: "a1",
+        data: {
+          label: "users",
+          columns: [
+            { name: "id", type: "UUID", isPrimaryKey: true },
+            { name: "handle", type: "TEXT" },
+          ],
+        },
+      };
+
+      const allNodes = [userNode, usersNode];
+
+      const pgUserOps = getEntityDbOperations(userNode, allNodes, "postgres").map((o) => o.name);
+      const pgUsersOps = getEntityDbOperations(usersNode, allNodes, "postgres").map((o) => o.name);
+
+      expect(pgUserOps).toContain("findAllUser");
+      expect(pgUserOps).toContain("createUser");
+      expect(pgUserOps).not.toContain("findAllUsers");
+
+      expect(pgUsersOps).toContain("findAllUsers");
+      expect(pgUsersOps).toContain("createUsers");
+      expect(pgUsersOps).not.toContain("createUser");
+
+      const sqliteUserOps = getEntityDbOperations(userNode, allNodes, "sqlite").map((o) => o.name);
+      const sqliteUsersOps = getEntityDbOperations(usersNode, allNodes, "sqlite").map((o) => o.name);
+
+      expect(sqliteUserOps).toContain("findAllUser");
+      expect(sqliteUserOps).toContain("createUser");
+      expect(sqliteUsersOps).toContain("findAllUsers");
+      expect(sqliteUsersOps).toContain("createUsers");
+    });
   });
 });

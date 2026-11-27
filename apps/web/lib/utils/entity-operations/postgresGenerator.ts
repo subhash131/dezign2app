@@ -1,6 +1,6 @@
 import { DbOperationFunction } from "@workspace/canvas/types";
 import { sqlColumnToTsType } from "@workspace/canvas/constants";
-import { toSqlIdentifier, toTableName, toVarName } from "@/lib/compiler/utils";
+import { toSqlIdentifier, toTableName, toVarName, hasSingularPluralTableCollision } from "@/lib/compiler/utils";
 import type { BackendNode } from "@/types/canvas";
 import { toPascal, toSingular, toPlural, RawTableColumn } from "./naming";
 
@@ -14,8 +14,9 @@ export function generatePostgresDbOperations(
   _allNodes: BackendNode[] = [],
 ): DbOperationFunction[] {
   const tableName = toTableName(label || "table");
-  const singularName = toSingular(tableName);
-  const pluralName = toPlural(tableName);
+  const hasCollision = hasSingularPluralTableCollision(tableName, _allNodes);
+  const singularName = hasCollision ? tableName : toSingular(tableName);
+  const pluralName = hasCollision ? tableName : toPlural(tableName);
   const pascal = toPascal(tableName);
   const pascalSingular = toPascal(singularName);
   const pascalPlural = toPascal(pluralName);

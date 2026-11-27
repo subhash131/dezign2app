@@ -1,6 +1,6 @@
 import { BackendNode } from "@/types/canvas";
 import { CompiledFile, CompiledDatabasePackage } from "@workspace/canvas/types";
-import { toTableName, toVarName, toSingular, toPlural } from "../utils";
+import { toTableName, toVarName, toSingular, toPlural, hasSingularPluralTableCollision } from "../utils";
 
 function toPascal(str: string): string {
   if (!str) return "Item";
@@ -101,6 +101,7 @@ export function generateTableHelperTest(
     "table";
 
   const tableName = toTableName(rawLabel);
+  const hasCollision = hasSingularPluralTableCollision(tableName, allNodes);
   const normEngine = (engine || "postgres").toLowerCase();
   const isPostgresOrMysql =
     normEngine.includes("postgres") ||
@@ -108,10 +109,14 @@ export function generateTableHelperTest(
     normEngine.includes("pg");
   const varName =
     customVarName ||
-    (isPostgresOrMysql ? toVarName(toSingular(tableName)) : toVarName(tableName));
+    (hasCollision
+      ? toVarName(tableName)
+      : isPostgresOrMysql
+        ? toVarName(toSingular(tableName))
+        : toVarName(tableName));
   const Pascal = toPascal(tableName);
-  const pascalSingular = toSingular(Pascal);
-  const pascalPlural = toPlural(Pascal);
+  const pascalSingular = hasCollision ? Pascal : toSingular(Pascal);
+  const pascalPlural = hasCollision ? Pascal : toPlural(Pascal);
   const isSqlite =
     normEngine.includes("sqlite") ||
     (!isPostgresOrMysql && !normEngine.includes("convex"));

@@ -6,7 +6,7 @@ import {
   DbOperationFunction,
 } from "@workspace/canvas/types";
 import { sqlColumnToTsType, isSqlNumericType, isSqlBooleanType } from "@workspace/canvas/constants";
-import { toTableName, toVarName, toSqlIdentifier, toSingular, toPlural, deduplicateEntityTableNodes } from "../../../utils";
+import { toTableName, toVarName, toSqlIdentifier, toSingular, toPlural, deduplicateEntityTableNodes, hasSingularPluralTableCollision } from "../../../utils";
 import { generateDefaultDbOperations, getEntityDbOperations } from "@/lib/utils/entityOperationsHelper";
 import { generateDatabaseConnectionTest, generateTableHelperTest } from "../../../generators/databaseTestGenerator";
 import { PersonaSeed } from "../../../types/testPersona";
@@ -82,10 +82,11 @@ function generateTableHelpers(
     tableNode.data?.tableName ||
     "table";
   const tableName = toTableName(rawLabel);
+  const hasCollision = hasSingularPluralTableCollision(tableName, allNodes);
   const varName = toVarName(tableName);
   const Pascal = toPascal(tableName);
-  const pascalSingular = toSingular(Pascal);
-  const pascalPlural = toPlural(Pascal);
+  const pascalSingular = hasCollision ? Pascal : toSingular(Pascal);
+  const pascalPlural = hasCollision ? Pascal : toPlural(Pascal);
   const rawCols = getColumns(tableNode, allNodes);
   // Deduplicate columns by variable name to prevent TS2300 duplicate identifier errors
   const seenColVars = new Set<string>();
@@ -1024,25 +1025,28 @@ try {
 
   tables.forEach((tableNode) => {
     const tableName = toTableName(tableNode.data.label || tableNode.data.tableName || "table");
+    const hasCollision = hasSingularPluralTableCollision(tableName, tables);
     const varName = toVarName(tableName);
     const { code, fns, typeExports, valueExports } = generateTableHelpers(tableNode, tables);
 
     files.push({ filename: `helpers/${varName}.ts`, language: "typescript", content: code });
-    const singularVarName = toVarName(toSingular(tableName));
-    const pluralVarName = toVarName(toPlural(tableName));
-    if (singularVarName !== varName) {
-      files.push({
-        filename: `helpers/${singularVarName}.ts`,
-        language: "typescript",
-        content: `export * from "./${varName}";\n`,
-      });
-    }
-    if (pluralVarName !== varName && pluralVarName !== singularVarName) {
-      files.push({
-        filename: `helpers/${pluralVarName}.ts`,
-        language: "typescript",
-        content: `export * from "./${varName}";\n`,
-      });
+    if (!hasCollision) {
+      const singularVarName = toVarName(toSingular(tableName));
+      const pluralVarName = toVarName(toPlural(tableName));
+      if (singularVarName !== varName) {
+        files.push({
+          filename: `helpers/${singularVarName}.ts`,
+          language: "typescript",
+          content: `export * from "./${varName}";\n`,
+        });
+      }
+      if (pluralVarName !== varName && pluralVarName !== singularVarName) {
+        files.push({
+          filename: `helpers/${pluralVarName}.ts`,
+          language: "typescript",
+          content: `export * from "./${varName}";\n`,
+        });
+      }
     }
     allReusableFunctions.push(...fns);
 

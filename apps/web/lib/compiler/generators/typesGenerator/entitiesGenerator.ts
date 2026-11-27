@@ -15,6 +15,33 @@ export function generateEntitiesModule(
   let code = `/**\n * Shared Data Models & Schemas\n */\n\n`;
   const seenNames = new Set<string>();
 
+  // Pre-collect all explicit relational entity PascalCase names so singular/plural aliases
+  // (e.g. `type Users = User`) never shadow or suppress a distinct `users` table.
+  const explicitEntityPascalNames = new Set<string>();
+  nodes.forEach((node) => {
+    if (node.type === "entity" || node.type === "db_ref") {
+      let targetNode = node;
+      if (node.type === "db_ref" && node.data?.tableRef) {
+        const master = nodes.find((n) => n.id === node.data.tableRef);
+        if (master) targetNode = master;
+      }
+      const rawName = targetNode.data?.label || targetNode.data?.tableName || targetNode.data?.tableRef;
+      if (rawName) {
+        const p = toPascalCase(rawName);
+        if (p) explicitEntityPascalNames.add(p);
+      }
+    } else if (node.type === "database") {
+      const tables = node.data?.tables || [];
+      tables.forEach((tbl) => {
+        const rawName = tbl.name || tbl.label || tbl.tableRef;
+        if (rawName) {
+          const p = toPascalCase(rawName);
+          if (p) explicitEntityPascalNames.add(p);
+        }
+      });
+    }
+  });
+
   function renderEntityInterface(
     pascal: string,
     rawName: string,
@@ -89,11 +116,12 @@ export function generateEntitiesModule(
     }
 
     // Generate dual singular/plural type aliases so both "Product" and "Products" work seamlessly,
-    // but avoid colliding with explicit user-defined custom types
+    // but avoid colliding with explicit user-defined custom types or another distinct entity table
     if (
       singularPascal &&
       singularPascal !== pascal &&
       !seenNames.has(singularPascal) &&
+      !explicitEntityPascalNames.has(singularPascal) &&
       !customTypeNames?.has(singularPascal)
     ) {
       seenNames.add(singularPascal);
@@ -111,6 +139,7 @@ export function generateEntitiesModule(
       pluralPascal &&
       pluralPascal !== pascal &&
       !seenNames.has(pluralPascal) &&
+      !explicitEntityPascalNames.has(pluralPascal) &&
       !customTypeNames?.has(pluralPascal)
     ) {
       seenNames.add(pluralPascal);
@@ -170,6 +199,7 @@ export function generateEntitiesModule(
       singularPascal &&
       singularPascal !== pascal &&
       !seenNames.has(`Create${singularPascal}Data`) &&
+      !explicitEntityPascalNames.has(singularPascal) &&
       !customTypeNames?.has(`Create${singularPascal}Data`)
     ) {
       seenNames.add(`Create${singularPascal}Data`);
@@ -183,6 +213,7 @@ export function generateEntitiesModule(
       pluralPascal &&
       pluralPascal !== pascal &&
       !seenNames.has(`Create${pluralPascal}Data`) &&
+      !explicitEntityPascalNames.has(pluralPascal) &&
       !customTypeNames?.has(`Create${pluralPascal}Data`)
     ) {
       seenNames.add(`Create${pluralPascal}Data`);
