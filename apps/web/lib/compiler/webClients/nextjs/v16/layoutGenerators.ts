@@ -1009,6 +1009,9 @@ export function SidebarActionButton({
 }: SidebarActionButtonProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const showDebugLogs =
+    process.env.NEXT_PUBLIC_ENABLE_DEBUG_LOGS?.trim().toLowerCase() === "true" ||
+    process.env.NEXT_PUBLIC_ENABLE_DEBUG_UI?.trim().toLowerCase() === "true";
 
   const handleClick = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -1039,8 +1042,10 @@ export function SidebarActionButton({
           customHeaders,
           queryParams,
           requestBody,
+          emitLog: false,
+          logId,
         });
-        if (typeof window !== "undefined") {
+        if (showDebugLogs && typeof window !== "undefined") {
           window.dispatchEvent(
             new CustomEvent("dezign:layout-log", {
               detail: {
@@ -1061,7 +1066,7 @@ export function SidebarActionButton({
         return result.data;
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : "Request failed";
-        if (typeof window !== "undefined") {
+        if (showDebugLogs && typeof window !== "undefined") {
           window.dispatchEvent(
             new CustomEvent("dezign:layout-log", {
               detail: {
@@ -1089,8 +1094,21 @@ export function SidebarActionButton({
         (clean && actionHandlers[clean]);
 
       if (handler) {
-        const result = await handler({ onTrigger, router });
-        if (!loggedViaTrigger && typeof window !== "undefined") {
+        const markLogged = () => {
+          loggedViaTrigger = true;
+        };
+        if (showDebugLogs && typeof window !== "undefined") {
+          window.addEventListener("dezign:layout-log", markLogged);
+        }
+        let result: unknown;
+        try {
+          result = await handler({ onTrigger, router });
+        } finally {
+          if (showDebugLogs && typeof window !== "undefined") {
+            window.removeEventListener("dezign:layout-log", markLogged);
+          }
+        }
+        if (showDebugLogs && !loggedViaTrigger && typeof window !== "undefined") {
           window.dispatchEvent(
             new CustomEvent("dezign:layout-log", {
               detail: {
@@ -1112,7 +1130,7 @@ export function SidebarActionButton({
           detail: { actionName, actionId, eventType: resolvedEventType },
         })
       );
-      if (typeof window !== "undefined") {
+      if (showDebugLogs && typeof window !== "undefined") {
         window.dispatchEvent(
           new CustomEvent("dezign:layout-log", {
             detail: {
@@ -1127,7 +1145,7 @@ export function SidebarActionButton({
       }
     } catch (err) {
       console.error(\`Failed to execute action \${actionName}:\`, err);
-      if (typeof window !== "undefined") {
+      if (showDebugLogs && typeof window !== "undefined") {
         window.dispatchEvent(
           new CustomEvent("dezign:layout-log", {
             detail: {

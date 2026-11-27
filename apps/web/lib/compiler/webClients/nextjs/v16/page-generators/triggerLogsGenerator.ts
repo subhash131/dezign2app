@@ -6,7 +6,7 @@ export function generateTriggerLogsState(hasLogsSection: boolean, hasStreamingAc
     process.env.NEXT_PUBLIC_ENABLE_DEBUG_UI?.trim().toLowerCase() === "true";
   const [isLogsOpen, setIsLogsOpen] = useState(false);
   const [hasLayoutDrawer, setHasLayoutDrawer] = useState(false);
-  const [triggerLogs, setTriggerLogs] = useState<Array<{
+  const [triggerLogs, setTriggerLogsState] = useState<Array<{
     id: string;
     eventName: string;
     eventType: string;
@@ -19,7 +19,13 @@ export function generateTriggerLogsState(hasLogsSection: boolean, hasStreamingAc
     error?: string;${streamingField}
   }>>([]);
 
+  const setTriggerLogs: React.Dispatch<React.SetStateAction<typeof triggerLogs>> = (updater) => {
+    if (!showDebugLogs) return;
+    setTriggerLogsState(updater);
+  };
+
   useEffect(() => {
+    if (!showDebugLogs) return;
     if (typeof document !== "undefined") {
       const check = () => {
         setHasLayoutDrawer(Boolean(document.querySelector('aside[aria-label="Layout Output Log"]')));
@@ -30,8 +36,9 @@ export function generateTriggerLogsState(hasLogsSection: boolean, hasStreamingAc
     }
   }, []);
 
-  // Bridge layout-level stream and action events into page Output Log
+  // Listen for page/layout action and stream events for Page Output Log
   useEffect(() => {
+    if (!showDebugLogs) return;
     const handleLayoutLog = (e: Event) => {
       if (
         e instanceof CustomEvent &&
@@ -68,6 +75,7 @@ export function generateTriggerLogsState(hasLogsSection: boolean, hasStreamingAc
   }, []);
 
   useEffect(() => {
+    if (!showDebugLogs) return;
     const handleOtherDrawer = (e: Event) => {
       if (e instanceof CustomEvent && e.detail === "layout") {
         queueMicrotask(() => {
@@ -109,25 +117,29 @@ export function generateTriggerHandler(hasApiActions: boolean, hasStreamingActio
         customHeaders,
         queryParams,
         requestBody,
+        emitLog: false,
+        logId,
       });
-      const logEntry = {
-        id: logId,
-        eventName,
-        eventType,
-        timestamp,
-        url: result.url || result.targetUrl || url || "N/A",
-        method: method || "TRIGGER",
-        status: result.status,
-        payload: requestBody,
-        data: result.data,
-        error: result.error,
-      };
-      setTriggerLogs((prev) => [
-        logEntry,
-        ...prev,
-      ]);
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent("dezign:layout-log", { detail: logEntry }));
+      if (showDebugLogs) {
+        const logEntry = {
+          id: logId,
+          eventName,
+          eventType,
+          timestamp,
+          url: result.url || result.targetUrl || url || "N/A",
+          method: method || "TRIGGER",
+          status: result.status,
+          payload: requestBody,
+          data: result.data,
+          error: result.error,
+        };
+        setTriggerLogs((prev) => [
+          logEntry,
+          ...prev,
+        ]);
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("dezign:layout-log", { detail: logEntry }));
+        }
       }
       const dataObj: Record<string, string | number | boolean | null | undefined> =
         result.data && typeof result.data === "object" && !Array.isArray(result.data)
@@ -146,22 +158,24 @@ export function generateTriggerHandler(hasApiActions: boolean, hasStreamingActio
       };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Request failed";
-      const errEntry = {
-        id: logId,
-        eventName,
-        eventType,
-        timestamp,
-        url: url || "N/A",
-        method: method || "TRIGGER",
-        error: errorMessage,
-        data: null,
-      };
-      setTriggerLogs((prev) => [
-        errEntry,
-        ...prev,
-      ]);
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent("dezign:layout-log", { detail: errEntry }));
+      if (showDebugLogs) {
+        const errEntry = {
+          id: logId,
+          eventName,
+          eventType,
+          timestamp,
+          url: url || "N/A",
+          method: method || "TRIGGER",
+          error: errorMessage,
+          data: null,
+        };
+        setTriggerLogs((prev) => [
+          errEntry,
+          ...prev,
+        ]);
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("dezign:layout-log", { detail: errEntry }));
+        }
       }
       return { error: errorMessage };
     }
@@ -194,8 +208,10 @@ export function generateTriggerHandler(hasApiActions: boolean, hasStreamingActio
         customHeaders,
         queryParams,
         requestBody,
+        emitLog: false,
+        logId,
         onStreamStart: (info) => {
-          if (!streamInitialized) {
+          if (showDebugLogs && !streamInitialized) {
             streamInitialized = true;
             setTriggerLogs((prev) => [
               {
@@ -215,6 +231,7 @@ export function generateTriggerHandler(hasApiActions: boolean, hasStreamingActio
           }
         },
         onStream: (streamData) => {
+          if (!showDebugLogs) return;
           if (!streamInitialized) {
             streamInitialized = true;
             setTriggerLogs((prev) => [
@@ -243,6 +260,7 @@ export function generateTriggerHandler(hasApiActions: boolean, hasStreamingActio
           }
         },
         onStreamEnd: (finalData) => {
+          if (!showDebugLogs) return;
           setTriggerLogs((prev) =>
             prev.map((log) =>
               log.id === logId
@@ -252,6 +270,7 @@ export function generateTriggerHandler(hasApiActions: boolean, hasStreamingActio
           );
         },
         onStreamError: (err) => {
+          if (!showDebugLogs) return;
           setTriggerLogs((prev) =>
             prev.map((log) =>
               log.id === logId
@@ -262,7 +281,7 @@ export function generateTriggerHandler(hasApiActions: boolean, hasStreamingActio
         },
       });
 
-      if (streamInitialized) {
+      if (showDebugLogs && streamInitialized) {
         setTriggerLogs((prev) =>
           prev.map((log) =>
             log.id === logId
@@ -295,7 +314,7 @@ export function generateTriggerHandler(hasApiActions: boolean, hasStreamingActio
             }),
           );
         }
-      } else {
+      } else if (showDebugLogs) {
         const streamFinalEntry = {
           id: logId,
           eventName,
@@ -334,23 +353,25 @@ export function generateTriggerHandler(hasApiActions: boolean, hasStreamingActio
       };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Request failed";
-      const errEntry = {
-        id: logId,
-        eventName,
-        eventType,
-        timestamp,
-        url: url || "N/A",
-        method: method || "TRIGGER",
-        error: errorMessage,
-        data: null,
-        isStreaming: false,
-      };
-      setTriggerLogs((prev) => [
-        errEntry,
-        ...prev,
-      ]);
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent("dezign:layout-log", { detail: errEntry }));
+      if (showDebugLogs) {
+        const errEntry = {
+          id: logId,
+          eventName,
+          eventType,
+          timestamp,
+          url: url || "N/A",
+          method: method || "TRIGGER",
+          error: errorMessage,
+          data: null,
+          isStreaming: false,
+        };
+        setTriggerLogs((prev) => [
+          errEntry,
+          ...prev,
+        ]);
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("dezign:layout-log", { detail: errEntry }));
+        }
       }
       return { error: errorMessage };
     }

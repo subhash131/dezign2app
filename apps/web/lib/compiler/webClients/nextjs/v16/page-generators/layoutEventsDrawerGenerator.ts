@@ -105,8 +105,10 @@ export function generateLayoutEventsDrawer(
             customHeaders,
             queryParams,
             requestBody,
+            emitLog: false,
+            logId,
           });
-          if (isMounted) {
+          if (isMounted && showDebugLogs) {
             const entry: LayoutLogEntry = {
               id: logId,
               eventName,
@@ -128,7 +130,7 @@ export function generateLayoutEventsDrawer(
           return result.data;
         } catch (err) {
           const errorMessage = err instanceof Error ? err.message : "Request failed";
-          if (isMounted) {
+          if (isMounted && showDebugLogs) {
             const entry: LayoutLogEntry = {
               id: logId,
               eventName,
@@ -187,12 +189,16 @@ export function LayoutEventsDrawer() {
     process.env.NEXT_PUBLIC_ENABLE_DEBUG_UI?.trim().toLowerCase() === "true";
 
   const [isOpen, setIsOpen] = useState(false);
-  const [triggerLogs, setTriggerLogs] = useState<LayoutLogEntry[]>([]);
+  const [triggerLogs, setTriggerLogsState] = useState<LayoutLogEntry[]>([]);
+  const setTriggerLogs: React.Dispatch<React.SetStateAction<LayoutLogEntry[]>> = (updater) => {
+    if (!showDebugLogs) return;
+    setTriggerLogsState(updater);
+  };
   const lastDispatchedIdRef = React.useRef<string | null>(null);
 
   // Broadcast layout stream logs to child pages via decoupled microtask
   useEffect(() => {
-    if (triggerLogs.length === 0 || typeof window === "undefined") return;
+    if (!showDebugLogs || triggerLogs.length === 0 || typeof window === "undefined") return;
     const latest = triggerLogs[0];
     if (latest && latest.id !== lastDispatchedIdRef.current) {
       lastDispatchedIdRef.current = latest.id;
@@ -204,6 +210,7 @@ export function LayoutEventsDrawer() {
 
 ${routeParamsHook}${sseEffectsJsx}${wsEffectsJsx}${onMountEffectsJsx}  // Listen for layout-level custom log events from buttons or child components
   useEffect(() => {
+    if (!showDebugLogs) return;
     const handleLogEvent = (e: Event) => {
       if (
         e instanceof CustomEvent &&
@@ -242,6 +249,7 @@ ${routeParamsHook}${sseEffectsJsx}${wsEffectsJsx}${onMountEffectsJsx}  // Listen
   }, []);
 
   useEffect(() => {
+    if (!showDebugLogs) return;
     const handleOtherDrawer = (e: Event) => {
       if (e instanceof CustomEvent && e.detail === "page") {
         queueMicrotask(() => {

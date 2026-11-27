@@ -137,6 +137,7 @@ export function generatePageCode(
     hooksList.push("useEffect");
   } else if (hasLogsSection) {
     hooksList.push("useState");
+    hooksList.push("useEffect");
   }
   if (mediaCaps.hasMediaStream) {
     hooksList.push("useRef");
