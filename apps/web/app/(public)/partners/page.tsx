@@ -47,8 +47,8 @@ export default function PartnersPage() {
               Agency & Solution Partners
             </h3>
             <p className="text-xs text-gray-600 leading-relaxed">
-              Accelerate client deliverables by 10x with automated
-              diagram-to-code pipelines and enterprise workspace features.
+              Accelerate client deliverables with deterministic diagram-to-code
+              monorepo pipelines and shared workspace features.
             </p>
           </div>
         </div>

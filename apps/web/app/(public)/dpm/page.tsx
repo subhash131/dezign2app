@@ -472,7 +472,7 @@ async def send_message(req: PromptRequest):
               </div>
               <div className="text-[11px] text-zinc-300 flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-white shrink-0" />
-                <span>10 tokens consumed, 0% syntax errors, 100% portable</span>
+                <span>Minimal tokens consumed, deterministic adapter templates, portable graph spec</span>
               </div>
             </div>
           </div>

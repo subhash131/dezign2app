@@ -34,26 +34,35 @@ export const HeroCanvasFooter: React.FC<HeroCanvasFooterProps> = ({
   return (
     <div className="border-t border-zinc-800/80 bg-[#101014] px-4 py-2 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
       <div className="flex items-center gap-3 text-zinc-400">
-        <div className="flex items-center gap-1.5 text-[11px]">
-          <Move className="w-3.5 h-3.5 text-zinc-400" />
-          <span className="text-zinc-300">Drag to Pan</span>
-          <span className="text-zinc-600">·</span>
-          <span className="text-zinc-400">Ctrl + Wheel to Zoom</span>
-          <span className="text-zinc-600">·</span>
-          <span className="text-zinc-300">
-            {activeInfraNode
-              ? `Inspecting: ${activeInfraNode.label} (${activeInfraNode.details.engine})`
-              : selectedNode
-              ? `Selected: ${selectedNode} (Click to toggle)`
-              : activeMode === "ethical-hacker" && activeSecurityStep
-              ? `Ethical Hacker: ${activeSecurityStep.phase} · ${activeSecurityStep.subAction}`
-              : activeMode === "ai-worker"
-              ? `AI Worker: ${currentStep.subAction} · ${currentStep.title}`
-              : activeMode === "infrastructure"
-              ? "Hover any Load Balancer or Replica circle for flying card telemetry"
-              : "Click page-ref or /chat to show SSE stream"}
-          </span>
-        </div>
+        {activeMode === "video" ? (
+          <div className="flex items-center gap-2 text-[11px]">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+            <span className="text-zinc-300">
+              Walkthrough Tutorial · Starts at 0:26 (Switch back to Design → Code anytime)
+            </span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 text-[11px]">
+            <Move className="w-3.5 h-3.5 text-zinc-400" />
+            <span className="text-zinc-300">Drag to Pan</span>
+            <span className="text-zinc-600">·</span>
+            <span className="text-zinc-400">Ctrl + Wheel to Zoom</span>
+            <span className="text-zinc-600">·</span>
+            <span className="text-zinc-300">
+              {activeInfraNode
+                ? `Inspecting: ${activeInfraNode.label} (${activeInfraNode.details.engine})`
+                : selectedNode
+                ? `Selected: ${selectedNode} (Click to toggle)`
+                : activeMode === "ethical-hacker" && activeSecurityStep
+                ? `Ethical Hacker: ${activeSecurityStep.phase} · ${activeSecurityStep.subAction}`
+                : activeMode === "ai-worker"
+                ? `AI Worker: ${currentStep.subAction} · ${currentStep.title}`
+                : activeMode === "infrastructure"
+                ? "Hover any Load Balancer or Replica circle for flying card telemetry"
+                : "Click page-ref or /chat to show SSE stream"}
+            </span>
+          </div>
+        )}
       </div>
 
       {activeMode === "ethical-hacker" && activeVector && activeSecurityStep ? (

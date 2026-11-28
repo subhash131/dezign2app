@@ -63,7 +63,7 @@ export const NODES: CanvasNode[] = [
     height: 260,
     themeColor: "border-zinc-800 bg-[#0d0e12]",
     details: [
-      "Next.js 15 App Router",
+      "Next.js 16 App Router",
       "Public: /, /login, /register",
       "Private: /dashboard, /chat",
     ],

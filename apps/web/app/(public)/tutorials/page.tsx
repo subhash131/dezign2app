@@ -2,6 +2,7 @@ import React from "react";
 import Link from "next/link";
 import { Header } from "../_landing_components/header";
 import { Footer } from "../_landing_components/footer";
+import VideoPlayer from "../_landing_components/intro/video-player";
 import { Metadata } from "next";
 import {
   PlayCircle,
@@ -57,6 +58,26 @@ export default function TutorialsPage() {
             Step-by-step guides and walkthroughs to help you master visual
             design and workflow automation.
           </p>
+        </div>
+
+        {/* Featured Video Walkthrough */}
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-bold text-gray-900">
+              Featured Walkthrough
+            </h2>
+            <a
+              href="https://youtu.be/4PHK9rqgrmE?t=26"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs font-semibold text-gray-600 hover:text-black transition-colors"
+            >
+              Watch on YouTube →
+            </a>
+          </div>
+          <div className="relative w-full aspect-video rounded-2xl overflow-hidden border border-gray-200 bg-black shadow-sm">
+            <VideoPlayer src="https://www.youtube.com/embed/4PHK9rqgrmE?start=26&rel=0" />
+          </div>
         </div>
 
         <div className="flex flex-col gap-4">

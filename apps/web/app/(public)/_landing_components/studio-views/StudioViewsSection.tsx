@@ -28,51 +28,51 @@ interface FrameworkLayer {
 
 const FRAMEWORK_LAYERS: FrameworkLayer[] = [
   {
-    packageName: "@dpm/auth",
+    packageName: "Auth & RBAC",
     category: "Authentication & Identity",
     color: "text-emerald-400",
     badgeBg: "bg-emerald-950/40 border-emerald-900/50 text-emerald-300",
     activeFramework: "Better Auth",
-    runtime: "TypeScript",
-    swappable: ["Clerk", "Supabase Auth", "Auth0", "NextAuth"],
+    runtime: "TypeScript & Python Middleware",
+    swappable: ["Email/Password", "Google OAuth", "GitHub OAuth", "RBAC Guards"],
     description:
-      "A single visual auth contract with OAuth handlers, email/passwords, session cookies, and RBAC guards.",
+      "First-class visual auth contracts generating Better Auth configs, session tables, client SDKs, and route middleware.",
     capabilities: [
-      "Swap auth providers without rewriting route guards",
-      "Unified session contract for web and mobile",
-      "Automated webhook signature verification",
+      "Automatic requireAuth guards on protected endpoints",
+      "Unified session contract across Next.js 16 and backend services",
+      "Email/password and OAuth provider wiring out of the box",
     ],
   },
   {
-    packageName: "@dpm/service",
-    category: "Backend Microservices",
+    packageName: "Service Targets",
+    category: "Backend & Web Targets",
     color: "text-blue-400",
     badgeBg: "bg-blue-950/40 border-blue-900/50 text-blue-300",
     activeFramework: "Express (Node.js)",
     runtime: "TypeScript / Python / Go",
-    swappable: ["FastAPI (Python)", "NestJS", "Go (Gin)", "Fastify"],
+    swappable: ["FastAPI (Python)", "Go", "Next.js 16"],
     description:
-      "Microservice containers with typed routing, middleware chains, and automatic Zod/Pydantic validation.",
+      "Define endpoints, request/response schemas, and pub/sub consumers once—compile to any supported service runtime.",
     capabilities: [
-      "Target Node.js, Python, or Go from one architecture",
-      "Type-safe REST, tRPC, and WebSocket wire protocols",
-      "Auto-generated Docker Compose & health checks",
+      "Compile services to Express, FastAPI, Go, or Next.js 16",
+      "Shared Zod schemas, REST clients, SSE, and WebSocket bindings",
+      "Auto-generated Docker Compose & service health checks",
     ],
   },
   {
-    packageName: "@dpm/database",
-    category: "Databases & Engines",
+    packageName: "Data Layer",
+    category: "Databases & Cache",
     color: "text-purple-400",
     badgeBg: "bg-purple-950/40 border-purple-900/50 text-purple-300",
-    activeFramework: "PostgreSQL (PG)",
-    runtime: "Drizzle & Prisma • Auto Migrations",
-    swappable: ["SQLite", "MySQL", "MongoDB", "Redis"],
+    activeFramework: "PostgreSQL",
+    runtime: "SQL DDL & Typed Queries",
+    swappable: ["MySQL", "SQLite", "Convex", "Redis"],
     description:
-      "Visual ERD schemas with foreign key relations, indexes, connection pools, and automated migration scripts.",
+      "Visual ERD schemas with foreign keys, indexes, and reusable query functions compiled for your chosen database engine.",
     capabilities: [
-      "Switch from PostgreSQL to SQLite, MySQL, or MongoDB with 0 code rewrite",
-      "Decouple data modeling from SQL dialects and ORM syntax",
-      "Compiles to Drizzle, Prisma, SQLAlchemy, or raw SQL migrations",
+      "Switch relational engines (PostgreSQL, MySQL, SQLite) from one ERD",
+      "Dedicated Convex schema & Redis cache/pub-sub/stream modeling",
+      "Generates SQL DDL, migrations, and typed database helpers",
     ],
   },
 ];
@@ -85,20 +85,20 @@ export const StudioViewsSection: React.FC = () => {
         <div className="flex flex-col items-center text-center gap-3 mb-14 max-w-3xl">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-zinc-800 bg-zinc-900/80 text-xs font-mono text-zinc-300">
             <Package className="w-3.5 h-3.5 text-emerald-400" />
-            <span>dpm — DEZIGN PACKAGE MANAGER</span>
+            <span>SUPPORTED TARGETS &amp; dpm RFC</span>
           </div>
 
           <h2
             style={{ fontFamily: "var(--font-display)" }}
             className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-white mt-1"
           >
-            Design Once. Migrate to Any.
+            One Architecture. Supported Multi-Stack Targets.
           </h2>
 
           <p className="text-zinc-400 text-sm sm:text-base leading-relaxed max-w-2xl mt-1">
-            <strong>dpm</strong> acts as a single visual interface for the entire package ecosystem.
-            There are hundreds of auth frameworks, frontend packages, and servers—Dezign2App is completely language agnostic.
-            Once you design your app, switch between any framework or language of your choice with zero code rewrites.
+            Model your system visually once and compile directly to{" "}
+            <strong className="text-zinc-200">Next.js 16, Express, FastAPI, or Go</strong> with{" "}
+            <strong className="text-zinc-200">PostgreSQL, MySQL, SQLite, Convex, and Redis</strong>—backed by our upcoming <strong className="text-white">dpm</strong> adapter spec for extensible packages.
           </p>
         </div>
 
@@ -125,7 +125,7 @@ export const StudioViewsSection: React.FC = () => {
                 {/* Active Framework with Swappable Indicator */}
                 <div className="p-3 rounded-xl border border-zinc-800 bg-[#08080a] mb-4">
                   <div className="flex items-center justify-between text-xs text-zinc-400 mb-1.5 font-mono">
-                    <span>Default Target:</span>
+                    <span>Supported Today:</span>
                     <span className="text-white font-semibold flex items-center gap-1">
                       {layer.category.includes("Auth") && <ShieldCheck className="w-3 h-3 text-emerald-400" />}
                       {layer.category.includes("Backend") && <Radio className="w-3 h-3 text-blue-400" />}
@@ -138,7 +138,7 @@ export const StudioViewsSection: React.FC = () => {
                   <div className="pt-2 border-t border-zinc-850 flex items-center gap-1.5 flex-wrap">
                     <span className="text-[10px] font-mono text-zinc-500 flex items-center gap-1">
                       <RefreshCw className="w-2.5 h-2.5 text-zinc-400 animate-spin-slow" />
-                      <span>Switch to:</span>
+                      <span>Also compiles:</span>
                     </span>
                     {layer.swappable.map((fw, fIdx) => (
                       <span
@@ -182,16 +182,16 @@ export const StudioViewsSection: React.FC = () => {
               <Package className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
                 <h3 className="text-sm sm:text-base font-bold text-white">
-                  The &ldquo;DefinitelyTyped&rdquo; of Visual Architecture
+                  dpm: The Upcoming Package Contract Spec
                 </h3>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-900/50 font-semibold">
-                  Zero Lock-In
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-950/60 text-amber-300 border border-amber-900/50 font-semibold">
+                  RFC / Upcoming
                 </span>
               </div>
               <p className="text-xs text-zinc-400 mt-1 max-w-2xl leading-relaxed">
-                Just as DefinitelyTyped (<code className="text-zinc-200 font-mono">@types/*</code>) added static typing to JavaScript without changing library code, <strong className="text-white">dpm</strong> (<code className="text-zinc-200 font-mono">@dpm/*</code>) adds visual architecture contracts to libraries. Your design stays pure; compile to whatever stack your team prefers.
+                Just as DefinitelyTyped (<code className="text-zinc-200 font-mono">@types/*</code>) added static typing to JavaScript without changing library code, <strong className="text-white">dpm</strong> (<code className="text-zinc-200 font-mono">@dpm/*</code>) is our upcoming RFC for community-authored visual port contracts and multi-target codegen adapters.
               </p>
             </div>
           </div>

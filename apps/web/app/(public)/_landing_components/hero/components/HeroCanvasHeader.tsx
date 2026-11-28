@@ -10,7 +10,8 @@ import {
   Pause,
   RotateCcw,
   Zap,
-  Target,
+  PlayCircle,
+  ExternalLink,
 } from "lucide-react";
 import type { CanvasMode, TrafficIntensity } from "../types";
 
@@ -65,10 +66,10 @@ export const HeroCanvasHeader: React.FC<HeroCanvasHeaderProps> = ({
 
         <div className="h-4 w-[1px] bg-zinc-800 hidden sm:block" />
 
-        {/* Feature Switcher Tabs */}
+        {/* Studio View Switcher Tabs */}
         <div className="flex items-center gap-1.5 flex-wrap">
-          {/* Tab 1: App Architecture (Live) */}
-          <div className="bg-[#09090d] p-1 rounded-lg border border-zinc-800">
+          <div className="flex items-center gap-1 bg-[#09090d] p-1 rounded-lg border border-zinc-800 flex-wrap">
+            {/* Tab 1: App Architecture */}
             <button
               onClick={() => handleSelectMode("architecture")}
               className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-mono font-medium transition-all ${
@@ -77,23 +78,11 @@ export const HeroCanvasHeader: React.FC<HeroCanvasHeaderProps> = ({
                   : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40"
               }`}
             >
-              <Workflow className="w-3.5 h-3.5 text-zinc-400" />
+              <Workflow className="w-3.5 h-3.5 text-emerald-400" />
               <span>Design → Code</span>
             </button>
-          </div>
 
-          <div className="h-4 w-[1px] bg-zinc-800 hidden sm:block" />
-
-          {/* Grouped: AI Workers (Upcoming) */}
-          <div className="flex items-center gap-1 bg-[#09090d] p-1 rounded-lg border border-zinc-800 flex-wrap">
-            <div className="flex items-center gap-1.5 px-2 py-0.5 text-xs font-mono text-zinc-400 border-r border-zinc-800/80 mr-0.5">
-              <span className="font-semibold text-zinc-300">AI Workers</span>
-              <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-zinc-900 text-zinc-400 border border-zinc-800 uppercase tracking-wider font-semibold">
-                Upcoming
-              </span>
-            </div>
-
-            {/* 1. Infra Manager */}
+            {/* Tab 2: Topology & Replicas */}
             <button
               onClick={() => handleSelectMode("infrastructure")}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-medium transition-all ${
@@ -101,47 +90,29 @@ export const HeroCanvasHeader: React.FC<HeroCanvasHeaderProps> = ({
                   ? "bg-zinc-800 text-white shadow-xs border border-zinc-700/80"
                   : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40"
               }`}
-              title="Infrastructure Manager: Load balancing, read replicas & traffic surge simulation"
+              title="Inspect load balancing, read replicas & traffic flow"
             >
               <Network className="w-3.5 h-3.5 text-zinc-400" />
-              <span>1. Infra Manager</span>
+              <span>Topology &amp; Replicas</span>
             </button>
 
-               {/* 2. Bug Buster */}
+            {/* Tab 3: Video Tutorial */}
             <button
-              onClick={() => handleSelectMode("ethical-hacker")}
+              onClick={() => handleSelectMode("video")}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-medium transition-all ${
-                activeMode === "ethical-hacker"
-                  ? "bg-rose-950/80 text-rose-200 shadow-xs border border-rose-700/80"
-                  : "text-zinc-400 hover:text-rose-300 hover:bg-zinc-800/40"
+                activeMode === "video"
+                  ? "bg-emerald-950/70 text-emerald-200 shadow-xs border border-emerald-700/70"
+                  : "text-zinc-300 hover:text-white hover:bg-zinc-800/40"
               }`}
-              title="Bug Buster / Ethical Hacker: Fuzzing endpoints, OWASP vulnerability detection & auto-patching"
+              title="Watch the Dezign2App video walkthrough"
             >
-              <ShieldAlert
+              <PlayCircle
                 className={`w-3.5 h-3.5 ${
-                  activeMode === "ethical-hacker" ? "text-rose-400" : "text-zinc-400"
+                  activeMode === "video" ? "text-emerald-400" : "text-emerald-400/80"
                 }`}
               />
-              <span>2. Bug Buster</span>
+              <span>Watch Walkthrough</span>
             </button>
-
-            {/* 3. Bug Fixer */}
-            <button
-              onClick={() => handleSelectMode("ai-worker")}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-medium transition-all ${
-                activeMode === "ai-worker"
-                  ? "bg-zinc-800 text-cyan-200 shadow-xs border border-cyan-800/60"
-                  : "text-zinc-400 hover:text-cyan-300 hover:bg-zinc-800/40"
-              }`}
-              title="Bug Fixer: Autonomous ticket resolution, PR generation & testing"
-            >
-              <Bot
-                className={`w-3.5 h-3.5 ${
-                  activeMode === "ai-worker" ? "text-cyan-400" : "text-zinc-400"
-                }`}
-              />
-              <span>3. Ticket Collector</span>
-            </button>         
           </div>
         </div>
       </div>
@@ -267,10 +238,20 @@ export const HeroCanvasHeader: React.FC<HeroCanvasHeaderProps> = ({
               </span>
             </button>
           </>
+        ) : activeMode === "video" ? (
+          <a
+            href="https://youtu.be/4PHK9rqgrmE?t=26"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-800 text-xs font-mono transition-colors"
+          >
+            <span>Open on YouTube</span>
+            <ExternalLink className="w-3 h-3 text-zinc-400" />
+          </a>
         ) : (
           <div className="flex items-center gap-2 text-zinc-500 text-xs font-mono">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-            <span>Full-Stack Graph · 8 Services</span>
+            <span>Example: Auth + API + Kafka + SSE</span>
           </div>
         )}
       </div>

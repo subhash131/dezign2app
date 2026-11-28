@@ -17,13 +17,13 @@ export const PricingSection: React.FC = () => {
             style={{ fontFamily: "var(--font-display)" }}
             className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-white"
           >
-            Pays for Itself on Day One.
+            Built for Architecture, Simulation &amp; Ship Speed.
           </h2>
           <p className="text-zinc-300 text-sm sm:text-base font-medium leading-relaxed">
-            Generate the 70% that&apos;s predictable with algorithms. Use AI only for the 30% that needs thinking.
+            Use deterministic compilation for your monorepo foundation, and give your AI coding agents a verified MCP spec for custom logic.
           </p>
           <p className="text-zinc-400 text-xs sm:text-sm leading-relaxed max-w-xl">
-            Coding agents charge $20/mo with strict rate limits, burning millions of tokens in endless retry loops just to piece together a single full-stack app. Dezign2App gives you a full month with <strong>zero token limits</strong>—compiling complete production monorepos instantly on your CPU at $0 token cost.
+            Beta Access unlocks the multi-canvas studio, Turborepo compiler, in-memory flow simulation, snapshot commit history, organization workspaces, MCP architecture server, and Desktop Studio.
           </p>
         </div>
 
@@ -36,15 +36,15 @@ export const PricingSection: React.FC = () => {
         <div className="flex flex-wrap items-center justify-center gap-8 mt-12 text-xs font-mono text-zinc-500">
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-zinc-400" />
-            <span>100% Code Ownership</span>
+            <span>Full Code Ownership</span>
           </div>
           <div className="flex items-center gap-2">
             <Coins className="w-4 h-4 text-emerald-400" />
-            <span>Zero Token Limits (Runs on CPU)</span>
+            <span>MCP Architecture Server Included</span>
           </div>
           <div className="flex items-center gap-2">
             <Lock className="w-4 h-4 text-zinc-400" />
-            <span>Zero Vendor Lock-In</span>
+            <span>No Runtime Vendor Lock-In</span>
           </div>
           <div className="flex items-center gap-2">
             <Zap className="w-4 h-4 text-zinc-400" />

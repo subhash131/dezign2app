@@ -245,7 +245,7 @@ export const VisualVsFileBasedSection: React.FC = () => {
                       <span>Live Architecture Topology</span>
                     </span>
                     <span className="text-emerald-400 text-[10px] flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3" /> Contracts 100% Synced
+                      <CheckCircle2 className="w-3 h-3" /> Shared Typed Contracts
                     </span>
                   </div>
 
@@ -256,29 +256,29 @@ export const VisualVsFileBasedSection: React.FC = () => {
                         <span className="font-semibold text-[10px]">API Gateway</span>
                         <span className="text-[9px] text-zinc-400 font-mono">:46500</span>
                       </div>
-                      <span className="text-zinc-600 font-mono text-[10px]">──(tRPC)──▶</span>
+                      <span className="text-zinc-600 font-mono text-[10px]">──(REST/Zod)──▶</span>
                       <div className="px-2.5 py-1.5 rounded border border-emerald-500/40 bg-emerald-950/20 text-emerald-300 flex-1 flex items-center justify-between">
                         <span className="font-semibold text-[10px]">Auth Service</span>
-                        <span className="text-[9px] text-emerald-400">Strict Guard</span>
+                        <span className="text-[9px] text-emerald-400">Better Auth</span>
                       </div>
                     </div>
 
                     <div className="flex items-center justify-between gap-2">
                       <div className="px-2.5 py-1.5 rounded border border-zinc-800 bg-[#121318] text-zinc-300 flex-1 flex items-center justify-between">
                         <span className="text-[10px]">PostgreSQL 16</span>
-                        <span className="text-[9px] text-zinc-500">Prisma / Drizzle</span>
+                        <span className="text-[9px] text-zinc-500">SQL DDL &amp; Queries</span>
                       </div>
                       <span className="text-zinc-600 font-mono text-[10px]">◀──(Pool)──</span>
                       <div className="px-2.5 py-1.5 rounded border border-zinc-800 bg-[#121318] text-zinc-300 flex-1 flex items-center justify-between">
                         <span className="text-[10px]">Redis Cache</span>
-                        <span className="text-[9px] text-zinc-500">Sub-ms Sessions</span>
+                        <span className="text-[9px] text-zinc-500">Pub/Sub &amp; Streams</span>
                       </div>
                     </div>
                   </div>
 
                   <div className="mt-2 pt-2 border-t border-zinc-800/80 flex items-center justify-between text-[10px] text-zinc-400">
-                    <span className="text-zinc-500">AST Compilation:</span>
-                    <span className="text-emerald-400 font-medium">32 files generated in 240ms</span>
+                    <span className="text-zinc-500">Compiler Output:</span>
+                    <span className="text-emerald-400 font-medium">Deterministic Turborepo + Docker Compose</span>
                   </div>
                 </div>
 
@@ -310,16 +310,16 @@ export const VisualVsFileBasedSection: React.FC = () => {
                       <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                       <p>
                         <strong className="text-white">Connections Enforce Type Contracts:</strong> When
-                        two nodes connect, their schemas (Zod, tRPC, OpenAPI, SQL) are bound. Modifying
-                        a schema validates downstream consumers instantly.
+                        two nodes connect, their Zod schemas, REST payloads, and SQL models are bound.
+                        Updating an endpoint propagates to generated frontend clients automatically.
                       </p>
                     </div>
                     <div className="flex items-start gap-2.5">
                       <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                       <p>
-                        <strong className="text-white">Deterministic AST Compilation:</strong> No
-                        hallucinated packages. Mathematical compilation ensures schemas, routes, and
-                        database models always align without human error.
+                        <strong className="text-white">Deterministic Monorepo Compilation:</strong>{" "}
+                        Template-driven code generation ensures schemas, routes, and database packages
+                        compile together consistently without guesswork.
                       </p>
                     </div>
                   </div>
@@ -330,17 +330,17 @@ export const VisualVsFileBasedSection: React.FC = () => {
                     <div className="flex items-start gap-2.5">
                       <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                       <p>
-                        <strong className="text-white">From Design to Production in Minutes:</strong>{" "}
-                        Drop database, auth, and gateway nodes onto the canvas and compile a complete
-                        production monorepo with Docker orchestrations in under a second.
+                        <strong className="text-white">From Design to Running Stack Fast:</strong>{" "}
+                        Drop database, auth, and service nodes onto the canvas and compile a complete
+                        Turborepo with Docker Compose orchestration on demand.
                       </p>
                     </div>
                     <div className="flex items-start gap-2.5">
                       <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                       <p>
                         <strong className="text-white">Pure Code Ownership:</strong> Visual design compiles
-                        into pristine, human-readable TypeScript and Turborepos that you run on your own
-                        machines or deploy to any cloud.
+                        into clean, human-readable TypeScript, Python, or Go code that you run locally
+                        or deploy to any cloud.
                       </p>
                     </div>
                   </div>
@@ -348,8 +348,8 @@ export const VisualVsFileBasedSection: React.FC = () => {
               </div>
 
               <div className="mt-6 pt-4 border-t border-zinc-900 text-xs font-mono text-zinc-500 flex items-center justify-between">
-                <span>Engine: Mathematical AST Compiler</span>
-                <span className="text-emerald-400 font-semibold">10x Engineering Velocity</span>
+                <span>Engine: Deterministic Monorepo Compiler</span>
+                <span className="text-emerald-400 font-semibold">Consistent Contracts</span>
               </div>
             </div>
           </div>
@@ -384,12 +384,12 @@ export const VisualVsFileBasedSection: React.FC = () => {
                 Enforced Cross-Node Contracts
               </h4>
               <p className="text-xs text-zinc-400 leading-relaxed">
-                Edges represent live typed contracts (Zod, tRPC, SQL). Breakages are caught at the connection
-                layer before any code is ever deployed.
+                Edges represent live typed contracts (Zod, REST, SQL, events). Mismatches are caught at
+                design time and during simulation before deployment.
               </p>
             </div>
             <div className="pt-4 mt-4 border-t border-zinc-900 text-[11px] font-mono text-zinc-500">
-              Zero architectural drift
+              Reduce contract drift
             </div>
           </div>
 
@@ -399,15 +399,15 @@ export const VisualVsFileBasedSection: React.FC = () => {
                 <Cpu className="w-4 h-4" />
               </div>
               <h4 className="text-sm font-semibold text-white mb-1.5">
-                Algorithmic Code Generation
+                Deterministic Code Generation
               </h4>
               <p className="text-xs text-zinc-400 leading-relaxed">
-                Skip token-burning AI code gen loops. Our deterministic AST engine synthesizes entire
-                Turborepos in sub-300ms without hallucinations.
+                Skip repetitive LLM prompt loops for CRUD and boilerplate. Our compiler synthesizes
+                structured Turborepos deterministically on demand.
               </p>
             </div>
             <div className="pt-4 mt-4 border-t border-zinc-900 text-[11px] font-mono text-zinc-500">
-              $0 token waste on scaffolding
+              Save AI tokens for real logic
             </div>
           </div>
 

@@ -7,11 +7,12 @@ import Link from "next/link";
 import { Monitor, ArrowRight } from "lucide-react";
 
 const navLinks: { name: string; href: string; external?: boolean; badge?: string }[] = [
-  { name: "Perspectives", href: "/#studio-views" },
+  { name: "Targets", href: "/#dpm" },
   { name: "Compiler", href: "/#compiler" },
-  { name: "Why Visual", href: "/#why-visual" },
+  { name: "MCP & Studio", href: "/#mcp" },
   { name: "Pricing", href: "/#pricing" },
-  { name: "dpm", href: "/dpm", badge: "Upcoming" },
+  { name: "Tutorials", href: "/tutorials" },
+  { name: "dpm", href: "/dpm", badge: "RFC" },
 ];
 
 export const Header: React.FC = () => {
