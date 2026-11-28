@@ -10,7 +10,7 @@ export const FinalCtaSection: React.FC = () => {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 flex flex-col items-center">
         {/* Tag */}
         <span className="text-xs font-mono uppercase tracking-wider text-emerald-400 font-semibold mb-3">
-          Deterministic Monorepo Compiler &bull; MCP Spec for AI Agents
+          Deterministic Monorepo Compiler &bull; Full Code Ownership
         </span>
 
         {/* Heading */}
@@ -23,7 +23,7 @@ export const FinalCtaSection: React.FC = () => {
 
         {/* Subhead */}
         <p className="mt-4 text-base text-zinc-400 max-w-xl leading-relaxed">
-          Design your services, schemas, and queues visually, simulate the flow, and export a clean Turborepo ready for your team and AI coding agents.
+          Design your services, schemas, and queues visually, simulate the flow, and export a clean Turborepo ready for your team.
         </p>
 
         {/* Dual Actions */}

@@ -40,7 +40,7 @@ const COMPARISON_ROWS: ComparisonRow[] = [
     },
   },
   {
-    feature: "Role of AI Agents",
+    feature: "Role of AI",
     pureAi: {
       status: "info",
       title: "Writes everything from scratch",
@@ -48,8 +48,8 @@ const COMPARISON_ROWS: ComparisonRow[] = [
     },
     algorithmAi: {
       status: "yes",
-      title: "Guided by MCP architecture spec",
-      detail: "Compiler handles scaffolding; Cursor & Claude Code query the live graph via MCP for custom logic",
+      title: "Targeted custom logic only",
+      detail: "Compiler handles deterministic scaffolding; AI focuses on custom business logic & UI",
     },
   },
   {

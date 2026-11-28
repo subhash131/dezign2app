@@ -15,7 +15,7 @@ import { Footer } from "./footer";
 
 export const Landing: React.FC = () => {
   return (
-    <div className="min-h-screen w-full bg-[#050505] text-white flex flex-col items-center overflow-x-hidden selection:bg-white/20 selection:text-white font-sans">
+    <div className="min-h-screen w-full bg-[#050505] text-white flex flex-col items-center overflow-x-clip selection:bg-white/20 selection:text-white font-sans">
       <Header />
       <main className="w-full flex flex-col">
         <HeroSection />

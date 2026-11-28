@@ -20,14 +20,14 @@ const FAQS: FaqItem[] = [
       "You own 100% of the exported code. There are no runtime fees and no proprietary SDK lock-in. You can download the monorepo as a ZIP, export to disk, or open in StackBlitz and deploy to AWS, GCP, Vercel, Railway, or your own servers.",
   },
   {
-    question: "How does Dezign2App work with Cursor, Claude Code, or other AI coding agents?",
+    question: "How does Dezign2App compare to pure AI code generators?",
     answer:
-      "Instead of asking an LLM to guess your entire architecture from scratch, Dezign2App compiles the predictable scaffolding (schemas, typed routes, auth middleware, client hooks, and Docker setup) deterministically, and exposes your live architecture graph over MCP (Model Context Protocol). Your coding agents query exact nodes, edges, and contracts via MCP to implement custom business logic against a verified spec.",
+      "Instead of asking an LLM to guess your entire architecture from scratch, Dezign2App compiles the predictable scaffolding (schemas, typed routes, auth middleware, client hooks, and Docker setup) deterministically from your visual graph. That keeps contracts aligned across packages while leaving AI and engineers to focus on custom business logic.",
   },
   {
     question: "What happens when I edit generated code and change the diagram later?",
     answer:
-      "Dezign2App compiles architecture updates into clean Turborepo packages and computes blast-radius impact and file diffs before applying deletions or structural changes. We recommend exporting to a Git repository and reviewing re-compiled diffs or letting your MCP-connected coding agent apply targeted contract updates so custom business logic stays under your control.",
+      "Dezign2App compiles architecture updates into clean Turborepo packages and computes blast-radius impact and file diffs before applying deletions or structural changes. We recommend exporting to a Git repository and reviewing re-compiled diffs so custom business logic stays under your control.",
   },
   {
     question: "Can I run Dezign2App locally on my workstation?",

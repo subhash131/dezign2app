@@ -14,19 +14,19 @@ export default function PrivacyPage() {
   const lastUpdated = "July 24, 2026";
 
   return (
-    <div className="max-w-screen min-h-screen w-full bg-white text-black flex flex-col items-center overflow-x-hidden">
+    <div className="max-w-screen min-h-screen w-full bg-[#050505] text-white flex flex-col items-center overflow-x-hidden font-sans">
       <Header />
 
       <main className="w-full max-w-4xl px-6 py-12 md:py-20 flex flex-col gap-10">
         {/* Header Section */}
-        <div className="flex flex-col gap-4 border-b border-gray-100 pb-8">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gray-100 text-xs text-gray-600 w-fit font-medium">
+        <div className="flex flex-col gap-4 border-b border-zinc-900 pb-8">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 font-mono w-fit font-medium">
             <span>Last Updated: {lastUpdated}</span>
           </div>
-          <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight text-gray-900">
+          <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight text-white">
             Privacy Policy
           </h1>
-          <p className="text-gray-600 text-sm md:text-base leading-relaxed max-w-2xl">
+          <p className="text-zinc-400 text-sm md:text-base leading-relaxed max-w-2xl">
             At dezign2app, we respect your privacy and are committed to
             safeguarding your personal data and intellectual property. This
             Privacy Policy details how we collect, use, process, and protect
@@ -36,10 +36,10 @@ export default function PrivacyPage() {
         </div>
 
         {/* Content Section */}
-        <div className="flex flex-col gap-10 text-gray-700 text-sm md:text-base leading-relaxed">
+        <div className="flex flex-col gap-10 text-zinc-300 text-sm md:text-base leading-relaxed">
           {/* Section 1 */}
           <section className="flex flex-col gap-3">
-            <h2 className="text-xl font-bold text-gray-900 tracking-tight">
+            <h2 className="text-xl font-bold text-white tracking-tight">
               1. Information We Collect
             </h2>
             <p>
@@ -47,15 +47,15 @@ export default function PrivacyPage() {
               improve our visual diagramming and system design generation
               platform. The types of data we collect include:
             </p>
-            <ul className="list-disc pl-6 flex flex-col gap-2 text-gray-600">
+            <ul className="list-disc pl-6 flex flex-col gap-2 text-zinc-400">
               <li>
-                <strong className="text-gray-900">Account Credentials:</strong>{" "}
+                <strong className="text-white">Account Credentials:</strong>{" "}
                 Name, email address, profile picture, authentication tokens, and
                 account preferences when registering via email or single sign-on
                 (SSO) providers.
               </li>
               <li>
-                <strong className="text-gray-900">
+                <strong className="text-white">
                   Project & Prompt Inputs:
                 </strong>{" "}
                 System design requirements, text prompts, visual specs, node
@@ -63,7 +63,7 @@ export default function PrivacyPage() {
                 design sessions.
               </li>
               <li>
-                <strong className="text-gray-900">
+                <strong className="text-white">
                   Payment & Transaction Data:
                 </strong>{" "}
                 Subscription tier, order histories, billing address, and
@@ -75,14 +75,14 @@ export default function PrivacyPage() {
                 </em>
               </li>
               <li>
-                <strong className="text-gray-900">
+                <strong className="text-white">
                   Technical & Usage Telemetry:
                 </strong>{" "}
                 IP address, browser type, device descriptors, operating system,
                 session duration, and feature performance metrics.
               </li>
               <li>
-                <strong className="text-gray-900">
+                <strong className="text-white">
                   Cookies & Local Storage:
                 </strong>{" "}
                 Essential session cookies and local storage tokens to preserve
@@ -93,14 +93,14 @@ export default function PrivacyPage() {
 
           {/* Section 2 */}
           <section className="flex flex-col gap-3">
-            <h2 className="text-xl font-bold text-gray-900 tracking-tight">
+            <h2 className="text-xl font-bold text-white tracking-tight">
               2. How We Use Your Information
             </h2>
             <p>
               We process personal data only for legitimate business and
               operational purposes, including:
             </p>
-            <ul className="list-disc pl-6 flex flex-col gap-2 text-gray-600">
+            <ul className="list-disc pl-6 flex flex-col gap-2 text-zinc-400">
               <li>
                 Generating and rendering architectural diagrams, visual
                 workflows, and code artifacts requested by users.
@@ -125,7 +125,7 @@ export default function PrivacyPage() {
 
           {/* Section 3 */}
           <section className="flex flex-col gap-3">
-            <h2 className="text-xl font-bold text-gray-900 tracking-tight">
+            <h2 className="text-xl font-bold text-white tracking-tight">
               3. AI Model Data Privacy & Processing
             </h2>
             <p>
@@ -134,22 +134,22 @@ export default function PrivacyPage() {
               diagrams and functional application blueprints. Regarding AI data
               handling:
             </p>
-            <ul className="list-disc pl-6 flex flex-col gap-2 text-gray-600">
+            <ul className="list-disc pl-6 flex flex-col gap-2 text-zinc-400">
               <li>
-                <strong className="text-gray-900">API Processing:</strong> User
+                <strong className="text-white">API Processing:</strong> User
                 prompts and architectural specifications are transmitted
                 securely via API connections to LLM providers (such as OpenAI,
                 Anthropic, or Google) solely to generate requested visual and
                 code outputs.
               </li>
               <li>
-                <strong className="text-gray-900">No Model Training:</strong>{" "}
+                <strong className="text-white">No Model Training:</strong>{" "}
                 Your private prompts, proprietary architecture specs, and
                 generated design assets are <strong>NOT</strong> used to train
                 public foundation AI models.
               </li>
               <li>
-                <strong className="text-gray-900">
+                <strong className="text-white">
                   Independent Branding Disclaimer:
                 </strong>{" "}
                 dezign2app is an independent application platform and interface.
@@ -163,16 +163,16 @@ export default function PrivacyPage() {
 
           {/* Section 4 */}
           <section className="flex flex-col gap-3">
-            <h2 className="text-xl font-bold text-gray-900 tracking-tight">
+            <h2 className="text-xl font-bold text-white tracking-tight">
               4. Third-Party Service Providers & Merchant of Record
             </h2>
             <p>
               We share data with trusted third-party vendors under strict data
               protection agreements:
             </p>
-            <ul className="list-disc pl-6 flex flex-col gap-2 text-gray-600">
+            <ul className="list-disc pl-6 flex flex-col gap-2 text-zinc-400">
               <li>
-                <strong className="text-gray-900">
+                <strong className="text-white">
                   Creem.io (Merchant of Record):
                 </strong>{" "}
                 Creem.io is our Merchant of Record and reseller. Creem processes
@@ -180,11 +180,11 @@ export default function PrivacyPage() {
                 taxes, and sends official receipts.
               </li>
               <li>
-                <strong className="text-gray-900">Clerk:</strong> Provides
+                <strong className="text-white">Clerk:</strong> Provides
                 secure user authentication and session token management.
               </li>
               <li>
-                <strong className="text-gray-900">
+                <strong className="text-white">
                   Cloud Infrastructure Providers:
                 </strong>{" "}
                 Hosting, serverless computing, and database services provided by
@@ -195,7 +195,7 @@ export default function PrivacyPage() {
 
           {/* Section 5 */}
           <section className="flex flex-col gap-3">
-            <h2 className="text-xl font-bold text-gray-900 tracking-tight">
+            <h2 className="text-xl font-bold text-white tracking-tight">
               5. Data Security & Storage Controls
             </h2>
             <p>
@@ -203,7 +203,7 @@ export default function PrivacyPage() {
               to protect user data from unauthorized access, loss, or
               disclosure:
             </p>
-            <ul className="list-disc pl-6 flex flex-col gap-2 text-gray-600">
+            <ul className="list-disc pl-6 flex flex-col gap-2 text-zinc-400">
               <li>
                 Encryption in transit using TLS 1.3 protocols and encryption at
                 rest (AES-256) for stored data.
@@ -218,29 +218,29 @@ export default function PrivacyPage() {
 
           {/* Section 6 */}
           <section className="flex flex-col gap-3">
-            <h2 className="text-xl font-bold text-gray-900 tracking-tight">
+            <h2 className="text-xl font-bold text-white tracking-tight">
               6. Your Data Rights (GDPR & CCPA)
             </h2>
             <p>
               Depending on your jurisdiction, you possess the following rights
               regarding your personal data:
             </p>
-            <ul className="list-disc pl-6 flex flex-col gap-2 text-gray-600">
+            <ul className="list-disc pl-6 flex flex-col gap-2 text-zinc-400">
               <li>
-                <strong className="text-gray-900">Access & Export:</strong>{" "}
+                <strong className="text-white">Access & Export:</strong>{" "}
                 Request a full copy of your personal data and project records.
               </li>
               <li>
-                <strong className="text-gray-900">Rectification:</strong>{" "}
+                <strong className="text-white">Rectification:</strong>{" "}
                 Correct inaccurate or incomplete account details.
               </li>
               <li>
-                <strong className="text-gray-900">Erasure & Deletion:</strong>{" "}
+                <strong className="text-white">Erasure & Deletion:</strong>{" "}
                 Request permanent deletion of your account, workspace assets,
                 and telemetry records.
               </li>
               <li>
-                <strong className="text-gray-900">Opt-Out:</strong> Opt out of
+                <strong className="text-white">Opt-Out:</strong> Opt out of
                 non-essential product update communications.
               </li>
             </ul>
@@ -248,7 +248,7 @@ export default function PrivacyPage() {
               To exercise any of these rights, email us at{" "}
               <a
                 href="mailto:founder@dezign2app.com"
-                className="text-black font-bold hover:underline"
+                className="text-white font-bold hover:underline"
               >
                 founder@dezign2app.com
               </a>
@@ -258,7 +258,7 @@ export default function PrivacyPage() {
 
           {/* Section 7 */}
           <section className="flex flex-col gap-3">
-            <h2 className="text-xl font-bold text-gray-900 tracking-tight">
+            <h2 className="text-xl font-bold text-white tracking-tight">
               7. Children's Privacy
             </h2>
             <p>
@@ -272,24 +272,24 @@ export default function PrivacyPage() {
 
           {/* Section 8 */}
           <section className="flex flex-col gap-3">
-            <h2 className="text-xl font-bold text-gray-900 tracking-tight">
+            <h2 className="text-xl font-bold text-white tracking-tight">
               8. Contact Us
             </h2>
             <p>
               If you have questions, concerns, or data privacy requests
               regarding this Privacy Policy, please contact our support team:
             </p>
-            <div className="p-4 bg-gray-50 border border-gray-100 rounded-xl text-gray-800 font-medium flex flex-col gap-1">
+            <div className="p-4 bg-[#0a0a0d] border border-zinc-800 rounded-xl text-zinc-200 font-medium flex flex-col gap-1">
               <div>
                 Email:{" "}
                 <a
                   href="mailto:founder@dezign2app.com"
-                  className="text-black font-bold hover:underline"
+                  className="text-white font-bold hover:underline"
                 >
                   founder@dezign2app.com
                 </a>
               </div>
-              <div className="text-xs text-gray-500">
+              <div className="text-xs text-zinc-500">
                 Customer Support & Privacy Compliance Team
               </div>
             </div>
@@ -297,23 +297,23 @@ export default function PrivacyPage() {
         </div>
 
         {/* Navigation back */}
-        <div className="border-t border-gray-100 pt-6 mt-6 flex justify-between items-center">
+        <div className="border-t border-zinc-900 pt-6 mt-6 flex justify-between items-center">
           <Link
             href="/"
-            className="text-xs font-semibold text-black hover:underline flex items-center gap-1"
+            className="text-xs font-semibold text-white hover:underline flex items-center gap-1"
           >
             ← Back to Home
           </Link>
           <div className="flex gap-4">
             <Link
               href="/terms"
-              className="text-xs font-semibold text-gray-600 hover:text-black transition-colors"
+              className="text-xs font-semibold text-zinc-400 hover:text-white transition-colors"
             >
               Terms of Service →
             </Link>
             <Link
               href="/acceptable-use"
-              className="text-xs font-semibold text-gray-600 hover:text-black transition-colors"
+              className="text-xs font-semibold text-zinc-400 hover:text-white transition-colors"
             >
               Acceptable Use Policy →
             </Link>
