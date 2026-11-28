@@ -103,6 +103,8 @@ export const BindingSourceEditor = ({
         onChange({ ...binding, source: { kind: "req_query", field: "" } });
       } else if (selectedId === "req_headers") {
         onChange({ ...binding, source: { kind: "req_headers", field: "" } });
+      } else if (selectedId === "event_headers") {
+        onChange({ ...binding, source: { kind: "event_headers", field: "" } });
       } else if (selectedId === "auth") {
         onChange({ ...binding, source: { kind: "auth", field: "" } });
       }
@@ -126,6 +128,8 @@ export const BindingSourceEditor = ({
           : src.kind === "req_query"
           ? "query"
           : src.kind === "req_headers"
+          ? "headers"
+          : src.kind === "event_headers"
           ? "headers"
           : src.kind === "auth"
           ? "auth"

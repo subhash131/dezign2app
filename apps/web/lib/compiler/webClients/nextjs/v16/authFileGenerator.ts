@@ -3,8 +3,125 @@ import { DEFAULT_BETTER_AUTH_VERSION, arePageRoutesEqual } from "@workspace/canv
 import { Endpoint, AnyMessagingResource, CompiledFile } from "@workspace/canvas/types";
 import { PageInfo } from "./types";
 import { compileAuth } from "../../../compileAuth";
+import { compileRedisNodes } from "../../../compileRedisNodes";
 import { toDbFolderBase } from "../../../utils";
 import { generateAuthClient } from "../../../generators/auth-providers/better-auth/v1.6/generateAuthClient";
+import { generateBetterAuthPermissions } from "../../../auth/better-auth/v1.6";
+
+/**
+ * Builds `lib/auth-token.ts` for Next.js WebApps.
+ * When Better Auth's `jwt` plugin is active, prioritizes `authClient.token()` (with an
+ * in-memory JWT cache checking `exp - 30s`) so decoupled microservices receive a JWKS-verifiable
+ * JWT instead of an opaque Better Auth session token.
+ */
+function buildAuthTokenHelperSource(useJwtClient: boolean): string {
+  const jwtClientBlock = useJwtClient
+    ? `  // 0. Check cached / live Better Auth JWT via jwtClient() (/api/auth/token)
+  //    Decoupled ServiceNodes verify this JWT locally via /api/auth/jwks.
+  try {
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (_cachedJwtToken && _cachedJwtExp - 30 > nowSec) {
+      return _cachedJwtToken;
+    }
+    const { authClient } = await import("@/lib/auth-client");
+    const tokenFn = authClient && "token" in authClient && typeof authClient.token === "function"
+      ? authClient.token
+      : null;
+    if (tokenFn) {
+      const tokenRes = await tokenFn();
+      const jwt = tokenRes?.data?.token;
+      if (jwt) {
+        const bearer = jwt.startsWith("Bearer ") ? jwt : \`Bearer \${jwt}\`;
+        _cachedJwtToken = bearer;
+        _cachedJwtExp = parseJwtExpSeconds(jwt) ?? nowSec + 300;
+        return bearer;
+      }
+    }
+  } catch (_jwtErr) {}
+
+`
+    : "";
+
+  const jwtCacheHelpers = useJwtClient
+    ? `let _cachedJwtToken: string | null = null;
+let _cachedJwtExp = 0;
+
+function parseJwtExpSeconds(jwt: string): number | null {
+  try {
+    const parts = jwt.split(".");
+    if (parts.length !== 3 || !parts[1]) return null;
+    const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const payload = JSON.parse(atob(base64));
+    return typeof payload?.exp === "number" ? payload.exp : null;
+  } catch {
+    return null;
+  }
+}
+
+`
+    : "";
+
+  return `/**
+ * Helper to retrieve the Bearer authorization token for client API requests.
+ * ${useJwtClient ? "Fetches JWKS-verifiable JWTs via authClient.token() and falls back to session/cookies." : "Checks active Better Auth session, cookies, localStorage, and sessionStorage."}
+ */
+${jwtCacheHelpers}export async function getAuthBearerToken(): Promise<string | null> {
+  if (typeof window === "undefined") return null;
+
+${jwtClientBlock}  // 1. Check active Better Auth client session
+  try {
+    const { authClient } = await import("@/lib/auth-client");
+    if (authClient && typeof authClient.getSession === "function") {
+      const sessionRes = await authClient.getSession();
+      const rawData = sessionRes?.data;
+      const directToken = rawData && typeof rawData === "object" && "token" in rawData && typeof rawData.token === "string"
+        ? rawData.token
+        : undefined;
+      const token = sessionRes?.data?.session?.token || directToken;
+      if (token) {
+        return token.startsWith("Bearer ") ? token : \`Bearer \${token}\`;
+      }
+    }
+  } catch (_e) {}
+
+  // 2. Check cookies for Better Auth session token (better-auth.session_token)
+  try {
+    const cookies = document.cookie.split(";");
+    for (const c of cookies) {
+      const trimmed = c.trim();
+      if (
+        trimmed.startsWith("better-auth.session_token=") ||
+        trimmed.startsWith("__Secure-better-auth.session_token=")
+      ) {
+        const val = trimmed.split("=")[1];
+        if (val) {
+          const decoded = decodeURIComponent(val);
+          return decoded.startsWith("Bearer ") ? decoded : \`Bearer \${decoded}\`;
+        }
+      }
+    }
+  } catch (_cErr) {}
+
+  // 3. Check browser localStorage & sessionStorage
+  const tokenKeys = [
+    "better-auth.session_token",
+    "auth_token",
+    "access_token",
+    "token",
+    "bearer_token",
+  ];
+
+  for (const k of tokenKeys) {
+    const stored = localStorage.getItem(k) || sessionStorage.getItem(k);
+    if (stored) {
+      return stored.startsWith("Bearer ") ? stored : \`Bearer \${stored}\`;
+    }
+  }
+
+  return null;
+}
+`;
+}
 
 export interface GenerateAuthFilesParams {
   files: CompiledFile[];
@@ -108,6 +225,17 @@ export function generateAuthFilesAndDependencies({
     const authBaseUrl = authNode.data?.baseUrl || `http://localhost:${authPort}`;
     const compiledAuth = compileAuth(authNode, endpoints, events, allNodes, allEdges, testCases);
 
+    const permissionsFile = compiledAuth.files.find((f) =>
+      f.filename.endsWith("auth-permissions.ts")
+    );
+    if (permissionsFile) {
+      files.push({
+        filename: "lib/auth-permissions.ts",
+        language: "typescript",
+        content: permissionsFile.content,
+      });
+    }
+
     const authFile = compiledAuth.files.find((f) => f.filename.endsWith("auth.ts"));
     if (authFile) {
       files.push({
@@ -196,13 +324,20 @@ export const { POST, GET } = toNextJsHandler(auth);
       }
     }
 
-    const enabledPlugins = authNode.data?.plugins || ["admin", "organization"];
+    const enabledPlugins = authNode.data?.plugins || ["bearer", "admin", "organization", "jwt"];
+    const hasJwtPlugin = enabledPlugins.includes("jwt");
     const clientPlugins: string[] = [];
     if (enabledPlugins.includes("admin")) clientPlugins.push("adminClient");
     if (enabledPlugins.includes("organization")) clientPlugins.push("organizationClient");
+    if (hasJwtPlugin) clientPlugins.push("jwtClient");
     if (clientPlugins.length === 0) {
       clientPlugins.push("adminClient", "organizationClient");
     }
+
+    // Pass custom RBAC flags only when auth-permissions.ts was emitted for Better Auth
+    const generatedPermissions = permissionsFile
+      ? generateBetterAuthPermissions(authNode.data || {})
+      : null;
 
     files.push({
       filename: "lib/auth-client.ts",
@@ -210,6 +345,8 @@ export const { POST, GET } = toNextJsHandler(auth);
       content: generateAuthClient({
         baseURL: authBaseUrl,
         plugins: clientPlugins,
+        customAdminRbac: generatedPermissions?.hasCustomAdminAccess,
+        customOrgRbac: generatedPermissions?.hasCustomOrgAccess,
       }),
     });
 
@@ -355,6 +492,19 @@ export async function requirePlan(requiredPlans: string[], redirectTo: string = 
         const semverVersion = cleanVersion.split(".").length === 2 ? `${cleanVersion}.0` : cleanVersion;
         pkgObj.dependencies["@workspace/db"] = "workspace:*";
         pkgObj.dependencies["@workspace/types"] = "workspace:*";
+        if (authNode.data?.secondaryStorage?.enabled) {
+          const compiledRedis = compileRedisNodes(allNodes, allEdges);
+          const targetRedisId = authNode.data.secondaryStorage.redisNodeId;
+          const matchedPkg = targetRedisId
+            ? compiledRedis.packages?.find((p) => p.redisNodeId === targetRedisId)
+            : compiledRedis.packages?.[0];
+          const redisPkgName =
+            matchedPkg?.packageName ||
+            (compiledRedis.files.length > 0 ? `@workspace/${compiledRedis.packageFolder || "redis"}` : undefined);
+          if (redisPkgName) {
+            pkgObj.dependencies[redisPkgName] = "workspace:*";
+          }
+        }
         pkgObj.dependencies["better-auth"] = `^${semverVersion}`;
         if (authNode.data?.plugins?.includes("passkey")) {
           pkgObj.dependencies["@better-auth/passkey"] = `^${semverVersion}`;
@@ -394,66 +544,7 @@ export async function requirePlan(requiredPlans: string[], redirectTo: string = 
     files.push({
       filename: "lib/auth-token.ts",
       language: "typescript",
-      content: `/**
- * Helper to retrieve the Bearer authorization token for client API requests.
- * Checks active Better Auth session, cookies, localStorage, and sessionStorage.
- */
-export async function getAuthBearerToken(): Promise<string | null> {
-  if (typeof window === "undefined") return null;
-
-  // 1. Check active Better Auth client session
-  try {
-    const { authClient } = await import("@/lib/auth-client");
-    if (authClient && typeof authClient.getSession === "function") {
-      const sessionRes = await authClient.getSession();
-      const rawData = sessionRes?.data;
-      const directToken = rawData && typeof rawData === "object" && "token" in rawData && typeof rawData.token === "string"
-        ? rawData.token
-        : undefined;
-      const token = sessionRes?.data?.session?.token || directToken;
-      if (token) {
-        return token.startsWith("Bearer ") ? token : \`Bearer \${token}\`;
-      }
-    }
-  } catch (_e) {}
-
-  // 2. Check cookies for Better Auth session token (better-auth.session_token)
-  try {
-    const cookies = document.cookie.split(";");
-    for (const c of cookies) {
-      const trimmed = c.trim();
-      if (
-        trimmed.startsWith("better-auth.session_token=") ||
-        trimmed.startsWith("__Secure-better-auth.session_token=")
-      ) {
-        const val = trimmed.split("=")[1];
-        if (val) {
-          const decoded = decodeURIComponent(val);
-          return decoded.startsWith("Bearer ") ? decoded : \`Bearer \${decoded}\`;
-        }
-      }
-    }
-  } catch (_cErr) {}
-
-  // 3. Check browser localStorage & sessionStorage
-  const tokenKeys = [
-    "better-auth.session_token",
-    "auth_token",
-    "access_token",
-    "token",
-    "bearer_token",
-  ];
-
-  for (const k of tokenKeys) {
-    const stored = localStorage.getItem(k) || sessionStorage.getItem(k);
-    if (stored) {
-      return stored.startsWith("Bearer ") ? stored : \`Bearer \${stored}\`;
-    }
-  }
-
-  return null;
-}
-`,
+      content: buildAuthTokenHelperSource(hasJwtPlugin),
     });
   }
 
@@ -510,66 +601,7 @@ export async function getAuthBearerToken(): Promise<string | null> {
     files.push({
       filename: "lib/auth-token.ts",
       language: "typescript",
-      content: `/**
- * Helper to retrieve the Bearer authorization token for client API requests.
- * Checks active Better Auth session, cookies, localStorage, and sessionStorage.
- */
-export async function getAuthBearerToken(): Promise<string | null> {
-  if (typeof window === "undefined") return null;
-
-  // 1. Check active Better Auth client session
-  try {
-    const { authClient } = await import("@/lib/auth-client");
-    if (authClient && typeof authClient.getSession === "function") {
-      const sessionRes = await authClient.getSession();
-      const rawData = sessionRes?.data;
-      const directToken = rawData && typeof rawData === "object" && "token" in rawData && typeof rawData.token === "string"
-        ? rawData.token
-        : undefined;
-      const token = sessionRes?.data?.session?.token || directToken;
-      if (token) {
-        return token.startsWith("Bearer ") ? token : \`Bearer \${token}\`;
-      }
-    }
-  } catch (_e) {}
-
-  // 2. Check cookies for Better Auth session token (better-auth.session_token)
-  try {
-    const cookies = document.cookie.split(";");
-    for (const c of cookies) {
-      const trimmed = c.trim();
-      if (
-        trimmed.startsWith("better-auth.session_token=") ||
-        trimmed.startsWith("__Secure-better-auth.session_token=")
-      ) {
-        const val = trimmed.split("=")[1];
-        if (val) {
-          const decoded = decodeURIComponent(val);
-          return decoded.startsWith("Bearer ") ? decoded : \`Bearer \${decoded}\`;
-        }
-      }
-    }
-  } catch (_cErr) {}
-
-  // 3. Check browser localStorage & sessionStorage
-  const tokenKeys = [
-    "better-auth.session_token",
-    "auth_token",
-    "access_token",
-    "token",
-    "bearer_token",
-  ];
-
-  for (const k of tokenKeys) {
-    const stored = localStorage.getItem(k) || sessionStorage.getItem(k);
-    if (stored) {
-      return stored.startsWith("Bearer ") ? stored : \`Bearer \${stored}\`;
-    }
-  }
-
-  return null;
-}
-`,
+      content: buildAuthTokenHelperSource(false),
     });
   }
 

@@ -18,6 +18,7 @@ import {
   Network,
   HardDrive,
   Variable,
+  ShieldCheck,
 } from "lucide-react";
 import {
   StepType,
@@ -126,10 +127,16 @@ export const STEP_TYPE_META: Record<StepType, StepTypeMeta> = {
     icon: React.createElement(Network, { size: 13 }),
     color: "text-primary bg-primary/10 border-primary/30",
   },
+  auth_verify: {
+    label: "Verify Auth",
+    icon: React.createElement(ShieldCheck, { size: 13 }),
+    color: "text-indigo-500 bg-indigo-500/10 border-indigo-500/30",
+  },
 };
 
 export const ADDABLE_STEP_TYPES: readonly StepType[] = [
   "variable",
+  "auth_verify",
   "transform",
   "db_operation",
   "redis_operation",

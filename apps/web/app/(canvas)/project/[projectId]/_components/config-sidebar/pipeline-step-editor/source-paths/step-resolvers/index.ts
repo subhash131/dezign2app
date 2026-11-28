@@ -50,7 +50,21 @@ export function resolveStepOutputPaths(
   // 5. LangGraph Agent Step
   resolveLangGraphStepPaths(step, allNodes, stepPaths);
 
-  // 6. Variable Step
+  // 6. Auth Verify Step (outputs AuthUser identity for downstream steps in HTTP or Kafka consumers)
+  if (step.type === "auth_verify") {
+    stepPaths.push(
+      { path: "id", type: "string", description: "Verified user ID" },
+      { path: "userId", type: "string", description: "Verified user ID" },
+      { path: "email", type: "string", description: "Verified user email" },
+      { path: "name", type: "string", description: "Verified user name" },
+      { path: "username", type: "string", description: "Verified username" },
+      { path: "role", type: "string", description: "Verified user role" },
+      { path: "activeOrganizationId", type: "string", description: "Active organization ID" },
+      { path: "orgRole", type: "string", description: "Verified active organization role" },
+    );
+  }
+
+  // 7. Variable Step
   if (step.type === "variable") {
     if (step.variableOperation !== "assign") {
       const varName = step.outputVariable || step.name || "var";

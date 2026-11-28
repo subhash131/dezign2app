@@ -1,6 +1,7 @@
 import { BackendNode, BackendEdge } from "@/types/canvas";
 import { Endpoint, CompiledFile } from "@workspace/canvas/types";
 import { resolveEndpointTrace } from "../../../../traceResolver";
+import { resolveServiceAuthContext } from "../../../../generators/routeGenerator/handlers/authResolver";
 import { toEnvVarName } from "../../../../utils";
 
 interface ManifestGeneratorsOptions {
@@ -26,6 +27,9 @@ export function generateManifestFiles({
 }: ManifestGeneratorsOptions): CompiledFile[] {
   const files: CompiledFile[] = [];
 
+  const authCtx = resolveServiceAuthContext(node, allNodes, allEdges);
+  const authDeps = authCtx.authNode ? "PyJWT[crypto]>=2.8.0\n" : "";
+
   files.push({
     filename: "requirements.txt",
     language: "plaintext",
@@ -33,7 +37,7 @@ export function generateManifestFiles({
 uvicorn[standard]>=0.28.0
 pydantic>=2.6.0
 httpx>=0.27.0
-pytest>=8.0.0
+${authDeps}pytest>=8.0.0
 pytest-asyncio>=0.23.5
 python-dotenv>=1.0.1
 `,
@@ -56,7 +60,8 @@ dependencies = [
     "fastapi>=0.110.0",
     "uvicorn[standard]>=0.28.0",
     "pydantic>=2.6.0",
-    "python-dotenv>=1.0.1"
+    "httpx>=0.27.0",
+${authCtx.authNode ? '    "PyJWT[crypto]>=2.8.0",\n' : ""}    "python-dotenv>=1.0.1"
 ]
 
 [tool.pytest.ini_options]
@@ -89,11 +94,14 @@ testpaths = [
     connectedServiceEnvLines.length > 0
       ? `\n# Connected Services\n${connectedServiceEnvLines.join("\n")}\n`
       : "";
+  const authEnvString = authCtx.authNode
+    ? `\n# Auth Server / JWKS Verification\nAUTH_SERVER_URL=${authCtx.authServerUrl}\nBETTER_AUTH_URL=${authCtx.authServerUrl}\nJWKS_URL=${authCtx.authServerUrl}/api/auth/jwks\n`
+    : "";
 
   files.push({
     filename: ".env",
     language: "dotenv",
-    content: `PORT=${port}\nENVIRONMENT=development\nLOG_LEVEL=info\n${connectedEnvString}`,
+    content: `PORT=${port}\nENVIRONMENT=development\nLOG_LEVEL=info\n${connectedEnvString}${authEnvString}`,
   });
 
   files.push({

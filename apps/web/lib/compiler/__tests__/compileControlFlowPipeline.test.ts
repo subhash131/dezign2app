@@ -699,7 +699,7 @@ describe("Control Flow Pipeline Steps Compilation", () => {
       const lines = renderPipeline(steps, "body");
       const code = lines.join("\n");
 
-      expect(code).toContain("const session = await getUserSession(req.headers[\"authorization\"]);");
+      expect(code).toContain("const session = await getUserSession(req.headers?.[\"authorization\"]);");
       expect(code).toContain("if (session === null || session === undefined) {");
       expect(code).toContain("return res.status(401).json({ error: \"Invalid or expired session\" });");
     });

@@ -9,6 +9,10 @@ export interface AuthUser {
   userId: string;
   username: string;
   role: string;
+  /** Active organization ID from session / JWT claims when Better Auth organization plugin is enabled. */
+  activeOrganizationId?: string;
+  /** Membership role within the active organization (e.g. "owner", "admin", "member", custom). */
+  orgRole?: string;
   email?: string;
   name?: string;
   sessionToken?: string;

@@ -2,6 +2,8 @@ import { BackendNode, BackendEdge } from "@/types/canvas";
 import { Endpoint, CompiledFile, JSONValue } from "@workspace/canvas/types";
 import { parseSchemaJson, toPascalCase } from "../../../../utils";
 import { resolveEndpointTrace } from "../../../../traceResolver";
+import { resolveEndpointAuth, resolveServiceAuthContext } from "../../../../generators/routeGenerator/handlers/authResolver";
+import { generateFastApiMiddleware } from "../../../../auth/better-auth/v1.6/generators/generateFastApiMiddleware";
 import { convertPathParams, toPythonRouteFileName } from "./utils";
 
 interface RouteGeneratorOptions {
@@ -26,6 +28,7 @@ export function generateRoutes({
   const routeInclusions: string[] = [];
   const usedFileNames = new Set<string>();
   const routeFileNames: string[] = [];
+  let hasAnyAuthRoute = false;
 
   if (nodeEndpoints.length === 0) {
     files.push({
@@ -86,6 +89,10 @@ async def health_handler():
         allEdges,
         endpoints,
       );
+      const authRes = resolveEndpointAuth(ep, trace);
+      if (authRes.requiresAuth) {
+        hasAnyAuthRoute = true;
+      }
       const isBodyMethod = ["post", "put", "patch"].includes(method);
 
       let requestModelName: string | null = null;
@@ -116,19 +123,34 @@ async def health_handler():
 
       const statusCode =
         method === "post" ? "status.HTTP_201_CREATED" : "status.HTTP_200_OK";
-      const bodyParamStr = requestModelName ? `body: ${requestModelName}` : "";
+      const requiredRoles = ep.requiredRoles && ep.requiredRoles.length > 0 ? ep.requiredRoles : [];
+      const authParamStr = authRes.requiresAuth
+        ? requiredRoles.length > 0
+          ? `current_user: dict = Depends(require_roles(${JSON.stringify(requiredRoles)}))`
+          : `current_user: dict = Depends(get_current_user)`
+        : "";
+      const routeParams = [
+        ...(requestModelName ? [`body: ${requestModelName}`] : []),
+        ...(authParamStr ? [authParamStr] : []),
+      ].join(", ");
+      const dependsImport = authRes.requiresAuth ? ", Depends" : "";
+      const authMiddlewareImport = authRes.requiresAuth
+        ? requiredRoles.length > 0
+          ? "from auth_middleware import get_current_user, require_roles\n"
+          : "from auth_middleware import get_current_user\n"
+        : "";
 
-      let routeCode = `from fastapi import APIRouter, HTTPException, status
+      let routeCode = `from fastapi import APIRouter, HTTPException, status${dependsImport}
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
 from core.logger import get_logger
 from core.response import format_response
-
+${authMiddlewareImport}
 logger = get_logger("${serviceName}:${routeFileName}")
 router = APIRouter()
 
 ${pydanticModelCode}@router.${method}("${path}", status_code=${statusCode}, tags=["${serviceName}"])\n`;
-      routeCode += `async def ${handlerName}(${bodyParamStr}):\n`;
+      routeCode += `async def ${handlerName}(${routeParams}):\n`;
       routeCode += `    """\n`;
       routeCode += `    ${ep.type || "GET"} ${path}\n`;
       routeCode += `    ${summary}\n`;
@@ -224,6 +246,18 @@ ${pydanticModelCode}@router.${method}("${path}", status_code=${statusCode}, tags
         `from .${routeFileName} import router as ${routeFileName}_router`,
       );
       routeInclusions.push(`router.include_router(${routeFileName}_router)`);
+    });
+  }
+
+  if (hasAnyAuthRoute) {
+    const authCtx = resolveServiceAuthContext(node, allNodes, allEdges);
+    files.push({
+      filename: "auth_middleware.py",
+      language: "python",
+      content: generateFastApiMiddleware({
+        ...(authCtx.authNode?.data || {}),
+        baseUrl: authCtx.authServerUrl,
+      }),
     });
   }
 

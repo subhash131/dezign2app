@@ -1,5 +1,11 @@
 import { Endpoint, CompiledFile } from "@workspace/canvas/types";
+import { BackendNode, BackendEdge } from "@/types/canvas";
 import { parseSchemaJson } from "../../../../utils";
+import { resolveEndpointTrace } from "../../../../traceResolver";
+import {
+  resolveEndpointAuth,
+  resolveServiceAuthContext,
+} from "../../../../generators/routeGenerator/handlers/authResolver";
 import {
   toPascalCase,
   toCamelCase,
@@ -10,20 +16,126 @@ import {
 } from "./utils";
 
 interface GenerateRoutesOptions {
+  serviceNode?: BackendNode;
   serviceName: string;
   moduleName: string;
   nodeEndpoints: (Endpoint & { nodeId?: string })[];
   requestModelMap: Map<string, string>;
   responseModelMap: Map<string, string>;
+  allNodes?: BackendNode[];
+  allEdges?: BackendEdge[];
+  endpoints?: (Endpoint & { nodeId: string })[];
+}
+
+function generateGoJwksMiddleware(authServerUrl: string): string {
+  return `package middleware
+
+import (
+\t"context"
+\t"fmt"
+\t"net/http"
+\t"os"
+\t"strings"
+\t"sync"
+
+\t"github.com/MicahParks/keyfunc/v3"
+\t"github.com/gin-gonic/gin"
+\t"github.com/golang-jwt/jwt/v5"
+)
+
+var (
+\tjwksOnce sync.Once
+\tjwksFunc keyfunc.Keyfunc
+\tjwksErr  error
+)
+
+func getJWKS() (keyfunc.Keyfunc, error) {
+\tjwksOnce.Do(func() {
+\t\tauthURL := os.Getenv("AUTH_SERVER_URL")
+\t\tif authURL == "" {
+\t\t\tauthURL = os.Getenv("BETTER_AUTH_URL")
+\t\t}
+\t\tif authURL == "" {
+\t\t\tauthURL = ${JSON.stringify(authServerUrl)}
+\t\t}
+\t\tjwksURL := strings.TrimRight(authURL, "/") + "/api/auth/jwks"
+\t\tjwksFunc, jwksErr = keyfunc.NewDefaultCtx(context.Background(), []string{jwksURL})
+\t})
+\treturn jwksFunc, jwksErr
+}
+
+// RequireAuth verifies incoming Bearer JWTs against the Auth server's cached JWKS keys
+// and optionally enforces allowed roles without querying any shared auth database.
+func RequireAuth(allowedRoles ...string) gin.HandlerFunc {
+\treturn func(c *gin.Context) {
+\t\tauthHeader := c.GetHeader("Authorization")
+\t\tif !strings.HasPrefix(authHeader, "Bearer ") {
+\t\t\tc.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized: Missing Bearer token"})
+\t\t\treturn
+\t\t}
+\t\ttokenStr := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
+\t\tkf, err := getJWKS()
+\t\tif err != nil || kf == nil {
+\t\t\tc.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "Authentication JWKS unavailable"})
+\t\t\treturn
+\t\t}
+
+\t\ttok, err := jwt.Parse(tokenStr, kf.Keyfunc)
+\t\tif err != nil || !tok.Valid {
+\t\t\tc.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized: Invalid or expired token"})
+\t\t\treturn
+\t\t}
+
+\t\tclaims, ok := tok.Claims.(jwt.MapClaims)
+\t\tif !ok {
+\t\t\tc.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized: Invalid token claims"})
+\t\t\treturn
+\t\t}
+
+\t\trole := "user"
+\t\tif r, exists := claims["role"]; exists {
+\t\t\trole = fmt.Sprintf("%v", r)
+\t\t}
+\t\tif len(allowedRoles) > 0 {
+\t\t\tallowed := false
+\t\t\tfor _, reqRole := range allowedRoles {
+\t\t\t\tif role == reqRole {
+\t\t\t\t\tallowed = true
+\t\t\t\t\tbreak
+\t\t\t\t}
+\t\t\t}
+\t\t\tif !allowed {
+\t\t\t\tc.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Forbidden: Insufficient role"})
+\t\t\t\treturn
+\t\t\t}
+\t\t}
+
+\t\tc.Set("user", claims)
+\t\tc.Set("userRole", role)
+\t\tc.Next()
+\t}
+}
+`;
 }
 
 export function generateRoutes(options: GenerateRoutesOptions): {
   files: CompiledFile[];
   routeRegistrations: { method: string; path: string; handlerName: string }[];
+  hasAuthRoutes: boolean;
 } {
-  const { serviceName, moduleName, nodeEndpoints, requestModelMap, responseModelMap } = options;
+  const {
+    serviceNode,
+    serviceName,
+    moduleName,
+    nodeEndpoints,
+    requestModelMap,
+    responseModelMap,
+    allNodes = [],
+    allEdges = [],
+    endpoints = [],
+  } = options;
   const files: CompiledFile[] = [];
-  const routeRegistrations: { method: string; path: string; handlerName: string }[] = [];
+  const routeRegistrations: { method: string; path: string; handlerName: string; requiresAuth?: boolean; requiredRoles?: string[] }[] = [];
   const usedFileNames = new Set<string>();
 
   // 1. Health Check Route
@@ -73,10 +185,18 @@ func HealthHandler(c *gin.Context) {
     }
     usedFileNames.add(routeFileName);
 
+    const epWithNodeId = { ...ep, nodeId: ep.nodeId || serviceNode?.id || "" };
+    const trace = serviceNode
+      ? resolveEndpointTrace(serviceNode, epWithNodeId, allNodes, allEdges, endpoints)
+      : { incoming: [], outgoing: [] };
+    const authRes = resolveEndpointAuth(epWithNodeId, trace);
+
     routeRegistrations.push({
       method: ginMethod,
       path: ginPath,
       handlerName,
+      requiresAuth: authRes.requiresAuth,
+      requiredRoles: ep.requiredRoles,
     });
 
     const requestModel = requestModelMap.get(ep.id);
@@ -218,19 +338,37 @@ ${paramParsingCode}${bodyBindingCode}${responseCode}}
     });
   });
 
+  const hasAuthRoutes = routeRegistrations.some((r) => r.requiresAuth);
+  if (hasAuthRoutes) {
+    const authCtx = resolveServiceAuthContext(serviceNode, allNodes, allEdges);
+    files.push({
+      filename: "middleware/auth.go",
+      language: "go",
+      content: generateGoJwksMiddleware(authCtx.authServerUrl),
+    });
+  }
+
   // 3. Generate router.go with RegisterRoutes
   let routerContent = `package routes
 
 import (
 \t"github.com/gin-gonic/gin"
-)
+${hasAuthRoutes ? `\t"${moduleName}/middleware"\n` : ""})
 
 // RegisterRoutes registers all service endpoints with the Gin engine
 func RegisterRoutes(r *gin.Engine) {
 `;
 
   routeRegistrations.forEach((reg) => {
-    routerContent += `\tr.${reg.method}("${reg.path}", ${reg.handlerName})\n`;
+    if (reg.requiresAuth) {
+      const roleArgs =
+        reg.requiredRoles && reg.requiredRoles.length > 0
+          ? reg.requiredRoles.map((role) => JSON.stringify(role)).join(", ")
+          : "";
+      routerContent += `\tr.${reg.method}("${reg.path}", middleware.RequireAuth(${roleArgs}), ${reg.handlerName})\n`;
+    } else {
+      routerContent += `\tr.${reg.method}("${reg.path}", ${reg.handlerName})\n`;
+    }
   });
 
   routerContent += `}\n`;
@@ -244,6 +382,7 @@ func RegisterRoutes(r *gin.Engine) {
   return {
     files,
     routeRegistrations,
+    hasAuthRoutes,
   };
 }
 

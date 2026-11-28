@@ -6,6 +6,7 @@ import {
 } from "@workspace/ui/components/accordion";
 import { Key } from "lucide-react";
 import {
+  AUTH_FRAMEWORK_BETTER_AUTH,
   DEFAULT_AUTH_FRAMEWORK,
   DEFAULT_BETTER_AUTH_VERSION,
   EmailPasswordConfig,
@@ -24,6 +25,7 @@ export const AuthProvidersSection: React.FC<AuthConfigSectionProps> = ({
   updateData,
 }) => {
   const selectedFramework = data.framework || DEFAULT_AUTH_FRAMEWORK;
+  const isBetterAuth = selectedFramework === AUTH_FRAMEWORK_BETTER_AUTH;
   const selectedVersion = data.version || DEFAULT_BETTER_AUTH_VERSION;
 
   const emailPassword: EmailPasswordConfig = {
@@ -89,28 +91,33 @@ export const AuthProvidersSection: React.FC<AuthConfigSectionProps> = ({
             updateData={updateData}
           />
 
-          {/* Email / Password & Security Guardrails */}
-          <EmailPasswordConfigCard
-            emailPassword={emailPassword}
-            providers={providers}
-            updateData={updateData}
-          />
+          {/* Better Auth–specific provider controls (hidden for external IdPs) */}
+          {isBetterAuth && (
+            <>
+              {/* Email / Password & Security Guardrails */}
+              <EmailPasswordConfigCard
+                emailPassword={emailPassword}
+                providers={providers}
+                updateData={updateData}
+              />
 
-          {/* OAuth Providers Table with Secret Security Indicators */}
-          <SocialProvidersConfigCard
-            isSocialEnabled={isSocialEnabled}
-            providers={providers}
-            updateData={updateData}
-          />
+              {/* OAuth Providers Table with Secret Security Indicators */}
+              <SocialProvidersConfigCard
+                isSocialEnabled={isSocialEnabled}
+                providers={providers}
+                updateData={updateData}
+              />
 
-          {/* Account Linking Policy (Shown only when OAuth 2.0 / Social Auth is enabled above) */}
-          {isSocialEnabled && (
-            <AccountLinkingConfigCard
-              accountLinking={accountLinking}
-              activePolicy={activePolicy}
-              providers={providers}
-              updateData={updateData}
-            />
+              {/* Account Linking Policy (Shown only when OAuth 2.0 / Social Auth is enabled above) */}
+              {isSocialEnabled && (
+                <AccountLinkingConfigCard
+                  accountLinking={accountLinking}
+                  activePolicy={activePolicy}
+                  providers={providers}
+                  updateData={updateData}
+                />
+              )}
+            </>
           )}
         </div>
       </AccordionContent>

@@ -17,6 +17,7 @@ import { compileRedisNodes, isServiceConnectedToRedis } from "../compileRedisNod
 import { compileDatabaseNodes } from "../compileDatabaseNodes";
 import { compileStorageNodes, isServiceConnectedToStorage } from "../compileStorageNodes";
 import { generateEnvFilesForNode, collectEnvSections } from "./generateEnvFile";
+import { resolveServiceAuthContext } from "./routeGenerator/handlers/authResolver";
 import {
   INTER_SERVICE_PROTOCOL_GRPC,
   GRPC_DEFAULT_PORT,
@@ -883,6 +884,11 @@ export function generateConfigFiles(
     });
   }
 
+  const authCtx = resolveServiceAuthContext(node, allNodes, allEdges);
+  if (authCtx.redisRevocationPackageName && !redisDeps[authCtx.redisRevocationPackageName]) {
+    redisDeps[authCtx.redisRevocationPackageName] = "workspace:*";
+  }
+
   const dependencies: Record<string, string> = {
     ...dbDeps,
     ...(hasKafka ? { [kafkaPackageName]: "workspace:*" } : {}),
@@ -1065,6 +1071,22 @@ NODE_ENV=development
 LOG_LEVEL=info
 ${dbEnvLines.length > 0 ? dbEnvLines.join("\n") + "\n" : ""}${redisEnvLines.length > 0 ? redisEnvLines.join("\n") + "\n" : ""}${connectedServiceEnvLines.length > 0 ? connectedServiceEnvLines.join("\n") + "\n" : ""}`;
     envExampleFile = envFile;
+  }
+
+  // Ensure AUTH_SERVER_URL / BETTER_AUTH_URL are present when an AuthNode governs this service
+  if (authCtx.authNode) {
+    const authEnvAddons: string[] = [];
+    if (!envFile.includes("AUTH_SERVER_URL=")) {
+      authEnvAddons.push(`AUTH_SERVER_URL=${authCtx.authServerUrl}`);
+    }
+    if (!envFile.includes("BETTER_AUTH_URL=")) {
+      authEnvAddons.push(`BETTER_AUTH_URL=${authCtx.authServerUrl}`);
+    }
+    if (authEnvAddons.length > 0) {
+      const addonBlock = `\n# Auth Server / JWKS Verification\n${authEnvAddons.join("\n")}\n`;
+      envFile = envFile.trimEnd() + addonBlock;
+      envExampleFile = envExampleFile.trimEnd() + addonBlock;
+    }
   }
 
 

@@ -1,4 +1,5 @@
 import React from "react";
+import { AUTH_FRAMEWORK_BETTER_AUTH, DEFAULT_AUTH_FRAMEWORK } from "@workspace/canvas";
 import { useBackendCanvasStore } from "@/lib/stores/backendCanvasStore";
 import { Accordion } from "@workspace/ui/components/accordion";
 import {
@@ -34,6 +35,9 @@ export const AuthConfig = ({
   if (!node) return null;
 
   const data = node.data;
+  // Gate Better Auth–specific configuration sections so switching to another IdP
+  // cleanly hides Better Auth table mappings, plugins, and lifecycle hooks.
+  const isBetterAuth = (data.framework || DEFAULT_AUTH_FRAMEWORK) === AUTH_FRAMEWORK_BETTER_AUTH;
 
   const updateData = (changes: Partial<typeof data>) => {
     updateNode(nodeId, { data: { ...data, ...changes } });
@@ -119,13 +123,15 @@ export const AuthConfig = ({
         ]}
         className="w-full flex flex-col gap-4 border-none"
       >
-        <AuthCoreEntitiesSection
-          data={data}
-          updateData={updateData}
-          allNodes={allNodes}
-          edges={edges}
-          nodeId={nodeId}
-        />
+        {isBetterAuth && (
+          <AuthCoreEntitiesSection
+            data={data}
+            updateData={updateData}
+            allNodes={allNodes}
+            edges={edges}
+            nodeId={nodeId}
+          />
+        )}
         <AuthProvidersSection
           data={data}
           updateData={updateData}
@@ -154,20 +160,24 @@ export const AuthConfig = ({
           edges={edges}
           nodeId={nodeId}
         />
-        <AuthHooksSection
-          data={data}
-          updateData={updateData}
-          allNodes={allNodes}
-          edges={edges}
-          nodeId={nodeId}
-        />
-        <AuthPluginsSection
-          data={data}
-          updateData={updateData}
-          allNodes={allNodes}
-          edges={edges}
-          nodeId={nodeId}
-        />
+        {isBetterAuth && (
+          <AuthHooksSection
+            data={data}
+            updateData={updateData}
+            allNodes={allNodes}
+            edges={edges}
+            nodeId={nodeId}
+          />
+        )}
+        {isBetterAuth && (
+          <AuthPluginsSection
+            data={data}
+            updateData={updateData}
+            allNodes={allNodes}
+            edges={edges}
+            nodeId={nodeId}
+          />
+        )}
         <AuthCodePreviewSection
           data={data}
           updateData={updateData}

@@ -20,6 +20,77 @@ export const BETTER_AUTH_VERSIONS = [
 export const DEFAULT_AUTH_FRAMEWORK = AUTH_FRAMEWORK_BETTER_AUTH;
 export const DEFAULT_BETTER_AUTH_VERSION = "v1.4";
 
+/**
+ * Multi-server verification strategies supported by generated ServiceNodes.
+ * - "auto": resolves to "jwks" for decoupled/multi-service/polyglot topologies, or "db" for single-DB Express monoliths.
+ * - "jwks": stateless asymmetric JWT verification against the Auth server's /api/auth/jwks endpoint (recommended for multi-server).
+ * - "db": direct session/HS256 lookup via shared @workspace/db.
+ * - "http": live /api/auth/get-session lookup against the Auth server.
+ */
+export const SERVICE_AUTH_STRATEGIES = ["auto", "jwks", "db", "http"] as const;
+export type ServiceAuthStrategy = (typeof SERVICE_AUTH_STRATEGIES)[number];
+
+/**
+ * Better Auth cookieCache encoding strategies.
+ * - "compact": smallest HMAC-signed base64url token (Better Auth default).
+ * - "jwt": standard signed JWT format.
+ * - "jwe": encrypted payload so session contents cannot be inspected by the browser.
+ */
+export const COOKIE_CACHE_STRATEGIES = ["compact", "jwt", "jwe"] as const;
+export type CookieCacheStrategy = (typeof COOKIE_CACHE_STRATEGIES)[number];
+
+/** Asymmetric key algorithms supported by Better Auth's jwt() JWKS key pair config. */
+export const JWT_SIGNING_ALGORITHMS = ["EdDSA", "RS256", "ES256"] as const;
+export type JwtSigningAlgorithm = (typeof JWT_SIGNING_ALGORITHMS)[number];
+
+/** Default global user roles used by Better Auth's admin() plugin. */
+export const DEFAULT_USER_ROLES = ["user", "admin"] as const;
+
+/** Default workspace/organization roles used by Better Auth's organization() plugin. */
+export const DEFAULT_ORG_ROLES = ["owner", "admin", "member"] as const;
+
+export interface ResolvedAuthRoles {
+  /** Global application/user roles (from rbac.roles or defaults). */
+  userRoles: string[];
+  /** Organization/workspace roles when organization RBAC is enabled (from organization.roles or defaults). */
+  orgRoles: string[];
+  /** Deduplicated union of userRoles and orgRoles for dropdowns and validators. */
+  allRoles: string[];
+}
+
+/**
+ * Resolves the available global user roles and organization roles from an AuthNode's data.
+ *
+ * Why:
+ * - Provides one single source of truth for downstream RoleMultiSelectDropdown controls
+ *   (EndpointConfig, AuthVerifyStepSection, WebPageProtectionSection) and compilers.
+ */
+export function resolveAuthRoles(data?: {
+  rbac?: { roles?: string[] };
+  organization?: { enabled?: boolean; roles?: string[] };
+}): ResolvedAuthRoles {
+  const rawUserRoles =
+    data?.rbac?.roles && data.rbac.roles.length > 0
+      ? data.rbac.roles
+      : [...DEFAULT_USER_ROLES];
+  const userRoles = Array.from(
+    new Set(rawUserRoles.map((r) => r.trim()).filter(Boolean)),
+  );
+
+  const orgEnabled = data?.organization?.enabled !== false;
+  const rawOrgRoles = orgEnabled
+    ? data?.organization?.roles && data.organization.roles.length > 0
+      ? data.organization.roles
+      : [...DEFAULT_ORG_ROLES]
+    : [];
+  const orgRoles = Array.from(
+    new Set(rawOrgRoles.map((r) => r.trim()).filter(Boolean)),
+  );
+
+  const allRoles = Array.from(new Set([...userRoles, ...orgRoles]));
+  return { userRoles, orgRoles, allRoles };
+}
+
 export const ACCOUNT_LINKING_POLICY_OPTIONS = [
   {
     id: "prompt",

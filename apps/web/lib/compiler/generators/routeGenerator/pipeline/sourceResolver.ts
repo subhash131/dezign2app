@@ -33,7 +33,13 @@ export function resolveSource(
     }
     case "req_headers": {
       const field = source.field ? source.field.trim() : "";
-      return field ? `req.headers["${field}"]` : "req.headers";
+      // Optional-chain req.headers because Express handler union request types allow headers to be omitted in direct calls/tests.
+      return field ? `req.headers?.["${field}"]` : "req.headers";
+    }
+    case "event_headers": {
+      // Decoded UTF-8 Kafka message headers passed into handle<Event>(payload, headers)
+      const field = source.field ? source.field.trim().toLowerCase() : "";
+      return field ? `headers["${field}"]` : "headers";
     }
     case "auth": {
       const field = source.field ? source.field.trim() : "";

@@ -83,13 +83,17 @@ export function compileGoV1Service(
   const { files: modelFiles, requestModelMap, responseModelMap } = generateModels(nodeEndpoints);
   files.push(...modelFiles);
 
-  // 2. Routes Generation (Path params, query params, headers, body binding, returns)
-  const { files: routeFiles, routeRegistrations } = generateRoutes({
+  // 2. Routes Generation (Path params, query params, headers, body binding, returns, JWKS auth middleware)
+  const { files: routeFiles, routeRegistrations, hasAuthRoutes } = generateRoutes({
+    serviceNode: node,
     serviceName,
     moduleName: sanitizedName,
     nodeEndpoints,
     requestModelMap,
     responseModelMap,
+    allNodes,
+    allEdges,
+    endpoints,
   });
   files.push(...routeFiles);
 
@@ -111,6 +115,10 @@ export function compileGoV1Service(
       moduleName: sanitizedName,
       port,
       endpoints: routeRegistrations,
+      hasAuthRoutes,
+      node,
+      allNodes,
+      allEdges,
     }),
   );
 
