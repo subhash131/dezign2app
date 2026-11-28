@@ -49,7 +49,6 @@ const ROUTE_CONFIG: Record<
   "free" | "premium-limited" | "premium-only"
 > = {
   "/pricing": "free",
-  "/docs": "free",
   "/sign-in": "free",
   "/sign-up": "free",
   "/auth/desktop": "free",

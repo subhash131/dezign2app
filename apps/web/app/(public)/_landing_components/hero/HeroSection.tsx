@@ -26,7 +26,7 @@ export const HeroSection: React.FC = () => {
 
       {/* Benefit-Driven Subhead */}
       <p className="mt-6 text-base sm:text-lg md:text-xl text-zinc-400 max-w-2xl font-normal leading-relaxed">
-        Model your services, schemas, and queues visually, compile a typed Turborepo monorepo in seconds, and expose the live graph to Cursor or Claude Code via MCP so AI writes custom logic against a verified spec.
+        Model your services, schemas, and queues visually, simulate request flows in-memory, and compile a typed Turborepo monorepo in seconds.
       </p>
 
       {/* Primary CTAs for Conversion */}
@@ -61,7 +61,7 @@ export const HeroSection: React.FC = () => {
         </div>
         <div className="flex items-center gap-2">
           <Check className="w-3.5 h-3.5 text-zinc-300" />
-          <span>MCP Architecture Spec for AI Agents</span>
+          <span>In-Memory Flow Simulation</span>
         </div>
         <div className="flex items-center gap-2">
           <ShieldCheck className="w-3.5 h-3.5 text-zinc-300" />

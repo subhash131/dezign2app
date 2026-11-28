@@ -4,18 +4,29 @@ import React from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Blockchain04Icon } from "@hugeicons/core-free-icons";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Monitor, ArrowRight } from "lucide-react";
 
 const navLinks: { name: string; href: string; external?: boolean; badge?: string }[] = [
-  { name: "Targets", href: "/#dpm" },
-  { name: "Compiler", href: "/#compiler" },
-  { name: "MCP & Studio", href: "/#mcp" },
   { name: "Pricing", href: "/#pricing" },
   { name: "Tutorials", href: "/tutorials" },
   { name: "dpm", href: "/dpm", badge: "RFC" },
 ];
 
 export const Header: React.FC = () => {
+  const pathname = usePathname();
+
+  const handleHashClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+    if (pathname === "/" && href.startsWith("/#")) {
+      const targetId = href.slice(2);
+      const el = document.getElementById(targetId);
+      if (el) {
+        e.preventDefault();
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+        window.history.replaceState(null, "", `#${targetId}`);
+      }
+    }
+  };
   return (
     <header className="h-14 sticky top-0 w-full flex justify-center px-4 lg:px-8 items-center z-50 backdrop-blur-md border-b border-zinc-800/80 bg-black/75">
       <div className="size-full max-w-6xl flex justify-between items-center">
@@ -54,6 +65,7 @@ export const Header: React.FC = () => {
               <Link
                 key={link.name}
                 href={link.href}
+                onClick={(e) => handleHashClick(e, link.href)}
                 className="text-xs text-zinc-400 hover:text-white transition-colors flex items-center gap-1.5"
               >
                 <span>{link.name}</span>

@@ -120,8 +120,7 @@ CREATE INDEX idx_users_email ON users(email);`,
   M packages/types/src/contracts.ts   # updated Zod contract
   M apps/web/lib/api/client.ts        # updated client fetch wrapper
   D apps/user-service/src/routes/users.ts
-# 3. Export PR diff or let Cursor / Claude Code read the updated spec via MCP:
-  -> get_system_design_context(projectId) reflects the new contract immediately`,
+# 3. Snapshot committed before export — review diffs cleanly in Git`,
   },
 ];
 
@@ -289,10 +288,10 @@ export const CompilerShowcaseSection: React.FC = () => {
             </p>
           </div>
           <div className="p-5 rounded-lg border border-zinc-800/80 bg-[#0c0c0e] flex flex-col gap-1.5">
-            <span className="text-zinc-500 font-mono text-xs">02 — Round-Trip Git &amp; MCP Sync</span>
+            <span className="text-zinc-500 font-mono text-xs">02 — Blast-Radius &amp; Git Diffs</span>
             <h4 className="text-sm font-semibold text-white">Review Diffs Before Merging</h4>
             <p className="text-xs text-zinc-400 leading-relaxed">
-              Every structural canvas edit computes affected routes, severed edges, and file diffs—so you merge clean contract updates in Git and let Cursor or Claude Code adapt custom handlers via MCP.
+              Every structural canvas edit computes affected routes, severed edges, and file diffs—paired with snapshot commits so you review contract updates cleanly in Git.
             </p>
           </div>
           <div className="p-5 rounded-lg border border-zinc-800/80 bg-[#0c0c0e] flex flex-col gap-1.5">

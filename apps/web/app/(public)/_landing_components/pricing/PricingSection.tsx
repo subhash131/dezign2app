@@ -20,10 +20,10 @@ export const PricingSection: React.FC = () => {
             Built for Architecture, Simulation &amp; Ship Speed.
           </h2>
           <p className="text-zinc-300 text-sm sm:text-base font-medium leading-relaxed">
-            Use deterministic compilation for your monorepo foundation, and give your AI coding agents a verified MCP spec for custom logic.
+            Use deterministic compilation for your monorepo foundation, and focus engineering time on custom business logic.
           </p>
           <p className="text-zinc-400 text-xs sm:text-sm leading-relaxed max-w-xl">
-            Beta Access unlocks the multi-canvas studio, Turborepo compiler, in-memory flow simulation, snapshot commit history, organization workspaces, MCP architecture server, and Desktop Studio.
+            Beta Access unlocks the multi-canvas studio, Turborepo compiler, in-memory flow simulation, snapshot commit history, organization workspaces, and Desktop Studio with local database runners.
           </p>
         </div>
 
@@ -40,7 +40,7 @@ export const PricingSection: React.FC = () => {
           </div>
           <div className="flex items-center gap-2">
             <Coins className="w-4 h-4 text-emerald-400" />
-            <span>MCP Architecture Server Included</span>
+            <span>In-Memory Flow Simulation Included</span>
           </div>
           <div className="flex items-center gap-2">
             <Lock className="w-4 h-4 text-zinc-400" />

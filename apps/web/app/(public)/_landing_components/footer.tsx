@@ -78,8 +78,8 @@ export const Footer = () => {
                 Product
               </span>
               <div className="flex flex-col gap-2 text-zinc-400">
-                <Link href="/#studio-views" className="hover:text-white transition-colors">
-                  Perspectives
+                <Link href="/#dpm" className="hover:text-white transition-colors">
+                  Targets
                 </Link>
                 <Link href="/#compiler" className="hover:text-white transition-colors">
                   Monorepo Compiler
@@ -154,7 +154,7 @@ export const Footer = () => {
           <div>&copy; {currentYear} Dezign2App Inc. All rights reserved.</div>
           <div className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
-            <span>Turborepo + MCP Architecture Studio</span>
+            <span>Visual Architecture &amp; Monorepo Compiler</span>
           </div>
         </div>
       </div>

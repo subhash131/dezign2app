@@ -2,97 +2,93 @@
 
 import React, { useState } from "react";
 import {
-  Cpu,
   Terminal,
   PlayCircle,
   GitBranch,
   Database,
   CheckCircle2,
   Compass,
-  Server,
+  Layers,
+  Workflow,
 } from "lucide-react";
 
 export const FutureRoadmapSection: React.FC = () => {
-  const [activeTool, setActiveTool] = useState<number>(0);
+  const [activeView, setActiveView] = useState<number>(0);
 
-  const MCP_TOOLS = [
+  const STUDIO_VIEWS = [
     {
-      name: "get_system_design_context",
-      summary: "Project-wide schema, services, endpoints & test cases",
-      response: `{
-  "services": ["auth-service (:3001)", "orders-api (:3002)"],
-  "databases": ["postgres-main (users, orders, order_items)"],
-  "auth": "better-auth (email/password + GitHub OAuth + RBAC)",
-  "contracts": "14 typed REST endpoints, 2 Kafka topics"
-}`,
+      name: "Architecture Graph View",
+      summary: "Distributed services, gateways, databases, brokers & streams",
+      preview: `Nodes: Better Auth · Next.js 16 Web · Orders API (Express) · PostgreSQL · Kafka
+Auto-Layout: Dagre / ELK edge routing
+Output: Typed Turborepo + Docker Compose`,
     },
     {
-      name: "traverse_architecture_graph",
-      summary: "Deterministic BFS traversal from any topic or node",
-      response: `# Subgraph: "orders" (depth=2, no LLM)
-[WebPage: /checkout] --(POST /orders)--> [Service: orders-api]
-[Service: orders-api] --(write)--> [Entity: orders (Postgres)]
-[Service: orders-api] --(publish)--> [Kafka: order.created]`,
+      name: "Schema & Entity ERD View",
+      summary: "Tables, columns, primary/foreign keys, indexes & Redis models",
+      preview: `Table: orders (id PK, user_id FK -> users.id, total_cents, status)
+Engines: PostgreSQL, MySQL, SQLite, Convex, Redis
+Output: SQL DDL + sync scripts + typed query helpers`,
     },
     {
-      name: "search_architecture_nodes",
-      summary: "Filtered node catalogue with 1-hop connections",
-      response: `# Node Catalogue (nodeType: "service", keyword: "orders")
-- orders-api (express): POST /orders, GET /orders/:id
-  Connections: postgres-main, better-auth, kafka-events`,
+      name: "Sequence & LangGraph Views",
+      summary: "Endpoint request/response flows & stateful multi-agent graphs",
+      preview: `Flow: POST /orders -> requireAuth -> DB insert -> Kafka publish
+LangGraph: MessagesAnnotation + router branches + SSE streaming
+Testing: Step-by-step trace & test persona assertions`,
     },
   ];
 
-  const currentMcpTool = MCP_TOOLS[activeTool] ?? MCP_TOOLS[0]!;
+  const currentView = STUDIO_VIEWS[activeView] ?? STUDIO_VIEWS[0]!;
 
   return (
-    <section id="mcp" className="w-full py-24 bg-[#070709] border-t border-zinc-900 scroll-mt-14">
+    <section id="studio" className="w-full py-24 bg-[#070709] border-t border-zinc-900 scroll-mt-14">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col items-center">
         {/* Section Header */}
         <div className="flex flex-col items-center text-center gap-3 mb-16 max-w-3xl">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-zinc-800 bg-zinc-900/60 text-xs font-mono text-zinc-300">
-            <Server className="w-3.5 h-3.5 text-emerald-400" />
-            <span>BUILT FOR AI AGENTS &amp; LOCAL WORKFLOWS</span>
+            <Layers className="w-3.5 h-3.5 text-emerald-400" />
+            <span>BUILT FOR REAL WORKFLOWS</span>
           </div>
 
           <h2
             style={{ fontFamily: "var(--font-display)" }}
             className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-white mt-2"
           >
-            Your Architecture Graph, Exposed via MCP.
+            Multi-Canvas Studio, Simulation &amp; Desktop Runtime.
           </h2>
 
           <p className="text-zinc-400 text-sm sm:text-base md:text-lg leading-relaxed max-w-2xl">
-            Instead of fighting Cursor or Claude Code, give them a verified architectural source of truth—paired with in-memory simulation and a native Desktop Studio.
+            Model your system across specialized architectural views, simulate flows in-memory before exporting, and run everything locally in our Electron Desktop Studio.
           </p>
         </div>
 
-        {/* Featured Card: Live MCP Server Integration */}
+        {/* Featured Card: Multi-Canvas Studio Perspectives */}
         <div className="w-full rounded-2xl border border-zinc-800 bg-[#09090c] p-6 sm:p-10 mb-10">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-8 mb-8 border-b border-zinc-800/80 gap-4">
             <div>
               <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded bg-emerald-950/40 border border-emerald-900/50 text-[11px] font-mono text-emerald-300 mb-2">
-                <Cpu className="w-3.5 h-3.5" />
-                <span>SHIPPED TODAY &bull; SYSTEM DESIGN MCP SERVER</span>
+                <Workflow className="w-3.5 h-3.5" />
+                <span>SHIPPED TODAY &bull; MULTI-CANVAS ARCHITECTURE STUDIO</span>
               </div>
               <h3 className="text-2xl sm:text-3xl font-bold text-white">
-                Let Coding Agents Build Against Your Live Spec
+                One Model, Multiple Architectural Perspectives
               </h3>
               <p className="text-xs sm:text-sm text-zinc-400 mt-1 max-w-2xl">
-                Our <code className="text-zinc-200 font-mono">apps/system-design-engine</code> MCP server lets Cursor, Claude Code, and other MCP clients query exact nodes, edges, schemas, and test cases deterministically.
+                Switch seamlessly between high-level system topology, database ERD modeling, sequence flow tracing, and LangGraph agent workflows in one workspace.
               </p>
             </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* Left: MCP Tool Selector */}
+            {/* Left: View Selector */}
             <div className="lg:col-span-5 flex flex-col gap-2">
-              {MCP_TOOLS.map((tool, index) => {
-                const isSelected = activeTool === index;
+              {STUDIO_VIEWS.map((view, index) => {
+                const isSelected = activeView === index;
                 return (
                   <button
-                    key={tool.name}
-                    onClick={() => setActiveTool(index)}
+                    key={view.name}
+                    onClick={() => setActiveView(index)}
                     className={`text-left p-4 rounded-xl border transition-all ${
                       isSelected
                         ? "bg-zinc-900/90 border-zinc-600 text-white"
@@ -100,30 +96,30 @@ export const FutureRoadmapSection: React.FC = () => {
                     }`}
                   >
                     <div className="font-mono text-xs font-bold text-emerald-400">
-                      {tool.name}
+                      {view.name}
                     </div>
                     <div className="text-xs text-zinc-400 mt-1">
-                      {tool.summary}
+                      {view.summary}
                     </div>
                   </button>
                 );
               })}
             </div>
 
-            {/* Right: Tool Output Preview */}
+            {/* Right: View Details */}
             <div className="lg:col-span-7 rounded-xl border border-zinc-800 bg-[#050507] p-5 font-mono text-xs flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3 mb-4 text-[11px] text-zinc-400">
-                  <span>MCP Tool Response &bull; Deterministic Graph Query</span>
-                  <span className="text-emerald-400">stdio / JSON-RPC</span>
+                  <span>{currentView.name}</span>
+                  <span className="text-emerald-400">Live Studio View</span>
                 </div>
                 <pre className="text-zinc-300 leading-relaxed whitespace-pre-wrap overflow-x-auto">
-                  <code>{currentMcpTool.response}</code>
+                  <code>{currentView.preview}</code>
                 </pre>
               </div>
               <div className="pt-4 mt-6 border-t border-zinc-800/80 flex items-center justify-between text-[11px] text-zinc-500">
-                <span>No vector guessing—reads canonical canvas graph</span>
-                <span className="text-zinc-300">Works with Cursor &amp; Claude Code</span>
+                <span>Backed by canonical @workspace/canvas schemas</span>
+                <span className="text-zinc-300">Web + Desktop Studio</span>
               </div>
             </div>
           </div>
@@ -214,7 +210,7 @@ export const FutureRoadmapSection: React.FC = () => {
           </div>
         </div>
 
-        {/* Focused Horizon Strip (Honest, restrained roadmap) */}
+        {/* Focused Horizon Strip */}
         <div className="w-full rounded-xl border border-zinc-800/80 bg-[#09090c] p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs">
           <div className="flex items-center gap-3">
             <Compass className="w-4 h-4 text-zinc-400 shrink-0" />
