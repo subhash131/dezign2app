@@ -10,29 +10,29 @@ interface FaqItem {
 
 const FAQS: FaqItem[] = [
   {
-    question: "Is the generated code actually production-ready?",
+    question: "What stack does the generated monorepo use?",
     answer:
-      "Yes. Dezign2App generates clean, standard TypeScript structured as a Turborepo + pnpm monorepo. It includes Next.js 16 App Router for the frontend, typed Express or FastAPI microservices, Better Auth authentication with RBAC guards, and Docker Compose with database migrations. It is the exact architecture senior engineering teams build by hand.",
+      "Dezign2App generates clean, standard TypeScript, Python, or Go code structured as a Turborepo + pnpm monorepo. It supports Next.js 16 App Router for web clients, Express, FastAPI, or Go services, Better Auth with RBAC guards, PostgreSQL, MySQL, SQLite, Convex, Redis, Kafka, and Docker Compose.",
   },
   {
     question: "Do I own the code, or is there vendor lock-in?",
     answer:
-      "You own 100% of the code. There are zero runtime fees, no proprietary SDKs, and zero vendor lock-in. You can download the project as a ZIP, push it to GitHub, and deploy to AWS, GCP, Vercel, Railway, or your own self-hosted servers. Your code is yours forever.",
+      "You own 100% of the exported code. There are no runtime fees and no proprietary SDK lock-in. You can download the monorepo as a ZIP, export to disk, or open in StackBlitz and deploy to AWS, GCP, Vercel, Railway, or your own servers.",
   },
   {
-    question: "How is Dezign2App different from pure AI code generators (Cursor, Claude, or 'vibe coding')?",
+    question: "How does Dezign2App work with Cursor, Claude Code, or other AI coding agents?",
     answer:
-      "Pure AI means you describe what you want and accept what comes out—which quickly breaks down in full-stack apps when database schemas, API contracts, auth flows, and frontend state drift out of sync. Dezign2App uses an 'Algorithm + AI' approach: we use deterministic algorithms for the predictable scaffolding (instant AST compilation of schemas, Turborepo packages, typed routes, and Docker bridges with 0 hallucinations and $0 token burn), and AI for custom domain logic. You decide the architecture first; AI implements a verified spec rather than a guess.",
+      "Instead of asking an LLM to guess your entire architecture from scratch, Dezign2App compiles the predictable scaffolding (schemas, typed routes, auth middleware, client hooks, and Docker setup) deterministically, and exposes your live architecture graph over MCP (Model Context Protocol). Your coding agents query exact nodes, edges, and contracts via MCP to implement custom business logic against a verified spec.",
   },
   {
-    question: "Can I customize the code? What happens to my custom edits on the next canvas sync?",
+    question: "What happens when I edit generated code and change the diagram later?",
     answer:
-      "Your custom code is never deleted. Dezign2App separates generated infrastructure contracts (shared schemas, types, and wire protocols) from user business logic (controllers, custom routes, and UI components). When you update your visual canvas, the compiler performs non-destructive incremental updates or emits clean Git PR diffs—ensuring your custom business logic, third-party packages, and manual edits remain 100% intact.",
+      "Dezign2App compiles architecture updates into clean Turborepo packages and computes blast-radius impact and file diffs before applying deletions or structural changes. We recommend exporting to a Git repository and reviewing re-compiled diffs or letting your MCP-connected coding agent apply targeted contract updates so custom business logic stays under your control.",
   },
   {
-    question: "Can I run Dezign2App offline on my local machine?",
+    question: "Can I run Dezign2App locally on my workstation?",
     answer:
-      "Yes. With our native Electron 34 Desktop Studio, you get embedded local database runners (PostgreSQL, SQLite, Redis) and an integrated native PTY terminal. You can design, simulate, and compile complete systems offline with zero cloud setup.",
+      "Yes. With our Electron 34 Desktop Studio, you get an embedded native PTY terminal, local PostgreSQL, SQLite, and Redis runners, direct disk export, and 1-click Docker Compose execution.",
   },
 ];
 

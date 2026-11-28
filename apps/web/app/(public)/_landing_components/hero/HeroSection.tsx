@@ -12,7 +12,7 @@ export const HeroSection: React.FC = () => {
       <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-zinc-900 border border-zinc-800 shadow-xs mb-8">
         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
         <span className="text-xs font-mono text-zinc-300 font-medium">
-          The Visual Software Architecture Platform
+          For Full-Stack TypeScript, Python &amp; Go Engineering Teams
         </span>
       </div>
 
@@ -26,7 +26,7 @@ export const HeroSection: React.FC = () => {
 
       {/* Benefit-Driven Subhead */}
       <p className="mt-6 text-base sm:text-lg md:text-xl text-zinc-400 max-w-2xl font-normal leading-relaxed">
-        Cheaper, faster, and consistent: AI where it matters, not everywhere. Visually map your distributed system and compile a production-ready full-stack codebase in seconds.
+        Model your services, schemas, and queues visually, compile a typed Turborepo monorepo in seconds, and expose the live graph to Cursor or Claude Code via MCP so AI writes custom logic against a verified spec.
       </p>
 
       {/* Primary CTAs for Conversion */}
@@ -35,7 +35,7 @@ export const HeroSection: React.FC = () => {
           href="/sign-up"
           className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-white text-black font-semibold text-sm hover:bg-zinc-200 transition-colors shadow-sm"
         >
-          <span>Start Building Free</span>
+          <span>Launch Studio</span>
           <ArrowRight className="w-4 h-4" />
         </Link>
 
@@ -53,19 +53,19 @@ export const HeroSection: React.FC = () => {
         </a>
       </div>
 
-      {/* Verified Engineering Benchmarks (Agent-evaluated and grounded) */}
+      {/* Grounded Engineering Pillars */}
       <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-3 max-w-3xl mb-14 text-xs font-mono text-zinc-400">
         <div className="flex items-center gap-2">
           <Zap className="w-3.5 h-3.5 text-emerald-400" />
-          <span>&lt;800ms Deterministic AST Compile</span>
+          <span>Deterministic Monorepo Compiler</span>
         </div>
         <div className="flex items-center gap-2">
           <Check className="w-3.5 h-3.5 text-zinc-300" />
-          <span>100% Type-Safe Contract Parity</span>
+          <span>MCP Architecture Spec for AI Agents</span>
         </div>
         <div className="flex items-center gap-2">
           <ShieldCheck className="w-3.5 h-3.5 text-zinc-300" />
-          <span>100% Code Ownership (Turborepo)</span>
+          <span>Full Code Ownership (Turborepo + Git)</span>
         </div>
       </div>
 

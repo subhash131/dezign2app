@@ -154,7 +154,7 @@ export const Footer = () => {
           <div>&copy; {currentYear} Dezign2App Inc. All rights reserved.</div>
           <div className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
-            <span>100% Production Grade</span>
+            <span>Turborepo + MCP Architecture Studio</span>
           </div>
         </div>
       </div>
