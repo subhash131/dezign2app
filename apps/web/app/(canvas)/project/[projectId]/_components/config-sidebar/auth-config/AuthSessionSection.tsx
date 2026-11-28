@@ -22,9 +22,19 @@ import {
   Clock,
   Info,
   ArrowRight,
-  Database
+  Database,
+  Server,
+  ShieldCheck,
 } from "lucide-react";
-import { SessionClaimConfig, SessionConfig } from "@workspace/canvas";
+import {
+  AUTH_FRAMEWORK_BETTER_AUTH,
+  COOKIE_CACHE_STRATEGIES,
+  DEFAULT_AUTH_FRAMEWORK,
+  JWT_SIGNING_ALGORITHMS,
+  SERVICE_AUTH_STRATEGIES,
+  SessionClaimConfig,
+  SessionConfig,
+} from "@workspace/canvas";
 import { getEntityDbOperations } from "@/lib/utils/entityOperationsHelper";
 import { AuthConfigSectionProps } from "./types";
 
@@ -50,6 +60,22 @@ export const AuthSessionSection: React.FC<AuthConfigSectionProps> = ({
 
   const claims: SessionClaimConfig[] = sessionConfig.claims || [];
   const cookieCache = sessionConfig.cookieCache || { enabled: true, maxAgeSeconds: 300 };
+
+  // Gate Better Auth–specific session/storage/JWT options so future IdPs only see
+  // provider-agnostic verification controls.
+  const isBetterAuth =
+    (data.framework || DEFAULT_AUTH_FRAMEWORK) === AUTH_FRAMEWORK_BETTER_AUTH;
+
+  const redisNodes = allNodes.filter(
+    (n) =>
+      n.type === "redis_instance" ||
+      (n.type === "database" &&
+        (n.data?.dbEngine === "redis" || n.data?.dbType === "redis")),
+  );
+  const secondaryStorage = data.secondaryStorage || {};
+  const jwtConfig = data.jwtConfig || {};
+  const serviceAuthStrategy = data.serviceAuthStrategy || "auto";
+  const revocationCheck = data.revocationCheck || {};
 
   const selectedDatabaseId = data.databaseId;
   const schemaEntities = allNodes.filter(
@@ -181,51 +207,341 @@ export const AuthSessionSection: React.FC<AuthConfigSectionProps> = ({
               </div>
             </div>
 
-            {/* Cookie Cache Configuration */}
-            <div className="flex items-center justify-between pt-2.5 border-t border-border/40">
-              <div className="flex items-center gap-2">
+            {/* Cookie Cache Configuration (Better Auth only) */}
+            {isBetterAuth && (
+              <div className="flex flex-col gap-2.5 pt-2.5 border-t border-border/40">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="cookie-cache"
+                      checked={cookieCache.enabled ?? true}
+                      onCheckedChange={(c) =>
+                        updateData({
+                          session: {
+                            ...sessionConfig,
+                            cookieCache: {
+                              ...cookieCache,
+                              enabled: Boolean(c),
+                            },
+                          },
+                        })
+                      }
+                    />
+                    <Label htmlFor="cookie-cache" className="text-[11px] font-normal cursor-pointer flex items-center gap-1">
+                      <Database className="w-3 h-3 text-primary shrink-0" /> Enable Cookie Cache (Prevents DB lookup per request)
+                    </Label>
+                  </div>
+
+                  {cookieCache.enabled !== false && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-muted-foreground font-mono">Max Age:</span>
+                      <LocalInput
+                        className="h-6 w-16 text-[11px] font-mono bg-background text-right"
+                        type="number"
+                        value={cookieCache.maxAgeSeconds ?? 300}
+                        onChange={(e) =>
+                          updateData({
+                            session: {
+                              ...sessionConfig,
+                              cookieCache: {
+                                ...cookieCache,
+                                maxAgeSeconds: parseInt(e.target.value, 10) || 300,
+                              },
+                            },
+                          })
+                        }
+                      />
+                      <span className="text-[10px] text-muted-foreground font-mono">s</span>
+                    </div>
+                  )}
+                </div>
+
+                {cookieCache.enabled !== false && (
+                  <div className="grid grid-cols-2 gap-3 pl-6">
+                    <div className="flex flex-col gap-1">
+                      <Label className="text-[10px] text-muted-foreground font-medium">
+                        Cookie Cache Strategy
+                      </Label>
+                      <Select
+                        value={cookieCache.strategy || "compact"}
+                        onValueChange={(val: "compact" | "jwt" | "jwe") =>
+                          updateData({
+                            session: {
+                              ...sessionConfig,
+                              cookieCache: { ...cookieCache, strategy: val },
+                            },
+                          })
+                        }
+                      >
+                        <SelectTrigger className="h-7 text-xs font-mono bg-background">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="font-mono">
+                          {COOKIE_CACHE_STRATEGIES.map((strat) => (
+                            <SelectItem key={strat} value={strat} className="text-xs font-mono">
+                              {strat.toUpperCase()}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-4">
+                      <Checkbox
+                        id="cookie-cache-refresh"
+                        checked={cookieCache.refreshCache ?? false}
+                        onCheckedChange={(c) =>
+                          updateData({
+                            session: {
+                              ...sessionConfig,
+                              cookieCache: { ...cookieCache, refreshCache: Boolean(c) },
+                            },
+                          })
+                        }
+                      />
+                      <Label htmlFor="cookie-cache-refresh" className="text-[11px] font-normal cursor-pointer">
+                        Stateless Refresh Cache
+                      </Label>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Better Auth–only: Redis Secondary Storage & JWT Keypair Config */}
+          {isBetterAuth && (
+            <div className="flex flex-col gap-3 p-3.5 bg-background/50 rounded-lg border border-border/40 text-xs">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold flex items-center gap-1.5">
+                  <Server className="w-3.5 h-3.5 text-rose-500" /> Redis Secondary Storage &amp; JWT Signing
+                </Label>
+                <span className="text-[10px] text-muted-foreground font-mono">Better Auth Multi-Server</span>
+              </div>
+
+              {/* Redis Secondary Storage Toggle & Node Picker */}
+              <div className="flex flex-col gap-2.5 pt-1">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="ba-secondary-storage"
+                      checked={secondaryStorage.enabled ?? false}
+                      onCheckedChange={(c) =>
+                        updateData({
+                          secondaryStorage: {
+                            ...secondaryStorage,
+                            enabled: Boolean(c),
+                          },
+                        })
+                      }
+                    />
+                    <Label htmlFor="ba-secondary-storage" className="text-[11px] font-normal cursor-pointer">
+                      Offload active sessions &amp; rate limits to Redis (<code className="font-mono text-[10px]">secondaryStorage</code>)
+                    </Label>
+                  </div>
+                </div>
+
+                {secondaryStorage.enabled && (
+                  <div className="grid grid-cols-2 gap-3 pl-6 pt-1">
+                    <div className="flex flex-col gap-1">
+                      <Label className="text-[10px] text-muted-foreground font-medium">
+                        Target Redis Instance
+                      </Label>
+                      <Select
+                        value={secondaryStorage.redisNodeId || "__auto__"}
+                        onValueChange={(val) =>
+                          updateData({
+                            secondaryStorage: {
+                              ...secondaryStorage,
+                              redisNodeId: val === "__auto__" ? undefined : val,
+                            },
+                          })
+                        }
+                      >
+                        <SelectTrigger className="h-7 text-xs font-mono bg-background">
+                          <SelectValue placeholder="Auto-select Redis" />
+                        </SelectTrigger>
+                        <SelectContent className="font-mono">
+                          <SelectItem value="__auto__" className="text-xs font-mono">
+                            {redisNodes[0] ? `Auto (${redisNodes[0].data?.label || "Redis"})` : "Auto (REDIS_URL)"}
+                          </SelectItem>
+                          {redisNodes.map((rn) => (
+                            <SelectItem key={rn.id} value={rn.id} className="text-xs font-mono">
+                              {rn.data?.label || rn.id}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <Label className="text-[10px] text-muted-foreground font-medium">
+                        Redis Key Prefix
+                      </Label>
+                      <LocalInput
+                        className="h-7 text-xs font-mono bg-background"
+                        placeholder="better-auth:"
+                        value={secondaryStorage.keyPrefix ?? "better-auth:"}
+                        onChange={(e) =>
+                          updateData({
+                            secondaryStorage: {
+                              ...secondaryStorage,
+                              keyPrefix: e.target.value,
+                            },
+                          })
+                        }
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="ba-store-session-db"
+                        checked={sessionConfig.storeSessionInDatabase ?? false}
+                        onCheckedChange={(c) =>
+                          updateData({
+                            session: {
+                              ...sessionConfig,
+                              storeSessionInDatabase: Boolean(c),
+                            },
+                          })
+                        }
+                      />
+                      <Label htmlFor="ba-store-session-db" className="text-[10.5px] font-normal cursor-pointer">
+                        Also persist sessions in SQL DB
+                      </Label>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="ba-rate-limit-redis"
+                        checked={secondaryStorage.useForRateLimit ?? true}
+                        onCheckedChange={(c) =>
+                          updateData({
+                            secondaryStorage: {
+                              ...secondaryStorage,
+                              useForRateLimit: Boolean(c),
+                            },
+                          })
+                        }
+                      />
+                      <Label htmlFor="ba-rate-limit-redis" className="text-[10.5px] font-normal cursor-pointer">
+                        Use Redis for Auth Rate Limiting
+                      </Label>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* JWT Signing Algorithm & TTL */}
+              <div className="grid grid-cols-2 gap-3 pt-2.5 border-t border-border/40">
+                <div className="flex flex-col gap-1">
+                  <Label className="text-[10px] text-muted-foreground font-medium">
+                    JWKS Signing Algorithm
+                  </Label>
+                  <Select
+                    value={jwtConfig.algorithm || "EdDSA"}
+                    onValueChange={(val: "EdDSA" | "RS256" | "ES256") =>
+                      updateData({
+                        jwtConfig: { ...jwtConfig, algorithm: val },
+                      })
+                    }
+                  >
+                    <SelectTrigger className="h-7 text-xs font-mono bg-background">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="font-mono">
+                      {JWT_SIGNING_ALGORITHMS.map((alg) => (
+                        <SelectItem key={alg} value={alg} className="text-xs font-mono">
+                          {alg}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <Label className="text-[10px] text-muted-foreground font-medium">
+                    JWT Access Token TTL
+                  </Label>
+                  <Select
+                    value={jwtConfig.expirationTime || "15m"}
+                    onValueChange={(val) =>
+                      updateData({
+                        jwtConfig: { ...jwtConfig, expirationTime: val },
+                      })
+                    }
+                  >
+                    <SelectTrigger className="h-7 text-xs font-mono bg-background">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="font-mono">
+                      <SelectItem value="5m" className="text-xs font-mono">5 minutes</SelectItem>
+                      <SelectItem value="15m" className="text-xs font-mono">15 minutes</SelectItem>
+                      <SelectItem value="1h" className="text-xs font-mono">1 hour</SelectItem>
+                      <SelectItem value="24h" className="text-xs font-mono">24 hours</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Provider-Agnostic Service Verification Strategy */}
+          <div className="flex flex-col gap-3 p-3.5 bg-background/50 rounded-lg border border-border/40 text-xs">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-semibold flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-sky-500" /> Microservice Token Verification
+              </Label>
+              <span className="text-[10px] text-muted-foreground font-mono">ServiceNode Middleware</span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 items-end">
+              <div className="flex flex-col gap-1">
+                <Label className="text-[10px] text-muted-foreground font-medium">
+                  Verification Strategy
+                </Label>
+                <Select
+                  value={serviceAuthStrategy}
+                  onValueChange={(val: "auto" | "jwks" | "db" | "http") =>
+                    updateData({ serviceAuthStrategy: val })
+                  }
+                >
+                  <SelectTrigger className="h-7 text-xs font-mono bg-background">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="font-mono">
+                    {(isBetterAuth
+                      ? SERVICE_AUTH_STRATEGIES
+                      : SERVICE_AUTH_STRATEGIES.filter((s) => s === "auto" || s === "jwks")
+                    ).map((strat) => (
+                      <SelectItem key={strat} value={strat} className="text-xs font-mono">
+                        {strat === "auto"
+                          ? "Auto (JWKS for multi-server)"
+                          : strat === "jwks"
+                          ? "JWKS (Stateless Public Key)"
+                          : strat === "db"
+                          ? "Shared DB (@workspace/db)"
+                          : "HTTP (/api/auth/get-session)"}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-center gap-2 pb-1">
                 <Checkbox
-                  id="cookie-cache"
-                  checked={cookieCache.enabled ?? true}
+                  id="auth-redis-revocation"
+                  checked={revocationCheck.enabled ?? false}
                   onCheckedChange={(c) =>
                     updateData({
-                      session: {
-                        ...sessionConfig,
-                        cookieCache: {
-                          ...cookieCache,
-                          enabled: Boolean(c),
-                        },
-                      },
+                      revocationCheck: { ...revocationCheck, enabled: Boolean(c) },
                     })
                   }
                 />
-                <Label htmlFor="cookie-cache" className="text-[11px] font-normal cursor-pointer flex items-center gap-1">
-                  <Database className="w-3 h-3 text-primary shrink-0" /> Enable Cookie Cache (Prevents DB lookup per request)
+                <Label htmlFor="auth-redis-revocation" className="text-[11px] font-normal cursor-pointer">
+                  Check Redis revocation blocklist
                 </Label>
               </div>
-
-              {cookieCache.enabled !== false && (
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] text-muted-foreground font-mono">Max Age:</span>
-                  <LocalInput
-                    className="h-6 w-16 text-[11px] font-mono bg-background text-right"
-                    type="number"
-                    value={cookieCache.maxAgeSeconds ?? 300}
-                    onChange={(e) =>
-                      updateData({
-                        session: {
-                          ...sessionConfig,
-                          cookieCache: {
-                            ...cookieCache,
-                            maxAgeSeconds: parseInt(e.target.value, 10) || 300,
-                          },
-                        },
-                      })
-                    }
-                  />
-                  <span className="text-[10px] text-muted-foreground font-mono">s</span>
-                </div>
-              )}
             </div>
           </div>
 

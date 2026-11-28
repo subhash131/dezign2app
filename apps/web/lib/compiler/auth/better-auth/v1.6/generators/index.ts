@@ -1,4 +1,5 @@
 export * from "./generateAuthConfig";
+export * from "./generateAuthPermissions";
 export * from "./generateAuthIndex";
 export * from "./generateNextJsRouteHandler";
 export * from "./generateFastApiMiddleware";

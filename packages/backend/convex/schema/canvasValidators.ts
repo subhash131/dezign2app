@@ -272,6 +272,17 @@ export const safePipelineStepSchema = z.object({
       bulkMessagesSource: z.string().optional(),
     })
     .optional(),
+
+  // auth_verify fields (kept in sync with packages/canvas/schemas/shared.ts)
+  authVerifyAuthNodeId: z.string().optional(),
+  authVerifyMode: z.enum(["auto", "jwks", "better_auth_session"]).optional(),
+  authVerifyExpirationPolicy: z
+    .enum(["strict", "verify_signature_ignore_exp"])
+    .optional(),
+  authVerifyRequiredRoles: z.array(z.string()).optional(),
+  authVerifyRequiredOrgRoles: z.array(z.string()).optional(),
+  authVerifyRoleMatchMode: z.enum(["all", "any"]).optional(),
+  authVerifyCheckRedisRevocation: z.boolean().optional(),
 });
 
 /**

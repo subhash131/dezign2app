@@ -13,6 +13,7 @@ import {
   renderLangGraphInvokeStep,
   renderPushToClientStep,
   renderVariableStep,
+  renderAuthVerifyStep,
 } from "./compilePipelineSteps";
 import { applyStepDecorators } from "./stepDecorators";
 import { collectReferencedEnvVars } from "./envCollector";
@@ -95,6 +96,10 @@ export function renderPipelineStep(
 
     case "push_to_client":
       rawLines = renderPushToClientStep(step, ctx);
+      break;
+
+    case "auth_verify":
+      rawLines = renderAuthVerifyStep(step, ctx);
       break;
 
     default:

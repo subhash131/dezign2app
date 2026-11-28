@@ -260,6 +260,9 @@ export function collectPipelineImports(
           imports.set(importPath, new Set([fnName]));
         }
       }
+    } else if (s.type === "auth_verify" && s.enabled !== false) {
+      // Shared verification helper generated per service in src/middleware/verifyToken.ts
+      addImport("../middleware/verifyToken", "verifyAuthToken");
     }
 
     // Cache Miss imports for Redis operations

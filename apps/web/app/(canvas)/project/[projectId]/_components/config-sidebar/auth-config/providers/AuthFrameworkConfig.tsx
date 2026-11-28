@@ -8,6 +8,7 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select";
 import {
+  AUTH_FRAMEWORK_BETTER_AUTH,
   AUTH_FRAMEWORK_OPTIONS,
   BETTER_AUTH_VERSIONS,
 } from "@workspace/canvas";
@@ -50,24 +51,26 @@ export const AuthFrameworkConfig: React.FC<AuthFrameworkConfigProps> = ({
         </Select>
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <Label className="text-xs font-semibold">Version</Label>
-        <Select
-          value={selectedVersion}
-          onValueChange={(val: string) => updateData({ version: val })}
-        >
-          <SelectTrigger className="h-8 text-xs font-mono bg-background">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent className="font-mono">
-            {BETTER_AUTH_VERSIONS.map((ver) => (
-              <SelectItem key={ver.value} value={ver.value} className="text-xs font-mono">
-                {ver.value}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      {selectedFramework === AUTH_FRAMEWORK_BETTER_AUTH && (
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs font-semibold">Version</Label>
+          <Select
+            value={selectedVersion}
+            onValueChange={(val: string) => updateData({ version: val })}
+          >
+            <SelectTrigger className="h-8 text-xs font-mono bg-background">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="font-mono">
+              {BETTER_AUTH_VERSIONS.map((ver) => (
+                <SelectItem key={ver.value} value={ver.value} className="text-xs font-mono">
+                  {ver.value}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
     </div>
   );
 };

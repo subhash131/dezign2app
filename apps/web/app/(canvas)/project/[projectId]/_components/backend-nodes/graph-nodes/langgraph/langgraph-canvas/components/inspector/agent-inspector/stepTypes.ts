@@ -271,6 +271,15 @@ export const LANGGRAPH_STEP_META: Record<LangGraphNodeStepType, LangGraphStepMet
     badgeBg: "bg-sky-500/10 text-sky-300 border-sky-500/25",
     description: "Invoke another LangGraph agent or subgraph",
   },
+  auth_verify: {
+    type: "auth_verify",
+    label: "Verify Auth",
+    icon: Shield,
+    color: "text-indigo-400",
+    borderColor: "border-indigo-500/40",
+    badgeBg: "bg-indigo-500/10 text-indigo-300 border-indigo-500/25",
+    description: "Verify Bearer/JWT token via JWKS or Better Auth session",
+  },
 };
 
 /**

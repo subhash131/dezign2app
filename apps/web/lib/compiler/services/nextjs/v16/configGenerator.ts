@@ -39,6 +39,7 @@ export function generateNextjsConfigFiles(params: GenerateNextjsConfigParams): C
     react: "^19.0.0",
     "react-dom": "^19.0.0",
     zod: "^3.24.2",
+    jose: "^5.9.6",
     "@workspace/types": "workspace:*",
     "@workspace/logger": "workspace:*",
   };

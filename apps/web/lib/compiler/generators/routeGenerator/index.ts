@@ -4,8 +4,31 @@ import { toVarName, toPascalCase, toPascalServiceName, deriveRouteFileName } fro
 import { isRouteConnectedToAuthenticatedPage } from "../../traceResolver";
 import { generateDefaultRoute } from "./defaultRouteGenerator";
 import { generateEndpointRouteHandler } from "./endpointHandlerGenerator";
-import { generateRequireAuthMiddleware } from "../auth-providers/better-auth/v1.6/generateRequireAuthMiddleware";
+import {
+  generateRequireAuthMiddleware,
+  generateVerifyTokenHelper,
+} from "../auth-providers/better-auth/v1.6/generateRequireAuthMiddleware";
+import { resolveServiceAuthContext } from "./handlers/authResolver";
 import { classifyEndpointShape } from "./endpointTypeClassifier";
+import type { PipelineStep } from "@workspace/canvas/types";
+
+function hasAuthVerifyStepRecursive(steps?: PipelineStep[]): boolean {
+  if (!steps || !Array.isArray(steps)) return false;
+  return steps.some(
+    (s) =>
+      s.enabled !== false &&
+      (s.type === "auth_verify" ||
+        hasAuthVerifyStepRecursive(s.thenSteps) ||
+        hasAuthVerifyStepRecursive(s.elseSteps) ||
+        hasAuthVerifyStepRecursive(s.trySteps) ||
+        hasAuthVerifyStepRecursive(s.catchSteps) ||
+        hasAuthVerifyStepRecursive(s.cacheMissSteps) ||
+        hasAuthVerifyStepRecursive(s.loopBody) ||
+        hasAuthVerifyStepRecursive(s.switchDefault) ||
+        s.switchCases?.some((c) => hasAuthVerifyStepRecursive(c.steps)) ||
+        s.parallelBranches?.some((b) => hasAuthVerifyStepRecursive(b.steps))),
+  );
+}
 
 export * from "./dbResolver";
 export * from "./kafkaResolver";
@@ -107,12 +130,44 @@ ${routeRegistrations.join("\n")}
     content: routesIndexCode,
   });
 
+  // Emit verifyToken.ts whenever any route needs requireAuth OR any endpoint/event uses an auth_verify step.
+  const hasAuthVerifyInEndpoints = nodeEndpoints.some((ep) =>
+    hasAuthVerifyStepRecursive(ep.pipelineSteps),
+  );
+  const hasAuthVerifyInServiceEvents = Boolean(
+    serviceNode?.data?.consumedEvents?.some((ev) =>
+      hasAuthVerifyStepRecursive(ev.pipelineSteps),
+    ),
+  );
+  const needsVerifyToken =
+    hasAuthEndpoints || hasAuthVerifyInEndpoints || hasAuthVerifyInServiceEvents;
+
+  if (needsVerifyToken) {
+    const authCtx = resolveServiceAuthContext(serviceNode, allNodes, allEdges);
+    files.push({
+      filename: "src/middleware/verifyToken.ts",
+      language: "typescript",
+      content: generateVerifyTokenHelper(authCtx.strategy, {
+        authServerUrl: authCtx.authServerUrl,
+        issuer: authCtx.issuer,
+        audience: authCtx.audience,
+        redisRevocationPackageName: authCtx.redisRevocationPackageName,
+      }),
+    });
+  }
+
   // Emit the requireAuth middleware and Express types augmentation once per service, only when needed.
   if (hasAuthEndpoints) {
+    const authCtx = resolveServiceAuthContext(serviceNode, allNodes, allEdges);
     files.push({
       filename: "src/middleware/requireAuth.ts",
       language: "typescript",
-      content: generateRequireAuthMiddleware("db"),
+      content: generateRequireAuthMiddleware(authCtx.strategy, {
+        authServerUrl: authCtx.authServerUrl,
+        issuer: authCtx.issuer,
+        audience: authCtx.audience,
+        redisRevocationPackageName: authCtx.redisRevocationPackageName,
+      }),
     });
     files.push({
       filename: "src/types.d.ts",

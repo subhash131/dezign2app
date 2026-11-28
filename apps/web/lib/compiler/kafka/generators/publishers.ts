@@ -40,10 +40,12 @@ export function generatePublisherFile(
   lines.push(` * Publish a typed message to the "${topicName}" topic.`);
   lines.push(` * @param message - Payload conforming to ${Pascal}Payload`);
   lines.push(` * @param key     - Optional partition key`);
+  lines.push(` * @param headers - Optional transport headers (e.g. authorization token)`);
   lines.push(` */`);
   lines.push(`export async function ${fnName}(`);
   lines.push(`  message: ${Pascal}Payload,`);
   lines.push(`  key?: string,`);
+  lines.push(`  headers?: Record<string, string>,`);
   lines.push(`): Promise<void> {`);
   lines.push(`  const producer: Producer = await getKafkaProducer();`);
   lines.push(`  try {`);
@@ -53,6 +55,7 @@ export function generatePublisherFile(
   lines.push(`        {`);
   lines.push(`          key: key ?? undefined,`);
   lines.push(`          value: JSON.stringify(message),`);
+  lines.push(`          ...(headers && Object.keys(headers).length > 0 ? { headers } : {}),`);
   lines.push(`          timestamp: Date.now().toString(),`);
   lines.push(`        },`);
   lines.push(`      ],`);
@@ -112,22 +115,25 @@ export function generatePublishersIndexFile(
       `  topic: TTopic,`,
       `  message: KafkaTopicPayloadMap[TTopic],`,
       `  key?: string,`,
+      `  headers?: Record<string, string>,`,
       `): Promise<void>;`,
       `export async function publishKafkaEvent<TPayload extends Record<string, string | number | boolean | null | object | undefined>>(`,
       `  topic: string,`,
       `  message: TPayload,`,
       `  key?: string,`,
+      `  headers?: Record<string, string>,`,
       `): Promise<void>;`,
       `export async function publishKafkaEvent(`,
       `  topic: string,`,
       `  message: Record<string, string | number | boolean | null | object | undefined>,`,
       `  key?: string,`,
+      `  headers?: Record<string, string>,`,
       `): Promise<void> {`,
       `  const producer = await getKafkaProducer();`,
       `  try {`,
       `    await producer.send({`,
       `      topic,`,
-      `      messages: [{ key: key ?? undefined, value: JSON.stringify(message), timestamp: Date.now().toString() }],`,
+      `      messages: [{ key: key ?? undefined, value: JSON.stringify(message), ...(headers && Object.keys(headers).length > 0 ? { headers } : {}), timestamp: Date.now().toString() }],`,
       `    });`,
       `    logger.info(\`Published to \${topic}\`, message);`,
       `  } catch (err) {`,

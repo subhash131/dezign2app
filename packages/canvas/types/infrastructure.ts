@@ -1,5 +1,6 @@
 import type { WorkerTask, SearchSource } from "../schemas";
 import type { DatabaseEngine } from "../techStack";
+import type { ServiceAuthStrategy } from "../constants";
 import type {
   GatewayRoute,
   AuthRule,
@@ -16,6 +17,10 @@ import type {
   OrgInvitationsConfig,
   AuthHookConfig,
   BetterAuthDbAdapter,
+  BetterAuthSecondaryStorageConfig,
+  BetterAuthJwtConfig,
+  AuthRevocationCheckConfig,
+  RbacConfig,
 } from "./auth";
 
 /** Background worker node fields (canvas type). */
@@ -109,6 +114,16 @@ export interface CanvasAuthNodeData {
   session?: SessionConfig;
   redirects?: RedirectsConfig;
   trustedOrigins?: string[];
+  /** Better Auth Redis secondaryStorage config (active only when framework === "better_auth"). */
+  secondaryStorage?: BetterAuthSecondaryStorageConfig;
+  /** Better Auth jwt() plugin key-pair & token lifetime config. */
+  jwtConfig?: BetterAuthJwtConfig;
+  /** Provider-agnostic ServiceNode verification strategy ("auto" | "jwks" | "db" | "http"). */
+  serviceAuthStrategy?: ServiceAuthStrategy;
+  /** Optional Redis revocation/blocklist check paired with stateless JWKS verification. */
+  revocationCheck?: AuthRevocationCheckConfig;
+  /** Provider-agnostic global RBAC roles catalog + Better Auth admin() role defaults. */
+  rbac?: RbacConfig;
   organization?: {
     enabled?: boolean;
     roles?: string[];

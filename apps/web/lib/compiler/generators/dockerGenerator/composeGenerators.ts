@@ -97,6 +97,17 @@ export function generateRootDockerCompose(ctx: ComposeGeneratorContext): string 
       composeLines.push(`      - KAFKA_BROKERS=kafka:9092`);
     }
 
+    const authNode = nodes.find((n) => n.type === "auth");
+    if (authNode) {
+      // Point microservices to the Auth WebApp container in Docker Compose if present
+      const authWebApp = webApps[0];
+      const composeAuthUrl = authWebApp
+        ? `http://${authWebApp.folderName}:3000`
+        : authNode.data?.baseUrl || `http://localhost:${authNode.data?.port || "3000"}`;
+      composeLines.push(`      - AUTH_SERVER_URL=${composeAuthUrl}`);
+      composeLines.push(`      - BETTER_AUTH_URL=${composeAuthUrl}`);
+    }
+
     // Inter-service endpoints
     edges.forEach((edge) => {
       if (edge.source === srv.id) {

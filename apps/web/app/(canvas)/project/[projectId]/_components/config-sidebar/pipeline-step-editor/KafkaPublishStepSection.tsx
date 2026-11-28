@@ -522,6 +522,53 @@ export const KafkaPublishStepSection = ({
       {/* Argument Bindings */}
       {children}
 
+      {/* Forward Auth Token in Kafka Headers */}
+      <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-orange-500/15">
+        <div className="flex flex-col">
+          <span className="text-[10px] font-medium text-foreground/90">
+            Forward Auth Token (Kafka Headers)
+          </span>
+          <span className="text-[9px] text-muted-foreground">
+            Attaches <code className="font-mono">headers.authorization</code> so Service B can run a <code className="font-mono">Verify Auth</code> step
+          </span>
+        </div>
+        {(() => {
+          const bindings = step.inputBindings || [];
+          const hasAuthForward = bindings.some((b) => b.argName === "headers.authorization");
+          return (
+            <button
+              type="button"
+              onClick={() => {
+                if (hasAuthForward) {
+                  onChange({
+                    ...step,
+                    inputBindings: bindings.filter((b) => b.argName !== "headers.authorization"),
+                  });
+                } else {
+                  onChange({
+                    ...step,
+                    inputBindings: [
+                      ...bindings,
+                      {
+                        argName: "headers.authorization",
+                        source: { kind: "req_headers", field: "authorization" },
+                      },
+                    ],
+                  });
+                }
+              }}
+              className={`px-2 py-1 rounded text-[10px] font-medium border transition-colors shrink-0 ${
+                hasAuthForward
+                  ? "bg-indigo-500/20 text-indigo-400 border-indigo-500/40"
+                  : "bg-background/60 text-muted-foreground border-border/60 hover:text-foreground"
+              }`}
+            >
+              {hasAuthForward ? "✓ Forwarding Token" : "+ Forward Token"}
+            </button>
+          );
+        })()}
+      </div>
+
       {/* Advanced function settings toggle */}
       <div className="flex flex-col gap-1.5 pt-1 border-t border-orange-500/15">
         <button

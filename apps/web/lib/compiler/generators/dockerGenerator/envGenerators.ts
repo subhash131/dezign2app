@@ -118,6 +118,16 @@ export function generateServiceEnvExample(
     lines.push("");
   }
 
+  const authNode = nodes.find((n) => n.type === "auth");
+  if (authNode) {
+    const authPort = String(authNode.data?.port || "3000");
+    const authUrl = authNode.data?.baseUrl || `http://localhost:${authPort}`;
+    lines.push("# Auth Server / JWKS Verification");
+    lines.push(`AUTH_SERVER_URL=${authUrl}`);
+    lines.push(`BETTER_AUTH_URL=${authUrl}`);
+    lines.push("");
+  }
+
   return lines.join("\n");
 }
 
