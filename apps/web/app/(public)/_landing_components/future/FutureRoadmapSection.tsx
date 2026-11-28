@@ -46,7 +46,7 @@ export const FutureRoadmapSection: React.FC = () => {
   const currentMcpTool = MCP_TOOLS[activeTool] ?? MCP_TOOLS[0]!;
 
   return (
-    <section className="w-full py-24 bg-[#070709] border-t border-zinc-900">
+    <section id="mcp" className="w-full py-24 bg-[#070709] border-t border-zinc-900 scroll-mt-14">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col items-center">
         {/* Section Header */}
         <div className="flex flex-col items-center text-center gap-3 mb-16 max-w-3xl">

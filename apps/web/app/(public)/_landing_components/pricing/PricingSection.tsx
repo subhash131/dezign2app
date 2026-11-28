@@ -23,7 +23,7 @@ export const PricingSection: React.FC = () => {
             Use deterministic compilation for your monorepo foundation, and give your AI coding agents a verified MCP spec for custom logic.
           </p>
           <p className="text-zinc-400 text-xs sm:text-sm leading-relaxed max-w-xl">
-            Beta Access unlocks the full multi-canvas studio, deterministic Turborepo compiler, in-memory flow simulation, snapshot versioning, MCP architecture server, and Desktop Studio with local database runners.
+            Beta Access unlocks the multi-canvas studio, Turborepo compiler, in-memory flow simulation, snapshot commit history, organization workspaces, MCP architecture server, and Desktop Studio.
           </p>
         </div>
 

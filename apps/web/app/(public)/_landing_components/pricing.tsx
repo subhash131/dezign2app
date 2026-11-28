@@ -61,16 +61,16 @@ const CREEM_PAYMENT_URL =
 const DEFAULT_BETA_PLAN: Plan = {
   id: TARGET_PRODUCT_ID,
   name: "Beta Access",
-  desc: "Everything you need to compile system architecture into production code.",
+  desc: "Full access to the visual studio, monorepo compiler, flow simulation, MCP server, and Desktop Studio.",
   price: 20,
   billingPeriod: "every-month",
   paymentUrl: CREEM_PAYMENT_URL,
   featured: true,
   features: [
-    "Full-Stack Monorepo Code Generation",
-    "Visual Architecture Graph to Code Compiler",
-    "Data Flow Simulation (Load test system designs before shipping)",
-    "Priority Implementation of Your Custom Stack & Products",
+    "Full-Stack Turborepo Monorepo Compiler (Next.js 16, Express, FastAPI, Go)",
+    "MCP Architecture Server for Cursor & Claude Code",
+    "In-Memory Flow Simulation & Persona Test Assertions",
+    "Electron Desktop Studio (Native PTY, Local DBs & Docker Compose)",
   ],
 };
 

@@ -12,7 +12,7 @@ export const HeroSection: React.FC = () => {
       <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-zinc-900 border border-zinc-800 shadow-xs mb-8">
         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
         <span className="text-xs font-mono text-zinc-300 font-medium">
-          The Visual Software Architecture Platform
+          For Full-Stack TypeScript, Python &amp; Go Engineering Teams
         </span>
       </div>
 
@@ -26,7 +26,7 @@ export const HeroSection: React.FC = () => {
 
       {/* Benefit-Driven Subhead */}
       <p className="mt-6 text-base sm:text-lg md:text-xl text-zinc-400 max-w-2xl font-normal leading-relaxed">
-        Design your architecture visually, compile a typed Turborepo monorepo in seconds, and expose the live graph to Cursor or Claude Code via MCP so AI implements logic against a verified spec.
+        Model your services, schemas, and queues visually, compile a typed Turborepo monorepo in seconds, and expose the live graph to Cursor or Claude Code via MCP so AI writes custom logic against a verified spec.
       </p>
 
       {/* Primary CTAs for Conversion */}
@@ -35,7 +35,7 @@ export const HeroSection: React.FC = () => {
           href="/sign-up"
           className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-white text-black font-semibold text-sm hover:bg-zinc-200 transition-colors shadow-sm"
         >
-          <span>Start Building Free</span>
+          <span>Launch Studio</span>
           <ArrowRight className="w-4 h-4" />
         </Link>
 

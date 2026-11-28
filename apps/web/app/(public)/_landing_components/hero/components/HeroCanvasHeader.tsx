@@ -251,7 +251,7 @@ export const HeroCanvasHeader: React.FC<HeroCanvasHeaderProps> = ({
         ) : (
           <div className="flex items-center gap-2 text-zinc-500 text-xs font-mono">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-            <span>Full-Stack Graph · 8 Services</span>
+            <span>Example: Auth + API + Kafka + SSE</span>
           </div>
         )}
       </div>

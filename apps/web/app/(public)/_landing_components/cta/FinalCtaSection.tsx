@@ -32,7 +32,7 @@ export const FinalCtaSection: React.FC = () => {
             href="/sign-up"
             className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-white text-black font-semibold text-sm hover:bg-zinc-200 transition-colors shadow-md"
           >
-            <span>Start Building Free</span>
+            <span>Launch Studio</span>
             <ArrowRight className="w-4 h-4" />
           </Link>
 

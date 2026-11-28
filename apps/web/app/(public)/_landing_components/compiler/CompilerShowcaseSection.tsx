@@ -111,14 +111,17 @@ CREATE INDEX idx_users_email ON users(email);`,
     id: "diff",
     filename: "architecture-impact.diff",
     language: "diff",
-    code: `# Impact analysis when modifying or deleting a node on canvas:
+    code: `# Round-trip workflow when you edit code locally & update the canvas:
+# 1. Custom business logic stays in Git (e.g. apps/api/src/routes/users.ts)
+# 2. Rename/update a node or schema on canvas -> inspect blast radius:
 ~ Severed Connection:
   - API Gateway -> User Service (POST /users)
-~ Affected Files Preview (before applying):
-  M packages/types/src/contracts.ts
-  M apps/web/lib/api/client.ts
+~ Affected Files Preview (before exporting):
+  M packages/types/src/contracts.ts   # updated Zod contract
+  M apps/web/lib/api/client.ts        # updated client fetch wrapper
   D apps/user-service/src/routes/users.ts
-# Snapshot committed before export — custom business logic stays in Git`,
+# 3. Export PR diff or let Cursor / Claude Code read the updated spec via MCP:
+  -> get_system_design_context(projectId) reflects the new contract immediately`,
   },
 ];
 
@@ -286,10 +289,10 @@ export const CompilerShowcaseSection: React.FC = () => {
             </p>
           </div>
           <div className="p-5 rounded-lg border border-zinc-800/80 bg-[#0c0c0e] flex flex-col gap-1.5">
-            <span className="text-zinc-500 font-mono text-xs">02 — Blast-Radius &amp; Diff Preview</span>
-            <h4 className="text-sm font-semibold text-white">Inspect Changes Before Writing</h4>
+            <span className="text-zinc-500 font-mono text-xs">02 — Round-Trip Git &amp; MCP Sync</span>
+            <h4 className="text-sm font-semibold text-white">Review Diffs Before Merging</h4>
             <p className="text-xs text-zinc-400 leading-relaxed">
-              Every canvas edit calculates affected routes, severed edges, and file diffs—paired with snapshot commits and clean Git exports so you review changes before merging.
+              Every structural canvas edit computes affected routes, severed edges, and file diffs—so you merge clean contract updates in Git and let Cursor or Claude Code adapt custom handlers via MCP.
             </p>
           </div>
           <div className="p-5 rounded-lg border border-zinc-800/80 bg-[#0c0c0e] flex flex-col gap-1.5">
