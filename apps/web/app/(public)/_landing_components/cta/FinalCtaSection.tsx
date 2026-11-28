@@ -10,7 +10,7 @@ export const FinalCtaSection: React.FC = () => {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 flex flex-col items-center">
         {/* Tag */}
         <span className="text-xs font-mono uppercase tracking-wider text-emerald-400 font-semibold mb-3">
-          Zero Token Limits &bull; 100% Code Ownership
+          Deterministic Monorepo Compiler &bull; MCP Spec for AI Agents
         </span>
 
         {/* Heading */}
@@ -18,12 +18,12 @@ export const FinalCtaSection: React.FC = () => {
           style={{ fontFamily: "var(--font-display)" }}
           className="text-3xl sm:text-5xl font-bold tracking-tight text-white max-w-3xl leading-tight"
         >
-          Turn System Architecture into Production Software.
+          Turn System Architecture into Real Monorepo Code.
         </h2>
 
         {/* Subhead */}
         <p className="mt-4 text-base text-zinc-400 max-w-xl leading-relaxed">
-          Skip weeks of boilerplate and thousands in AI token bills. Model your system visually on CPU in seconds and ship production software today.
+          Design your services, schemas, and queues visually, simulate the flow, and export a clean Turborepo ready for your team and AI coding agents.
         </p>
 
         {/* Dual Actions */}

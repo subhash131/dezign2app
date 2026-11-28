@@ -27,133 +27,94 @@ interface ComparisonRow {
 
 const COMPARISON_ROWS: ComparisonRow[] = [
   {
-    feature: "Production Reliability",
+    feature: "Contract Consistency",
     pureAi: {
       status: "no",
-      title: "No — Schema & contract drift",
-      detail: "Silent type mismatches between frontend, backend, and DB",
+      title: "Prone to schema & route drift",
+      detail: "Models edit files one at a time, causing mismatches between frontend, API, and DB",
     },
     algorithmAi: {
       status: "yes",
-      title: "Yes — 100% contract parity",
-      detail: "Deterministic AST compiler guarantees type safety across packages",
+      title: "Shared typed contracts",
+      detail: "Compiler generates shared schemas, endpoints, and client hooks from one graph",
     },
   },
   {
-    feature: "Compute & AI Models",
-    pureAi: {
-      status: "no",
-      title: "Cloud GPUs & Heavy Reasoning",
-      detail: "Costly cloud reasoning models churning millions of tokens on repetitive boilerplate",
-    },
-    algorithmAi: {
-      status: "yes",
-      title: "Native CPUs + Fast Flash Models",
-      detail: "Algorithms execute locally on CPUs at clock speed; Flash AI only writes targeted custom logic",
-    },
-  },
-  {
-    feature: "Speed to First Demo",
+    feature: "Role of AI Agents",
     pureAi: {
       status: "info",
-      title: "Delayed by token reasoning",
-      detail: "Waits minutes streaming tokens and guessing repetitive scaffolding",
+      title: "Writes everything from scratch",
+      detail: "Coding agents burn context re-inventing auth, routing, and CRUD boilerplate",
     },
     algorithmAi: {
       status: "yes",
-      title: "Instant on CPUs (<300ms)",
-      detail: "If you know what to build, algorithms waste zero time reasoning—your full stack compiles immediately",
+      title: "Guided by MCP architecture spec",
+      detail: "Compiler handles scaffolding; Cursor & Claude Code query the live graph via MCP for custom logic",
     },
   },
   {
-    feature: "Speed to Production",
+    feature: "Speed to Working Scaffold",
     pureAi: {
-      status: "no",
-      title: "Stalls hard after ~60-70%",
-      detail: "Hits a wall as compounding hallucinations and broken imports pile up",
+      status: "info",
+      title: "Minutes of prompt iteration",
+      detail: "Streaming and fixing repetitive setup files across packages",
     },
     algorithmAi: {
       status: "yes",
-      title: "Steady & predictable to 100%",
-      detail: "Solid architecture ensures smooth sprint-by-sprint extension",
+      title: "Deterministic compilation",
+      detail: "Predictable Turborepo + Docker Compose output generated directly from your canvas",
     },
   },
   {
     feature: "System Architecture",
     pureAi: {
       status: "no",
-      title: "Whatever the model guesses",
-      detail: "Scattered across disjointed files with zero whole-system context",
+      title: "Implicit in folder trees",
+      detail: "Architecture lives across dozens of files without a single visual source of truth",
     },
     algorithmAi: {
       status: "yes",
-      title: "Intentional & contract-locked",
-      detail: "You pick schemas, API shapes, and state flow on the visual canvas",
+      title: "Explicit & inspectable graph",
+      detail: "Services, queues, schemas, and auth boundaries are defined and simulated on canvas",
     },
   },
   {
-    feature: "Token & API Cost Waste",
-    pureAi: {
-      status: "no",
-      title: "High ($$$ in retry loops)",
-      detail: "Heavy token burn on repetitive boilerplate and debugging loops",
-    },
-    algorithmAi: {
-      status: "yes",
-      title: "$0 scaffolding tokens",
-      detail: "Compiler builds monorepo; AI only generates custom business logic",
-    },
-  },
-  {
-    feature: "Performance & Indexing",
-    pureAi: {
-      status: "no",
-      title: "Naive implementations",
-      detail: "Prone to N+1 queries, unindexed DB scans, and memory leaks",
-    },
-    algorithmAi: {
-      status: "yes",
-      title: "Engineered for scale",
-      detail: "Proper DB relations, indexing, and connection pooling by design",
-    },
-  },
-  {
-    feature: "Security & Authentication",
-    pureAi: {
-      status: "no",
-      title: "High risk & silent gaps",
-      detail: "Auth bypasses, unvalidated payload inputs, and exposed secrets",
-    },
-    algorithmAi: {
-      status: "yes",
-      title: "Strict & hardened",
-      detail: "Better Auth with RBAC guards and strict Zod runtime validation",
-    },
-  },
-  {
-    feature: "Debugging & Maintenance",
-    pureAi: {
-      status: "no",
-      title: "Painful black-box hunting",
-      detail: "Hard to debug since you don't fully understand the generated code",
-    },
-    algorithmAi: {
-      status: "yes",
-      title: "Easy & modular",
-      detail: "Every node, contract, and connection exists for a deliberate reason",
-    },
-  },
-  {
-    feature: "Best For",
+    feature: "Database & Auth Foundations",
     pureAi: {
       status: "info",
-      title: "Throwaway prototypes & hackathons",
-      detail: "Validating disposable ideas where maintainability doesn't matter",
+      title: "Inconsistent across prompts",
+      detail: "Ad-hoc queries, missing validation, or forgotten auth guards between routes",
     },
     algorithmAi: {
       status: "yes",
-      title: "Real production products",
-      detail: "Anything dealing with users, transactions, data integrity, and real scale",
+      title: "Standardized templates",
+      detail: "Better Auth session guards, Zod validation, and SQL/ORM schemas wired consistently",
+    },
+  },
+  {
+    feature: "Verification Before Running",
+    pureAi: {
+      status: "no",
+      title: "Trial-and-error debugging",
+      detail: "Broken wiring is often discovered only after starting services",
+    },
+    algorithmAi: {
+      status: "yes",
+      title: "In-memory flow simulation",
+      detail: "Trace endpoints, queues, and persona test cases before exporting code",
+    },
+  },
+  {
+    feature: "Best Fit",
+    pureAi: {
+      status: "info",
+      title: "Quick single-file scripts & UI tweaks",
+      detail: "Great when an agent has a clear spec and bounded scope",
+    },
+    algorithmAi: {
+      status: "yes",
+      title: "Multi-service full-stack apps",
+      detail: "Apps with multiple endpoints, auth rules, queues, and shared frontend/backend types",
     },
   },
 ];

@@ -107,6 +107,19 @@ services:
 
 CREATE INDEX idx_users_email ON users(email);`,
   },
+  {
+    id: "diff",
+    filename: "architecture-impact.diff",
+    language: "diff",
+    code: `# Impact analysis when modifying or deleting a node on canvas:
+~ Severed Connection:
+  - API Gateway -> User Service (POST /users)
+~ Affected Files Preview (before applying):
+  M packages/types/src/contracts.ts
+  M apps/web/lib/api/client.ts
+  D apps/user-service/src/routes/users.ts
+# Snapshot committed before export — custom business logic stays in Git`,
+  },
 ];
 
 export const CompilerShowcaseSection: React.FC = () => {
@@ -200,6 +213,17 @@ export const CompilerShowcaseSection: React.FC = () => {
                   <Box className="w-3.5 h-3.5 shrink-0 text-zinc-500" />
                   <span className="truncate">docker-compose.yml</span>
                 </button>
+                <button
+                  onClick={() => setSelectedSnippetId("diff")}
+                  className={`flex items-center gap-2 px-2.5 py-1.5 rounded text-left transition-colors ${
+                    selectedSnippetId === "diff"
+                      ? "bg-zinc-800 text-white font-medium"
+                      : "text-zinc-400 hover:text-white"
+                  }`}
+                >
+                  <FileCode className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
+                  <span className="truncate">architecture-impact.diff</span>
+                </button>
               </div>
             </div>
 
@@ -262,10 +286,10 @@ export const CompilerShowcaseSection: React.FC = () => {
             </p>
           </div>
           <div className="p-5 rounded-lg border border-zinc-800/80 bg-[#0c0c0e] flex flex-col gap-1.5">
-            <span className="text-zinc-500 font-mono text-xs">02 — Non-Destructive Sync</span>
-            <h4 className="text-sm font-semibold text-white">Your Custom Code Is Protected</h4>
+            <span className="text-zinc-500 font-mono text-xs">02 — Blast-Radius &amp; Diff Preview</span>
+            <h4 className="text-sm font-semibold text-white">Inspect Changes Before Writing</h4>
             <p className="text-xs text-zinc-400 leading-relaxed">
-              Architecture updates compile into isolated contract and schema layers. Your custom business logic, routes, and manual edits are never overwritten on sync.
+              Every canvas edit calculates affected routes, severed edges, and file diffs—paired with snapshot commits and clean Git exports so you review changes before merging.
             </p>
           </div>
           <div className="p-5 rounded-lg border border-zinc-800/80 bg-[#0c0c0e] flex flex-col gap-1.5">
