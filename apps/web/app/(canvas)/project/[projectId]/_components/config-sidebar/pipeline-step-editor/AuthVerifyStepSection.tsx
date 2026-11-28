@@ -5,6 +5,7 @@ import { BackendNode } from "@workspace/canvas/types";
 import {
   AUTH_FRAMEWORK_BETTER_AUTH,
   DEFAULT_AUTH_FRAMEWORK,
+  resolveAuthRoles,
 } from "@workspace/canvas";
 import { Label } from "@workspace/ui/components/label";
 import { Checkbox } from "@workspace/ui/components/checkbox";
@@ -50,6 +51,13 @@ export const AuthVerifyStepSection: React.FC<AuthVerifyStepSectionProps> = ({
   const isBetterAuth =
     (selectedAuthNode?.data?.framework || DEFAULT_AUTH_FRAMEWORK) ===
     AUTH_FRAMEWORK_BETTER_AUTH;
+
+  const { orgRoles } = resolveAuthRoles(selectedAuthNode?.data);
+  const showOrgRoleSelector =
+    orgRoles.length > 0 || (step.authVerifyRequiredOrgRoles?.length ?? 0) > 0;
+  const hasBothRoleChecks =
+    (step.authVerifyRequiredRoles?.length ?? 0) > 0 &&
+    (step.authVerifyRequiredOrgRoles?.length ?? 0) > 0;
 
   const tokenBinding: StepBinding = step.inputBindings?.[0] || {
     argName: "token",
@@ -146,38 +154,40 @@ export const AuthVerifyStepSection: React.FC<AuthVerifyStepSectionProps> = ({
         </div>
       </div>
 
-      {/* 3. Expiration Policy (especially for async Kafka queues/DLQs) & Required Roles */}
-      <div className="grid grid-cols-2 gap-2">
-        <div className="flex flex-col gap-1">
-          <Label className="text-[10px] text-muted-foreground">Expiration Policy</Label>
-          <Select
-            value={step.authVerifyExpirationPolicy || "strict"}
-            onValueChange={(val: "strict" | "verify_signature_ignore_exp") =>
-              onChange({ ...step, authVerifyExpirationPolicy: val })
-            }
-          >
-            <SelectTrigger className="h-7 text-xs bg-background/70 border-border/60 font-mono">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="font-mono">
-              <SelectItem value="strict" className="text-xs font-mono">
-                Strict (Reject Expired JWT)
-              </SelectItem>
-              <SelectItem
-                value="verify_signature_ignore_exp"
-                className="text-xs font-mono"
-              >
-                Async Kafka (Verify Sig, Ignore Exp)
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+      {/* 3. Expiration Policy (especially for async Kafka queues/DLQs) */}
+      <div className="flex flex-col gap-1">
+        <Label className="text-[10px] text-muted-foreground">Expiration Policy</Label>
+        <Select
+          value={step.authVerifyExpirationPolicy || "strict"}
+          onValueChange={(val: "strict" | "verify_signature_ignore_exp") =>
+            onChange({ ...step, authVerifyExpirationPolicy: val })
+          }
+        >
+          <SelectTrigger className="h-7 text-xs bg-background/70 border-border/60 font-mono">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent className="font-mono">
+            <SelectItem value="strict" className="text-xs font-mono">
+              Strict (Reject Expired JWT)
+            </SelectItem>
+            <SelectItem
+              value="verify_signature_ignore_exp"
+              className="text-xs font-mono"
+            >
+              Async Kafka (Verify Sig, Ignore Exp)
+            </SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
+      {/* 4. Separate Global User Roles & Organization Roles checks (prevents "admin" ambiguity) */}
+      <div className={showOrgRoleSelector ? "grid grid-cols-2 gap-2" : "flex flex-col gap-1"}>
         <div className="flex flex-col gap-1">
           <Label className="text-[10px] text-muted-foreground">
-            Required Roles
+            Required User Roles
           </Label>
           <RoleMultiSelectDropdown
+            scope="user"
             selectedRoles={step.authVerifyRequiredRoles || []}
             onChange={(roles) =>
               onChange({
@@ -186,10 +196,57 @@ export const AuthVerifyStepSection: React.FC<AuthVerifyStepSectionProps> = ({
               })
             }
             authNode={selectedAuthNode}
-            placeholder="Any valid user"
+            placeholder="Any user role"
           />
         </div>
+
+        {showOrgRoleSelector && (
+          <div className="flex flex-col gap-1">
+            <Label className="text-[10px] text-muted-foreground">
+              Required Org Roles
+            </Label>
+            <RoleMultiSelectDropdown
+              scope="org"
+              selectedRoles={step.authVerifyRequiredOrgRoles || []}
+              onChange={(orgRolesSelected) =>
+                onChange({
+                  ...step,
+                  authVerifyRequiredOrgRoles: orgRolesSelected,
+                })
+              }
+              authNode={selectedAuthNode}
+              placeholder="Any org role"
+            />
+          </div>
+        )}
       </div>
+
+      {/* Show match policy only when both global User Roles and Org Roles are specified */}
+      {hasBothRoleChecks && (
+        <div className="flex flex-col gap-1">
+          <Label className="text-[10px] text-muted-foreground">
+            Dual Role Enforcement (User + Org)
+          </Label>
+          <Select
+            value={step.authVerifyRoleMatchMode || "all"}
+            onValueChange={(val: "all" | "any") =>
+              onChange({ ...step, authVerifyRoleMatchMode: val })
+            }
+          >
+            <SelectTrigger className="h-7 text-xs bg-background/70 border-border/60 font-mono">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="font-mono">
+              <SelectItem value="all" className="text-xs font-mono">
+                Require BOTH User Role AND Org Role
+              </SelectItem>
+              <SelectItem value="any" className="text-xs font-mono">
+                Match EITHER User Role OR Org Role
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       <div className="flex items-center gap-2 pt-0.5">
         <Checkbox

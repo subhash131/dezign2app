@@ -280,6 +280,8 @@ export const safePipelineStepSchema = z.object({
     .enum(["strict", "verify_signature_ignore_exp"])
     .optional(),
   authVerifyRequiredRoles: z.array(z.string()).optional(),
+  authVerifyRequiredOrgRoles: z.array(z.string()).optional(),
+  authVerifyRoleMatchMode: z.enum(["all", "any"]).optional(),
   authVerifyCheckRedisRevocation: z.boolean().optional(),
 });
 

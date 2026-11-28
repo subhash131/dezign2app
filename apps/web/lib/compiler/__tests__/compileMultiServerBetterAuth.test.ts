@@ -86,8 +86,10 @@ describe("Multi-server Better Auth + Redis + Kafka + auth_verify pipeline", () =
 
     expect(authTs).toContain('alg: "RS256"');
     expect(authTs).toContain('expirationTime: "10m"');
-    expect(authTs).toContain("definePayload: ({ user, session })");
-    expect(authTs).toContain("activeOrganizationId:");
+    expect(authTs).toContain("definePayload: async ({ user, session })");
+    expect(authTs).toContain('import { findAuthOrgMemberRole } from "@workspace/db";');
+    expect(authTs).toContain("activeOrganizationId,");
+    expect(authTs).toContain("orgRole,");
     expect(authTs).toContain("planTier:");
     expect(authTs).toContain('import { getRedisClient } from "@workspace/auth-redis";');
     expect(authTs).toContain("secondaryStorage:");
@@ -447,5 +449,57 @@ describe("Multi-server Better Auth + Redis + Kafka + auth_verify pipeline", () =
     expect(webAppPermFile?.content).toContain("export const adminRolesMap");
     expect(webAppClientFile?.content).toContain('from "./auth-permissions"');
     expect(webAppClientFile?.content).toContain("adminClient({ ac: adminAcInstance, roles: adminRolesMap }");
+  });
+
+  it("supports dual Global User Roles + Organization Roles enforcement in auth_verify and verifyAuthToken", async () => {
+    const dualRoleStepAll: PipelineStep = {
+      id: "step-dual-all",
+      type: "auth_verify",
+      name: "Verify Global + Org Role",
+      outputVariable: "verifiedDual",
+      authVerifyAuthNodeId: authNode.id,
+      authVerifyMode: "jwks",
+      authVerifyExpirationPolicy: "strict",
+      authVerifyRequiredRoles: ["admin", "user"],
+      authVerifyRequiredOrgRoles: ["billing_manager"],
+      authVerifyRoleMatchMode: "all",
+      inputBindings: [
+        { argName: "token", source: { kind: "event_headers", field: "authorization" } },
+      ],
+    };
+
+    const dualRoleStepAny: PipelineStep = {
+      ...dualRoleStepAll,
+      id: "step-dual-any",
+      authVerifyRoleMatchMode: "any",
+    };
+
+    const allLines = renderPipeline([dualRoleStepAll], "payload");
+    expect(allLines.join("\n")).toContain(
+      'const verifiedDual = await verifyAuthToken(String(headers["authorization"] ?? ""), { roles: ["admin","user"], orgRoles: ["billing_manager"], roleMatchMode: "all" });',
+    );
+
+    const anyLines = renderPipeline([dualRoleStepAny], "payload");
+    expect(anyLines.join("\n")).toContain(
+      'const verifiedDual = await verifyAuthToken(String(headers["authorization"] ?? ""), { roles: ["admin","user"], orgRoles: ["billing_manager"], roleMatchMode: "any" });',
+    );
+
+    const { generateVerifyTokenHelper } = await import(
+      "../generators/auth-providers/better-auth/v1.6/generateRequireAuthMiddleware"
+    );
+
+    const jwksHelper = generateVerifyTokenHelper("jwks", { authServerUrl: "http://localhost:3000" });
+    expect(jwksHelper).toContain("orgRoles?: string[];");
+    expect(jwksHelper).toContain('roleMatchMode?: "all" | "any";');
+    expect(jwksHelper).toContain("userRoleMatches && orgRoleMatches");
+    expect(jwksHelper).toContain("userRoleMatches || orgRoleMatches");
+    expect(jwksHelper).toContain("orgRole: payloadOrgRole");
+
+    const dbHelper = generateVerifyTokenHelper("db");
+    expect(dbHelper).toContain("findAuthOrgMemberRole");
+    expect(dbHelper).toContain("await findAuthOrgMemberRole(resolvedUserId, resolvedActiveOrgId)");
+
+    const httpHelper = generateVerifyTokenHelper("http", { authServerUrl: "http://localhost:3000" });
+    expect(httpHelper).toContain("/api/auth/organization/get-active-member");
   });
 });

@@ -60,6 +60,7 @@ export function resolveStepOutputPaths(
       { path: "username", type: "string", description: "Verified username" },
       { path: "role", type: "string", description: "Verified user role" },
       { path: "activeOrganizationId", type: "string", description: "Active organization ID" },
+      { path: "orgRole", type: "string", description: "Verified active organization role" },
     );
   }
 

@@ -87,6 +87,11 @@ export function generateAuthConfig(data: BetterAuthV16NodeData): string {
 
   const sessionConfig = data.session;
   const sessionClaims: SessionClaimConfig[] = sessionConfig?.claims || [];
+  const org = data.organization;
+  const hasOrganizationPlugin =
+    org?.enabled !== false && (enabledPlugins.includes("organization") || Boolean(org?.enabled));
+  const hasOrgDbLookup =
+    hasOrganizationPlugin && adapterConfig.importStatement.includes("@workspace/db");
 
   if (enabledPlugins.includes("jwt")) {
     pluginImports.add("jwt");
@@ -103,11 +108,17 @@ export function generateAuthConfig(data: BetterAuthV16NodeData): string {
       return `          ${key}: "${key}" in user ? user.${key} : ${fallback},`;
     });
 
-    // Include role and activeOrganizationId in JWT payload so stateless JWKS
-    // middleware on decoupled ServiceNodes can enforce RBAC without DB lookups.
-    pluginCalls.push(
-      `jwt({\n    jwks: {\n      keyPairConfig: { alg: "${alg}" },\n    },\n    jwt: {\n      expirationTime: "${expTime}",\n      definePayload: ({ user, session }) => ({\n        id: user.id,\n        email: user.email,\n        name: user.name,\n        role: "role" in user && typeof user.role === "string" ? user.role : "user",\n        activeOrganizationId: "activeOrganizationId" in session ? session.activeOrganizationId : undefined,\n${extraJwtClaimLines.join("\n")}${extraJwtClaimLines.length > 0 ? "\n" : ""}      }),\n    },\n  })`,
-    );
+    // Include global user role, activeOrganizationId, and active orgRole in JWT payload so stateless
+    // JWKS middleware on decoupled services can enforce both global user and org roles without DB lookups.
+    if (hasOrgDbLookup) {
+      pluginCalls.push(
+        `jwt({\n    jwks: {\n      keyPairConfig: { alg: "${alg}" },\n    },\n    jwt: {\n      expirationTime: "${expTime}",\n      definePayload: async ({ user, session }) => {\n        const activeOrganizationId =\n          "activeOrganizationId" in session && typeof session.activeOrganizationId === "string"\n            ? session.activeOrganizationId\n            : undefined;\n        const orgRole = activeOrganizationId\n          ? await findAuthOrgMemberRole(user.id, activeOrganizationId)\n          : undefined;\n        return {\n          id: user.id,\n          email: user.email,\n          name: user.name,\n          role: "role" in user && typeof user.role === "string" ? user.role : "user",\n          activeOrganizationId,\n          orgRole,\n${extraJwtClaimLines.join("\n")}${extraJwtClaimLines.length > 0 ? "\n" : ""}        };\n      },\n    },\n  })`,
+      );
+    } else {
+      pluginCalls.push(
+        `jwt({\n    jwks: {\n      keyPairConfig: { alg: "${alg}" },\n    },\n    jwt: {\n      expirationTime: "${expTime}",\n      definePayload: ({ user, session }) => ({\n        id: user.id,\n        email: user.email,\n        name: user.name,\n        role: "role" in user && typeof user.role === "string" ? user.role : "user",\n        activeOrganizationId: "activeOrganizationId" in session ? session.activeOrganizationId : undefined,\n${extraJwtClaimLines.join("\n")}${extraJwtClaimLines.length > 0 ? "\n" : ""}      }),\n    },\n  })`,
+      );
+    }
   }
 
   if (enabledPlugins.includes("multiSession")) {
@@ -121,8 +132,7 @@ export function generateAuthConfig(data: BetterAuthV16NodeData): string {
   }
 
   // Organization plugin configuration
-  const org = data.organization;
-  if (org?.enabled !== false && (enabledPlugins.includes("organization") || org?.enabled)) {
+  if (hasOrganizationPlugin) {
     pluginImports.add("organization");
     const teamsEnabled = Boolean(org?.teams);
     const orgAccessLines = generatedPermissions.hasCustomOrgAccess
@@ -147,6 +157,9 @@ export function generateAuthConfig(data: BetterAuthV16NodeData): string {
     const claimLines: string[] = customSessionClaims.map((claim: SessionClaimConfig) => {
       const key = claim.key || "claim";
       if (claim.source === "orgRole") {
+        if (hasOrgDbLookup) {
+          return `        ${key}: session.activeOrganizationId ? await findAuthOrgMemberRole(user.id, session.activeOrganizationId) : undefined,`;
+        }
         return `        ${key}: session.activeOrganizationId ? "member" : undefined,`;
       }
       return `        ${key}: "${claim.targetValue || "default_value"}", // Resolved from ${claim.source}`;
@@ -372,6 +385,14 @@ export function generateAuthConfig(data: BetterAuthV16NodeData): string {
     advancedBlock = `\n  advanced: {\n    database: {\n      ${dbConfigLines.join("\n      ")}\n    },\n  },`;
   }
 
+  const needsOrgMemberLookupImport =
+    hasOrgDbLookup &&
+    (enabledPlugins.includes("jwt") ||
+      customSessionClaims.some((c: SessionClaimConfig) => c.source === "orgRole"));
+  const dbOrgMemberImportStr = needsOrgMemberLookupImport
+    ? `import { findAuthOrgMemberRole } from "@workspace/db";\n`
+    : "";
+
   const permissionsImportStr =
     permissionImports.length > 0
       ? `import { ${permissionImports.join(", ")} } from "./auth-permissions";\n`
@@ -381,7 +402,7 @@ export function generateAuthConfig(data: BetterAuthV16NodeData): string {
 import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
 ${adapterConfig.importStatement}
-${redisImportStr}${createMiddlewareImport}${pluginImportStr}${passkeyImportStr}${permissionsImportStr}export const auth = betterAuth({
+${dbOrgMemberImportStr}${redisImportStr}${createMiddlewareImport}${pluginImportStr}${passkeyImportStr}${permissionsImportStr}export const auth = betterAuth({
   database: ${adapterConfig.adapterCall},${secretBlock}${baseUrlBlock}${basePathBlock}${userBlock}${emailPasswordBlock}${socialProvidersBlock}${accountLinkingBlock}${sessionBlock}${secondaryStorageBlock}${rateLimitBlock}${trustedOriginsBlock}${hooksBlock}${databaseHooksBlock}${advancedBlock}
   plugins: [
     ${pluginCalls.join(",\n    ")},

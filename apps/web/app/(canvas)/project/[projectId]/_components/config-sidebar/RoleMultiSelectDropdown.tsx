@@ -30,6 +30,8 @@ export interface RoleMultiSelectDropdownProps {
   onChange: (roles: string[]) => void;
   /** Optional explicit AuthNode to source role options from; falls back to canvas AuthNode. */
   authNode?: BackendNode;
+  /** Which AuthNode role set(s) to expose in the dropdown ("all" | "user" | "org"). */
+  scope?: "all" | "user" | "org";
   /** Placeholder shown when no roles are selected. */
   placeholder?: string;
   className?: string;
@@ -41,12 +43,15 @@ export interface RoleMultiSelectDropdownProps {
  * Why:
  * - Prevents typos across `AuthVerifyStepSection`, `EndpointConfig`, and `WebPageProtectionSection`
  *   by pulling global user roles and organization roles straight from `resolveAuthRoles(authNode.data)`.
+ * - Supports scoping to `"user"` or `"org"` so `auth_verify` can distinguish global user roles
+ *   from organization membership roles (e.g. `"admin"` exists in both).
  * - Still allows adding an ad-hoc custom role inside the popover when needed.
  */
 export const RoleMultiSelectDropdown: React.FC<RoleMultiSelectDropdownProps> = ({
   selectedRoles,
   onChange,
   authNode,
+  scope = "all",
   placeholder = "Any authenticated user (all roles)",
   className,
 }) => {
@@ -69,10 +74,28 @@ export const RoleMultiSelectDropdown: React.FC<RoleMultiSelectDropdownProps> = (
     [selectedRoles],
   );
 
+  const visibleUserRoles = scope === "org" ? [] : userRoles;
+  const visibleOrgRoles =
+    scope === "user"
+      ? []
+      : scope === "org"
+      ? orgRoles
+      : orgRoles.filter((r) => !userRoles.includes(r));
+
+  const availablePool = useMemo(
+    () =>
+      scope === "user"
+        ? userRoles
+        : scope === "org"
+        ? orgRoles
+        : allRoles,
+    [scope, userRoles, orgRoles, allRoles],
+  );
+
   // Include any previously saved custom roles not currently in AuthNode so they remain visible/removable
   const extraSelectedRoles = useMemo(
-    () => normalizedSelected.filter((r) => !allRoles.includes(r)),
-    [normalizedSelected, allRoles],
+    () => normalizedSelected.filter((r) => !availablePool.includes(r)),
+    [normalizedSelected, availablePool],
   );
 
   const toggleRole = (role: string) => {
@@ -90,13 +113,8 @@ export const RoleMultiSelectDropdown: React.FC<RoleMultiSelectDropdownProps> = (
     .replace(/[^a-z0-9_-]/g, "");
   const canAddCustom =
     Boolean(trimmedSearch) &&
-    !allRoles.includes(trimmedSearch) &&
+    !availablePool.includes(trimmedSearch) &&
     !extraSelectedRoles.includes(trimmedSearch);
-
-  const orgOnlyRoles = useMemo(
-    () => orgRoles.filter((r) => !userRoles.includes(r)),
-    [orgRoles, userRoles],
-  );
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -161,28 +179,30 @@ export const RoleMultiSelectDropdown: React.FC<RoleMultiSelectDropdownProps> = (
               {canAddCustom ? "Press below to add custom role." : "No matching roles found."}
             </CommandEmpty>
 
-            <CommandGroup heading="User Roles">
-              {userRoles.map((role) => {
-                const checked = normalizedSelected.includes(role);
-                return (
-                  <CommandItem
-                    key={`user-${role}`}
-                    value={role}
-                    onSelect={() => toggleRole(role)}
-                    className="text-xs font-mono flex items-center gap-2 cursor-pointer"
-                  >
-                    <Checkbox checked={checked} className="pointer-events-none" />
-                    <span>{role}</span>
-                  </CommandItem>
-                );
-              })}
-            </CommandGroup>
+            {visibleUserRoles.length > 0 && (
+              <CommandGroup heading="User Roles">
+                {visibleUserRoles.map((role) => {
+                  const checked = normalizedSelected.includes(role);
+                  return (
+                    <CommandItem
+                      key={`user-${role}`}
+                      value={role}
+                      onSelect={() => toggleRole(role)}
+                      className="text-xs font-mono flex items-center gap-2 cursor-pointer"
+                    >
+                      <Checkbox checked={checked} className="pointer-events-none" />
+                      <span>{role}</span>
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            )}
 
-            {orgOnlyRoles.length > 0 && (
+            {visibleOrgRoles.length > 0 && (
               <>
-                <CommandSeparator />
+                {visibleUserRoles.length > 0 && <CommandSeparator />}
                 <CommandGroup heading="Organization Roles">
-                  {orgOnlyRoles.map((role) => {
+                  {visibleOrgRoles.map((role) => {
                     const checked = normalizedSelected.includes(role);
                     return (
                       <CommandItem

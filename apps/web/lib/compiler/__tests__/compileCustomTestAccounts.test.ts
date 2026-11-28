@@ -168,7 +168,9 @@ describe("Custom Test Accounts Seeding Integration", () => {
     expect(middlewareCode).not.toContain('INSERT INTO "user"');
 
     // Verify engine-agnostic DB auth helpers and complete elimination of 'any'
-    expect(middlewareCode).toContain('import { findAuthSessionByToken, findAuthUserById } from "@workspace/db";');
+    expect(middlewareCode).toContain(
+      'import { findAuthSessionByToken, findAuthUserById, findAuthOrgMemberRole } from "@workspace/db";',
+    );
     expect(middlewareCode).toContain("const session = await findAuthSessionByToken(token);");
     expect(middlewareCode).toContain("resolvedUserRecord = await findAuthUserById(resolvedUserId);");
     expect(middlewareCode).not.toContain("as any");

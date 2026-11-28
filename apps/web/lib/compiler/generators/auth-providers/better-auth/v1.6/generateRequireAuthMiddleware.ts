@@ -75,8 +75,16 @@ const JWKS = createRemoteJWKSet(new URL(\`\${AUTH_SERVER_URL}/api/auth/jwks\`));
 }
 
 export interface VerifyTokenOptions {
-  /** Required roles; throws 403 if the verified user's role is not included. */
+  /** Required global user roles (resolvedUser.role); throws 403 if not satisfied. */
   roles?: string[];
+  /** Required organization membership roles (resolvedUser.orgRole); throws 403 if not satisfied. */
+  orgRoles?: string[];
+  /**
+   * Match rule when both roles and orgRoles are supplied:
+   * - "all" (default): requires BOTH global user role AND organization role to match.
+   * - "any": passes if EITHER global user role OR organization role matches.
+   */
+  roleMatchMode?: "all" | "any";
   /**
    * When true, skips JWT \`exp\` validation while still verifying cryptographic signature
    * (useful for delayed/retried Kafka consumer messages paired with Redis revocation).
@@ -100,12 +108,33 @@ export async function verifyAuthToken(
 ${verifyBody}
 ${redisRevocationBlock}
 
-  if (options.roles && options.roles.length > 0) {
-    const userRole = resolvedUser.role;
-    if (!options.roles.includes(userRole)) {
+  const requiredUserRoles = options.roles?.filter(Boolean) ?? [];
+  const requiredOrgRoles = options.orgRoles?.filter(Boolean) ?? [];
+  if (requiredUserRoles.length > 0 || requiredOrgRoles.length > 0) {
+    const userRoleMatches =
+      requiredUserRoles.length > 0 && requiredUserRoles.includes(resolvedUser.role);
+    const orgRoleMatches =
+      requiredOrgRoles.length > 0 &&
+      typeof resolvedUser.orgRole === "string" &&
+      requiredOrgRoles.includes(resolvedUser.orgRole);
+
+    const matchMode = options.roleMatchMode ?? "all";
+    const hasBoth = requiredUserRoles.length > 0 && requiredOrgRoles.length > 0;
+    const authorized = hasBoth
+      ? matchMode === "any"
+        ? userRoleMatches || orgRoleMatches
+        : userRoleMatches && orgRoleMatches
+      : requiredUserRoles.length > 0
+      ? userRoleMatches
+      : orgRoleMatches;
+
+    if (!authorized) {
       logger.warn("Auth failed: insufficient role", {
-        userRole,
-        required: options.roles,
+        userRole: resolvedUser.role,
+        orgRole: resolvedUser.orgRole,
+        requiredUserRoles,
+        requiredOrgRoles,
+        roleMatchMode: matchMode,
       });
       throw new AuthVerificationError(403, "Forbidden: Insufficient role");
     }
@@ -174,6 +203,10 @@ ${coreSource}
 interface AuthOptions {
   /** When provided, the request is rejected with 403 unless req.user.role is in this list. */
   roles?: string[];
+  /** When provided, enforces active organization membership role (req.user.orgRole). */
+  orgRoles?: string[];
+  /** Match rule when both roles and orgRoles are provided ("all" | "any"). */
+  roleMatchMode?: "all" | "any";
 }
 
 /**
@@ -205,6 +238,8 @@ export function requireAuth<
     try {
       req.user = await verifyAuthToken(authHeader, {
         roles: options.roles,
+        orgRoles: options.orgRoles,
+        roleMatchMode: options.roleMatchMode,
       });
       next();
     } catch (err) {
@@ -227,7 +262,7 @@ export function requireAuth<
 
 function buildImports(strategy: AuthStrategy): string {
   if (strategy === "db") {
-    return `import { findAuthSessionByToken, findAuthUserById } from "@workspace/db";
+    return `import { findAuthSessionByToken, findAuthUserById, findAuthOrgMemberRole } from "@workspace/db";
 import crypto from "node:crypto";`;
   }
   if (strategy === "jwks") {
@@ -247,6 +282,8 @@ function buildVerifyDbBody(): string {
   };
   let resolvedUserId: string | undefined;
   let resolvedRole: string = "user";
+  let resolvedActiveOrgId: string | undefined;
+  let resolvedOrgRole: string | undefined;
   let resolvedUserClaims: Record<string, string | number | boolean | null | undefined> = {};
   let resolvedUserRecord: { role?: string; email?: string; name?: string; username?: string } | null | undefined;
 
@@ -272,6 +309,9 @@ function buildVerifyDbBody(): string {
             if (sub) {
               resolvedUserId = _toValidUuid(String(sub));
               resolvedRole = String(payload.role ?? "user");
+              resolvedActiveOrgId =
+                typeof payload.activeOrganizationId === "string" ? payload.activeOrganizationId : undefined;
+              resolvedOrgRole = typeof payload.orgRole === "string" ? payload.orgRole : undefined;
               resolvedUserClaims = { ...payload };
               logger.info("Auth: token resolved via stateless HS256 JWT verification", { userId: resolvedUserId, role: resolvedRole });
             }
@@ -289,6 +329,8 @@ function buildVerifyDbBody(): string {
 
     resolvedUserId = session?.userId ? _toValidUuid(String(session.userId)) : undefined;
     const resolvedExpiresAt = session?.expiresAt;
+    resolvedActiveOrgId =
+      typeof session?.activeOrganizationId === "string" ? session.activeOrganizationId : undefined;
 
     if (!resolvedUserId) {
       logger.warn("Auth failed: session not found and JWT invalid", {
@@ -304,6 +346,9 @@ function buildVerifyDbBody(): string {
 
     resolvedUserRecord = await findAuthUserById(resolvedUserId);
     resolvedRole = String(resolvedUserRecord?.role ?? "user");
+    if (resolvedActiveOrgId) {
+      resolvedOrgRole = await findAuthOrgMemberRole(resolvedUserId, resolvedActiveOrgId);
+    }
     logger.info("Auth: session resolved via shared DB", { userId: resolvedUserId, role: resolvedRole });
   }
 
@@ -313,6 +358,8 @@ function buildVerifyDbBody(): string {
     userId: _toValidUuid(String(resolvedUserId)),
     username: String(resolvedUserClaims.username ?? resolvedUserRecord?.username ?? resolvedUserClaims.name ?? resolvedUserRecord?.name ?? resolvedUserId),
     role: resolvedRole,
+    ...(resolvedActiveOrgId ? { activeOrganizationId: resolvedActiveOrgId } : {}),
+    ...(resolvedOrgRole ? { orgRole: resolvedOrgRole } : {}),
     ...(resolvedUserClaims.email ? { email: String(resolvedUserClaims.email) } : resolvedUserRecord?.email ? { email: String(resolvedUserRecord.email) } : {}),
     ...(resolvedUserClaims.name ? { name: String(resolvedUserClaims.name) } : resolvedUserRecord?.name ? { name: String(resolvedUserRecord.name) } : {}),
     sessionToken: token,
@@ -349,6 +396,12 @@ function buildVerifyJwksBody(options: RequireAuthMiddlewareOptions): string {
   const payloadUsername = "username" in payload && typeof payload.username === "string" ? payload.username : undefined;
   const payloadName = "name" in payload && typeof payload.name === "string" ? payload.name : undefined;
   const payloadRole = "role" in payload && typeof payload.role === "string" ? payload.role : "user";
+  const payloadActiveOrgId =
+    "activeOrganizationId" in payload && typeof payload.activeOrganizationId === "string"
+      ? payload.activeOrganizationId
+      : undefined;
+  const payloadOrgRole =
+    "orgRole" in payload && typeof payload.orgRole === "string" ? payload.orgRole : undefined;
   const payloadEmail = "email" in payload && typeof payload.email === "string" ? payload.email : undefined;
 
   resolvedUser = {
@@ -357,6 +410,8 @@ function buildVerifyJwksBody(options: RequireAuthMiddlewareOptions): string {
     userId: resolvedSub,
     username: payloadUsername ?? payloadName ?? resolvedSub,
     role: payloadRole,
+    ...(payloadActiveOrgId ? { activeOrganizationId: payloadActiveOrgId } : {}),
+    ...(payloadOrgRole ? { orgRole: payloadOrgRole } : {}),
     email: payloadEmail,
     name: payloadName,
     sessionToken: token,
@@ -370,12 +425,13 @@ function buildVerifyHttpBody(defaultAuthUrl: string): string {
   const authServerUrl =
     process.env.AUTH_SERVER_URL ?? process.env.BETTER_AUTH_URL ?? ${JSON.stringify(defaultAuthUrl)};
 
+  const forwardHeaders = {
+    authorization: \`Bearer \${token}\`,
+    "x-better-auth-session-token": token,
+    cookie: \`better-auth.session_token=\${token}\`,
+  };
   const authRes = await fetch(\`\${authServerUrl}/api/auth/get-session\`, {
-    headers: {
-      authorization: \`Bearer \${token}\`,
-      "x-better-auth-session-token": token,
-      cookie: \`better-auth.session_token=\${token}\`,
-    },
+    headers: forwardHeaders,
   });
 
   if (!authRes.ok) {
@@ -391,7 +447,7 @@ function buildVerifyHttpBody(defaultAuthUrl: string): string {
 
   interface BetterAuthSessionResponse {
     user?: { id?: string; role?: string; email?: string; name?: string; username?: string };
-    session?: { userId?: string };
+    session?: { userId?: string; activeOrganizationId?: string };
   }
   const data: BetterAuthSessionResponse = await authRes.json();
 
@@ -401,12 +457,32 @@ function buildVerifyHttpBody(defaultAuthUrl: string): string {
     throw new AuthVerificationError(401, "Unauthorized: User not found");
   }
 
+  const activeOrganizationId = data.session?.activeOrganizationId;
+  let orgRole: string | undefined;
+  if (activeOrganizationId) {
+    try {
+      const memberRes = await fetch(\`\${authServerUrl}/api/auth/organization/get-active-member\`, {
+        headers: forwardHeaders,
+      });
+      if (memberRes.ok && (memberRes.headers.get("content-type") ?? "").includes("application/json")) {
+        const memberData = (await memberRes.json()) as { role?: string } | null;
+        if (typeof memberData?.role === "string") {
+          orgRole = memberData.role;
+        }
+      }
+    } catch {
+      // Ignore if organization endpoint is not enabled on the auth server
+    }
+  }
+
   resolvedUser = {
     ...(data.user || {}),
     id: String(userId),
     userId: String(userId),
     username: String(data.user?.username ?? data.user?.name ?? userId),
     role: String(data.user?.role ?? "user"),
+    ...(activeOrganizationId ? { activeOrganizationId } : {}),
+    ...(orgRole ? { orgRole } : {}),
     email: data.user?.email,
     name: data.user?.name,
     sessionToken: token,

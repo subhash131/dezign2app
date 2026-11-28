@@ -528,8 +528,17 @@ export interface PipelineStep {
    * - "verify_signature_ignore_exp": verify cryptographic signature + optional Redis revocation even if JWT exp elapsed during Kafka queue lag/retries
    */
   authVerifyExpirationPolicy?: "strict" | "verify_signature_ignore_exp";
-  /** Optional list of allowed roles enforced after token signature verification */
+  /** Optional list of allowed global user roles enforced after token signature verification */
   authVerifyRequiredRoles?: string[];
+  /** Optional list of allowed organization membership roles enforced after token signature verification */
+  authVerifyRequiredOrgRoles?: string[];
+  /**
+   * Role matching policy when both `authVerifyRequiredRoles` (global user roles) and
+   * `authVerifyRequiredOrgRoles` (organization roles) are configured:
+   * - "all" (default): user must satisfy both global role and org role
+   * - "any": user passes if either global role OR org role matches
+   */
+  authVerifyRoleMatchMode?: "all" | "any";
   /** Whether to check Redis revocation blocklist after cryptographic signature verification */
   authVerifyCheckRedisRevocation?: boolean;
 }
@@ -691,6 +700,8 @@ export const pipelineStepSchema: z.ZodType<PipelineStep> = z.lazy(() =>
     authVerifyMode: z.enum(["auto", "jwks", "better_auth_session"]).optional(),
     authVerifyExpirationPolicy: z.enum(["strict", "verify_signature_ignore_exp"]).optional(),
     authVerifyRequiredRoles: z.array(z.string()).optional(),
+    authVerifyRequiredOrgRoles: z.array(z.string()).optional(),
+    authVerifyRoleMatchMode: z.enum(["all", "any"]).optional(),
     authVerifyCheckRedisRevocation: z.boolean().optional(),
   })
 );

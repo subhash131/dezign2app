@@ -47,8 +47,16 @@ export function renderAuthVerifyStep(
     : defaultTokenExpr;
 
   const opts: string[] = [];
-  if (step.authVerifyRequiredRoles && step.authVerifyRequiredRoles.length > 0) {
+  const hasUserRoles = Boolean(step.authVerifyRequiredRoles && step.authVerifyRequiredRoles.length > 0);
+  const hasOrgRoles = Boolean(step.authVerifyRequiredOrgRoles && step.authVerifyRequiredOrgRoles.length > 0);
+  if (hasUserRoles) {
     opts.push(`roles: ${JSON.stringify(step.authVerifyRequiredRoles)}`);
+  }
+  if (hasOrgRoles) {
+    opts.push(`orgRoles: ${JSON.stringify(step.authVerifyRequiredOrgRoles)}`);
+  }
+  if (hasUserRoles && hasOrgRoles && step.authVerifyRoleMatchMode) {
+    opts.push(`roleMatchMode: ${JSON.stringify(step.authVerifyRoleMatchMode)}`);
   }
   if (step.authVerifyExpirationPolicy === "verify_signature_ignore_exp") {
     opts.push("ignoreExpiration: true");
