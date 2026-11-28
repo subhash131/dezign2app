@@ -16,24 +16,20 @@ export interface UseSmoothWheelZoomOptions {
  * Checks whether an element or any of its scrollable parents
  * should consume wheel scroll events natively.
  */
-function isInsideScrollable(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
+function isInsideScrollable(
+  target: EventTarget | null,
+  container: HTMLElement,
+): boolean {
+  if (!(target instanceof Element)) return false;
 
   const selector = [
     ".nowheel",
     "[data-prevent-zoom]",
-    "input",
-    "textarea",
-    "select",
-    "[contenteditable='true']",
     "[role='dialog']",
     "[role='menu']",
     "[role='listbox']",
-    "[role='textbox']",
-    "[role='combobox']",
     "[data-inspector]",
     ".inspector-sidebar",
-    ".nodrag",
   ].join(",");
 
   if (target.closest(selector)) {
@@ -41,20 +37,22 @@ function isInsideScrollable(target: EventTarget | null): boolean {
   }
 
   // Check for scrollable containers (e.g. overflow-y: auto/scroll with scrollable content)
-  let el: HTMLElement | null = target;
-  while (el && !el.classList.contains("react-flow__pane")) {
-    if (el.scrollHeight > el.clientHeight + 4) {
-      const style = window.getComputedStyle(el);
-      const overflowY = style.overflowY;
-      if (overflowY === "auto" || overflowY === "scroll") {
-        return true;
+  let el: Element | null = target;
+  while (el && el !== container && !el.classList.contains("react-flow__pane")) {
+    if (el instanceof HTMLElement) {
+      if (el.scrollHeight > el.clientHeight + 4) {
+        const style = window.getComputedStyle(el);
+        const overflowY = style.overflowY;
+        if (overflowY === "auto" || overflowY === "scroll") {
+          return true;
+        }
       }
-    }
-    if (el.scrollWidth > el.clientWidth + 4) {
-      const style = window.getComputedStyle(el);
-      const overflowX = style.overflowX;
-      if (overflowX === "auto" || overflowX === "scroll") {
-        return true;
+      if (el.scrollWidth > el.clientWidth + 4) {
+        const style = window.getComputedStyle(el);
+        const overflowX = style.overflowX;
+        if (overflowX === "auto" || overflowX === "scroll") {
+          return true;
+        }
       }
     }
     el = el.parentElement;
@@ -103,7 +101,7 @@ export function useSmoothWheelZoom({
 
     const handleWheel = (event: WheelEvent) => {
       // Allow internal scrollable elements (e.g. code editors, menus) to scroll natively
-      if (isInsideScrollable(event.target)) {
+      if (isInsideScrollable(event.target, container)) {
         return;
       }
 
