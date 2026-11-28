@@ -75,6 +75,8 @@ export function getDefaultVariableName(type: StepType, stepNumber: number): stri
       return "";
     case "push_to_client":
       return `pushToClient${stepNumber}`;
+    case "auth_verify":
+      return `verifiedAuth${stepNumber}`;
     default:
       return `step${stepNumber}Result`;
   }
@@ -95,7 +97,26 @@ export function createDefaultStepDraft({
 
   let initialFields: Partial<PipelineStepDraft> = {};
 
-  if (type === "variable") {
+  if (type === "auth_verify") {
+    const firstAuthNode = allNodes.find((n) => n.type === "auth");
+    // Default token binding to Kafka event_headers.authorization in consumers,
+    // or req.headers.authorization in HTTP endpoints.
+    initialFields = {
+      name: "Verify Auth Token",
+      outputVariable: defaultVar,
+      authVerifyAuthNodeId: firstAuthNode?.id,
+      authVerifyMode: "jwks",
+      authVerifyExpirationPolicy: isConsumer ? "verify_signature_ignore_exp" : "strict",
+      inputBindings: [
+        {
+          argName: "token",
+          source: isConsumer
+            ? { kind: "event_headers", field: "authorization" }
+            : { kind: "req_headers", field: "authorization" },
+        },
+      ],
+    };
+  } else if (type === "variable") {
     initialFields = {
       name: `Variable: ${defaultVar}`,
       outputVariable: defaultVar,

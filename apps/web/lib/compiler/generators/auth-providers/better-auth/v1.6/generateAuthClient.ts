@@ -2,6 +2,10 @@ export interface BetterAuthClientOptions {
   baseUrl?: string;
   baseURL?: string;
   plugins?: string[];
+  /** Pass true when AuthNode defines custom admin user roles/defaults in auth-permissions.ts */
+  customAdminRbac?: boolean;
+  /** Pass true when AuthNode defines custom organization roles in auth-permissions.ts */
+  customOrgRbac?: boolean;
 }
 
 export function generateAuthClient(options: BetterAuthClientOptions = {}): string {
@@ -24,17 +28,33 @@ export function generateAuthClient(options: BetterAuthClientOptions = {}): strin
     ? `\nimport { passkeyClient } from "@better-auth/passkey/client";`
     : "";
 
+  const permissionImports: string[] = [];
   const allPluginCalls = [
-    ...standardPlugins.map((p) => `    ${p}(),`),
+    ...standardPlugins.map((p) => {
+      if (p === "adminClient" && options.customAdminRbac) {
+        permissionImports.push("adminAcInstance", "adminRolesMap");
+        return `    adminClient({ ac: adminAcInstance, roles: adminRolesMap } as Parameters<typeof adminClient>[0]),`;
+      }
+      if (p === "organizationClient" && options.customOrgRbac) {
+        permissionImports.push("orgAcInstance", "orgRolesMap");
+        return `    organizationClient({ ac: orgAcInstance, roles: orgRolesMap } as Parameters<typeof organizationClient>[0]),`;
+      }
+      return `    ${p}(),`;
+    }),
     ...(hasPasskey ? ["    passkeyClient(),"] : []),
   ];
+
+  const permissionsImport =
+    permissionImports.length > 0
+      ? `\nimport { ${permissionImports.join(", ")} } from "./auth-permissions";`
+      : "";
 
   const pluginEntries =
     allPluginCalls.length > 0
       ? `\n  plugins: [\n${allPluginCalls.join("\n")}\n  ],`
       : "";
 
-  return `import { createAuthClient } from "better-auth/react";${standardPluginImports}${passkeyImport}
+  return `import { createAuthClient } from "better-auth/react";${standardPluginImports}${passkeyImport}${permissionsImport}
 
 const appUrl =
   typeof window !== "undefined"

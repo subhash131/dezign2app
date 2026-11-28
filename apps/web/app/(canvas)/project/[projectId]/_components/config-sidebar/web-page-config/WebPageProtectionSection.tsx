@@ -1,6 +1,7 @@
 import React from "react";
 import { ShieldCheck } from "lucide-react";
 import { LocalInput } from "../../backend-nodes/graph-nodes/shared";
+import { RoleMultiSelectDropdown } from "../RoleMultiSelectDropdown";
 import { Label } from "@workspace/ui/components/label";
 import { Checkbox } from "@workspace/ui/components/checkbox";
 import {
@@ -121,20 +122,13 @@ export function WebPageProtectionSection({
           {accessType === "role-gated" && (
             <div className="flex flex-col gap-2">
               <Label className="text-xs text-muted-foreground">
-                Allowed Roles (comma-separated)
+                Allowed Roles
               </Label>
-              <LocalInput
-                value={allowedRoles.join(", ")}
-                onChange={(e) =>
-                  onUpdateAllowedRoles(
-                    e.target.value
-                      .split(",")
-                      .map((s) => s.trim())
-                      .filter(Boolean),
-                  )
-                }
-                placeholder="e.g. admin, superadmin"
-                className="h-8 text-xs bg-background/50"
+              <RoleMultiSelectDropdown
+                selectedRoles={allowedRoles}
+                onChange={onUpdateAllowedRoles}
+                placeholder="Select allowed roles..."
+                className="min-h-8 bg-background/50"
               />
             </div>
           )}

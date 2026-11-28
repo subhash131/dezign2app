@@ -17,6 +17,8 @@ import { Id } from "@workspace/backend/_generated/dataModel";
 import { useParams } from "next/navigation";
 import { useCallerWebPageZone } from "./hooks/useCallerWebPageZone";
 import { AuthAwarenessBanner } from "./AuthAwarenessBanner";
+import { RoleMultiSelectDropdown } from "./RoleMultiSelectDropdown";
+import { resolveAuthNodeForService } from "@/lib/compiler/generators/routeGenerator/handlers/authResolver";
 import { RequestBodyEditor } from "./RequestBodyEditor";
 import { NestedResponseSchemaEditor } from "./NestedResponseSchemaEditor";
 import { EndpointTestCasesSection } from "./endpoint-testing/EndpointTestCasesSection";
@@ -66,6 +68,10 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
 
   const allNodes = useBackendCanvasStore((s) => s.nodes);
   const allEdges = useBackendCanvasStore((s) => s.edges);
+  const governingAuthNode = React.useMemo(
+    () => resolveAuthNodeForService(node, allNodes, allEdges),
+    [node, allNodes, allEdges],
+  );
 
   // Must be called before any early returns (rules of hooks)
   const { isProtected, zoneName } = useCallerWebPageZone(nodeId, id);
@@ -369,21 +375,6 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
     200,
   );
 
-  const rolesBuffer = useBufferedInput(
-    item?.requiredRoles?.join(", ") || "",
-    React.useCallback(
-      (val: string) =>
-        updateEndpoint(id, {
-          requiredRoles: val
-            .split(",")
-            .map((r) => r.trim())
-            .filter(Boolean),
-        }),
-      [id, updateEndpoint],
-    ),
-    200,
-  );
-
   const scopesBuffer = useBufferedInput(
     item?.requiredScopes?.join(", ") || "",
     React.useCallback(
@@ -544,6 +535,21 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
         />
       )}
 
+      {/* Per-endpoint role restriction for regular service endpoints */}
+      {!isExternal && node?.type !== "api_gateway" && isAuthEnabled && (
+        <div className="flex flex-col gap-1.5 px-1">
+          <Label className="text-xs text-muted-foreground">
+            Required Roles (Optional)
+          </Label>
+          <RoleMultiSelectDropdown
+            selectedRoles={item.requiredRoles || []}
+            onChange={(requiredRoles) => updateEndpoint(item.id, { requiredRoles })}
+            authNode={governingAuthNode}
+            placeholder="Any authenticated user"
+          />
+        </div>
+      )}
+
       {node?.type === "api_gateway" && (
         <div className="flex flex-col gap-4 rounded-xl border bg-card/50 p-4 shadow-sm backdrop-blur-sm">
           <div className="flex flex-col gap-2">
@@ -585,14 +591,13 @@ export const EndpointConfig = ({ id, nodeId }: EndpointConfigProps) => {
             <div className="grid grid-cols-1 gap-3">
               <div className="flex flex-col gap-1.5">
                 <Label className="text-xs">
-                  Required Roles (Comma separated)
+                  Required Roles
                 </Label>
-                <Input
-                  className="h-7 text-xs bg-background"
-                  placeholder="e.g. admin, user"
-                  value={rolesBuffer.value}
-                  onChange={(e) => rolesBuffer.onChange(e.target.value)}
-                  onBlur={rolesBuffer.flush}
+                <RoleMultiSelectDropdown
+                  selectedRoles={item.requiredRoles || []}
+                  onChange={(requiredRoles) => updateEndpoint(item.id, { requiredRoles })}
+                  authNode={governingAuthNode}
+                  placeholder="Any authenticated user"
                 />
               </div>
               <div className="flex flex-col gap-1.5">

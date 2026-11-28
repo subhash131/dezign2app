@@ -102,12 +102,57 @@ export const sessionConfigSchema = z.object({
     .object({
       enabled: z.boolean().optional(),
       maxAgeSeconds: z.number().optional(),
+      /** Better Auth cookieCache encoding format: compact (HMAC), jwt, or jwe (encrypted). */
+      strategy: z.enum(["compact", "jwt", "jwe"]).optional(),
+      /** Enables fully stateless cookie cache refresh without hitting DB/Redis on every request. */
+      refreshCache: z.boolean().optional(),
     })
     .optional(),
+  /** Persist session rows in primary SQL DB even when Redis secondaryStorage is enabled. */
+  storeSessionInDatabase: z.boolean().optional(),
   refreshTokenRotation: z.boolean().optional(),
   rememberMeDurationDays: z.number().optional(),
 });
 export type SessionConfig = z.infer<typeof sessionConfigSchema>;
+
+/** Better Auth Redis secondaryStorage configuration (only active when framework === "better_auth"). */
+export const betterAuthSecondaryStorageSchema = z.object({
+  enabled: z.boolean().optional(),
+  /** Optional canvas Redis node ID; defaults to the first Redis node if omitted. */
+  redisNodeId: z.string().optional(),
+  keyPrefix: z.string().optional(),
+  /** Route Better Auth's built-in IP/endpoint rate limiter to Redis secondaryStorage. */
+  useForRateLimit: z.boolean().optional(),
+});
+export type BetterAuthSecondaryStorageConfig = z.infer<typeof betterAuthSecondaryStorageSchema>;
+
+/** Better Auth jwt() plugin signing and claim options for stateless multi-server JWKS verification. */
+export const betterAuthJwtConfigSchema = z.object({
+  algorithm: z.enum(["EdDSA", "RS256", "ES256"]).optional(),
+  expirationTime: z.string().optional(),
+  issuer: z.string().optional(),
+  audience: z.string().optional(),
+});
+export type BetterAuthJwtConfig = z.infer<typeof betterAuthJwtConfigSchema>;
+
+/** Optional Redis-backed revocation check so short-lived JWTs can still be invalidated immediately on logout/ban. */
+export const authRevocationCheckSchema = z.object({
+  enabled: z.boolean().optional(),
+  redisNodeId: z.string().optional(),
+});
+export type AuthRevocationCheckConfig = z.infer<typeof authRevocationCheckSchema>;
+
+/**
+ * Global application / user roles configuration for AuthNode.
+ * - `roles`: provider-agnostic role catalog used by downstream endpoint/page/pipeline dropdowns.
+ * - `defaultRole` & `adminRoles`: mapped to Better Auth `admin()` plugin options when `framework === "better_auth"`.
+ */
+export const rbacConfigSchema = z.object({
+  roles: z.array(z.string()).optional(),
+  defaultRole: z.string().optional(),
+  adminRoles: z.array(z.string()).optional(),
+});
+export type RbacConfig = z.infer<typeof rbacConfigSchema>;
 
 export const orgInvitationsConfigSchema = z.object({
   deliveryMethod: z.enum(["email", "link", "both"]).optional(),
@@ -212,6 +257,16 @@ export const authDataSchema = baseNodeDataSchema
       })
       .optional(),
     hooks: z.array(authHookConfigSchema).optional(),
+    /** Provider-agnostic global RBAC roles catalog + Better Auth admin() role defaults. */
+    rbac: rbacConfigSchema.optional(),
+    /** Better Auth Redis secondaryStorage config (gated to framework === "better_auth"). */
+    secondaryStorage: betterAuthSecondaryStorageSchema.optional(),
+    /** Better Auth jwt() plugin key-pair & token lifetime config (gated to framework === "better_auth"). */
+    jwtConfig: betterAuthJwtConfigSchema.optional(),
+    /** Provider-agnostic ServiceNode verification strategy ("auto" resolves to "jwks" in multi-server). */
+    serviceAuthStrategy: z.enum(["auto", "jwks", "db", "http"]).optional(),
+    /** Optional Redis revocation/token-version check paired with stateless JWKS verification. */
+    revocationCheck: authRevocationCheckSchema.optional(),
     paymentsPlugin: z
       .object({
         provider: z.literal("creem"),

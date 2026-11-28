@@ -1,4 +1,4 @@
-import { AnyMessagingResource } from "@workspace/canvas/types";
+import { AnyMessagingResource, PipelineStep, PipelineStepInputSource } from "@workspace/canvas/types";
 import { BackendNode, BackendEdge } from "@/types/canvas";
 import { CompiledFile } from "@workspace/canvas/types";
 import { toVarName, toPascalCase } from "../utils";
@@ -10,6 +10,35 @@ import {
 } from "./routeGenerator/pipelineRenderer";
 import { isKafkaNode, isServiceConnectedToKafka } from "../kafka";
 import { toFolderName } from "../kafka/utils";
+
+/**
+ * Checks whether a consumer's pipeline steps inspect Kafka transport headers
+ * (via `auth_verify` or `event_headers` bindings) so only header-aware consumers
+ * emit the `(payload, headers)` 2nd parameter and preserve backwards compatibility.
+ */
+function consumerUsesHeaders(steps?: PipelineStep[]): boolean {
+  if (!steps || !Array.isArray(steps)) return false;
+  const usesEventHeaderSource = (src?: PipelineStepInputSource): boolean =>
+    src?.kind === "event_headers";
+  return steps.some(
+    (s) =>
+      s.enabled !== false &&
+      (s.type === "auth_verify" ||
+        s.inputBindings?.some((b) => usesEventHeaderSource(b.source)) ||
+        usesEventHeaderSource(s.variableSource) ||
+        usesEventHeaderSource(s.switchSource) ||
+        usesEventHeaderSource(s.loopSource) ||
+        consumerUsesHeaders(s.thenSteps) ||
+        consumerUsesHeaders(s.elseSteps) ||
+        consumerUsesHeaders(s.trySteps) ||
+        consumerUsesHeaders(s.catchSteps) ||
+        consumerUsesHeaders(s.cacheMissSteps) ||
+        consumerUsesHeaders(s.loopBody) ||
+        consumerUsesHeaders(s.switchDefault) ||
+        s.switchCases?.some((c) => consumerUsesHeaders(c.steps)) ||
+        s.parallelBranches?.some((b) => consumerUsesHeaders(b.steps))),
+  );
+}
 
 export function generateConsumers(
   serviceName: string,
@@ -121,6 +150,8 @@ export async function initConsumers(): Promise<void> {
         }
       });
 
+      const usesHeaders = consumerUsesHeaders(executableSteps);
+
       let consumerCode = `import { createLogger } from "@workspace/logger";
 import {
   ${typeImportsList.join(",\n  ")}
@@ -132,7 +163,11 @@ const logger = createLogger("${serviceName}:Consumer:${effectiveEventName}");
  * Event Consumer for: "${effectiveEventName}"
  * Description: ${ev.description || "Processes incoming event payload"}
  */
-export async function ${handlerName}(payload: ${payloadInterfaceName}): Promise<void> {
+export async function ${handlerName}(${
+        usesHeaders
+          ? `payload: ${payloadInterfaceName}, headers: Record<string, string> = {}`
+          : `payload: ${payloadInterfaceName}`
+      }): Promise<void> {
   try {
     logger.info(\`Consuming event [${effectiveEventName}]\`, payload);
 `;
@@ -234,6 +269,24 @@ export async function ${handlerName}(payload: ${payloadInterfaceName}): Promise<
         kafkaConsumerImports.push(consumeFnName);
         const sanitizedService = serviceName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "service";
         const groupId = `${sanitizedService}-${consumerFileName}-group`;
+        const decodeHeadersBlock = usesHeaders
+          ? `
+        // Decode Kafka message headers to UTF-8 strings so auth_verify pipeline steps can inspect them
+        const headers: Record<string, string> = {};
+        if (message.headers) {
+          for (const [k, v] of Object.entries(message.headers)) {
+            if (v !== undefined && v !== null) {
+              headers[k.toLowerCase()] = Array.isArray(v)
+                ? String(v[0] ?? "")
+                : Buffer.isBuffer(v)
+                ? v.toString("utf-8")
+                : String(v);
+            }
+          }
+        }
+        await ${handlerName}(payload, headers);`
+          : `
+        await ${handlerName}(payload);`;
         consumerInits.push(
 `  try {
     await ${consumeFnName}("${groupId}", async ({ message }) => {
@@ -242,8 +295,7 @@ export async function ${handlerName}(payload: ${payloadInterfaceName}): Promise<
         const rawPayload = rawValue ? JSON.parse(rawValue) : {};
         const payload = (rawPayload && typeof rawPayload === "object" && "payload" in rawPayload && Object.keys(rawPayload).length <= 3)
           ? rawPayload.payload
-          : rawPayload;
-        await ${handlerName}(payload);
+          : rawPayload;${decodeHeadersBlock}
       } catch (err) {
         logger.error(\`Error processing message from topic [${effectiveEventName}]:\`, err);
       }

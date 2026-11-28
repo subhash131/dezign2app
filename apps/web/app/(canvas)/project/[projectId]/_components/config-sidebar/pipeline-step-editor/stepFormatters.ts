@@ -24,7 +24,7 @@ export function formatSourceShort(source?: any): string {
       ? "params"
       : source.kind === "req_query"
       ? "query"
-      : source.kind === "req_headers"
+      : source.kind === "req_headers" || source.kind === "event_headers"
       ? "headers"
       : source.kind === "auth"
       ? "auth"

@@ -3,11 +3,13 @@ import { CompiledFile, CompiledServiceResult } from "@workspace/canvas/types";
 import { BetterAuthV16NodeData } from "./types";
 import {
   generateAuthConfig,
+  generateBetterAuthPermissions,
   generateNextJsRouteHandler,
   generateEnvExample,
   generateFastApiMiddleware,
 } from "./generators";
 import { generateAuthClient } from "../../../generators/auth-providers/better-auth/v1.6/generateAuthClient";
+import { compileRedisNodes } from "../../../compileRedisNodes";
 
 export * from "./types";
 export * from "./adapters";
@@ -75,12 +77,28 @@ export function compileBetterAuthV16(
     connectedDbNode?.data?.connectionString ||
     connectedDbNode?.data?.connectionStringPooled;
 
+  // Resolve optional Redis package for Better Auth secondaryStorage (only when enabled)
+  let resolvedRedisPackageName: string | undefined = rawData.redisPackageName;
+  if (!resolvedRedisPackageName && rawData.secondaryStorage?.enabled) {
+    const compiledRedis = compileRedisNodes(_allNodes, _allEdges);
+    const targetRedisId = rawData.secondaryStorage.redisNodeId;
+    const matchedPkg = targetRedisId
+      ? compiledRedis.packages?.find((p) => p.redisNodeId === targetRedisId)
+      : compiledRedis.packages?.[0];
+    if (matchedPkg?.packageName) {
+      resolvedRedisPackageName = matchedPkg.packageName;
+    } else if (compiledRedis.files.length > 0) {
+      resolvedRedisPackageName = `@workspace/${compiledRedis.packageFolder || "redis"}`;
+    }
+  }
+
   const data: BetterAuthV16NodeData = {
     ...rawData,
     dbAdapter: resolvedDbAdapter,
     dbEngine: resolvedDbEngine || rawData.dbEngine,
     connectionString: resolvedConnectionString,
     validateSchema: rawData.validateSchema ?? false,
+    ...(resolvedRedisPackageName ? { redisPackageName: resolvedRedisPackageName } : {}),
     paymentsPlugin: rawData.paymentsPlugin || (connectedPaymentsNode
       ? {
           provider: "creem",
@@ -94,11 +112,25 @@ export function compileBetterAuthV16(
   const clientPlugins: string[] = [];
   if (enabledPlugins.includes("admin")) clientPlugins.push("adminClient");
   if (enabledPlugins.includes("organization")) clientPlugins.push("organizationClient");
+  // Register jwtClient whenever jwt() is active so the frontend can call authClient.token()
+  // and issue JWKS-verifiable JWTs to decoupled microservices.
+  if (enabledPlugins.includes("jwt")) clientPlugins.push("jwtClient");
   if (clientPlugins.length === 0) {
     clientPlugins.push("adminClient", "organizationClient");
   }
 
+  const generatedPermissions = generateBetterAuthPermissions(data);
+
   const files: CompiledFile[] = [
+    ...(generatedPermissions.permissionsCode
+      ? [
+          {
+            filename: "auth-permissions.ts",
+            language: "typescript",
+            content: generatedPermissions.permissionsCode,
+          },
+        ]
+      : []),
     {
       filename: "auth.ts",
       language: "typescript",
@@ -110,6 +142,8 @@ export function compileBetterAuthV16(
       content: generateAuthClient({
         baseURL: authBaseUrl,
         plugins: clientPlugins,
+        customAdminRbac: generatedPermissions.hasCustomAdminAccess,
+        customOrgRbac: generatedPermissions.hasCustomOrgAccess,
       }),
     },
     {

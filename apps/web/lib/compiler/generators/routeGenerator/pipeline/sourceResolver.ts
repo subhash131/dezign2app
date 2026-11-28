@@ -35,6 +35,11 @@ export function resolveSource(
       const field = source.field ? source.field.trim() : "";
       return field ? `req.headers["${field}"]` : "req.headers";
     }
+    case "event_headers": {
+      // Decoded UTF-8 Kafka message headers passed into handle<Event>(payload, headers)
+      const field = source.field ? source.field.trim().toLowerCase() : "";
+      return field ? `headers["${field}"]` : "headers";
+    }
     case "auth": {
       const field = source.field ? source.field.trim() : "";
       return field ? `auth?.${field}` : "auth";

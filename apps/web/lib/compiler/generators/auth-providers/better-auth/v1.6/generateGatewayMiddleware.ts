@@ -30,6 +30,11 @@ export async function betterAuthMiddleware(request: NextRequest) {
     }
 
     const requestHeaders = new Headers(request.headers);
+    // NOTE: Downstream ServiceNodes should verify the forwarded Bearer JWT via JWKS
+    // rather than trusting x-user-* headers if services are reachable outside a private VPC.
+    if (authHeader) {
+      requestHeaders.set("authorization", authHeader);
+    }
     requestHeaders.set("x-user-id", session.user.id);
     requestHeaders.set("x-user-email", session.user.email);
     if (session.user.role) {

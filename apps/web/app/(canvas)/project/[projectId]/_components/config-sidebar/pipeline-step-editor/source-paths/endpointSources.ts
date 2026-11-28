@@ -257,30 +257,16 @@ export function getEndpointSources(
       paths: eventPayloadPaths,
     });
 
-    // 2. Event Metadata
+    // 2. Event Transport Headers (decoded UTF-8 strings passed into handle<Event>(payload, headers))
     sources.push({
-      id: "event_metadata",
-      label: "Event Metadata (event)",
-      kind: "req_headers",
-      rootVariableName: "event",
+      id: "event_headers",
+      label: "Event Headers (headers)",
+      kind: "event_headers",
+      rootVariableName: "headers",
       paths: [
-        { path: "key", type: "string", description: "Message partition key" },
-        { path: "topic", type: "string", description: "Broker topic name" },
-        {
-          path: "headers",
-          type: "Record<string, string>",
-          description: "Message transport headers",
-        },
-        {
-          path: "offset",
-          type: "string",
-          description: "Stream offset / message ID",
-        },
-        {
-          path: "timestamp",
-          type: "number",
-          description: "Timestamp of emission",
-        },
+        { path: "authorization", type: "string", description: "Forwarded Bearer JWT from Kafka producer" },
+        { path: "x-auth-token", type: "string", description: "Custom auth token header" },
+        { path: "x-correlation-id", type: "string", description: "Distributed trace / correlation ID" },
       ],
     });
   } else {

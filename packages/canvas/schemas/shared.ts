@@ -79,6 +79,8 @@ export const pipelineStepInputSourceSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("req_query"), field: z.string().optional() }),
   /** A field from req.headers */
   z.object({ kind: z.literal("req_headers"), field: z.string().optional() }),
+  /** A field from Kafka/event message headers (decoded UTF-8 strings) */
+  z.object({ kind: z.literal("event_headers"), field: z.string().optional() }),
   /** A field from decrypted auth session token / user (auth) */
   z.object({ kind: z.literal("auth"), field: z.string().optional() }),
   /** An environment variable from process.env (.env) */
@@ -179,6 +181,7 @@ export const pipelineStepTypeEnum = z.enum([
   "early_return",     // mid-pipeline short circuit response
   "push_to_client",   // deliver processed result to a web-page client via SSE / WS / WebRTC / Webhook
   "langgraph_invoke", // invoke a LangGraph agent (streaming or sync)
+  "auth_verify",      // verify an incoming Bearer/JWT/session token in HTTP endpoints or Kafka consumers
 ]);
 export type PipelineStepType = z.infer<typeof pipelineStepTypeEnum>;
 
@@ -513,6 +516,22 @@ export interface PipelineStep {
   langGraphHistoryBeforeSource?: string;
   /** Specific state channels to select (e.g. ['values.messages']) */
   langGraphHistorySelect?: string[];
+
+  // ─── auth_verify step (HTTP endpoints & Kafka consumers) ───
+  /** Target canvas AuthNode ID to verify tokens against */
+  authVerifyAuthNodeId?: string;
+  /** Verification mode: "auto" | "jwks" (stateless IdP public keys) | "better_auth_session" (Better Auth only) */
+  authVerifyMode?: "auto" | "jwks" | "better_auth_session";
+  /**
+   * Token expiration handling:
+   * - "strict": reject expired tokens (default for HTTP endpoints)
+   * - "verify_signature_ignore_exp": verify cryptographic signature + optional Redis revocation even if JWT exp elapsed during Kafka queue lag/retries
+   */
+  authVerifyExpirationPolicy?: "strict" | "verify_signature_ignore_exp";
+  /** Optional list of allowed roles enforced after token signature verification */
+  authVerifyRequiredRoles?: string[];
+  /** Whether to check Redis revocation blocklist after cryptographic signature verification */
+  authVerifyCheckRedisRevocation?: boolean;
 }
 
 export interface LangGraphMessagesConfig {
@@ -666,6 +685,13 @@ export const pipelineStepSchema: z.ZodType<PipelineStep> = z.lazy(() =>
     langGraphHistoryLimitDefault: z.number().optional(),
     langGraphHistoryBeforeSource: z.string().optional(),
     langGraphHistorySelect: z.array(z.string()).optional(),
+
+    // auth_verify fields
+    authVerifyAuthNodeId: z.string().optional(),
+    authVerifyMode: z.enum(["auto", "jwks", "better_auth_session"]).optional(),
+    authVerifyExpirationPolicy: z.enum(["strict", "verify_signature_ignore_exp"]).optional(),
+    authVerifyRequiredRoles: z.array(z.string()).optional(),
+    authVerifyCheckRedisRevocation: z.boolean().optional(),
   })
 );
 

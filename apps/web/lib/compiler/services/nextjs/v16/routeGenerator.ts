@@ -2,6 +2,7 @@ import { Endpoint, AnyMessagingResource, CompiledFile, ReusableFunction } from "
 import { BackendNode, BackendEdge } from "@/types/canvas";
 import { toVarName, toPascalCase } from "../../../utils";
 import { isRouteConnectedToAuthenticatedPage } from "../../../traceResolver";
+import { resolveServiceAuthContext } from "../../../generators/routeGenerator/handlers/authResolver";
 
 export interface NormalizedRoutePath {
   filePath: string;
@@ -85,42 +86,64 @@ export function generateNextjsRoutes(params: GenerateNextjsRoutesParams): Compil
     ? isRouteConnectedToAuthenticatedPage(serviceNode, undefined, allNodes, allEdges)
     : false;
 
+  const authCtx = resolveServiceAuthContext(serviceNode, allNodes, allEdges);
+  const authVerifyHelper = `import { jwtVerify, createRemoteJWKSet } from "jose";
+
+const AUTH_SERVER_URL =
+  process.env.AUTH_SERVER_URL ?? process.env.BETTER_AUTH_URL ?? ${JSON.stringify(authCtx.authServerUrl)};
+const JWKS = createRemoteJWKSet(new URL(\`\${AUTH_SERVER_URL}/api/auth/jwks\`));
+
+export interface VerifiedTokenUser {
+  id: string;
+  name?: string;
+  email?: string;
+  role?: string;
+  [key: string]: string | number | boolean | null | undefined;
+}
+
+/**
+ * Verifies a Bearer JWT cryptographically via the Auth server's cached JWKS keys.
+ */
+export async function verifyBearerToken(authHeader: string | null): Promise<VerifiedTokenUser | null> {
+  if (!authHeader?.startsWith("Bearer ")) return null;
+  const token = authHeader.substring(7).trim();
+  if (!token) return null;
+  try {
+    const { payload } = await jwtVerify(token, JWKS);
+    const id = String(payload.sub ?? payload.id ?? payload.userId ?? "");
+    if (!id) return null;
+    return {
+      ...(payload as Record<string, string | number | boolean | null | undefined>),
+      id,
+      name: typeof payload.name === "string" ? payload.name : undefined,
+      email: typeof payload.email === "string" ? payload.email : undefined,
+      role: typeof payload.role === "string" ? payload.role : "user",
+    };
+  } catch {
+    return null;
+  }
+}
+`;
+  files.push({
+    filename: "lib/verify-auth.ts",
+    language: "typescript",
+    content: authVerifyHelper,
+  });
+
   // Fallback: If no endpoints exist, generate a default health-check route
   if (nodeEndpoints.length === 0) {
     const healthContent = isConnectedToAuthPage
       ? `import { NextRequest, NextResponse } from "next/server";
 import { createLogger } from "@workspace/logger";
+import { verifyBearerToken } from "@/lib/verify-auth";
 
 const logger = createLogger("${serviceName}:health");
 
 export const dynamic = "force-dynamic";
 
-export type HealthUserPayload = {
-  id: string;
-  name?: string;
-  email?: string;
-  role?: string;
-  token?: string;
-  [key: string]: string | number | boolean | null | undefined;
-};
-
 export async function GET(request: NextRequest) {
   logger.info("Health check endpoint called");
-  let user: HealthUserPayload | null = null;
-  const authHeader = request.headers.get("authorization");
-  if (authHeader?.startsWith("Bearer ")) {
-    const token = authHeader.substring(7).trim();
-    try {
-      const parts = token.split(".");
-      if (parts.length === 3) {
-        user = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf-8"));
-      } else {
-        user = JSON.parse(Buffer.from(token, "base64").toString("utf-8"));
-      }
-    } catch {
-      user = { id: "authenticated-user", token };
-    }
-  }
+  const user = await verifyBearerToken(request.headers.get("authorization"));
   return NextResponse.json({
     status: "healthy",
     service: "${serviceName}",
@@ -265,21 +288,7 @@ export async function ${method}(
         responseDataProps.push(`body`);
       }
       if (isHealth && (isEpConnectedToAuthPage || ep.requireAuth === true)) {
-        handlerCode += `    let user: HealthUserPayload | null = null;
-    const authHeader = request.headers.get("authorization");
-    if (authHeader?.startsWith("Bearer ")) {
-      const token = authHeader.substring(7).trim();
-      try {
-        const parts = token.split(".");
-        if (parts.length === 3) {
-          user = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf-8"));
-        } else {
-          user = JSON.parse(Buffer.from(token, "base64").toString("utf-8"));
-        }
-      } catch {
-        user = { id: "authenticated-user", token };
-      }
-    }\n`;
+        handlerCode += `    const user = await verifyBearerToken(request.headers.get("authorization"));\n`;
         responseDataProps.push(`user`);
         responseDataProps.push(`status: "healthy"`);
         responseDataProps.push(`service: "${serviceName}"`);
@@ -338,14 +347,7 @@ export async function ${method}(
 
     const fileContent = `import { NextRequest, NextResponse } from "next/server";
 import { createLogger } from "@workspace/logger";
-${fileUsesDb ? `import { db } from "@workspace/db";\n` : ""}${hasAuthHealth ? `\nexport type HealthUserPayload = {
-  id: string;
-  name?: string;
-  email?: string;
-  role?: string;
-  token?: string;
-  [key: string]: string | number | boolean | null | undefined;
-};\n` : ""}
+${fileUsesDb ? `import { db } from "@workspace/db";\n` : ""}${hasAuthHealth ? `import { verifyBearerToken } from "@/lib/verify-auth";\n` : ""}
 const logger = createLogger("${serviceName}:${normalized.urlPath.replace(/[^a-zA-Z0-9]/g, "_")}");
 
 export const dynamic = "force-dynamic";

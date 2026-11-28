@@ -8,6 +8,7 @@ import {
 import { BetterAuthV16NodeData } from "../types";
 import { getAdapterConfig } from "../adapters";
 import { resolveOAuthProviders } from "../providers";
+import { generateBetterAuthPermissions } from "./generateAuthPermissions";
 
 /**
  * Generates the core `src/auth.ts` file for Better Auth
@@ -16,6 +17,8 @@ export function generateAuthConfig(data: BetterAuthV16NodeData): string {
   const version = data.version || DEFAULT_BETTER_AUTH_VERSION;
   const dbAdapterKey = data.dbAdapter || "sqlite-raw";
   const adapterConfig = getAdapterConfig(version, dbAdapterKey);
+  const generatedPermissions = generateBetterAuthPermissions(data);
+  const permissionImports: string[] = [];
 
   const pluginImports = new Set<string>();
   const pluginCalls: string[] = [];
@@ -28,7 +31,22 @@ export function generateAuthConfig(data: BetterAuthV16NodeData): string {
 
   if (enabledPlugins.includes("admin")) {
     pluginImports.add("admin");
-    pluginCalls.push("admin()");
+    if (generatedPermissions.hasCustomAdminAccess) {
+      permissionImports.push("adminAcInstance", "adminRolesMap");
+      const adminLines = [
+        "    ac: adminAcInstance,",
+        "    roles: adminRolesMap,",
+      ];
+      if (generatedPermissions.defaultRole) {
+        adminLines.push(`    defaultRole: ${JSON.stringify(generatedPermissions.defaultRole)},`);
+      }
+      if (generatedPermissions.adminRoles && generatedPermissions.adminRoles.length > 0) {
+        adminLines.push(`    adminRoles: ${JSON.stringify(generatedPermissions.adminRoles)},`);
+      }
+      pluginCalls.push(`admin({\n${adminLines.join("\n")}\n  })`);
+    } else {
+      pluginCalls.push("admin()");
+    }
   }
 
   if (enabledPlugins.includes("twoFactor")) {
@@ -67,9 +85,29 @@ export function generateAuthConfig(data: BetterAuthV16NodeData): string {
     pluginCalls.push("apiKey()");
   }
 
+  const sessionConfig = data.session;
+  const sessionClaims: SessionClaimConfig[] = sessionConfig?.claims || [];
+
   if (enabledPlugins.includes("jwt")) {
     pluginImports.add("jwt");
-    pluginCalls.push("jwt()");
+    const jwtCfg = data.jwtConfig;
+    const alg = jwtCfg?.algorithm || "EdDSA";
+    const expTime = jwtCfg?.expirationTime || "15m";
+    const jwtClaims = sessionClaims.filter(
+      (c: SessionClaimConfig) =>
+        (c.destination || c.deliveryMode) === "jwt" && c.key && c.key !== "orgRole",
+    );
+    const extraJwtClaimLines = jwtClaims.map((claim: SessionClaimConfig) => {
+      const key = claim.key;
+      const fallback = JSON.stringify(claim.targetValue || "");
+      return `          ${key}: "${key}" in user ? user.${key} : ${fallback},`;
+    });
+
+    // Include role and activeOrganizationId in JWT payload so stateless JWKS
+    // middleware on decoupled ServiceNodes can enforce RBAC without DB lookups.
+    pluginCalls.push(
+      `jwt({\n    jwks: {\n      keyPairConfig: { alg: "${alg}" },\n    },\n    jwt: {\n      expirationTime: "${expTime}",\n      definePayload: ({ user, session }) => ({\n        id: user.id,\n        email: user.email,\n        name: user.name,\n        role: "role" in user && typeof user.role === "string" ? user.role : "user",\n        activeOrganizationId: "activeOrganizationId" in session ? session.activeOrganizationId : undefined,\n${extraJwtClaimLines.join("\n")}${extraJwtClaimLines.length > 0 ? "\n" : ""}      }),\n    },\n  })`,
+    );
   }
 
   if (enabledPlugins.includes("multiSession")) {
@@ -87,14 +125,18 @@ export function generateAuthConfig(data: BetterAuthV16NodeData): string {
   if (org?.enabled !== false && (enabledPlugins.includes("organization") || org?.enabled)) {
     pluginImports.add("organization");
     const teamsEnabled = Boolean(org?.teams);
+    const orgAccessLines = generatedPermissions.hasCustomOrgAccess
+      ? (() => {
+          permissionImports.push("orgAcInstance", "orgRolesMap");
+          return `\n    ac: orgAcInstance,\n    roles: orgRolesMap,`;
+        })()
+      : "";
     pluginCalls.push(
-      `organization({\n    teams: {\n      enabled: ${teamsEnabled},\n    },\n    allowUserToCreateOrganization: ${Boolean(org?.multiOrg ?? true)},\n  })`
+      `organization({${orgAccessLines}\n    teams: {\n      enabled: ${teamsEnabled},\n    },\n    allowUserToCreateOrganization: ${Boolean(org?.multiOrg ?? true)},\n  })`
     );
   }
 
   // customSession plugin configuration for session claims & payments
-  const sessionConfig = data.session;
-  const sessionClaims: SessionClaimConfig[] = sessionConfig?.claims || [];
   const customSessionClaims = sessionClaims.filter(
     (c: SessionClaimConfig) => c.deliveryMode === "session" || c.destination === "session"
   );
@@ -233,15 +275,37 @@ export function generateAuthConfig(data: BetterAuthV16NodeData): string {
 
   // Session Config
   let sessionBlock = "";
+  const storeInDbLine =
+    sessionConfig?.storeSessionInDatabase !== undefined
+      ? `\n    storeSessionInDatabase: ${Boolean(sessionConfig.storeSessionInDatabase)},`
+      : "";
   if (sessionConfig) {
     const cookieCache = sessionConfig.cookieCache;
+    const strategyLine = cookieCache?.strategy ? `\n      strategy: "${cookieCache.strategy}",` : "";
+    const refreshCacheLine =
+      cookieCache?.refreshCache !== undefined
+        ? `\n      refreshCache: ${Boolean(cookieCache.refreshCache)},`
+        : "";
     const cookieCachePart = cookieCache?.enabled === true
-      ? `\n    cookieCache: {\n      enabled: true,\n      maxAge: ${cookieCache?.maxAgeSeconds ?? 300},\n    },`
+      ? `\n    cookieCache: {\n      enabled: true,\n      maxAge: ${cookieCache?.maxAgeSeconds ?? 300},${strategyLine}${refreshCacheLine}\n    },`
       : `\n    cookieCache: {\n      enabled: false,\n    },`;
 
-    sessionBlock = `\n  session: {\n    expiresIn: ${sessionConfig.expiresInSeconds ?? 604800},\n    updateAge: ${sessionConfig.updateAgeSeconds ?? 86400},${cookieCachePart}\n  },`;
+    sessionBlock = `\n  session: {\n    expiresIn: ${sessionConfig.expiresInSeconds ?? 604800},\n    updateAge: ${sessionConfig.updateAgeSeconds ?? 86400},${storeInDbLine}${cookieCachePart}\n  },`;
   } else {
     sessionBlock = `\n  session: {\n    expiresIn: 604800,\n    updateAge: 86400,\n    cookieCache: {\n      enabled: false,\n    },\n  },`;
+  }
+
+  // Redis Secondary Storage & Rate Limit (Better Auth multi-server session/rate-limit store)
+  let redisImportStr = "";
+  let secondaryStorageBlock = "";
+  let rateLimitBlock = "";
+  if (data.secondaryStorage?.enabled && data.redisPackageName) {
+    const keyPrefix = data.secondaryStorage.keyPrefix ?? "better-auth:";
+    redisImportStr = `import { getRedisClient } from "${data.redisPackageName}";\n`;
+    secondaryStorageBlock = `\n  // Offload ephemeral sessions, verification tokens, and rate-limit counters to Redis\n  secondaryStorage: {\n    get: async (key) => {\n      const client = await getRedisClient();\n      const value = await client.get(${JSON.stringify(keyPrefix)} + key);\n      return value ?? null;\n    },\n    set: async (key, value, ttl) => {\n      const client = await getRedisClient();\n      if (ttl) {\n        await client.set(${JSON.stringify(keyPrefix)} + key, value, "EX", ttl);\n      } else {\n        await client.set(${JSON.stringify(keyPrefix)} + key, value);\n      }\n    },\n    delete: async (key) => {\n      const client = await getRedisClient();\n      await client.del(${JSON.stringify(keyPrefix)} + key);\n    },\n  },`;
+    if (data.secondaryStorage.useForRateLimit !== false) {
+      rateLimitBlock = `\n  rateLimit: {\n    enabled: true,\n    storage: "secondary-storage",\n  },`;
+    }
   }
 
   // Trusted Origins
@@ -308,12 +372,17 @@ export function generateAuthConfig(data: BetterAuthV16NodeData): string {
     advancedBlock = `\n  advanced: {\n    database: {\n      ${dbConfigLines.join("\n      ")}\n    },\n  },`;
   }
 
+  const permissionsImportStr =
+    permissionImports.length > 0
+      ? `import { ${permissionImports.join(", ")} } from "./auth-permissions";\n`
+      : "";
+
   return `import "dotenv/config";
 import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
 ${adapterConfig.importStatement}
-${createMiddlewareImport}${pluginImportStr}${passkeyImportStr}export const auth = betterAuth({
-  database: ${adapterConfig.adapterCall},${secretBlock}${baseUrlBlock}${basePathBlock}${userBlock}${emailPasswordBlock}${socialProvidersBlock}${accountLinkingBlock}${sessionBlock}${trustedOriginsBlock}${hooksBlock}${databaseHooksBlock}${advancedBlock}
+${redisImportStr}${createMiddlewareImport}${pluginImportStr}${passkeyImportStr}${permissionsImportStr}export const auth = betterAuth({
+  database: ${adapterConfig.adapterCall},${secretBlock}${baseUrlBlock}${basePathBlock}${userBlock}${emailPasswordBlock}${socialProvidersBlock}${accountLinkingBlock}${sessionBlock}${secondaryStorageBlock}${rateLimitBlock}${trustedOriginsBlock}${hooksBlock}${databaseHooksBlock}${advancedBlock}
   plugins: [
     ${pluginCalls.join(",\n    ")},
     nextCookies(),

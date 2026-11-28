@@ -10,6 +10,27 @@ import {
   resolveServiceRealtimeCapabilities,
 } from "../../../generators/configGenerator";
 import { generateServiceUnitTests } from "../../../generators/testGenerator";
+import { generateVerifyTokenHelper } from "../../../generators/auth-providers/better-auth/v1.6/generateRequireAuthMiddleware";
+import { resolveServiceAuthContext } from "../../../generators/routeGenerator/handlers/authResolver";
+import type { PipelineStep } from "@workspace/canvas/types";
+
+function hasAuthVerifyInSteps(steps?: PipelineStep[]): boolean {
+  if (!steps || !Array.isArray(steps)) return false;
+  return steps.some(
+    (s) =>
+      s.enabled !== false &&
+      (s.type === "auth_verify" ||
+        hasAuthVerifyInSteps(s.thenSteps) ||
+        hasAuthVerifyInSteps(s.elseSteps) ||
+        hasAuthVerifyInSteps(s.trySteps) ||
+        hasAuthVerifyInSteps(s.catchSteps) ||
+        hasAuthVerifyInSteps(s.cacheMissSteps) ||
+        hasAuthVerifyInSteps(s.loopBody) ||
+        hasAuthVerifyInSteps(s.switchDefault) ||
+        s.switchCases?.some((c) => hasAuthVerifyInSteps(c.steps)) ||
+        s.parallelBranches?.some((b) => hasAuthVerifyInSteps(b.steps))),
+  );
+}
 
 /**
  * Compiles a Service Node into an Express.js 4.x microservice application
@@ -170,6 +191,25 @@ export function compileExpressV4Service(
     ),
     ...generateServiceUnitTests(serviceName, nodeEndpoints, testCases),
   ];
+
+  // Ensure verifyToken.ts exists if any Kafka consumer uses an auth_verify step
+  // even when HTTP routes on this service do not have requireAuth enabled.
+  const consumerUsesAuthVerify = nodeConsumedEvents.some((ev) =>
+    hasAuthVerifyInSteps(ev.pipelineSteps),
+  );
+  if (consumerUsesAuthVerify && !files.some((f) => f.filename === "src/middleware/verifyToken.ts")) {
+    const authCtx = resolveServiceAuthContext(node, allNodes, allEdges);
+    files.push({
+      filename: "src/middleware/verifyToken.ts",
+      language: "typescript",
+      content: generateVerifyTokenHelper(authCtx.strategy, {
+        authServerUrl: authCtx.authServerUrl,
+        issuer: authCtx.issuer,
+        audience: authCtx.audience,
+        redisRevocationPackageName: authCtx.redisRevocationPackageName,
+      }),
+    });
+  }
 
   // Guarantee that src/index.ts always includes the default express import
   const serverFile = files.find((f) => f.filename === "src/index.ts");

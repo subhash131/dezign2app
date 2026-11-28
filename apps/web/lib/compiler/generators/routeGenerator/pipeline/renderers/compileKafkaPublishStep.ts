@@ -25,6 +25,15 @@ export function renderKafkaPublishStep(
   const isGeneric = fnName === "publishKafkaEvent" || functionRef.name === "publishKafkaEvent";
   const topicBinding = inputBindings.find((b) => b.argName === "topic");
   const keyBinding = inputBindings.find((b) => b.argName === "key");
+  const authHeaderBinding = inputBindings.find(
+    (b) =>
+      b.argName === "headers.authorization" ||
+      b.argName === "authToken" ||
+      b.argName === "authorization",
+  );
+  const customHeaderBindings = inputBindings.filter(
+    (b) => b !== authHeaderBinding && b.argName.startsWith("headers."),
+  );
 
   // Determine if an explicit spread base was specified
   const spreadBinding = inputBindings.find(
@@ -38,14 +47,21 @@ export function renderKafkaPublishStep(
             other !== b &&
             other.argName !== "topic" &&
             other.argName !== "key" &&
+            other !== authHeaderBinding &&
+            !other.argName.startsWith("headers.") &&
             other.argName !== "_spread" &&
             other.argName !== "...",
         )),
   );
 
-  // Field bindings are all non-topic, non-key bindings (excluding the spread binding)
+  // Field bindings are all non-topic, non-key, non-header bindings (excluding the spread binding)
   const fieldBindings = inputBindings.filter(
-    (b) => b.argName !== "topic" && b.argName !== "key" && b !== spreadBinding,
+    (b) =>
+      b.argName !== "topic" &&
+      b.argName !== "key" &&
+      b !== authHeaderBinding &&
+      !b.argName.startsWith("headers.") &&
+      b !== spreadBinding,
   );
 
   const topicExpr = topicBinding
@@ -83,14 +99,32 @@ export function renderKafkaPublishStep(
 
   const keyExpr = keyBinding ? resolveBinding(keyBinding, ctx) : null;
 
+  const headerEntries: string[] = [];
+  if (authHeaderBinding) {
+    headerEntries.push(`authorization: String(${resolveBinding(authHeaderBinding, ctx)} ?? "")`);
+  }
+  for (const hb of customHeaderBindings) {
+    const headerKey = hb.argName.slice("headers.".length).trim().toLowerCase();
+    if (headerKey) {
+      headerEntries.push(`${JSON.stringify(headerKey)}: String(${resolveBinding(hb, ctx)} ?? "")`);
+    }
+  }
+  const hasHeaders = headerEntries.length > 0;
+  const headersExpr = hasHeaders ? `{ ${headerEntries.join(", ")} }` : null;
+
   const declPrefix = step.declarationKind === "reassign" ? "" : `${step.declarationKind || "const"} `;
   rawLines.push(`${declPrefix}${outputVariable} = await ${fnName}(`);
   if (isGeneric) {
     rawLines.push(`  ${topicExpr},`);
   }
-  rawLines.push(`  ${payloadExpr}${keyExpr ? `,` : ""}`);
+  rawLines.push(`  ${payloadExpr}${keyExpr || headersExpr ? `,` : ""}`);
   if (keyExpr) {
-    rawLines.push(`  ${keyExpr},`);
+    rawLines.push(`  ${keyExpr}${headersExpr ? `,` : ""}`);
+  } else if (headersExpr) {
+    rawLines.push(`  undefined,`);
+  }
+  if (headersExpr) {
+    rawLines.push(`  ${headersExpr},`);
   }
   rawLines.push(`);`);
   return rawLines;

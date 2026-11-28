@@ -69,14 +69,19 @@ export function emitInterServiceCalls(params: InterServiceCallEmitterParams): st
       const tgtGrpcPort = targetNode?.data?.grpcPort || "50051";
       code += `    // --- Inter-Service gRPC Call: ${tgtLabel} (${rpcName}) ---\n`;
       code += `    const { create${rpcName}Client } = await import("${packageName}/${endpointName}");\n`;
+      code += `    const { Metadata: ${varPrefix}GrpcMetadata } = await import("@grpc/grpc-js");\n`;
       code += `    type ${rpcName}Response = import("${packageName}/${endpointName}").${rpcName}Response;\n`;
       code += `    const ${varPrefix}GrpcClient = create${rpcName}Client(\n`;
       code += `      process.env.${envVarName} || "localhost:${tgtGrpcPort}",\n`;
       code += `    );\n`;
+      code += `    const ${varPrefix}Meta = new ${varPrefix}GrpcMetadata();\n`;
+      code += `    if (req.headers.authorization) {\n`;
+      code += `      ${varPrefix}Meta.set("authorization", String(req.headers.authorization));\n`;
+      code += `    }\n`;
 
       code += `    let ${varPrefix}Data: ${rpcName}Response | null = null;\n`;
       code += `    ${varPrefix}Data = await new Promise((resolve, reject) => {\n`;
-      code += `      ${varPrefix}GrpcClient.${rpcMethod}(${payloadVar}, (err, response) => {\n`;
+      code += `      ${varPrefix}GrpcClient.${rpcMethod}(${payloadVar}, ${varPrefix}Meta, (err, response) => {\n`;
       code += `        if (err) {\n`;
       code += `          logger.error("gRPC call to ${tgtLabel} failed", { err });\n`;
       code += `          return reject(err);\n`;

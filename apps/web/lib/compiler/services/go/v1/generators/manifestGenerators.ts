@@ -1,14 +1,33 @@
 import { CompiledFile } from "@workspace/canvas/types";
+import { BackendNode, BackendEdge } from "@/types/canvas";
+import { resolveServiceAuthContext } from "../../../../generators/routeGenerator/handlers/authResolver";
 
 interface ManifestOptions {
   serviceName: string;
   moduleName: string;
   port: string;
   endpoints: { method: string; path: string }[];
+  hasAuthRoutes?: boolean;
+  node?: BackendNode;
+  allNodes?: BackendNode[];
+  allEdges?: BackendEdge[];
 }
 
 export function generateManifestFiles(options: ManifestOptions): CompiledFile[] {
-  const { serviceName, moduleName, port, endpoints } = options;
+  const {
+    serviceName,
+    moduleName,
+    port,
+    endpoints,
+    hasAuthRoutes = false,
+    node,
+    allNodes = [],
+    allEdges = [],
+  } = options;
+
+  const authRequireLines = hasAuthRoutes
+    ? `\n\tgithub.com/MicahParks/keyfunc/v3 v3.3.5\n\tgithub.com/golang-jwt/jwt/v5 v5.2.1`
+    : "";
 
   const goModContent = `module ${moduleName}
 
@@ -16,7 +35,7 @@ go 1.23
 
 require (
 \tgithub.com/gin-contrib/cors v1.7.2
-\tgithub.com/gin-gonic/gin v1.10.0
+\tgithub.com/gin-gonic/gin v1.10.0${authRequireLines}
 )
 `;
 
@@ -95,6 +114,17 @@ air
 The server will listen on port **${port || "8080"}**.
 `;
 
+  const authCtx = resolveServiceAuthContext(node, allNodes, allEdges);
+  const envFiles: CompiledFile[] = authCtx.authNode
+    ? [
+        {
+          filename: ".env",
+          language: "dotenv",
+          content: `PORT=${port}\nAUTH_SERVER_URL=${authCtx.authServerUrl}\nBETTER_AUTH_URL=${authCtx.authServerUrl}\n`,
+        },
+      ]
+    : [];
+
   return [
     {
       filename: "go.mod",
@@ -116,5 +146,6 @@ The server will listen on port **${port || "8080"}**.
       language: "markdown",
       content: readmeContent,
     },
+    ...envFiles,
   ];
 }

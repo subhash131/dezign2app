@@ -404,6 +404,10 @@ import type {
   OrgInvitationsConfig,
   RedirectsConfig,
   BetterAuthTableMapping,
+  BetterAuthSecondaryStorageConfig,
+  BetterAuthJwtConfig,
+  AuthRevocationCheckConfig,
+  RbacConfig,
 } from "../schemas/nodes/auth";
 
 export type {
@@ -420,6 +424,10 @@ export type {
   OrgInvitationsConfig,
   RedirectsConfig,
   BetterAuthTableMapping,
+  BetterAuthSecondaryStorageConfig,
+  BetterAuthJwtConfig,
+  AuthRevocationCheckConfig,
+  RbacConfig,
 };
 
 import type {
@@ -508,6 +516,8 @@ export type BetterAuthV16NodeData = CanvasAuthNodeData & {
   connectionStringPooled?: string;
   dbAdapter?: BetterAuthDbAdapter;
   validateSchema?: boolean;
+  /** Resolved workspace Redis package name (e.g. "@workspace/redis") for secondaryStorage imports. */
+  redisPackageName?: string;
 };
 
 
