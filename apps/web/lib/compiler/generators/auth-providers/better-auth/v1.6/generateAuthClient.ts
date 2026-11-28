@@ -33,11 +33,11 @@ export function generateAuthClient(options: BetterAuthClientOptions = {}): strin
     ...standardPlugins.map((p) => {
       if (p === "adminClient" && options.customAdminRbac) {
         permissionImports.push("adminAcInstance", "adminRolesMap");
-        return `    adminClient({ ac: adminAcInstance, roles: adminRolesMap } as Parameters<typeof adminClient>[0]),`;
+        return `    adminClient({ ac: adminAcInstance, roles: adminRolesMap }),`;
       }
       if (p === "organizationClient" && options.customOrgRbac) {
         permissionImports.push("orgAcInstance", "orgRolesMap");
-        return `    organizationClient({ ac: orgAcInstance, roles: orgRolesMap } as Parameters<typeof organizationClient>[0]),`;
+        return `    organizationClient({ ac: orgAcInstance, roles: orgRolesMap }),`;
       }
       return `    ${p}(),`;
     }),

@@ -40,7 +40,7 @@ export function renderAuthVerifyStep(
   const isConsumerContext = ctx.bodyVar === "validatedPayload" || ctx.bodyVar === "payload";
   const defaultTokenExpr = isConsumerContext
     ? 'headers["authorization"] || headers["x-auth-token"] || ""'
-    : 'req.headers["authorization"] || ""';
+    : 'req.headers?.["authorization"] || ""';
 
   const tokenExpr = tokenBinding
     ? `${resolveBinding(tokenBinding, ctx)} ?? ""`

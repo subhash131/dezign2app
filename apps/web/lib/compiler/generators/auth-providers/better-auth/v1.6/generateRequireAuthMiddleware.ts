@@ -61,8 +61,8 @@ const JWKS = createRemoteJWKSet(new URL(\`\${AUTH_SERVER_URL}/api/auth/jwks\`));
     strategy === "jwks"
       ? buildVerifyJwksBody(options)
       : strategy === "http"
-      ? buildVerifyHttpBody(defaultAuthUrl)
-      : buildVerifyDbBody();
+        ? buildVerifyHttpBody(defaultAuthUrl)
+        : buildVerifyDbBody();
 
   const coreSource = `export class AuthVerificationError extends Error {
   constructor(
@@ -266,7 +266,7 @@ function buildImports(strategy: AuthStrategy): string {
 import crypto from "node:crypto";`;
   }
   if (strategy === "jwks") {
-    return `import { jwtVerify, createRemoteJWKSet } from "jose";`;
+    return `import { jwtVerify, createRemoteJWKSet, type JWTPayload } from "jose";`;
   }
   return "";
 }
@@ -372,13 +372,13 @@ function buildVerifyJwksBody(options: RequireAuthMiddlewareOptions): string {
   if (options.audience) jwtVerifyOpts.push(`audience: ${JSON.stringify(options.audience)}`);
 
   return `  // Strategy: jwks — stateless asymmetric JWT verification via cached JWKS endpoint
-  let payload: Record<string, unknown>;
+  let payload: JWTPayload;
   try {
     const verifyResult = await jwtVerify(token, JWKS, {
       ...(options.ignoreExpiration ? { currentDate: new Date(0) } : {}),
       ${jwtVerifyOpts.join(",\n      ")}
     });
-    payload = verifyResult.payload as Record<string, unknown>;
+    payload = verifyResult.payload;
   } catch (jwtErr) {
     logger.warn("Auth failed: JWKS token verification failed", { error: String(jwtErr) });
     throw new AuthVerificationError(401, "Unauthorized: Invalid or expired token");
@@ -404,8 +404,21 @@ function buildVerifyJwksBody(options: RequireAuthMiddlewareOptions): string {
     "orgRole" in payload && typeof payload.orgRole === "string" ? payload.orgRole : undefined;
   const payloadEmail = "email" in payload && typeof payload.email === "string" ? payload.email : undefined;
 
+  // Collect primitive JWT claims cleanly onto AuthUser without unsafe type casts
+  const extraClaims: Record<string, string | number | boolean | null | undefined> = {};
+  for (const [claimKey, claimValue] of Object.entries(payload)) {
+    if (
+      typeof claimValue === "string" ||
+      typeof claimValue === "number" ||
+      typeof claimValue === "boolean" ||
+      claimValue === null
+    ) {
+      extraClaims[claimKey] = claimValue;
+    }
+  }
+
   resolvedUser = {
-    ...payload,
+    ...extraClaims,
     id: resolvedSub,
     userId: resolvedSub,
     username: payloadUsername ?? payloadName ?? resolvedSub,
@@ -465,7 +478,7 @@ function buildVerifyHttpBody(defaultAuthUrl: string): string {
         headers: forwardHeaders,
       });
       if (memberRes.ok && (memberRes.headers.get("content-type") ?? "").includes("application/json")) {
-        const memberData = (await memberRes.json()) as { role?: string } | null;
+        const memberData: { role?: string } | null = await memberRes.json();
         if (typeof memberData?.role === "string") {
           orgRole = memberData.role;
         }

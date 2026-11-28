@@ -307,7 +307,7 @@ describe("Multi-server Better Auth + Redis + Kafka + auth_verify pipeline", () =
     );
 
     const pubLines = renderPipeline([publishStep], "req.body");
-    expect(pubLines.join("\n")).toContain('authorization: String(req.headers["authorization"] ?? "")');
+    expect(pubLines.join("\n")).toContain('authorization: String(req.headers?.["authorization"] ?? "")');
 
     const consumerHandler = compiledB.files.find((f) => f.filename === "src/consumer/orderCreated.ts");
     const consumerIndex = compiledB.files.find((f) => f.filename === "src/consumer/index.ts");
@@ -418,8 +418,9 @@ describe("Multi-server Better Auth + Redis + Kafka + auth_verify pipeline", () =
     expect(authClientTs).toContain(
       'import { adminAcInstance, adminRolesMap, orgAcInstance, orgRolesMap } from "./auth-permissions";',
     );
-    expect(authClientTs).toContain("adminClient({ ac: adminAcInstance, roles: adminRolesMap }");
-    expect(authClientTs).toContain("organizationClient({ ac: orgAcInstance, roles: orgRolesMap }");
+    expect(authClientTs).toContain("adminClient({ ac: adminAcInstance, roles: adminRolesMap }),");
+    expect(authClientTs).toContain("organizationClient({ ac: orgAcInstance, roles: orgRolesMap }),");
+    expect(authClientTs).not.toContain("as Parameters<");
 
     // Verify Next.js WebApp monorepo output includes lib/auth-permissions.ts and custom lib/auth-client.ts
     const webAppNode: BackendNode = {
@@ -498,8 +499,30 @@ describe("Multi-server Better Auth + Redis + Kafka + auth_verify pipeline", () =
     const dbHelper = generateVerifyTokenHelper("db");
     expect(dbHelper).toContain("findAuthOrgMemberRole");
     expect(dbHelper).toContain("await findAuthOrgMemberRole(resolvedUserId, resolvedActiveOrgId)");
+    expect(jwksHelper).not.toMatch(/\bas\s+[A-Za-z_]/);
+    expect(jwksHelper).not.toMatch(/:\s*(any|unknown)\b|<any>|<unknown>|Record<[^,]+,\s*(any|unknown)>/);
 
     const httpHelper = generateVerifyTokenHelper("http", { authServerUrl: "http://localhost:3000" });
     expect(httpHelper).toContain("/api/auth/organization/get-active-member");
+    expect(httpHelper).not.toContain(" as ");
+
+    // Verify HTTP Express route with auth_verify step guards optional req.headers?.["authorization"]
+    const httpVerifySteps: PipelineStep[] = [
+      {
+        id: "step-http-auth-verify",
+        type: "auth_verify",
+        name: "Verify Auth Token",
+        outputVariable: "verifiedAuth2",
+        authVerifyAuthNodeId: authNode.id,
+        authVerifyMode: "jwks",
+        authVerifyExpirationPolicy: "strict",
+        inputBindings: [
+          { argName: "token", source: { kind: "req_headers", field: "authorization" } },
+        ],
+      },
+    ];
+    const httpRouteLines = renderPipeline(httpVerifySteps, "req.body");
+    expect(httpRouteLines.join("\n")).toContain('String(req.headers?.["authorization"] ?? "")');
+    expect(httpRouteLines.join("\n")).not.toContain('req.headers["authorization"]');
   });
 });
