@@ -61,14 +61,14 @@ const CREEM_PAYMENT_URL =
 const DEFAULT_BETA_PLAN: Plan = {
   id: TARGET_PRODUCT_ID,
   name: "Beta Access",
-  desc: "Full access to the visual studio, monorepo compiler, flow simulation, MCP server, and Desktop Studio.",
+  desc: "Full access to the visual studio, monorepo compiler, flow simulation, snapshot history, and Desktop Studio.",
   price: 20,
   billingPeriod: "every-month",
   paymentUrl: CREEM_PAYMENT_URL,
   featured: true,
   features: [
     "Full-Stack Turborepo Monorepo Compiler (Next.js 16, Express, FastAPI, Go)",
-    "MCP Architecture Server for Cursor & Claude Code",
+    "Multi-Canvas Studio (Architecture Graph, Schema ERD, Sequence, LangGraph)",
     "In-Memory Flow Simulation & Persona Test Assertions",
     "Electron Desktop Studio (Native PTY, Local DBs & Docker Compose)",
   ],
@@ -189,10 +189,7 @@ const Pricing = ({
   }, []);
 
   return (
-    <section
-      className="w-full bg-transparent text-black relative overflow-hidden py-12 scroll-mt-14"
-      id="pricing"
-    >
+    <section className="w-full bg-transparent text-white relative overflow-hidden py-12 scroll-mt-14">
       {/* Subtle radial bg */}
       <div
         className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] z-0"

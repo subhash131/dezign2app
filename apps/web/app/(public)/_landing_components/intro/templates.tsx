@@ -15,9 +15,9 @@ const TEMPLATES_DATA = [
     features: [
       "Webhook Trigger",
       "Gemini Reasoning",
-      "Postgres MCP Tool",
+      "Postgres Query Node",
       "Success/Failure Branching",
-      "Clerk Authentication",
+      "Better Auth RBAC",
     ],
   },
   {
@@ -61,7 +61,7 @@ const TEMPLATES_DATA = [
   {
     title: "Database Schema Analyzer",
     description:
-      "Inspect schema with Postgres MCP tool and write migrations via LLM",
+      "Inspect relational schemas and generate SQL migrations deterministically",
     authorImg: "/hash.png",
     authorName: "Subhash",
     experienceStack: [
@@ -71,7 +71,7 @@ const TEMPLATES_DATA = [
     ],
     features: [
       "Interactive Trigger",
-      "MCP Schema Discovery",
+      "Schema Discovery",
       "OpenAI Generator",
       "Migration Safe Verification",
       "End-node SSE Log Stream",
