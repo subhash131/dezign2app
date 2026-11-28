@@ -39,6 +39,7 @@ import { HeroCanvasConsole } from "./components/HeroCanvasConsole";
 import { HeroCanvasSecurityConsole } from "./components/HeroCanvasSecurityConsole";
 import { HeroCanvasControls } from "./components/HeroCanvasControls";
 import { HeroCanvasFooter } from "./components/HeroCanvasFooter";
+import VideoPlayer from "../intro/video-player";
 
 export const HeroCanvasPreview: React.FC = () => {
   // Feature mode switcher: "architecture" vs "infrastructure" vs "ai-worker" vs "ethical-hacker"
@@ -405,9 +406,14 @@ export const HeroCanvasPreview: React.FC = () => {
         />
       )}
 
-      {/* Main Canvas Stage */}
-      <div
-        ref={scrollContainerRef}
+      {/* Main Canvas Stage or Embedded Walkthrough Video */}
+      {activeMode === "video" ? (
+        <div className="relative w-full h-[460px] sm:h-[500px] md:h-[540px] lg:h-[580px] bg-black">
+          <VideoPlayer src="https://www.youtube.com/embed/4PHK9rqgrmE?start=26&rel=0" />
+        </div>
+      ) : (
+        <div
+          ref={scrollContainerRef}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
@@ -614,7 +620,8 @@ export const HeroCanvasPreview: React.FC = () => {
           handleZoomOut={handleZoomOut}
           handleFitView={handleFitView}
         />
-      </div>
+        </div>
+      )}
 
       {/* Floating Canvas Footer Status Bar */}
       <HeroCanvasFooter

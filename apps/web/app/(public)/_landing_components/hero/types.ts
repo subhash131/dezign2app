@@ -1,6 +1,6 @@
 import React from "react";
 
-export type CanvasMode = "architecture" | "infrastructure" | "ai-worker" | "ethical-hacker";
+export type CanvasMode = "architecture" | "infrastructure" | "video" | "ai-worker" | "ethical-hacker";
 export type TrafficIntensity = "normal" | "burst";
 
 export interface NodeHandle {
